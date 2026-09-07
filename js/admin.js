@@ -203,9 +203,93 @@ async function ecrireAdmin(action, data) {
  * (vues live / invitation) et ne renvoient plus les contacts. Lecture seule côté serveur : ne
  * prend pas le verrou d'écriture.
  */
-async function lireConfigAdmin() {
-  const r = await apiPostProtege('getConfigAdmin', {}, 'admin', 'admin');
+async function lireConfigAdmin(cle) {
+  // ⭐ `cle` est RÉSERVÉE à l'ouverture de la page (`ouvrirSessionAdmin`), qui valide une clé pas
+  //   encore mémorisée : on l'envoie TELLE QUELLE, sans ouvrir de fenêtre et sans rien mémoriser,
+  //   pour que le refus revienne à l'appelant, qui seul sait quoi en faire.
+  //   Sans argument (tous les autres appels), comportement historique strictement inchangé.
+  const r = cle
+    ? await apiPost('getConfigAdmin', { cle: cle })
+    : await apiPostProtege('getConfigAdmin', {}, 'admin', 'admin');
   return (r && r.config) || { global: {}, categories: [] };
+}
+
+/**
+ * Vrai si l'erreur est un REFUS DE CLÉ par le serveur — et NON une panne.
+ *
+ * ⭐ Signal PRIORITAIRE : le drapeau structuré `acces_refuse` de la réponse, attaché à l'erreur
+ *   par apiPost (voir api.js). Présent, il tranche seul : plus aucune dépendance au texte du
+ *   message ni à son encodage.
+ * ⛔ REPLI seulement : `estRefusCle` (contrôle textuel historique), pour une réponse ANCIENNE qui
+ *   ne porte pas encore le drapeau. Une panne réseau, une erreur HTTP ou une exception serveur
+ *   n'ont ni drapeau ni texte de refus : elles restent des pannes, jamais « clé incorrecte ».
+ */
+function estRefusCleAdmin(err) {
+  const reponse = err && err.reponse;
+  if (reponse && typeof reponse === 'object' && 'acces_refuse' in reponse) {
+    return reponse.acces_refuse === true;
+  }
+  return estRefusCle(err && err.message);
+}
+
+/**
+ * Ouvre la session d'administration ET lance les DEUX lectures d'ouverture EN PARALLÈLE.
+ *
+ * ⭐ Il n'y a plus de sonde préalable. Avant, la page vérifiait la clé avec une action d'écriture
+ *   passant par le verrou (`supprimerEquipe` sur un identifiant inexistant : aucune cellule n'était
+ *   touchée, mais le chemin et le verrou des écritures étaient bien pris), AVANT de commencer à
+ *   charger — un aller-retour entier, en série, dont le seul produit était un oui/non.
+ *   C'est `getConfigAdmin` — déjà indispensable, déjà protégé par la même clé côté serveur — qui
+ *   porte désormais la validation : son succès EST la preuve que la clé est bonne.
+ *
+ * ⛔ `getAll` n'est lancé QU'UNE FOIS, au premier essai, et il est CONSERVÉ d'un essai à l'autre :
+ *   une clé refusée ne relance que `getConfigAdmin`.
+ * ⛔ La clé n'est mémorisée qu'APRÈS le succès de `getConfigAdmin`, qui est la preuve que le
+ *   serveur l'accepte : une clé refusée ne laisse aucune trace en session. Une panne de `getAll`
+ *   survient APRÈS cette preuve — la clé, elle, est bien valide et reste acquise pour la session.
+ * ⛔ Toute erreur qui n'est PAS un refus de clé est RELANCÉE telle quelle : elle doit finir dans
+ *   le message d'erreur général, jamais en « clé incorrecte », et sans rouvrir de fenêtre.
+ *
+ * @return {Promise<Object>} { connecte: true, data, cfg }, ou { connecte: false } si annulation.
+ */
+async function ouvrirSessionAdmin() {
+  let cle = lireCleLocale('admin');
+  let getAll = null; // promesse UNIQUE : lancée au premier essai, jamais relancée ensuite
+
+  while (true) {
+    if (!cle) {
+      const saisie = await dialogDemander(
+        '🔒 Accès à l\'administration\n\nEntre la clé :', '', { ok: 'Se connecter' });
+      if (saisie == null) return { connecte: false }; // annulé : aucun appel, aucune clé mémorisée
+      cle = saisie.trim();
+      // Clé vide : on redemande SANS rien envoyer — aucun appel réseau tant qu'il n'y a pas de clé.
+      if (!cle) { await dialogAlerter('Clé incorrecte. Réessaie.'); continue; }
+    }
+
+    // Les deux lectures partent ENSEMBLE : aucune n'attend l'autre.
+    // Le `catch` vide marque la promesse comme surveillée : sans lui, un `getAll` qui échoue
+    // pendant qu'on redemande la clé remonterait en rejet NON GÉRÉ. L'erreur reste intacte et
+    // ressort au `await` ci-dessous.
+    if (!getAll) { getAll = apiGet('getAll'); getAll.catch(function () { /* relu plus bas */ }); }
+
+    let cfg;
+    try {
+      cfg = await lireConfigAdmin(cle);
+    } catch (err) {
+      if (!estRefusCleAdmin(err)) throw err; // panne : ce n'est PAS un problème de clé
+      definirCleLocale('admin', '');         // on efface la clé refusée (cas d'une clé de session)
+      cle = '';
+      await dialogAlerter('Clé incorrecte. Réessaie.');
+      continue;                              // on redemande, et on ne relance QUE getConfigAdmin
+    }
+
+    // Le serveur vient d'accepter la clé : `getConfigAdmin` a répondu. On la mémorise ICI, avant
+    // d'attendre `getAll` — si cette seconde lecture tombe en panne, le chargement échoue, mais la
+    // clé reste acquise : le rechargement suivant repartira sans redemander la saisie.
+    definirCleLocale('admin', cle);
+    const data = await getAll;
+    return { connecte: true, data: data, cfg: cfg };
+  }
 }
 
 /**
@@ -302,17 +386,21 @@ async function initAdmin() {
   if (typeof injecterIcones === 'function') injecterIcones(); // icônes SVG des boutons statiques
 
   // La page d'administration édite des données PERSONNELLES (contacts, sécurité, réponse). Elle
-  // exige donc la clé admin AVANT de charger la config : sans clé, aucune donnée sensible n'est
+  // exige donc la clé admin POUR charger la config : sans clé, aucune donnée sensible n'est
   // servie. La config COMPLÈTE se lit via getConfigAdmin (clé admin) ; getAll ne fournit plus que
   // les données live (équipes/planning + config filtrée), sans les contacts.
-  const connecte = await connexion('admin', "à l'administration");
-  majBarreConnexion(connecte);
+  // ⭐ La validation de la clé et les deux lectures d'ouverture partent ENSEMBLE.
+  // getAll : équipes / poules / matchs (sa config est la vue LIVE, on ne s'en sert pas pour
+  // l'édition). getConfigAdmin : la config complète, ET la preuve que la clé est bonne.
+  let connecte = false;
+  try {
+    const session = await ouvrirSessionAdmin();
+    connecte = session.connecte;
+    majBarreConnexion(connecte);
 
-  if (connecte) {
-    try {
-      // getAll : équipes / poules / matchs (sa config est la vue LIVE, on ne s'en sert pas pour
-      // l'édition). getConfigAdmin : la config complète. Les deux en parallèle.
-      const [data, cfg] = await Promise.all([apiGet('getAll'), lireConfigAdmin()]);
+    if (connecte) {
+      const data = session.data;
+      const cfg = session.cfg;
       configCourante = cfg;
       equipesCourantes = data.equipes;
       matchsCourants = data.matchs || [];
@@ -346,14 +434,18 @@ async function initAdmin() {
       // 5) Tableau de bord + horodatage.
       majTableauBord();
       majHeureAdmin();
-    } catch (erreur) {
+    } else {
       zoneReglages.innerHTML =
-        '<div class="message erreur">Impossible de charger les réglages.<br>' +
-        'Détail : ' + erreur.message + '</div>';
+        '<div class="message">🔒 Connecte-toi avec la clé admin pour accéder aux réglages du tournoi.</div>';
     }
-  } else {
+  } catch (erreur) {
+    // Panne technique (réseau, HTTP, exception serveur) : JAMAIS présentée comme une clé refusée.
+    // Survenue avant la connexion, elle laisse la barre sur « Non connecté » ; survenue pendant le
+    // rendu (déjà connecté), elle ne touche pas la barre — comportement d'avant conservé.
+    if (!connecte) majBarreConnexion(false);
     zoneReglages.innerHTML =
-      '<div class="message">🔒 Connecte-toi avec la clé admin pour accéder aux réglages du tournoi.</div>';
+      '<div class="message erreur">Impossible de charger les réglages.<br>' +
+      'Détail : ' + erreur.message + '</div>';
   }
 
   // Barre de connexion : boutons « Se connecter » / « Changer de clé » (délégué).
