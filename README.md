@@ -3,6 +3,8 @@
 Démonstration publique d'**AppRugbyEvent**, une application d'organisation de tournoi de rugby
 pour écoles de rugby.
 
+**Adresse du site :** <https://rfl974.github.io/Demo-AppRugbyEvent/>
+
 Ce dépôt contient le **frontend** de la démonstration : des pages web (HTML / CSS / JavaScript),
 **pensées pour le mobile d'abord**, sans framework ni étape de construction. Elles dialoguent avec
 un backend Google Apps Script adossé à un classeur Google Sheets **dédié à la démonstration** :
@@ -23,7 +25,8 @@ Le cœur de la démonstration, et la seule page destinée au grand public. Deux 
 mathématiquement certain. Elle se rafraîchit toute seule pendant la journée. Aucune clé n'est
 demandée : on ouvre l'adresse, on choisit son équipe, on suit ses matchs.
 
-`index.html` redirige la racine du site vers cette page.
+`index.html` redirige la racine du site vers cette page : ouvrir
+<https://rfl974.github.io/Demo-AppRugbyEvent/> mène donc directement à `tournoi.html`.
 
 ### L'administration — `admin.html`
 
