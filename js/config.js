@@ -19,7 +19,7 @@
  * URL de la Web App Google Apps Script (elle se termine par "/exec").
  *
  *  ⭐ ICI : le déploiement « Version 1 » du backend de la DÉMO RACING.
- *  (Backend DR issu du commit 60d92d9 du dépôt RFL974/tournoi-r92.)
+ *  Backend DR dédié à cette démonstration.
  *
  *  ⚠️ IMPORTANT : pour garder CETTE MÊME URL quand on modifie le code backend,
  *  il faut redéployer via  Déployer → Gérer les déploiements → (crayon) Modifier
