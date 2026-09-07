@@ -67,20 +67,39 @@ function initAdminSponsors() {
   document.getElementById('projection-appareils').addEventListener('input', afficherBilanSponsors);
 }
 
-/** Appelé par admin.js une fois la config chargée : remplit les réglages puis la liste. */
+/** Appelé par admin.js une fois la config chargée : remplit les réglages puis la liste.
+ *
+ * ⚡ Les deux lectures partent ENSEMBLE. `listerSponsors` et `lireMesuresSponsors` sont deux
+ * appels Apps Script indépendants : les enchaîner ajoutait une ronde réseau complète au
+ * chargement de l'administration, pour rien. Chaque démarrage Apps Script coûte une à
+ * plusieurs secondes — c'est le poste le plus cher de cet écran.
+ *
+ * ⚠️ Ce qui n'est PAS parallélisable, c'est le RENDU. `afficherBilanSponsors()` lit les fiches
+ * via `sponsorsActifsAdmin()` : rendu trop tôt, il verrait `sponsorsAdmin` encore vide et
+ * afficherait « aucun relevé » — un faux état vide, qui ne serait jamais corrigé. D'où la
+ * séparation lecture / rendu : on lit en parallèle, on rend une fois les deux lectures finies.
+ */
 async function majSponsors() {
   if (!document.getElementById('bloc-sponsors-liste')) return;
   injecterReglagesSponsors(configCourante.global || {});
-  await chargerSponsors();
-  await chargerMesuresSponsors();
+  // Aucune des deux ne rejette (chacune traite son propre échec) : Promise.all ne peut pas
+  // court-circuiter, et un échec d'un côté laisse l'autre section s'afficher normalement.
+  const [fichesOk] = await Promise.all([lireFichesSponsors(), lireRelevesSponsors()]);
+  if (fichesOk) afficherListeSponsors(); // sinon : le message d'erreur posé par la lecture reste
+  afficherBilanSponsors();
 }
 
 /**
  * Récupère les relevés déposés par les navigateurs des spectateurs et les consolide.
  * En cas d'échec (backend pas encore redéployé, réseau), on retombe sur les compteurs
  * de CET appareil : la fiche reste affichable, et elle le dit.
+ *
+ * ⛔ NE REND RIEN — le rendu appartient à l'appelant. C'est ce qui permet à `majSponsors` de
+ * lancer cette lecture en même temps que celle des fiches sans risquer d'afficher le bilan
+ * avant que `sponsorsAdmin` soit rempli. Ne jamais rejeter : l'échec est déjà traduit en
+ * `sponsorsConsolide = null`, que `afficherBilanSponsors` sait interpréter (repli appareil).
  */
-async function chargerMesuresSponsors() {
+async function lireRelevesSponsors() {
   const zone = document.getElementById('bilan-sponsors');
   if (zone) zone.innerHTML = '<div class="message">Lecture des relevés…</div>';
   try {
@@ -96,6 +115,15 @@ async function chargerMesuresSponsors() {
   } catch (err) {
     sponsorsConsolide = null;
   }
+}
+
+/**
+ * Lecture + rendu du bilan, en un geste. Point d'entrée des usages ISOLÉS : bouton
+ * « Rafraîchir » et fin de `onViderBilan`, où les fiches sont déjà à l'écran. Comportement
+ * inchangé. (Branchée directement comme écouteur de clic : elle ne prend aucun argument.)
+ */
+async function chargerMesuresSponsors() {
+  await lireRelevesSponsors();
   afficherBilanSponsors();
 }
 
@@ -429,16 +457,32 @@ function sponsorsActifsAdmin() {
     });
 }
 
-async function chargerSponsors() {
+/**
+ * Lit les fiches partenaires. ⛔ NE REND RIEN — comme `lireRelevesSponsors`, pour que les deux
+ * lectures puissent partir ensemble depuis `majSponsors`.
+ * ⚠️ En cas d'échec, le message d'erreur est posé ICI et `false` est renvoyé : l'appelant ne
+ * doit alors PAS appeler `afficherListeSponsors()`, qui écraserait ce message par un
+ * « Aucun partenaire pour l'instant » mensonger — une panne de lecture n'est pas une absence.
+ * @return {Promise<boolean>} true si les fiches ont été lues, false si la lecture a échoué.
+ */
+async function lireFichesSponsors() {
   const zone = document.getElementById('liste-sponsors');
   try {
     const r = await apiPostProtege('listerSponsors', {}, 'admin', 'admin');
     sponsorsAdmin = (r && r.sponsors) || [];
+    return true;
   } catch (err) {
     zone.innerHTML = '<p class="vide">Erreur de chargement des partenaires : ' + echapper(err.message) + '</p>';
-    return;
+    return false;
   }
-  afficherListeSponsors();
+}
+
+/**
+ * Lecture + rendu des fiches, en un geste. Point d'entrée des usages ISOLÉS : après
+ * enregistrement ou suppression d'un partenaire. Comportement inchangé.
+ */
+async function chargerSponsors() {
+  if (await lireFichesSponsors()) afficherListeSponsors();
 }
 
 function afficherListeSponsors() {
