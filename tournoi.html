@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Le tournoi</title>
+  <meta name="theme-color" content="#0C1C2E">
+  <meta name="description" content="Le tournoi de rugby en direct : poules, planning et scores en temps réel.">
+  <link rel="icon" type="image/svg+xml" href="assets/logo-tournoi.svg">
+
+  <!-- Polices de la charte du site vitrine (Barlow + Barlow Condensed) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Feuille de style DÉDIÉE à la page publique (thème clair). -->
+  <link rel="stylesheet" href="css/tournoi-public.css">
+  <!-- Encarts partenaires : feuille partagée avec l'écran d'administration (aperçus). -->
+  <link rel="stylesheet" href="css/sponsors.css">
+</head>
+<body>
+
+  <a class="lien-evitement" href="#contenu">Aller au contenu</a>
+
+  <!--
+    PAGE PUBLIQUE UNIQUE. Deux onglets : « Mon équipe » (matchs + classements d'une équipe)
+    et « Classements » (derniers scores du tournoi + poules + niveaux croisés). Un seul appel
+    réseau (getAll) et un seul rafraîchissement auto alimentent les 2 vues. Lecture seule.
+  -->
+
+  <!-- ============ EN-TÊTE (navy, comme le site vitrine) ============ -->
+  <header class="entete">
+    <div class="conteneur">
+      <div class="logo">
+        <img src="assets/logo-tournoi.svg" alt="" width="64" height="64" decoding="async">
+      </div>
+    </div>
+  </header>
+
+  <!-- ============ BANDEAU DE TITRE (dégradé navy) ============ -->
+  <section class="bandeau-titre">
+    <div class="conteneur">
+      <p class="sous-titre">En direct</p>
+      <h1 class="titre-page" id="titre-tournoi">Le tournoi</h1>
+      <p class="chapo">Poules, planning et scores en temps réel. Choisis ton équipe pour suivre tes matchs.</p>
+    </div>
+  </section>
+
+  <!-- ============ CONTENU ============ -->
+  <main id="contenu" class="section">
+    <div class="conteneur">
+      <!-- ============ A · BANDEAU PARTENAIRE PRINCIPAL ============
+           Rempli par sponsors.js. Reste vide (et invisible) tant qu'aucun partenaire
+           n'est déclaré sur cet emplacement : la page est alors STRICTEMENT celle d'avant. -->
+      <div id="sp-bandeau" class="sp-zone-bandeau" hidden></div>
+
+      <div class="carte-app">
+
+        <!-- Écran « à venir » : affiché tant que le tournoi n'est pas publié depuis l'admin. -->
+        <div id="tournoi-avenir" hidden>
+          <div class="avenir">
+            <div class="avenir-emoji">🏉</div>
+            <h2 class="avenir-titre">Le tournoi arrive bientôt</h2>
+            <p class="avenir-texte">Les poules, le planning et les scores en direct s'afficheront ici
+              dès l'ouverture du tournoi. Reviens un peu plus tard !</p>
+          </div>
+        </div>
+
+        <!-- Tête : contrôles à gauche, podium (si certain) dans l'encadré à droite. -->
+        <div class="tete-live">
+          <div class="tete-controls">
+            <div class="live-barre">
+              <button id="btn-refresh" class="bouton">🔄 Rafraîchir</button>
+              <span id="maj" class="live-maj"></span>
+            </div>
+
+            <!-- Barre d'onglets (segmenté). « Mon équipe » est l'onglet par défaut. -->
+            <div class="onglets" role="tablist" aria-label="Vues du tournoi">
+              <button class="onglet actif" data-onglet="equipe" role="tab" aria-selected="true" aria-controls="vue-equipe">📋 Mon équipe</button>
+              <button class="onglet" data-onglet="classements" role="tab" aria-selected="false" aria-controls="vue-classements">🏆 Classements</button>
+            </div>
+
+            <!-- Filtre catégorie GLOBAL : pilote les deux onglets. Masqué s'il n'y a qu'une catégorie. -->
+            <div id="filtre-categorie" class="mp-filtre" hidden>
+              <label class="mp-label" for="select-categorie">Choisis ta catégorie :</label>
+              <select id="select-categorie" class="r-input"></select>
+            </div>
+          </div>
+
+          <!-- Colonne de droite : le podium (quand il est certain) puis le rail partenaires.
+               Sur ordinateur cette colonne est vide les trois quarts du temps — le rail s'y
+               installe sans rien pousser. Sur téléphone, il bascule en barre basse (CSS). -->
+          <div class="tete-cote">
+            <!-- Podium (top 3) : affiché seulement quand il est mathématiquement certain. -->
+            <aside id="podium" class="podium" hidden></aside>
+            <!-- B · RAIL PARTENAIRES (ordinateur). Rempli par sponsors.js. -->
+            <aside id="sp-rail" class="sp-rail" hidden aria-label="Partenaires du tournoi"></aside>
+          </div>
+        </div>
+
+        <div id="vues">
+          <!-- 📋 Mon équipe : sélecteur + matchs + classements de l'équipe -->
+          <div id="vue-equipe" role="tabpanel">
+            <label class="mp-label" for="select-equipe">Choisis ton équipe :</label>
+            <select id="select-equipe" class="r-input">
+              <option value="">— Chargement… —</option>
+            </select>
+            <div id="mon-planning">
+              <p class="vide">Sélectionne ton équipe pour voir tes matchs.</p>
+            </div>
+          </div>
+
+          <!-- 🏆 Classements : derniers scores + poules (matin) + niveaux croisés (après-midi) -->
+          <div id="vue-classements" role="tabpanel" hidden>
+            <div class="message">Chargement des classements…</div>
+          </div>
+        </div>
+
+        <!-- ============ E · MUR DES PARTENAIRES ============
+             Tous les logos, sans hiérarchie, en bas de la carte. Rempli par sponsors.js. -->
+        <div id="sp-mur" hidden></div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ============ B · BARRE PARTENAIRE (téléphone) ============
+       Même contenu que le rail, rendu en barre basse sur petit écran. Le corps de page
+       réserve sa hauteur (classe .sp-barre-active) pour ne jamais recouvrir un score. -->
+  <div id="sp-barre" class="sp-barre" hidden aria-label="Partenaires du tournoi"></div>
+
+  <!-- ============ PIED DE PAGE (navy) ============ -->
+  <footer class="pied">
+    <div class="conteneur">
+      <img class="pied-logo" src="assets/logo-tournoi.svg" alt="" width="64" height="64" decoding="async">
+      <p>Le tournoi en direct</p>
+    </div>
+  </footer>
+
+  <script src="js/config.js"></script>
+  <script src="js/commun.js"></script>
+  <script src="js/dialog.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/sponsors.js"></script>
+  <script src="js/tournoi.js"></script>
+
+</body>
+</html>

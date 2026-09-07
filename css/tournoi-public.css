@@ -1,0 +1,600 @@
+/* =========================================================
+   LE TOURNOI — page publique
+   ---------------------------------------------------------
+   Feuille de style DÉDIÉE à tournoi.html, calquée sur la
+   charte de la page publique : navy / bleu ciel /
+   bleu vif, polices Barlow. Les pages admin/saisie/perfs
+   gardent, elles, leur feuille styles.css (thème sombre).
+   Pensé "mobile d'abord".
+   ========================================================= */
+
+/* ---------------------------------------------------------
+   1. COULEURS DE LA MARQUE (identiques au site vitrine)
+   --------------------------------------------------------- */
+:root {
+  --navy:        #0C1C2E;
+  --navy-clair:  #16304a;
+  --ciel:        #B8D8F8;
+  --bleu-vif:    #2E8FE0;
+  --blanc:       #FFFFFF;
+  --gris-texte:  #3B4A63;
+  --surface-clair: #F5F9FD;
+  --bordure:     #e6edf5;
+  --ombre:       0 1px 3px rgba(12, 28, 46, 0.06);
+
+  /* Résultats (contrastés pour fond clair) */
+  --vert:  #1a8a4a;   /* victoire */
+  --rouge: #c0392b;   /* défaite  */
+
+  --largeur-max: 900px;
+  --rayon: 14px;
+}
+
+/* ---------------------------------------------------------
+   2. BASE
+   --------------------------------------------------------- */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  font-family: 'Barlow', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+  color: var(--gris-texte);
+  background: var(--blanc);
+  line-height: 1.6;
+  overflow-wrap: break-word;
+}
+/* Grain très subtil sur toute la page (n'attrape aucun clic). Ressource LOCALE. */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  opacity: 0.04;
+  mix-blend-mode: soft-light;
+  background: url('../assets/grain.svg') repeat;
+  background-size: 200px 200px;
+}
+a { color: var(--bleu-vif); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.conteneur {
+  width: 100%;
+  max-width: var(--largeur-max);
+  margin: 0 auto;
+  padding: 0 20px;
+}
+
+/* L'attribut HTML [hidden] doit toujours l'emporter : sans ce !important, une règle
+   auteur en display:flex/block (barre, onglets, bandeau de don) resterait affichée même
+   avec l'attribut hidden — ce qui laisserait apparaître les contrôles sur l'écran « à venir »
+   quand le tournoi n'est pas encore publié. */
+[hidden] { display: none !important; }
+
+/* Lien d'évitement (accessibilité clavier) */
+.lien-evitement {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  background: var(--bleu-vif);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 0 0 8px 0;
+  z-index: 10000;
+}
+.lien-evitement:focus { left: 0; }
+
+/* ---------------------------------------------------------
+   3. EN-TÊTE (navy, logo + retour au site)
+   --------------------------------------------------------- */
+.entete {
+  background: var(--navy);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+}
+.entete .conteneur {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.logo img { height: 48px; width: auto; display: block; }
+
+/* ---------------------------------------------------------
+   4. BANDEAU DE TITRE (dégradé navy + fine barre bleue)
+   --------------------------------------------------------- */
+.bandeau-titre {
+  position: relative;
+  background: linear-gradient(135deg, var(--navy-clair), var(--navy));
+  color: var(--blanc);
+  padding: 44px 0;
+  overflow: hidden;
+}
+.bandeau-titre::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: var(--bleu-vif);
+}
+.bandeau-titre > .conteneur { position: relative; z-index: 1; }
+.sous-titre {
+  font-family: 'Barlow Condensed', 'Segoe UI', sans-serif;
+  color: #7db8ec;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+}
+.titre-page {
+  font-family: 'Barlow Condensed', 'Segoe UI', sans-serif;
+  font-weight: 800;
+  font-size: 2.2rem;
+  letter-spacing: 0.5px;
+  color: var(--blanc);
+  line-height: 1.05;
+}
+.chapo { color: #c3d6ec; font-size: 1.1rem; margin-top: 12px; max-width: 640px; }
+
+/* ---------------------------------------------------------
+   5. ZONE DE CONTENU + CARTE
+   --------------------------------------------------------- */
+.section { padding: 32px 0 48px; }
+/* Colonne souple : l'ordre d'affichage des blocs est piloté par les `order:` ci-dessous,
+   indépendamment de leur position dans le HTML. */
+.carte-app {
+  background: var(--blanc);
+  border: 1px solid var(--bordure);
+  border-radius: var(--rayon);
+  box-shadow: var(--ombre);
+  padding: 20px 18px 24px;
+  display: flex;
+  flex-direction: column;
+}
+#tournoi-avenir { order: 10; }
+.tete-live      { order: 30; }
+#vues           { order: 40; }
+#sp-mur         { order: 50; }
+
+/* ---------------------------------------------------------
+   6. BOUTONS
+   --------------------------------------------------------- */
+.btn, .bouton {
+  display: inline-block;
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  border-radius: 8px;
+  border: 2px solid transparent;
+  padding: 8px 16px;
+  transition: transform 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+.btn:hover, .bouton:hover { transform: translateY(-1px); text-decoration: none; }
+/* Rafraîchir : contour bleu sur fond clair */
+.bouton {
+  background: transparent;
+  color: var(--bleu-vif);
+  border-color: var(--bleu-vif);
+}
+.bouton:hover { background: var(--bleu-vif); color: var(--blanc); }
+.bouton:disabled { opacity: 0.6; cursor: default; transform: none; }
+
+/* ---------------------------------------------------------
+   7. CHAMPS (menus déroulants équipe / catégorie)
+   --------------------------------------------------------- */
+.r-input {
+  width: 100%;
+  font-family: 'Barlow', sans-serif;
+  font-size: 1rem;
+  color: var(--navy);
+  background: var(--blanc);
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.r-input:focus { outline: none; border-color: var(--bleu-vif); box-shadow: 0 0 0 3px rgba(46, 143, 224, 0.15); }
+.mp-label {
+  display: block;
+  color: var(--navy);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  margin-bottom: 6px;
+}
+#select-equipe { margin-bottom: 10px; }
+.mp-filtre { margin-bottom: 16px; }
+
+/* ---------------------------------------------------------
+   8. BARRE "EN DIRECT" (rafraîchir + heure)
+   --------------------------------------------------------- */
+.live-barre {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 14px;
+}
+.live-maj {
+  color: #8a97a6;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.9rem;
+}
+
+/* ---------------------------------------------------------
+   8 bis. TÊTE : contrôles à gauche + PODIUM dans l'encadré à droite
+   --------------------------------------------------------- */
+.tete-live {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+.tete-controls { flex: 1 1 auto; min-width: 0; }
+
+/* Colonne de droite : le podium, puis le rail partenaires. Sur ordinateur cette colonne
+   est vide les trois quarts du temps — le rail s'y installe sans rien pousser. */
+.tete-cote {
+  flex: 0 0 auto;
+  width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* Le podium prend la place de l'encadré libre en haut à droite. */
+.podium {
+  flex: 0 0 auto;
+  width: 100%;
+  background: var(--surface-clair);
+  border: 1px solid var(--bordure);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: var(--ombre);
+}
+.podium-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 1.1rem;
+  color: var(--navy);
+  text-align: center;
+  margin-bottom: 10px;
+}
+.podium-cat { color: var(--bleu-vif); }
+.podium-ligne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  margin-bottom: 5px;
+}
+.podium-ligne:last-child { margin-bottom: 0; }
+/* Accent de médaille : or / argent / bronze, en dégradé discret. */
+.podium-1 { background: linear-gradient(90deg, rgba(233, 181, 62, 0.22), rgba(233, 181, 62, 0.04)); }
+.podium-2 { background: linear-gradient(90deg, rgba(150, 164, 180, 0.22), rgba(150, 164, 180, 0.04)); }
+.podium-3 { background: linear-gradient(90deg, rgba(205, 127, 50, 0.20), rgba(205, 127, 50, 0.04)); }
+.podium-rang { font-size: 1.35rem; line-height: 1; flex: 0 0 auto; }
+.podium-nom {
+  font-weight: 700;
+  color: var(--navy);
+  font-size: 0.95rem;
+  line-height: 1.15;
+}
+
+/* Sur mobile/tablette étroite : le podium passe sous les contrôles, pleine largeur. */
+@media (max-width: 720px) {
+  .tete-live { flex-direction: column; }
+  .tete-cote { width: 100%; }
+}
+
+/* ---------------------------------------------------------
+   10. ONGLETS (Mon équipe / Classements) — contrôle segmenté
+   --------------------------------------------------------- */
+.onglets { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
+.onglet {
+  flex: 1 1 auto;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 1.02rem;
+  color: var(--navy);
+  background: var(--surface-clair);
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  padding: 9px 16px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.onglet:hover { border-color: var(--bleu-vif); }
+.onglet.actif {
+  background: var(--bleu-vif);
+  color: var(--blanc);
+  border-color: var(--bleu-vif);
+}
+
+/* ---------------------------------------------------------
+   11. SOUS-TITRES DE PHASE / SECTIONS INTERNES
+   --------------------------------------------------------- */
+.planning-phase {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 1.15rem;
+  color: var(--navy);
+  margin: 22px 0 8px;
+  padding-bottom: 6px;
+  border-bottom: 2px solid var(--surface-clair);
+}
+.live-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 1.3rem;
+  color: var(--navy);
+  margin: 4px 0 10px;
+}
+.live-cat {
+  font-family: 'Barlow Condensed', sans-serif;
+  color: var(--bleu-vif);
+  font-size: 1.15rem;
+  margin: 16px 0 4px;
+}
+.live-poule {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  color: var(--navy);
+  margin: 10px 0 4px;
+}
+
+/* ---------------------------------------------------------
+   12. CARTES DE MATCH (Mon équipe)
+   --------------------------------------------------------- */
+.match {
+  background: var(--surface-clair);
+  border: 1px solid var(--bordure);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.match-termine { border-color: rgba(26, 138, 74, 0.35); }
+.match-meta {
+  color: #8a97a6;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.95rem;
+  margin-bottom: 6px;
+}
+.mp-ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.mp-adv { font-weight: 700; font-size: 1.05rem; color: var(--navy); }
+.mp-resultat { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; }
+.mp-resultat.gagne { color: var(--vert); }
+.mp-resultat.perd  { color: var(--rouge); }
+.mp-resultat.nul   { color: var(--bleu-vif); }
+.mp-avenir { color: #8a97a6; font-style: italic; }
+
+/* ---------------------------------------------------------
+   13. DERNIERS SCORES (scoreboard)
+   --------------------------------------------------------- */
+.score-ligne {
+  background: var(--surface-clair);
+  border: 1px solid var(--bordure);
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-bottom: 8px;
+}
+.score-meta {
+  color: #8a97a6;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.85rem;
+}
+.score-corps {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  margin-top: 4px;
+  color: var(--navy);
+}
+.score-corps > span:first-child { text-align: right; }
+.score-corps > span:last-child  { text-align: left; }
+.score-corps .gagnant { font-weight: 700; color: var(--vert); }
+.score-chiffres {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  white-space: nowrap;
+  text-align: center;
+  min-width: 72px;
+  color: var(--navy);
+}
+
+/* ---------------------------------------------------------
+   13bis. ARBRE DE COUPE (bracket) + Plateau / Libre
+   --------------------------------------------------------- */
+.bracket-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 1.1rem;
+  color: var(--navy);
+  margin: 16px 0 8px;
+}
+.note-amical { color: var(--gris-texte); font-style: italic; margin: 4px 0 10px; }
+
+.bracket-scroll { overflow-x: auto; padding-bottom: 6px; }
+.bracket {
+  display: flex;
+  gap: 16px;
+  align-items: stretch;
+  min-width: min-content;   /* laisse les colonnes déborder → défilement horizontal sur mobile */
+}
+.bracket-col {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-around;  /* espace les matchs pour évoquer l'arbre */
+  gap: 12px;
+  min-width: 190px;
+}
+.bracket-col-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.8rem;
+  color: var(--bleu-vif);
+  font-weight: 700;
+  text-align: center;
+}
+.bracket-match {
+  background: var(--surface-clair);
+  border: 1px solid var(--bordure);
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: var(--ombre);
+}
+.bracket-match-attente { border-style: dashed; opacity: 0.75; }
+.bracket-eq {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 10px;
+  font-size: 0.95rem;
+  color: var(--navy);
+}
+.bracket-eq + .bracket-eq { border-top: 1px solid var(--bordure); }
+.bracket-nom { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bracket-score { font-weight: 700; flex: none; font-variant-numeric: tabular-nums; }
+.bracket-gagnant { color: var(--vert); }
+.bracket-gagnant .bracket-nom { font-weight: 700; }
+.bracket-perdant { color: #8a97a6; }
+.bracket-attente { font-style: italic; color: #8a97a6; }
+.bracket-petite { margin-top: 14px; max-width: 230px; }
+
+/* Vainqueur / tête du classement général (croisé) */
+.note-vainqueur {
+  background: linear-gradient(90deg, rgba(233, 181, 62, 0.20), rgba(233, 181, 62, 0.04));
+  border: 1px solid rgba(233, 181, 62, 0.5);
+  border-radius: 10px;
+  padding: 8px 12px;
+  margin: 6px 0 8px;
+  color: var(--navy);
+}
+.note-vainqueur.note-provisoire {
+  background: var(--surface-clair);
+  border-color: var(--bordure);
+  color: var(--gris-texte);
+  font-style: italic;
+}
+tr.cl-vainqueur { background: rgba(233, 181, 62, 0.16); }
+tr.cl-vainqueur .col-equipe { font-weight: 700; color: var(--navy); }
+
+/* ---------------------------------------------------------
+   14. TABLEAUX DE CLASSEMENT
+   --------------------------------------------------------- */
+.table-scroll { overflow-x: auto; margin-top: 8px; }
+.table-planning {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.table-planning th,
+.table-planning td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--bordure);
+  white-space: nowrap;
+}
+.table-planning th {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--bleu-vif);
+  font-size: 0.85rem;
+}
+.table-classement th,
+.table-classement td { text-align: center; vertical-align: middle; }
+.table-classement .col-equipe { text-align: left; font-weight: 600; color: var(--navy); }
+.table-classement .col-pts { font-weight: 800; color: var(--navy); }
+/* La colonne « Équipe » peut revenir à la ligne : les noms longs
+   (ex. « PUC (PARIS UNIVERSITÉ CLUB)-2 ») ne débordent plus sur la colonne
+   voisine mais s'enroulent dans leur cellule. */
+.table-classement .col-equipe {
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.2;
+}
+/* Surlignage de l'équipe choisie */
+.fav-ligne { background: rgba(46, 143, 224, 0.10); }
+
+/* Largeurs fixes pour aligner les tableaux complets d'une poule à l'autre.
+   La colonne « Équipe » est plus large (les noms y tiennent sur 1–2 lignes). */
+.cl-full { table-layout: fixed; }
+.cl-full th:nth-child(1), .cl-full td:nth-child(1) { width: 30px; }
+.cl-full th:nth-child(2), .cl-full td:nth-child(2) { width: 150px; }
+.cl-full th:nth-child(n+3), .cl-full td:nth-child(n+3) { width: 42px; }
+
+/* ---------------------------------------------------------
+   15. MESSAGES & ÉTAT VIDE
+   --------------------------------------------------------- */
+.vide { color: #8a97a6; font-style: italic; }
+.message {
+  text-align: center;
+  padding: 20px;
+  color: #8a97a6;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.1rem;
+}
+
+/* ---------------------------------------------------------
+   16. ÉCRAN "À VENIR" (tournoi pas encore publié)
+   --------------------------------------------------------- */
+.avenir { text-align: center; padding: 40px 16px; }
+.avenir-emoji { font-size: 3.4rem; line-height: 1; }
+.avenir-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 1.9rem;
+  color: var(--navy);
+  margin: 14px 0 8px;
+}
+.avenir-texte { color: var(--gris-texte); max-width: 40ch; margin: 0 auto; }
+
+/* ---------------------------------------------------------
+   17. PIED DE PAGE (navy, comme le site vitrine)
+   --------------------------------------------------------- */
+.pied {
+  background: var(--navy);
+  color: var(--ciel);
+  padding: 36px 0 24px;
+  text-align: center;
+  clip-path: polygon(0 24px, 100% 0, 100% 100%, 0 100%);
+}
+.pied-logo { height: 52px; width: auto; margin: 0 auto 14px; }
+.pied p { font-size: 0.85rem; color: #7f9bb8; }
+
+/* ---------------------------------------------------------
+   18. TABLETTE / ORDINATEUR
+   --------------------------------------------------------- */
+@media (min-width: 700px) {
+  .titre-page { font-size: 2.8rem; }
+  .carte-app { padding: 28px 26px 32px; }
+  .onglet { flex: 0 1 auto; padding: 10px 26px; }
+}
+@media (max-width: 480px) {
+  .conteneur { padding: 0 16px; }
+  .titre-page { font-size: 1.9rem; }
+  .bandeau-titre { padding: 34px 0; }
+}
+
+/* =========================================================
+   19. PARTENAIRES (sponsors) → css/sponsors.css
+   ---------------------------------------------------------
+   Ces règles ont déménagé dans une feuille à part : l'écran
+   d'administration en a besoin lui aussi pour ses aperçus, et
+   il ne peut pas charger la présente feuille (elle habille
+   toute la page publique). tournoi.html charge les deux.
+   ========================================================= */

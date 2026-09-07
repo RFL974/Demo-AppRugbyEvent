@@ -1,0 +1,689 @@
+/* ============================================================================
+   DOSSIER CLUB — style « document » : fond blanc, texte sombre, format A4.
+   Charte : navy #0C1C2E (titres, entête) + bleu vif #2E8FE0 (accents),
+   corps noir/gris sur blanc pour rester lisible à l'impression.
+   ========================================================================== */
+
+:root {
+  --d-navy: #0C1C2E;
+  --d-bleu: #2E8FE0;
+  --d-texte: #1a1f26;
+  --d-gris: #5b6570;
+  --d-filet: #dbe3ec;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: #eef2f7;               /* gris doux autour de la « feuille » à l'écran */
+  color: var(--d-texte);
+  font-family: 'Barlow', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* ----- Barre d'outils (écran uniquement) ---------------------------------- */
+.barre-outils {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--d-navy);
+  color: #fff;
+}
+/* Astuce d'impression, juste avant le bouton : discrète, mais lue au bon moment. */
+.barre-outils-astuce {
+  flex: 0 1 auto;
+  max-width: 52ch;
+  margin-left: auto;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: #b8d8f8;
+}
+.barre-outils-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  font-size: 0.9rem;
+  color: #b8d8f8;
+}
+.btn-outil {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: transparent;
+  color: #fff;
+  border-radius: 999px;
+  padding: 7px 16px;
+  font: 600 0.9rem 'Barlow', sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+.btn-outil:hover { background: rgba(255, 255, 255, 0.12); }
+.btn-principal { background: var(--d-bleu); border-color: var(--d-bleu); }
+.btn-principal:hover { background: #227ac4; }
+
+/* ----- La « feuille » A4 --------------------------------------------------- */
+.feuille {
+  max-width: 210mm;                  /* largeur A4 : l'écran prévisualise l'impression */
+  margin: 24px auto 48px;
+  background: #fff;
+  padding: 14mm 16mm;
+  box-shadow: 0 10px 34px -14px rgba(12, 28, 46, 0.35);
+}
+
+.message-chargement { color: var(--d-gris); text-align: center; padding: 40px 0; }
+.message-chargement.erreur { color: #b3261e; }
+
+/* ----- Date de génération (utile sur le papier) ------------------------------ */
+.d-genere { margin: 6px 0 0; font-size: 0.78rem; color: var(--d-gris); }
+
+/* ----- Présentation + sections ---------------------------------------------- */
+.d-presentation { margin: 14px 0 4px; }
+
+/* Accueil personnalisé (Phase 2, dossier envoyé à un club précis). */
+.d-accueil {
+  margin: 14px 0 4px;
+  padding: 10px 14px;
+  background: #f2f7fd;
+  border-left: 4px solid var(--d-bleu);
+  border-radius: 0 6px 6px 0;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.d-section { margin-top: 18px; }
+.d-section h2 {
+  margin: 0 0 8px;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-size: 1.05rem;
+  color: var(--d-bleu);
+  border-bottom: 1px solid var(--d-filet);
+  padding-bottom: 4px;
+}
+
+.d-liste { list-style: none; margin: 0; padding: 0; }
+.d-liste li { display: flex; gap: 10px; padding: 3px 0; }
+.d-libelle { flex: 0 0 190px; color: var(--d-gris); }
+.d-valeur { flex: 1; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.d-valeur a { color: var(--d-bleu); word-break: break-all; }
+
+.d-note { margin: 8px 0 0; font-size: 0.8rem; color: var(--d-gris); font-style: italic; }
+
+/* ----- Partager le dossier à ses équipes ------------------------------------- */
+.d-partage {
+  margin: 16px 0 4px; padding: 14px 16px; border-radius: 10px;
+  background: #f2f7fd; border-left: 4px solid var(--d-bleu);
+}
+.d-partage-titre { margin: 0 0 10px; font-weight: 600; color: var(--d-navy); }
+.d-partage-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.d-partage-choix { display: inline-flex; flex-wrap: wrap; gap: 8px; }
+.d-partage-choix[hidden] { display: none; }
+.d-partage-note { margin: 10px 0 0; font-size: 0.85rem; color: var(--d-gris); line-height: 1.5; }
+.d-partage-lien { word-break: break-all; color: var(--d-bleu); }
+
+/* ----- Vos équipes + votre planning (lot « jour J ») ------------------------- */
+.d-equipes { list-style: none; margin: 0; padding: 0; }
+.d-equipes li {
+  display: flex; align-items: baseline; flex-wrap: wrap; gap: 8px;
+  padding: 5px 0; border-bottom: 1px dashed var(--d-filet);
+}
+.d-equipes li:last-child { border-bottom: none; }
+.d-eq-nom { font-weight: 700; color: var(--d-navy); }
+.d-eq-cat {
+  font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.6px;
+  font-size: 0.8rem; color: #fff; background: var(--d-bleu); border-radius: 999px; padding: 1px 9px;
+}
+.d-eq-detail { color: var(--d-gris); font-size: 0.9rem; }
+/* La poule complète, sous l'équipe : le club voit QUI il rencontre, pas seulement sa lettre. */
+.d-eq-poule { flex-basis: 100%; font-size: 0.9rem; color: var(--d-texte); }
+.d-eq-poule strong { color: var(--d-navy); }
+
+/* Un bloc par catégorie : le club engagé en U8 et en U10 lit deux plannings, pas un mélange. */
+.d-pl-bloc + .d-pl-bloc { margin-top: 16px; }
+.d-pl-phase {
+  margin: 10px 0 2px; font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  letter-spacing: 0.6px; font-size: 0.85rem; color: var(--d-gris);
+}
+.d-planning-titre {
+  margin: 14px 0 4px; font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  letter-spacing: 0.8px; font-size: 0.95rem; color: var(--d-bleu);
+}
+.d-planning { width: 100%; border-collapse: collapse; margin: 4px 0 0; }
+.d-planning th {
+  text-align: left; padding: 5px 8px; background: var(--d-navy); color: #fff;
+  font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.6px;
+  font-size: 0.82rem; font-weight: 600;
+}
+.d-planning td { padding: 5px 8px; border-bottom: 1px solid var(--d-filet); vertical-align: top; }
+.d-planning tr:nth-child(even) td { background: #f5f8fc; }
+.d-pl-heure { font-weight: 700; color: var(--d-navy); white-space: nowrap; }
+.d-pl-terrain { white-space: nowrap; }
+.d-pl-cat { color: var(--d-gris); font-size: 0.85em; }
+.d-engagement-action { margin: 10px 0 0; }
+
+/* ----- Parking & accès (texte + photo pleine largeur) -------------------------- */
+.d-parking-texte { margin: 0 0 4px; }
+.d-parking-photo {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  border: 1px solid var(--d-filet);   /* légère bordure arrondie, cohérente avec la charte */
+  border-radius: 8px;
+}
+
+/* ----- Suivi live + QR -------------------------------------------------------- */
+.d-suivi { display: flex; gap: 18px; align-items: flex-start; }
+.d-suivi-texte { flex: 1; min-width: 0; }
+.d-qr { flex: none; text-align: center; }
+.d-qr svg { width: 110px; height: 110px; display: block; }
+.d-qr-legende {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--d-gris);
+  margin-top: 2px;
+}
+
+/* ----- Contact ------------------------------------------------------------------ */
+.d-contact {
+  background: #f2f7fd;
+  border-left: 4px solid var(--d-bleu);
+  padding: 10px 14px;
+}
+.d-contact h2 { border: none; margin-bottom: 2px; padding-bottom: 0; }
+.d-contact-ligne { margin: 0; font-size: 1.05rem; }
+.d-contact-ligne a { color: var(--d-navy); text-decoration: none; font-weight: 700; }
+
+/* ----- Bandeau d'actions --------------------------------------------------------- */
+.d-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 18px;
+  padding: 12px;
+  background: var(--d-navy);
+  border-radius: 10px;
+}
+.d-action {
+  appearance: none;
+  border: none;
+  background: var(--d-bleu);
+  color: #fff;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font: 600 0.85rem 'Barlow', sans-serif;
+  text-decoration: none;
+  cursor: pointer;
+}
+.d-action:hover { background: #227ac4; }
+.d-action:disabled { opacity: 0.6; cursor: wait; }
+/* Message d'erreur du bandeau (ex : modèle d'autorisation introuvable). */
+
+/* ----- Pied de page ------------------------------------------------------------- */
+.d-pied {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 10px;
+  border-top: 1px solid var(--d-filet);
+  font-family: 'Barlow Condensed', sans-serif;
+  letter-spacing: 0.6px;
+  color: var(--d-navy);
+}
+.d-pied-logo { height: 34px; width: auto; }
+.d-pied-mention { color: var(--d-gris); font-size: 0.85em; }
+
+/* ============================================================================
+   INVITATION (Phase 1) — éléments propres à invitation-club.html
+   (réutilise le reste de dossier.css : sections, listes, pied de page).
+   Refonte VITRINE : la page se lit comme un carton d'invitation — blason centré
+   en grand, affiche en héros, frise horaire, une carte par catégorie.
+   ========================================================================== */
+
+/* ----- 1) En-tête vitrine : blason centré, surtitre, grand titre, date · lieu ----- */
+.inv-hero { text-align: center; padding: 8px 0 0; }
+.inv-blason { display: block; width: 150px; height: auto; margin: 0 auto 12px; }
+.inv-surtitre {
+  margin: 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--d-bleu);
+}
+.inv-titre {
+  margin: 8px 0 2px;
+  font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif;
+  font-size: 3.2rem;
+  line-height: 1.05;
+  letter-spacing: 1px;
+  color: var(--d-navy);
+}
+.inv-quand { margin: 4px 0 0; font-weight: 600; font-size: 1.05rem; color: var(--d-navy); }
+
+/* Mention sous la date, propre au DOSSIER : le nom du club et son engagement. Le document
+   appartient à ce club-là, et ça doit se voir sans lire une ligne de texte. */
+.inv-hero-mention { margin: 10px 0 0; }
+.inv-hero-club {
+  display: inline-block;
+  margin: 0;
+  padding: 5px 16px;
+  background: var(--d-navy);
+  color: #fff;
+  border-radius: 999px;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-size: 0.95rem;
+}
+.inv-hero-engagement { margin: 6px 0 0; color: var(--d-gris); font-size: 0.92rem; }
+/* Typo française : seule la PREMIÈRE lettre de « dimanche 13 juin 2027 » prend la majuscule
+   (::first-letter exige un élément de type bloc, d'où l'inline-block). */
+.inv-quand-date { display: inline-block; }
+.inv-quand-date::first-letter { text-transform: uppercase; }
+.inv-quand-sep { color: var(--d-bleu); }
+/* Filet d'accent sous l'en-tête : signe la charte sans alourdir. */
+.inv-hero::after {
+  content: '';
+  display: block;
+  width: 90px;
+  height: 4px;
+  margin: 16px auto 0;
+  background: var(--d-bleu);
+  border-radius: 2px;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ----- 2) Affiche en héros : centrée, en grand ----- */
+.inv-affiche { margin: 18px auto 0; text-align: center; }
+.inv-affiche img {
+  max-width: 86%;
+  max-height: 150mm;                 /* garde l'affiche impressionnante mais imprimable */
+  border: 1px solid var(--d-filet);
+  border-radius: 10px;
+  box-shadow: 0 14px 34px -20px rgba(12, 28, 46, 0.5);
+}
+/* Variante COMPACTE (page de réponse) : rappelle le tournoi sans repousser le formulaire. */
+.inv-affiche-compacte img { max-height: 80mm; max-width: 55%; }
+
+/* ----- 3) Descriptif complet : colonne de lecture centrée ----- */
+.inv-presentation { max-width: 88%; margin: 16px auto 0; font-size: 1.02rem; }
+.inv-presentation p { margin: 0 0 8px; }
+.inv-presentation p:last-child { margin-bottom: 0; }
+
+/* ----- 4) Frise horaire de la journée ----- */
+.inv-frise { list-style: none; display: flex; gap: 8px; margin: 14px 0 0; padding: 0; }
+.inv-frise li { flex: 1 1 0; min-width: 0; text-align: center; position: relative; padding-top: 16px; }
+/* Point bleu de chaque étape + trait qui relie à la suivante. */
+.inv-frise li::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--d-bleu);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.inv-frise li:not(:last-child)::after {
+  content: '';
+  position: absolute;
+  top: 4px;
+  left: calc(50% + 10px);
+  right: calc(-50% + 10px);
+  height: 2px;
+  background: var(--d-filet);
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.inv-frise-heure {
+  display: block;
+  font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif;
+  font-size: 1.5rem;
+  color: var(--d-navy);
+}
+.inv-frise-titre { display: block; font-weight: 600; font-size: 0.92rem; }
+.inv-frise-note { display: block; font-size: 0.78rem; color: var(--d-gris); }
+
+/* ----- 5) Cartes par catégorie ----- */
+.inv-cats-intro { margin: 2px 0 10px; color: var(--d-texte); }
+.inv-cartes { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.inv-carte {
+  border: 1px solid var(--d-filet);
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.inv-carte-tete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--d-navy);
+  color: #fff;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.inv-carte-cat {
+  font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif;
+  font-size: 1.5rem;
+  letter-spacing: 1px;
+}
+.inv-carte-forme {
+  padding: 4px 10px;
+  background: var(--d-bleu);
+  border-radius: 999px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-size: 0.78rem;
+  text-align: center;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.inv-carte-infos { list-style: none; margin: 0; padding: 8px 12px; flex: 1; }
+.inv-carte-infos li { display: flex; gap: 8px; padding: 3px 0; font-size: 0.9rem; border-bottom: 1px dashed #e8eef6; }
+.inv-carte-infos li:last-child { border-bottom: none; }
+.inv-carte-libelle { flex: 0 0 118px; color: var(--d-gris); }
+.inv-carte-valeur { flex: 1; font-weight: 600; min-width: 0; overflow-wrap: anywhere; }
+.inv-carte-valeur a { color: var(--d-bleu); }
+.inv-carte-apm {
+  margin: 0;
+  padding: 8px 12px 10px;
+  background: #f5f8fc;
+  border-top: 1px solid var(--d-filet);
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: #274a68;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* ----- 7) Encart « Votre réponse » ----- */
+.inv-cta {
+  margin-top: 6px;
+  padding: 16px 20px;
+  background: var(--d-navy);
+  color: #fff;
+  border-radius: 12px;
+  text-align: center;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.inv-cta-titre {
+  margin: 0;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  font-size: 0.95rem;
+  color: #b8d8f8;
+}
+.inv-cta-date { margin: 4px 0 0; font-size: 1.15rem; }
+.inv-cta-date strong { font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif; font-size: 1.5rem; letter-spacing: 0.5px; font-weight: 400; }
+/* Bouton « Répondre à l'invitation » (page ouverte depuis l'email : club reconnu). */
+.inv-cta-action { margin: 12px 0 0; }
+.inv-cta-bouton {
+  display: inline-block;
+  background: var(--d-bleu);
+  color: #fff;
+  text-decoration: none;
+  border-radius: 999px;
+  padding: 12px 26px;
+  font: 600 1rem 'Barlow', sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+.inv-cta-bouton:hover { background: #227ac4; }
+.inv-cta-note { margin: 8px auto 0; max-width: 52ch; font-size: 0.88rem; color: #d7e7f8; line-height: 1.5; }
+.inv-cta-contact { margin: 8px 0 0; font-size: 0.95rem; }
+.inv-cta-contact a { color: #fff; }
+.inv-cta-sep { color: #b8d8f8; }
+
+/* Rappel sécurité FFR sous la liste des catégories : effectif minimum ⇒ temps de jeu par enfant
+   proche du temps d'équipe, or la FFR le plafonne (session 20). Ton orange doux, jamais criard. */
+.inv-rappel-effectif {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  background: #fdf4e3;
+  border-left: 3px solid #e5a33c;
+  border-radius: 0 6px 6px 0;
+  color: #8a5a0c;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+/* Note « pourquoi ce format » (poules de niveau, session 20) : doctrine FFR EDR expliquée aux
+   clubs. Ton bleu informatif (💡), même gabarit que le rappel effectif. */
+.inv-note-format {
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  background: #eef5fc;
+  border-left: 3px solid var(--d-bleu);
+  border-radius: 0 6px 6px 0;
+  color: #274a68;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+/* « Sur place » : pastilles (affichées seulement si le service est coché). */
+.inv-pastilles { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 4px; }
+.inv-pastille {
+  display: inline-block;
+  padding: 6px 14px;
+  background: var(--d-navy);
+  color: #fff;
+  border-radius: 999px;
+  font: 600 0.85rem 'Barlow', sans-serif;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+/* Pied de page de l'invitation : logo + nom + liens de l'association. */
+.inv-pied { flex-wrap: wrap; gap: 10px 14px; }
+.inv-pied-nom { flex: 1 1 auto; }
+.inv-pied-liens { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.inv-lien { color: var(--d-bleu); text-decoration: none; font-family: 'Barlow', sans-serif; letter-spacing: 0; }
+.inv-lien:hover { text-decoration: underline; }
+
+/* ============================================================================
+   RÉPONSE À L'INVITATION (Phase 1, libre-service) — reponse-invitation.html
+   ========================================================================== */
+.rep-deja {
+  margin: 10px 0;
+  padding: 8px 12px;
+  background: #eef7ee;
+  border-left: 4px solid #35c06a;
+  border-radius: 0 6px 6px 0;
+  font-size: 0.9rem;
+}
+/* Gel J-16 : les inscriptions sont closes — encart informatif (le verrou est côté serveur). */
+.rep-gel {
+  margin: 10px 0;
+  padding: 10px 14px;
+  background: #fdf4e3;
+  border-left: 4px solid #e5a33c;
+  border-radius: 0 6px 6px 0;
+  color: #8a5a0c;
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.rep-gel a { color: #8a5a0c; font-weight: 600; }
+.rep-choix { display: flex; flex-wrap: wrap; gap: 12px; margin: 18px 0; }
+.rep-btn {
+  appearance: none;
+  border: none;
+  border-radius: 999px;
+  padding: 12px 22px;
+  font: 600 1rem 'Barlow', sans-serif;
+  cursor: pointer;
+}
+.rep-btn-oui { background: var(--d-bleu); color: #fff; }
+.rep-btn-oui:hover { background: #227ac4; }
+.rep-btn-non { background: #f2f7fd; color: var(--d-navy); border: 1px solid var(--d-filet); }
+.rep-btn-non:hover { background: #e6eef8; }
+.rep-btn-neutre { background: transparent; color: var(--d-gris); border: 1px solid var(--d-filet); }
+.rep-btn:disabled { opacity: 0.6; cursor: wait; }
+
+.rep-question { font-weight: 600; margin: 10px 0; }
+
+/* Formulaire « présents » */
+.rep-form { margin-top: 8px; }
+.rep-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  font-size: 1.05rem;
+  color: var(--d-bleu);
+  border-bottom: 1px solid var(--d-filet);
+  padding-bottom: 4px;
+  margin: 6px 0 8px;
+}
+.rep-aide { color: var(--d-gris); font-size: 0.9rem; margin: 0 0 10px; }
+.rep-cats { display: grid; gap: 8px; }
+.rep-cat {
+  padding: 10px 12px;
+  background: #f5f8fc;
+  border-left: 3px solid var(--d-bleu);
+  border-radius: 0 6px 6px 0;
+}
+.rep-cat-titre { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; cursor: pointer; }
+.rep-cat-nom { font-weight: 700; color: var(--d-navy); }
+.rep-cat-info { color: var(--d-gris); font-size: 0.85rem; }
+.rep-cat-nb { display: inline-block; margin: 8px 0 0 26px; font-size: 0.9rem; color: var(--d-texte); }
+.rep-cat-equipes, #rep-joueurs {
+  width: 74px;
+  padding: 6px 8px;
+  border: 1px solid var(--d-filet);
+  border-radius: 6px;
+  font: inherit;
+}
+#rep-joueurs { width: 96px; }
+.rep-cat-err { display: block; margin: 4px 0 0 26px; color: #b3261e; font-size: 0.82rem; }
+.rep-champ-joueurs { display: block; margin: 16px 0 0; font-weight: 600; }
+.rep-champ-joueurs input { display: block; margin-top: 6px; }
+
+/* Détail PAR ÉQUIPE (session 23) : joueurs + éducateurs de chaque équipe engagée. */
+.rep-cat-detail { margin: 8px 0 0 26px; display: grid; gap: 6px; }
+.rep-equipe {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  padding: 6px 10px; background: #fff; border: 1px solid #e3ebf3; border-radius: 8px;
+}
+.rep-eq-nom { font-weight: 600; min-width: 70px; }
+.rep-equipe label { font-size: 0.9rem; color: var(--d-texte); }
+.rep-equipe input { width: 64px; margin-left: 6px; }
+.rep-eq-note { flex-basis: 100%; font-size: 0.82rem; line-height: 1.4; }
+.rep-eq-note-conseil { color: #8a5a0c; }
+.rep-eq-note-mini { color: #b3261e; font-weight: 600; }
+
+/* Totaux vivants joueurs / éducateurs (sous la liste des catégories). */
+.rep-totaux {
+  margin: 16px 0 0; padding: 10px 12px; display: flex; flex-wrap: wrap; gap: 6px 24px;
+  background: #f5f8fc; border-left: 3px solid var(--d-bleu); border-radius: 0 6px 6px 0;
+  font-size: 0.95rem;
+}
+.rep-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 18px; }
+.rep-form-msg { font-size: 0.9rem; }
+.rep-form-msg.ko { color: #b3261e; }
+
+.rep-merci {
+  margin-top: 8px;
+  padding: 18px 20px;
+  background: #f2f7fd;
+  border-left: 4px solid var(--d-bleu);
+  border-radius: 0 8px 8px 0;
+}
+.rep-merci h2 { margin: 0 0 6px; color: var(--d-navy); font-family: 'Barlow Condensed', sans-serif; }
+.rep-merci p { margin: 0; }
+
+/* ----- Petits écrans (aperçu mobile) ---------------------------------------------- */
+@media (max-width: 640px) {
+  .feuille { margin: 0; padding: 18px 14px; box-shadow: none; }
+  .d-liste li { flex-direction: column; gap: 0; }
+  .d-libelle { flex: none; font-size: 0.8rem; }
+  .d-suivi { flex-direction: column; }
+  /* Invitation vitrine : titre réduit, affiche pleine largeur, frise verticale, cartes empilées. */
+  .inv-blason { width: 110px; }
+  .inv-titre { font-size: 2.3rem; }
+  .inv-affiche img { max-width: 100%; }
+  .inv-affiche-compacte img { max-width: 80%; }
+  .inv-presentation { max-width: none; }
+  .inv-frise { flex-direction: column; gap: 10px; }
+  .inv-frise li { text-align: left; padding: 0 0 0 22px; }
+  .inv-frise li::before { top: 6px; left: 0; transform: none; }
+  .inv-frise li:not(:last-child)::after { top: 20px; bottom: -12px; left: 4px; right: auto; width: 2px; height: auto; }
+  .inv-frise-heure { display: inline; margin-right: 8px; }
+  .inv-frise-titre { display: inline; }
+  .inv-cartes { grid-template-columns: 1fr; }
+  .inv-carte-libelle { flex-basis: 104px; }
+}
+
+/* ============================================================================
+   IMPRESSION — l'« export PDF » du navigateur. Une feuille A4 propre :
+   pas de barre d'outils, pas d'ombres, liens en couleur charte, le bandeau
+   d'actions reste (les liens/QR restent utiles sur papier via le QR code).
+   ========================================================================== */
+@page { size: A4; margin: 12mm; }
+
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; font-size: 11pt; }
+  .feuille {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  .d-section { break-inside: avoid; }
+  /* Invitation vitrine : chaque carte reste entière sur sa page ; l'affiche héros est bornée
+     pour laisser l'en-tête + l'affiche + le descriptif tenir sur la première page. La section
+     des catégories, elle, PEUT se couper (sinon elle démarre seule sur une page en laissant
+     la précédente aux trois quarts vide — constaté à l'export PDF). */
+  .d-section.inv-categories { break-inside: auto; }
+  /* Un planning peut être long : il a le droit de se couper d'une page à l'autre — mais jamais
+     au milieu d'un match, et l'en-tête du tableau se répète en haut de chaque page. */
+  .d-section.d-planning-section { break-inside: auto; }
+  .d-planning tr { break-inside: avoid; }
+  .d-planning thead { display: table-header-group; }
+  .d-planning th { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .inv-carte, .inv-cta, .inv-frise { break-inside: avoid; }
+  /* …mais un TITRE ne reste jamais seul en bas d'une page : il part avec ce qu'il annonce.
+     Constaté à l'export : « Rappel — vos catégories engagées » terminait la page 2, ses cartes
+     commençaient page 3. Idem pour la phrase d'introduction des cartes. */
+  .d-section h2, .inv-cats-intro { break-after: avoid; }
+  /* PIED DE PAGE RETIRÉ DU PAPIER. Compacter n'a pas suffi : blason + nom + mention pesaient
+     encore plus que le fond de page disponible, et s'exilaient sur une feuille à eux seuls
+     (constaté sur deux exports successifs). Or, sur papier, ce pied fait DOUBLON — le blason et
+     le nom de l'école ouvrent déjà la première page, en grand. Ne survit que la mention
+     « document généré le… » : une ligne, la seule information que le papier n'a pas déjà, et
+     celle qui dit au club que son impression peut être périmée. */
+  .d-pied { display: none; }
+  .d-genere { margin-top: 8px; font-size: 7.5pt; }
+  .inv-affiche img { max-height: 130mm; box-shadow: none; }
+  /* Dossier : l'affiche réduite le reste à l'impression (sinon la règle ci-dessus la ferait
+     regrossir en hauteur et repousserait le jour J en page 2). */
+  .inv-affiche-compacte img { max-height: 70mm; }
+  /* Pastille du club : sans les couleurs forcées, elle s'imprime en blanc sur blanc. */
+  .inv-hero-club { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  /* Bandeau d'actions : RETIRÉ du papier. Ce sont des BOUTONS (agenda, itinéraires, autorisation
+     liens du club) — sur une feuille imprimée, ils ne cliquent pas, et leurs adresses ne sont
+     même pas lisibles. Il coûtait une feuille entière à lui seul (constaté à l'export : page 4
+     ne contenait que lui). Ce qui compte reste imprimé : l'adresse est dans « Infos pratiques »
+     et le QR code des scores dans « Suivi ». */
+  .d-actions { display: none !important; }
+  .d-contact { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  a { color: var(--d-bleu); text-decoration: none; }
+}

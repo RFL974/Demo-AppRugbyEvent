@@ -1,0 +1,5 @@
+# Artefacts système
+.DS_Store
+
+# Artefacts d'outillage local
+.playwright-mcp/

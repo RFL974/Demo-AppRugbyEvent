@@ -1,0 +1,290 @@
+/* ==========================================================================
+   TOURNOI R92 — MODE « ÉCRANS » (barre latérale + onglets de la page admin)
+   --------------------------------------------------------------------------
+   Habille la structure construite par js/ecrans.js. Tout est scopé sous
+   `body.avec-ecrans` (classe posée par ecrans.js) ou sous #ecr-nav (qui
+   n'existe qu'en mode écrans) → aucun effet sur les autres pages, ni sur la
+   page longue (« Vue classique ») ou l'assistant à cartes (mobile).
+
+   S'appuie sur les couleurs de la surcouche theme-r92.css (variables --r92-*)
+   avec des valeurs de repli si elle venait à être retirée.
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   NEUTRALISATION de la mise en page « page longue » pendant le mode écrans :
+   - la grille 2 colonnes de <main> (styles.css ≥1024px) n'a plus de sens ;
+   - la section #reglages est vide (ses 2 zones sont déplacées dans les écrans).
+   -------------------------------------------------------------------------- */
+body.avec-ecrans main:has(#reglages) { display: block; }
+body.avec-ecrans #reglages { display: none; }
+
+/* Les écrans inactifs sont masqués (l'attribut hidden fait foi, même si un
+   display: est posé ailleurs sur .ecran). */
+body.avec-ecrans .ecran[hidden] { display: none !important; }
+
+/* --------------------------------------------------------------------------
+   GRAND ÉCRAN (≥1024px) — barre latérale navy fixe à gauche, contenu à droite
+   -------------------------------------------------------------------------- */
+@media (min-width: 1024px) {
+  body.avec-ecrans .conteneur:has(#reglages) { max-width: 1400px; }
+
+  body.avec-ecrans .conteneur {
+    display: grid;
+    grid-template-columns: 264px minmax(0, 1fr);
+    gap: 28px;
+    align-items: start;
+  }
+
+  /* Le grand bandeau-titre fait doublon avec la marque de la barre latérale. */
+  body.avec-ecrans .entete { display: none; }
+
+  /* En mode écrans, <main> n'est plus une grille (pas de gap) : on rétablit la
+     respiration sous la barre de connexion, que la règle de grille de
+     styles.css (main:has(#reglages) > #barre-connexion) remettait à zéro. */
+  body.avec-ecrans main:has(#reglages) > #barre-connexion { margin-bottom: 38px; }
+
+  /* Écran « Infos du tournoi » : la carte « Date & conformité FFR » occupe TOUTE la largeur
+     tout en haut, puis en dessous le formulaire des infos à GAUCHE et l'aperçu du site à DROITE
+     (côte à côte sur grand écran uniquement). */
+  body.avec-ecrans #ecran-infos:not([hidden]) {
+    display: grid;
+    grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+    gap: 24px;
+    align-items: start;
+  }
+  /* Carte cadre (date + zone + conformité FFR) : pleine largeur, en première ligne. */
+  body.avec-ecrans #ecran-infos:not([hidden]) > #bloc-cadre-tournoi { grid-column: 1 / -1; }
+
+  #ecr-nav {
+    position: sticky;
+    top: 20px;
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 40px);
+    padding: 22px 16px 16px;
+    border-radius: 24px;
+    background: linear-gradient(160deg, var(--r92-navy, #0E2340) 0%, var(--r92-navy-2, #16335C) 75%, #234978 100%);
+    box-shadow: 0 18px 40px -24px rgba(14, 35, 64, 0.55);
+  }
+
+  .ecr-marque {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    padding: 6px 8px 20px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+    margin-bottom: 14px;
+    text-align: center;
+  }
+  /* Symbole carré : 110 px (taille de l'ancien bandeau) serait disproportionné ici. */
+  .ecr-logo { width: 56px; height: auto; margin-bottom: 8px; }
+  .ecr-marque-titre {
+    font-family: 'Fraunces', Georgia, serif;
+    font-weight: 500;
+    letter-spacing: -0.02em;
+    font-size: 1.35rem;
+    color: #ffffff;
+  }
+  .ecr-marque-sous {
+    font-size: 0.8rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--r92-accent, #3E8FD6);
+    font-weight: 700;
+  }
+
+  .ecr-liste {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    flex: 1;                 /* pousse « Vue classique » tout en bas */
+  }
+
+  .ecr-onglet {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 14px;
+    border: none;
+    border-radius: 14px;
+    background: transparent;
+    color: rgba(255, 255, 255, 0.78);
+    font: inherit;
+    font-size: 0.95rem;
+    font-weight: 600;
+    text-align: left;
+    cursor: pointer;
+    transition: background .15s, color .15s;
+  }
+  .ecr-onglet:hover { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
+  .ecr-onglet.est-actif {
+    background: #ffffff;
+    color: var(--r92-navy, #0E2340);
+    box-shadow: 0 8px 18px -10px rgba(3, 12, 26, 0.6);
+  }
+  .ecr-onglet:focus-visible { outline: 2px solid #7CC0EC; outline-offset: 2px; }
+
+  .ecr-icone { font-size: 1.05rem; line-height: 1; }
+  /* Icône filaire de l'onglet actif : bleu ciel (le reste suit la couleur du texte). */
+  .ecr-onglet.est-actif .ecr-icone svg { color: var(--r92-accent, #3E8FD6); }
+  .ecr-libelle { flex: 1; }
+
+  /* Zone de danger « Réinitialiser » : rosé, un peu à l'écart, rouge en actif. */
+  .ecr-onglet.est-danger { color: #E7A2A2; margin-top: 10px; }
+  .ecr-onglet.est-danger:hover { background: rgba(224, 120, 120, 0.14); color: #F3C0C0; }
+  .ecr-onglet.est-danger.est-actif { background: #ffffff; color: #C0483C; }
+  .ecr-onglet.est-danger.est-actif .ecr-icone svg { color: #C0483C; }
+
+  .ecr-pied {
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.12);
+    text-align: center;
+  }
+  .ecr-classique { color: rgba(255, 255, 255, 0.65); border-color: rgba(255, 255, 255, 0.25); }
+  .ecr-classique:hover { color: #ffffff; background: rgba(255, 255, 255, 0.08); }
+}
+
+/* --------------------------------------------------------------------------
+   PETIT ÉCRAN (<1024px) — la barre latérale devient une barre d'onglets
+   horizontale collée en haut (cas d'une fenêtre d'ordinateur rétrécie :
+   au chargement sur mobile, c'est l'assistant à cartes qui prend la main).
+   -------------------------------------------------------------------------- */
+@media (max-width: 1023.98px) {
+  #ecr-nav {
+    position: sticky;
+    top: 0;
+    z-index: 40;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin: 0 calc(-1 * var(--espace, 16px)) var(--espace, 16px);
+    padding: 10px var(--espace, 16px);
+    background: rgba(255, 255, 255, 0.96);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid var(--r92-ligne, #E2EAF2);
+  }
+  .ecr-marque { display: none; }
+
+  .ecr-liste {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    flex: 1;
+    scrollbar-width: none;
+  }
+  .ecr-liste::-webkit-scrollbar { display: none; }
+
+  .ecr-onglet {
+    display: inline-flex;
+    align-items: center;
+    flex: 0 0 auto;          /* jamais écrasé : la barre défile horizontalement */
+    gap: 7px;
+    padding: 8px 14px;
+    border: 1px solid var(--r92-champ-bd, #D3E1F0);
+    border-radius: 999px;
+    background: var(--r92-champ-bg, #F8FBFE);
+    color: var(--r92-navy, #0E2340);
+    font: inherit;
+    font-size: 0.85rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+  }
+  .ecr-onglet.est-actif {
+    background: var(--r92-navy, #0E2340);
+    border-color: var(--r92-navy, #0E2340);
+    color: #ffffff;
+  }
+  .ecr-onglet:focus-visible { outline: 2px solid var(--r92-accent, #3E8FD6); outline-offset: 2px; }
+
+  /* Zone de danger « Réinitialiser » dans la barre d'onglets horizontale. */
+  .ecr-onglet.est-danger { color: #C0483C; border-color: #EBC7C2; }
+  .ecr-onglet.est-danger.est-actif { background: #C0483C; border-color: #C0483C; color: #ffffff; }
+
+  .ecr-pied { flex: 0 0 auto; }
+  .ecr-classique { font-size: 0.8rem; padding: 6px 10px; }
+}
+
+/* --------------------------------------------------------------------------
+   ICÔNES FILAIRES des onglets (SVG construits par svgEcr, ecrans.js) —
+   dimension commune aux deux mises en page (barre latérale et barre d'onglets).
+   -------------------------------------------------------------------------- */
+.ecr-icone { display: inline-flex; align-items: center; }
+.ecr-icone svg { width: 19px; height: 19px; flex-shrink: 0; }
+
+/* --------------------------------------------------------------------------
+   PASTILLES D'ÉTAT des onglets (nourries par le « cerveau » d'admin.js) :
+   ✓ fait (coche ciel sur fond blanc) · ⚪️ à faire (point creux) ·
+   🟠 « ! » à refaire · 🔒 verrouillé (une étape précédente n'est pas complète).
+   -------------------------------------------------------------------------- */
+.ecr-pastille {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1;
+}
+/* Étape complète : coche bleu ciel sur fond blanc (le liseré la garde lisible
+   sur l'onglet actif, lui aussi blanc, en desktop). */
+.ecr-pastille.est-fait {
+  background: #ffffff;
+  color: var(--r92-accent, #3E8FD6);
+  box-shadow: 0 0 0 1px rgba(62, 143, 214, 0.4);
+}
+.ecr-pastille.est-afaire   { background: transparent; border: 2px dashed rgba(140, 165, 195, 0.9); }
+.ecr-pastille.est-arefaire { background: #FFB570; color: #5C2E00; }
+/* Sur l'onglet actif (fond clair, desktop), le point « à faire » reste visible. */
+.ecr-onglet.est-actif .ecr-pastille.est-afaire { border-color: rgba(90, 107, 128, 0.6); }
+/* Écran verrouillé : petit cadenas à la place de la pastille. */
+.ecr-pastille.est-verrou { background: transparent; font-size: 0.75rem; }
+
+/* --------------------------------------------------------------------------
+   VERROU DES ONGLETS — un écran hors de portée est grisé et ne réagit pas ;
+   cliquer dessus le fait trembler (l'infobulle dit quoi terminer d'abord).
+   -------------------------------------------------------------------------- */
+.ecr-onglet.est-verrouille { opacity: 0.45; cursor: not-allowed; }
+.ecr-onglet.est-verrouille:hover { background: transparent; }
+@media (min-width: 1024px) {
+  .ecr-onglet.est-verrouille:hover { color: rgba(255, 255, 255, 0.78); }
+}
+.ecr-onglet.est-secoue { animation: ecr-secousse 0.35s ease; }
+@keyframes ecr-secousse {
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-3px); }
+  80% { transform: translateX(3px); }
+}
+
+/* --------------------------------------------------------------------------
+   En mode écrans, les étapes de « Où en suis-je ? » vivent dans la barre
+   latérale → on masque le fil (doublon), mais on GARDE le verdict « prêt à
+   publier » et le thermomètre de la journée (début / pause / fin prévue).
+   -------------------------------------------------------------------------- */
+body.avec-ecrans #etat-avancement .ea-entete,
+body.avec-ecrans #etat-avancement .ea-fil { display: none; }
+
+/* Explication du VERROU : pourquoi cette étape est inaccessible. Affichée au clic sur un
+   onglet grisé — avant, l'onglet se contentait de trembler sans rien dire. */
+.ecr-verrou-msg {
+  margin: 8px 10px 0;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: rgba(214, 141, 20, .16);
+  color: #b26a00;
+  font-size: .82rem;
+  line-height: 1.45;
+}
+.theme-clair .ecr-verrou-msg { background: #FFF4E0; color: #8a5200; }

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Perfs du club</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-tournoi.svg">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <!--
+    PAGE INTERNE « juste pour nous » : elle n'est volontairement PAS liée dans le
+    menu public. Pour l'ouvrir, il faut connaître l'adresse (…/perfs.html).
+    Elle ne fait que LIRE les données (getAll), elle ne modifie rien.
+  -->
+  <div class="conteneur">
+
+    <header class="entete">
+      <div class="sous-titre">Interne</div>
+      <h1>Perfs des équipes du club</h1>
+    </header>
+
+    <main>
+      <section class="carte">
+        <div class="live-barre">
+          <button id="btn-refresh-perfs" class="bouton">🔄 Rafraîchir</button>
+          <span id="maj-perfs" class="live-maj"></span>
+        </div>
+
+        <!-- Deux onglets : le tournoi en cours, et le cumul de toute la saison. -->
+        <div class="perfs-onglets">
+          <button id="onglet-tournoi" class="onglet actif">Ce tournoi</button>
+          <button id="onglet-saison" class="onglet">Saison</button>
+        </div>
+
+        <!-- Vue « Ce tournoi » : bilan + frise horaire du tournoi du jour. -->
+        <div id="vue-tournoi">
+          <div class="message">Chargement des perfs…</div>
+        </div>
+
+        <!-- Vue « Saison » : cumul des rencontres (historique), masquée au départ. -->
+        <div id="vue-saison" hidden>
+          <div class="message">Chargement de la saison…</div>
+        </div>
+      </section>
+    </main>
+
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="js/commun.js"></script>
+  <script src="js/dialog.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/perfs.js"></script>
+
+</body>
+</html>

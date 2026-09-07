@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Répondre à l'invitation</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-tournoi.svg">
+  <meta name="description" content="Répondez à l'invitation de votre club au tournoi : présence, catégories engagées, équipes, joueurs et éducateurs.">
+  <!-- Page personnelle sécurisée par jeton : jamais indexée. -->
+  <meta name="robots" content="noindex">
+  <!-- L'URL porte le jeton du club : aucun referrer ne doit le laisser fuiter. -->
+  <meta name="referrer" content="no-referrer">
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Même feuille « document » (fond blanc, charte) que l'invitation / le dossier.
+       En-tête vitrine partagé avec l'invitation refondue (blason centré, grand titre). -->
+  <link rel="stylesheet" href="css/dossier.css">
+</head>
+<body>
+
+  <!-- Toute la page est construite par js/reponse.js après validation du jeton côté backend.
+       Aucun lien vers l'administration : page publique destinée au contact du club. -->
+  <main class="feuille" id="reponse">
+    <div class="message-chargement" id="message-reponse">Chargement…</div>
+  </main>
+
+  <script src="js/config.js"></script>
+  <script src="js/commun.js"></script>
+  <script src="js/commun-dossier.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/reponse.js"></script>
+
+</body>
+</html>

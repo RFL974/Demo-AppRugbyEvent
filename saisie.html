@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <!-- "viewport" = indispensable pour un affichage correct sur téléphone (mobile-first) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Saisie des scores</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-tournoi.svg">
+
+  <!-- Polices de la charte (Bebas Neue, Barlow Condensed, Barlow) via Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Notre feuille de style commune -->
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+  <div class="conteneur">
+
+    <header class="entete">
+      <div class="sous-titre">Le tournoi</div>
+      <h1>Saisie des scores</h1>
+    </header>
+
+    <main>
+      <section class="carte">
+        <p class="note-generation">
+          Entre le score de chaque match puis clique sur <strong>Valider</strong>.<br>
+          Le match passe alors en <em>terminé</em> et compte dans le classement.
+        </p>
+
+        <!-- Barre de rafraîchissement : recharge les saisies faites sur les autres appareils. -->
+        <div class="live-barre">
+          <button type="button" class="bouton" id="bouton-rafraichir-saisie">🔄 Rafraîchir</button>
+          <span class="live-maj" id="maj-saisie"></span>
+        </div>
+
+        <!-- Filtre catégorie : une table de marque par catégorie. Masqué s'il n'y en a qu'une. -->
+        <div id="filtre-cat-saisie" class="mp-filtre" hidden>
+          <label class="mp-label" for="select-cat-saisie">Catégorie à saisir :</label>
+          <select id="select-cat-saisie" class="r-input"></select>
+        </div>
+
+        <!-- Filtre grand terrain : ne montre que les matchs des mini-terrains qui composent le
+             grand terrain choisi (évite les erreurs à la table de marque). Masqué si la
+             répartition automatique n'a pas été appliquée ou s'il n'y a qu'un grand terrain. -->
+        <div id="filtre-terrain-saisie" class="mp-filtre" hidden>
+          <label class="mp-label" for="select-terrain-saisie">Grand terrain :</label>
+          <select id="select-terrain-saisie" class="r-input"></select>
+        </div>
+
+        <!-- La liste des matchs de la catégorie choisie, injectée par saisie.js -->
+        <div id="liste-matchs">
+          <div class="message">Chargement des matchs…</div>
+        </div>
+      </section>
+    </main>
+
+  </div>
+
+  <!-- On charge les scripts DANS CET ORDRE :
+       1) config.js  → définit l'URL du backend
+       2) commun.js  → petites fonctions partagées par toutes les pages (echapper, estTermine…)
+       3) dialog.js  → fenêtres de dialogue maison (utilisées par api.js et saisie.js)
+       4) api.js     → fournit apiGet() / apiPost()
+       5) saisie.js  → utilise le tout pour afficher la page -->
+  <script src="js/config.js"></script>
+  <script src="js/commun.js"></script>
+  <script src="js/dialog.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/saisie.js"></script>
+
+</body>
+</html>

@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <!-- "viewport" = indispensable pour un affichage correct sur téléphone (mobile-first) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Administration du tournoi</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-tournoi.svg">
+
+  <!-- Polices de la charte (Bebas Neue, Barlow Condensed, Barlow) via Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Notre feuille de style commune -->
+  <link rel="stylesheet" href="css/styles.css">
+  <!-- Surcouche moderne navy/blanc/ciel (re-skin admin — retirer cette ligne pour revenir en arrière) -->
+  <link rel="stylesheet" href="css/theme-r92.css">
+  <!-- Mode « écrans » : barre latérale + onglets sur grand écran (structure construite par js/ecrans.js) -->
+  <link rel="stylesheet" href="css/ecrans.css">
+  <!-- Encarts partenaires : les MÊMES règles que la page publique, pour que l'aperçu de
+       chaque emplacement et le test du message plein écran montrent le vrai résultat. -->
+  <link rel="stylesheet" href="css/sponsors.css">
+</head>
+<!-- theme-clair : fond blanc + cartes navy translucides (thème propre à la page admin). -->
+<body class="theme-clair">
+
+  <div class="conteneur">
+
+    <header class="entete">
+      <!-- Repère visuel neutre et temporaire (voir frontend/assets/logo-tournoi.svg).
+           onerror : si le fichier manquait, on masque l'image plutôt qu'une icône cassée. -->
+      <img class="logo" src="assets/logo-tournoi.svg" alt=""
+           onerror="this.style.display='none'">
+      <h1>Administration du tournoi</h1>
+    </header>
+
+    <main>
+
+      <!-- Repère de connexion : indique si la clé admin est active (rempli par admin.js) -->
+      <div id="barre-connexion" class="barre-connexion" hidden></div>
+
+      <!-- 0) Tableau de bord : l'état du tournoi en un coup d'œil (rempli par admin.js) -->
+      <section class="tableau-bord" id="tableau-bord" aria-label="État du tournoi">
+        <div class="tb-entete">
+          <span class="tb-titre">État du tournoi</span>
+          <span class="tb-refresh">
+            <span class="live-maj" id="maj-admin"></span>
+            <button type="button" class="bouton-lien" id="bouton-rafraichir-admin" data-ic="rafraichir">Rafraîchir</button>
+          </span>
+        </div>
+        <div class="tb-grille">
+          <div class="tb-stat"><span class="tb-val" id="tb-categories">…</span><span class="tb-lib">Catégories</span></div>
+          <div class="tb-stat"><span class="tb-val" id="tb-equipes">…</span><span class="tb-lib">Équipes</span></div>
+          <div class="tb-stat"><span class="tb-val" id="tb-planning">…</span><span class="tb-lib">Planning matin</span></div>
+          <div class="tb-stat"><span class="tb-val" id="tb-publication">…</span><span class="tb-lib">Publication</span></div>
+        </div>
+      </section>
+
+      <!-- 0 bis) « Où en suis-je ? » : fil d'avancement de la préparation + thermomètre de la
+           journée (début / pause / heure de fin prévue). Rempli par admin.js (majEtatAvancement).
+           Chaque étape est cliquable et fait défiler jusqu'à la section correspondante. -->
+      <section class="etat-avancement" id="etat-avancement" aria-label="Avancement de la préparation"></section>
+
+      <!-- Cadre du tournoi : date prévue + zone de vacances + contrôle FFR (conflits, points de
+           vigilance et prescriptions). VOLONTAIREMENT séparé des « Infos du tournoi » ci-dessous :
+           ici, c'est la PLANIFICATION et la CONFORMITÉ (rien n'y est communiqué au public). Enregistré
+           via son propre bouton (onEnregistrerCadre) — sauvegarde partielle : date + zone seulement. -->
+      <section class="carte" id="bloc-cadre-tournoi">
+        <h2>Date &amp; conformité FFR</h2>
+        <p class="note-generation">
+          La <strong>date prévue</strong> et la <strong>zone de vacances</strong> servent au
+          <strong>contrôle de conformité FFR</strong> (conflits de calendrier, points de vigilance et
+          prescriptions par catégorie). Elles ne s'affichent pas sur le site — clique
+          <strong>« Enregistrer la date »</strong> pour les sauvegarder.
+        </p>
+        <form id="form-cadre-tournoi">
+          <label class="reglage"><span class="r-libelle">Date prévue du tournoi</span>
+            <input class="r-input" type="date" name="tournoi_date">
+          </label>
+          <label class="reglage"><span class="r-libelle">Zone de vacances (contrôle FFR)</span>
+            <select class="r-input" name="zone_vacances">
+              <option value="A">Zone A</option>
+              <option value="B">Zone B</option>
+              <!-- Zone C (Île-de-France) présélectionnée par défaut : c'est la valeur par défaut
+                   de zone_vacances côté backend. Sans ce `selected`, un <select> sans valeur JS
+                   retomberait sur la 1re option (Zone A). -->
+              <option value="C" selected>Zone C (Île-de-France)</option>
+            </select>
+          </label>
+          <!-- « Trouver une date compatible » : on choisit un mois, le backend renvoie les jours
+               jouables (dim/mer/sam) avec leur statut FFR ; un clic applique une date au tournoi.
+               Rempli/piloté par admin-conformite-ffr.js (le panneau est masqué par défaut). -->
+          <div class="date-finder">
+            <button type="button" class="bouton-lien" id="bouton-trouver-date" aria-expanded="false">
+              🔎 Trouver une date compatible…
+            </button>
+            <div id="panneau-trouver-date" class="date-finder-panneau" hidden>
+              <p class="date-finder-aide">Choisis un mois : je te propose les samedis, dimanches et
+                mercredis <strong>sans conflit FFR</strong> (les alertes douces sont signalées en orange).</p>
+              <div class="date-finder-controles">
+                <label class="reglage"><span class="r-libelle">Mois à explorer</span>
+                  <input class="r-input" type="month" id="finder-mois">
+                </label>
+                <button type="button" class="bouton" id="bouton-chercher-dates">Chercher les jours compatibles</button>
+              </div>
+              <div id="finder-resultats" class="date-finder-resultats" aria-live="polite"></div>
+            </div>
+          </div>
+          <!-- Conformité FFR : résultat de verifierConformiteFFR (backend), rempli par
+               admin-conformite-ffr.js. Bloc INFORMATIF — n'empêche pas d'enregistrer la date. -->
+          <div id="bloc-conformite-ffr" class="ffr-zone"></div>
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-cadre">Enregistrer la date</button>
+            <span class="message-form" id="message-cadre-tournoi"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- Infos du tournoi : le NOM alimente la page publique du tournoi ; nom, date, lieu,
+           description et affiche alimentent les invitations et le dossier transmis aux clubs.
+           ⛔ Plus aucun site tiers ne les lit (découplage M1-PUB / PUB-4).
+           Enregistrées via « Enregistrer les infos ». (Date & zone → carte « Date & conformité FFR ».) -->
+      <section class="carte" id="bloc-infos-tournoi">
+        <h2>Infos du tournoi</h2>
+        <p class="note-generation">
+          Le <strong>nom</strong> apparaît sur la <strong>page publique</strong> du tournoi. Le nom,
+          la date, le lieu, la description et l'affiche servent aussi aux <strong>invitations</strong>
+          et au <strong>dossier</strong> transmis aux clubs.<br>
+          Clique sur <strong>« Enregistrer les infos »</strong> pour les sauvegarder. Tu peux les
+          modifier à tout moment, <strong>même après publication</strong>.
+        </p>
+        <form id="form-infos-tournoi">
+          <label class="reglage"><span class="r-libelle">Nom du tournoi</span>
+            <input class="r-input" type="text" name="tournoi_nom" placeholder="Ex : Tournoi de Noël U8–U12">
+          </label>
+          <label class="reglage"><span class="r-libelle">Lieu</span>
+            <input class="r-input" type="text" name="tournoi_lieu" placeholder="Ex : Stade Paul Langevin">
+          </label>
+          <label class="reglage"><span class="r-libelle">Adresse complète</span>
+            <input class="r-input" type="text" name="tournoi_adresse" placeholder="Ex : 11 av. Paul Langevin, 92350 Le Plessis-Robinson">
+          </label>
+          <label class="reglage"><span class="r-libelle">Description</span>
+            <textarea class="r-input" name="tournoi_description" rows="4" placeholder="Quelques phrases de présentation du tournoi…"></textarea>
+          </label>
+          <!-- Affiche : zone de glisser-déposer (le clic ouvre aussi le sélecteur de
+               fichier grâce au <label> ; le glisser-déposer est géré par admin.js). -->
+          <label class="reglage"><span class="r-libelle">Affiche du tournoi (image)</span>
+            <span class="zone-depot" id="zone-depot-affiche">
+              <input type="file" name="tournoi_affiche" accept="image/*" hidden>
+              <span class="zd-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5M7.5 9.5 12 5l4.5 4.5M4.5 19h15"></path></svg></span>
+              <span class="zd-texte"><strong>Glisse ton affiche ici</strong><br>ou clique pour choisir une image</span>
+            </span>
+          </label>
+          <div id="apercu-affiche" class="apercu-affiche" hidden>
+            <img id="apercu-affiche-img" alt="Aperçu de l'affiche du tournoi">
+            <button type="button" class="bouton-suppr" id="bouton-retirer-affiche">Retirer l'affiche</button>
+          </div>
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-infos">Enregistrer les infos</button>
+            <span class="message-form" id="message-infos-tournoi"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- Contacts & sécurité : référent tournoi, poste de secours, référent sécurité.
+           Alimente le futur générateur de dossier club. Tous les champs sont facultatifs.
+           Les champs conditionnels (précisions secours, référent sécurité distinct) sont
+           révélés/masqués par admin.js selon les cases à cocher. -->
+      <section class="carte" id="bloc-contacts-securite">
+        <h2>Contacts &amp; sécurité</h2>
+        <p class="note-generation">
+          Ces informations alimenteront le <strong>dossier club</strong> envoyé aux équipes.
+          Tous les champs sont <strong>facultatifs</strong> — enregistre ce que tu connais déjà.
+        </p>
+        <form id="form-contacts-securite">
+          <label class="reglage"><span class="r-libelle">Référent tournoi — nom</span>
+            <input class="r-input" type="text" name="referent_nom" placeholder="Ex : Camille Dupont" autocomplete="off">
+          </label>
+          <label class="reglage"><span class="r-libelle">Référent tournoi — téléphone</span>
+            <input class="r-input" type="tel" name="referent_tel" placeholder="Ex : 06 12 34 56 78" autocomplete="off">
+          </label>
+          <label class="reglage">
+            <span class="r-libelle">Poste de secours</span>
+            <span class="mini-toggle"><input type="checkbox" name="securite_secours_oui"> Poste de secours sur place</span>
+          </label>
+          <label class="reglage" id="ligne-secours-precisions" hidden>
+            <span class="r-libelle">Poste de secours — précisions</span>
+            <input class="r-input" type="text" name="securite_secours_precisions" placeholder="Ex : local à côté du club-house">
+          </label>
+          <label class="reglage">
+            <span class="r-libelle">Référent sécurité</span>
+            <span class="mini-toggle"><input type="checkbox" name="securite_referent_identique" checked> Identique au référent tournoi</span>
+          </label>
+          <div id="lignes-referent-securite" hidden>
+            <label class="reglage"><span class="r-libelle">Référent sécurité — nom</span>
+              <input class="r-input" type="text" name="securite_referent_nom" autocomplete="off">
+            </label>
+            <label class="reglage"><span class="r-libelle">Référent sécurité — téléphone</span>
+              <input class="r-input" type="tel" name="securite_referent_tel" placeholder="Ex : 06 12 34 56 78" autocomplete="off">
+            </label>
+          </div>
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-contacts">Enregistrer contacts &amp; sécurité</button>
+            <span class="message-form" id="message-contacts-securite"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- ============ PARTENAIRES (sponsors de la page publique) ============
+           Trois cartes : les réglages d'affichage, la liste des partenaires, puis la fiche
+           de visibilité à renvoyer à chaque partenaire. Tout est piloté par admin-sponsors.js. -->
+
+      <section class="carte" id="bloc-sponsors-reglages">
+        <h2>Partenaires — réglages d'affichage</h2>
+        <p class="note-generation">
+          Ces réglages pilotent l'affichage des partenaires sur la
+          <strong>page publique des scores</strong>. Tant que
+          <strong>« Afficher les partenaires »</strong> est décoché, la page reste
+          <strong>exactement celle d'aujourd'hui</strong> — tu peux tout préparer sans que
+          personne ne voie quoi que ce soit.
+        </p>
+        <form id="form-sponsors-reglages">
+          <label class="reglage">
+            <span class="r-libelle">Afficher les partenaires</span>
+            <span class="mini-toggle"><input type="checkbox" name="sponsors_actifs"> Interrupteur général</span>
+          </label>
+          <label class="reglage">
+            <span class="r-libelle">Mur des partenaires</span>
+            <span class="mini-toggle"><input type="checkbox" name="sponsors_mur_actif" checked> Grille des logos en bas de page</span>
+          </label>
+          <label class="reglage">
+            <span class="r-libelle">Barre basse sur téléphone</span>
+            <span class="mini-toggle"><input type="checkbox" name="sponsor_barre_mobile" checked> Bandeau rotatif en bas de l'écran</span>
+          </label>
+          <label class="reglage"><span class="r-libelle">Rotation des partenaires (secondes)</span>
+            <input class="r-input" type="number" name="sponsor_rotation_s" min="0" max="60" step="1" value="8">
+          </label>
+
+          <h3 class="apercu-sous-titre">Message plein écran à l'arrivée</h3>
+          <label class="reglage">
+            <span class="r-libelle">Activer le message</span>
+            <span class="mini-toggle"><input type="checkbox" name="sponsor_interstitiel_actif"> Plein écran quelques secondes à l'ouverture</span>
+          </label>
+          <div id="lignes-interstitiel" hidden>
+            <label class="reglage"><span class="r-libelle">Durée d'affichage (secondes)</span>
+              <input class="r-input" type="number" name="sponsor_interstitiel_duree_s" min="3" max="10" step="1" value="5">
+            </label>
+            <label class="reglage"><span class="r-libelle">Bouton « Passer » actif après (secondes)</span>
+              <input class="r-input" type="number" name="sponsor_interstitiel_skip_s" min="0" max="10" step="1" value="2">
+            </label>
+            <label class="reglage"><span class="r-libelle">Ne pas revoir avant (minutes)</span>
+              <input class="r-input" type="number" name="sponsor_interstitiel_repos_min" min="1" max="240" step="1" value="30">
+            </label>
+            <label class="reglage">
+              <span class="r-libelle">Dès la première visite</span>
+              <span class="mini-toggle"><input type="checkbox" name="sponsor_interstitiel_premiere_visite">
+                Montrer aussi à la toute première arrivée de la journée</span>
+            </label>
+            <p class="note-generation">
+              Décoché (recommandé), le message n'apparaît qu'à partir du <strong>deuxième
+              chargement</strong> : on ne fait pas attendre un parent qui ouvre la page pour
+              la première fois pour voir un score.
+            </p>
+          </div>
+
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-sponsors-reglages">Enregistrer les réglages</button>
+            <button type="button" class="bouton-lien" id="bouton-tester-interstitiel">Tester le plein écran</button>
+            <span class="message-form" id="message-sponsors-reglages"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="carte" id="bloc-sponsors-liste">
+        <h2>Partenaires — les fiches</h2>
+        <p class="note-generation">
+          Un partenaire = une fiche. Coche les <strong>emplacements</strong> où il apparaît et
+          règle son <strong>poids</strong> : un poids 3 passe trois fois plus souvent qu'un
+          poids 1 dans la rotation. C'est le seul levier commercial, et il est explicable
+          tel quel au partenaire.
+        </p>
+        <div id="liste-sponsors"><div class="message">Chargement des partenaires…</div></div>
+
+        <!-- Contrôle de vérité : relit l'instantané PUBLIC (le même que reçoivent la page des
+             scores et le dossier club) et affiche, réglage par réglage, ce qui est réellement
+             servi. Répond à « j'ai réglé et rien ne change » sans avoir à deviner. -->
+        <div class="ligne-action">
+          <button type="button" class="bouton-lien" id="bouton-verifier-public">Vérifier ce que reçoit le public</button>
+        </div>
+        <div id="verif-public" class="diagnostic-remontee" hidden></div>
+
+        <form id="form-sponsor">
+          <h3 class="apercu-sous-titre" id="titre-form-sponsor">Ajouter un partenaire</h3>
+          <input type="hidden" name="id_sponsor" value="">
+          <label class="reglage"><span class="r-libelle">Nom du partenaire</span>
+            <input class="r-input" type="text" name="nom" placeholder="Ex : Décathlon Le Plessis-Robinson" autocomplete="off">
+          </label>
+          <label class="reglage"><span class="r-libelle">Accroche (une ligne, facultatif)</span>
+            <input class="r-input" type="text" name="accroche" maxlength="60" placeholder="Ex : Tout l'équipement rugby des U6 aux U14">
+          </label>
+          <label class="reglage"><span class="r-libelle">Site web (facultatif)</span>
+            <input class="r-input" type="url" name="url" placeholder="https://…">
+          </label>
+
+          <label class="reglage"><span class="r-libelle">Logo (image)</span>
+            <span class="zone-depot" id="zone-depot-sponsor-logo">
+              <input type="file" name="sponsor_logo" accept="image/*" hidden>
+              <span class="zd-texte"><strong>Glisse le logo ici</strong><br>ou clique pour choisir une image</span>
+            </span>
+          </label>
+          <div id="apercu-sponsor-logo" class="apercu-affiche" hidden>
+            <img id="apercu-sponsor-logo-img" alt="Aperçu du logo du partenaire">
+            <button type="button" class="bouton-suppr" id="bouton-retirer-sponsor-logo">Retirer le logo</button>
+          </div>
+          <p class="note-generation">
+            Sans logo, le partenaire s'affiche sous forme de pastille à son nom, sur sa couleur
+            de marque. Utile pour un commerçant qui n'a pas de fichier exploitable.
+          </p>
+
+          <label class="reglage"><span class="r-libelle">Taille du logo (%)</span>
+            <input class="r-input" type="number" name="logo_zoom" min="50" max="200" step="10" value="100">
+          </label>
+          <p class="note-generation">
+            <strong>100 % = taille normale.</strong> Beaucoup de fichiers de logo contiennent
+            leurs propres <strong>marges blanches</strong> : le logo paraît alors petit alors que
+            l'image, elle, est à la bonne taille. Monte à <strong>130 ou 150 %</strong> dans ce
+            cas — ou recadre le fichier, ce qui reste la meilleure solution.
+          </p>
+
+          <label class="reglage"><span class="r-libelle">Couleur de marque</span>
+            <input class="r-input" type="color" name="couleur" value="#0c1c2e">
+          </label>
+
+          <span class="r-libelle">Emplacements et réglages</span>
+          <p class="note-generation">
+            Coche un emplacement pour y faire apparaître ce partenaire. Chaque emplacement
+            ouvre alors <strong>ses propres réglages</strong> — texte, taille du logo et
+            disposition — pour l'adapter exactement à la forme de l'encart. Laisser un réglage
+            vide reprend celui du partenaire, puis le défaut de l'emplacement.
+          </p>
+          <div class="sponsor-emplacements" id="sponsor-emplacements"></div>
+
+          <label class="reglage"><span class="r-libelle">Poids dans la rotation (1 à 5)</span>
+            <input class="r-input" type="number" name="poids" min="1" max="5" step="1" value="1">
+          </label>
+          <label class="reglage"><span class="r-libelle">Ordre dans le mur</span>
+            <input class="r-input" type="number" name="ordre" min="1" max="999" step="1" value="100">
+          </label>
+          <label class="reglage">
+            <span class="r-libelle">Partenaire actif</span>
+            <span class="mini-toggle"><input type="checkbox" name="actif" checked> Visible sur la page publique</span>
+          </label>
+
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-sponsor">Enregistrer le partenaire</button>
+            <button type="button" class="bouton-lien" id="bouton-annuler-sponsor" hidden>Annuler la modification</button>
+            <span class="message-form" id="message-sponsor"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="carte" id="bloc-sponsors-bilan">
+        <h2>Partenaires — fiche de visibilité</h2>
+        <p class="note-generation">
+          Ce que tu renvoies au partenaire après l'événement. Les chiffres sont
+          <strong>consolidés entre tous les appareils</strong> : chaque navigateur qui affiche
+          les partenaires remonte ses compteurs, et la fiche annonce la portée réelle.
+          Les relevés arrivent <strong>20 secondes après l'ouverture d'une page, puis toutes les
+          10 minutes</strong> — laisse donc passer un moment avant de t'inquiéter d'un zéro.
+        </p>
+        <div class="ligne-action">
+          <button type="button" class="bouton" id="bouton-rafraichir-bilan">Rafraîchir les chiffres</button>
+          <button type="button" class="bouton-lien" id="bouton-tester-remontee">Tester la remontée</button>
+          <button type="button" class="bouton-lien" id="bouton-imprimer-bilan">Imprimer / PDF</button>
+          <button type="button" class="bouton-lien" id="bouton-exporter-bilan">Exporter en CSV</button>
+          <button type="button" class="bouton-lien" id="bouton-vider-bilan">Repartir de zéro</button>
+        </div>
+        <div id="diagnostic-remontee" class="diagnostic-remontee" hidden></div>
+        <label class="reglage" id="ligne-projection">
+          <span class="r-libelle">Projection — « et si tant de personnes avaient consulté la page ? »</span>
+          <input class="r-input" type="number" id="projection-appareils" min="1" max="20000" step="10"
+                 placeholder="Laisser vide pour les chiffres mesurés">
+        </label>
+        <div id="bilan-sponsors"><div class="message">Chargement du bilan…</div></div>
+      </section>
+
+      <!-- 1) Les réglages (horaires + catégories), injectés par admin.js dans deux zones
+           distinctes (pour les placer côte à côte / indépendamment sur grand écran). -->
+      <section id="reglages">
+        <div id="zone-horaires"><div class="message">Chargement des réglages…</div></div>
+        <div id="zone-categories"></div>
+      </section>
+
+      <!-- 2) La saisie des équipes -->
+      <section class="carte" id="bloc-equipes">
+        <h2>Équipes</h2>
+
+        <!-- Guidage affiché quand aucune catégorie n'existe (formulaire désactivé) -->
+        <p class="note-generation" id="aide-categories" hidden>
+          ➕ Ajoute d'abord une <strong>catégorie</strong> (section « Catégories » ci-dessus)
+          pour pouvoir saisir des équipes.
+        </p>
+
+        <!-- Formulaire d'ajout : nom + catégorie + effectifs déclarés (joueurs / éducateurs).
+             Les effectifs sont FACULTATIFS (laisser vide = non déclaré) et alimentent la
+             demande d'autorisation (A.4 participants, B.3 éducateurs). -->
+        <form id="form-equipe" class="form-equipe">
+          <input id="champ-nom" type="text" placeholder="Nom de l'équipe" autocomplete="off" required>
+          <select id="champ-categorie" required>
+            <option value="">Catégorie…</option>
+          </select>
+          <input id="champ-joueurs" class="champ-effectif" type="number" min="0" step="1"
+                 placeholder="Joueurs" aria-label="Nombre de joueurs de cette équipe (facultatif)">
+          <input id="champ-educateurs" class="champ-effectif" type="number" min="0" step="1"
+                 placeholder="Éducs" aria-label="Nombre d'éducateurs accompagnant cette équipe (facultatif)">
+          <button type="submit" class="bouton" id="bouton-ajouter">Ajouter</button>
+        </form>
+        <p class="note-generation">💡 « Joueurs » et « Éducs » sont facultatifs : renseignés, ils
+          alimentent automatiquement la <strong>demande d'autorisation</strong> (nombre de
+          participants et nombre d'éducateurs). Modifiables ensuite avec le crayon ✏️.</p>
+
+        <!-- Message de retour (succès / erreur) -->
+        <div id="message-equipe" class="message-form"></div>
+
+        <!-- La liste des équipes, groupée par catégorie -->
+        <div id="liste-equipes"></div>
+
+        <!-- Réglage interne : comment reconnaître MES équipes parmi toutes celles du tournoi.
+             Placé ici, avec les équipes, parce que la valeur attendue est un morceau de LEUR NOM.
+             Enregistré par `enregistrerInfosTournoi` (écriture partielle : le backend n'écrit que
+             les champs envoyés), sans nouvelle action serveur. -->
+        <form id="form-perfs-club" class="form-perfs-club">
+          <label class="reglage"><span class="r-libelle">Identifier mes équipes dans Perfs</span>
+            <input class="r-input" type="text" name="perfs_mot_cle_club" autocomplete="off"
+                   placeholder="Ex : ABC" aria-describedby="aide-perfs-club">
+          </label>
+          <p class="note-generation" id="aide-perfs-club">
+            Indiquez <strong>au moins 3 caractères</strong> présents dans le nom de
+            <strong>toutes</strong> les équipes de votre club. Par exemple, <code>ABC</code>
+            reconnaîtra <code>ABC-1</code> et <code>ABC-2</code>. Choisissez un morceau
+            <strong>bien distinctif</strong> : s'il apparaît aussi dans le nom d'un adversaire,
+            ses résultats seraient comptés comme les vôtres — et vos rencontres contre lui
+            <strong>disparaîtraient</strong> du cumul de saison, l'application les prenant pour
+            des matchs entre deux de vos équipes. Laissez vide pour désactiver la page
+            <strong>Perfs</strong> — elle préfère ne rien afficher plutôt qu'un bilan faux.
+          </p>
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-perfs-club">Enregistrer</button>
+          </div>
+          <div id="message-perfs-club" class="message-form"></div>
+        </form>
+      </section>
+
+      <!-- 2 bis) Terrains physiques & répartition automatique des mini-terrains.
+           Placé APRÈS les équipes (la répartition dépend du nombre d'équipes) et AVANT la
+           génération (qui utilise le champ `terrains` de chaque catégorie). Rempli par admin.js. -->
+      <section class="carte" id="bloc-terrains">
+        <div id="zone-terrains"><div class="message">Chargement des terrains…</div></div>
+      </section>
+
+      <!-- 3) Génération des poules et du planning -->
+      <section class="carte" id="bloc-generation">
+        <h2>Poules &amp; planning</h2>
+        <p class="note-generation">
+          Répartit les équipes en poules et calcule tous les horaires sans conflit.<br>
+          ⚠️ Cela <strong>efface</strong> les poules, matchs et scores précédents.
+        </p>
+        <button id="bouton-generer" class="bouton" data-ic="poules">Générer poules et planning</button>
+        <!-- Régénération NON destructive : recalcule seulement les heures, garde les poules
+             ET les scores. Activé/masqué par admin.js (majBoutonRecalculer) selon l'état. -->
+        <button id="bouton-recalculer-horaires" class="bouton bouton-doux" hidden data-ic="horloge">Recalculer les horaires (garde les scores)</button>
+        <p class="note-generation aide-recalculer" id="aide-recalculer" hidden></p>
+        <div id="message-generation" class="message-form"></div>
+        <div id="arbitrages"></div>
+        <!-- Modification manuelle des poules du matin (rééquilibrer les niveaux avant de jouer) -->
+        <button id="bouton-modifier-poules" class="bouton" hidden data-ic="crayon">Modifier les poules du matin</button>
+        <div id="edition-poules"></div>
+        <!-- VERROU DE PUBLICATION : générer n'est pas valider. Tant que l'organisateur n'a pas
+             regardé l'équilibre des poules, les clubs ne voient rien dans leur dossier. Toute
+             génération ou réorganisation remet ce témoin à « non » — rendu par majPublicationPlanning(). -->
+        <div id="publication-planning"></div>
+        <div id="affichage-planning"></div>
+      </section>
+
+      <!-- 4) Génération de la phase après-midi (classement croisé) -->
+      <section class="carte" id="bloc-apresmidi">
+        <h2>Phase après-midi (classement croisé)</h2>
+        <p class="note-generation">
+          Génère les matchs de l'après-midi à partir du <strong>classement du matin</strong>
+          (les équipes de même rang de poule jouent ensemble).<br>
+          ⚠️ Nécessite que <strong>tous les scores du matin</strong> soient saisis.
+          N'efface <strong>pas</strong> les matchs du matin.<br>
+          💡 Si tu <strong>corriges un score du matin</strong> après avoir généré l'après-midi,
+          clique à nouveau sur ce bouton pour <strong>régénérer</strong> les niveaux à jour.
+        </p>
+        <!-- État de préparation : indique si les scores du matin sont complets.
+             Le bouton reste désactivé tant que ce n'est pas le cas. -->
+        <p class="apresmidi-etat">Scores du matin : <strong id="etat-scores-matin">…</strong></p>
+        <button id="bouton-apresmidi" class="bouton" data-ic="ballon">Générer l'après-midi</button>
+        <div id="message-apresmidi" class="message-form"></div>
+
+        <!-- Super Challenge — Phase 3, 2ᵉ journée (dimanche). Bloc masqué : révélé par majDimancheScf()
+             uniquement si une catégorie U14 est en contexte Super Challenge Phase 3. Le brassage
+             (poules E/F/G par niveau) réutilise le classement croisé, généré APRÈS les scores du samedi. -->
+        <div id="bloc-dimanche-scf" hidden>
+          <hr>
+          <p class="note-generation">
+            <strong>Super Challenge — Phase 3 (2ᵉ journée) :</strong> une fois <strong>tous les scores
+            du samedi</strong> saisis, génère le <strong>brassage du dimanche</strong> — les 1ᵉʳˢ de
+            chaque poule ensemble, les 2ᵉˢ ensemble, les 3ᵉˢ ensemble (poules par niveau), en 2×11.
+            Régénérable si tu corriges un score du samedi.
+          </p>
+          <p class="apresmidi-etat">Scores du samedi : <strong id="etat-samedi-scf">…</strong></p>
+          <button id="bouton-dimanche-scf" class="bouton" data-ic="ballon">Générer le dimanche (brassage)</button>
+          <div id="message-dimanche-scf" class="message-form"></div>
+        </div>
+      </section>
+
+      <!-- 4 ter) FEUILLE DE FIN DE JOURNÉE — tous les matchs de la journée dans l'ordre
+           chronologique, avec leur score. Se télécharge en PDF et s'envoie aux clubs sur
+           l'adresse qui a servi à les inviter. Rempli par admin-feuille-jour.js. -->
+      <section class="carte" id="bloc-feuille-jour">
+        <h2>📋 Feuille de fin de journée</h2>
+        <p class="note-generation">
+          Tous les matchs de la journée <strong>dans l'ordre chronologique</strong>, avec leur score.
+          À <strong>télécharger en PDF</strong> et à <strong>envoyer aux clubs</strong> sur l'adresse
+          qui a servi à les inviter.
+        </p>
+        <div id="feuille-jour-contenu"><p class="vide">Chargement…</p></div>
+        <div class="ligne-action">
+          <button type="button" class="bouton" id="bouton-feuille-jour-pdf">📄 Télécharger le PDF</button>
+          <button type="button" class="bouton" id="bouton-feuille-jour-envoi">✉️ Envoyer aux clubs</button>
+          <span id="message-feuille-jour" class="message-form"></span>
+        </div>
+      </section>
+
+      <!-- 4 bis) CLUBS INVITÉS (Phase 1) — en TÊTE de la page « Inviter un club » : liste + ajout,
+           statut, envoi individuel de l'invitation, et (une fois Accepté) génération du dossier
+           Phase 2. ⚠️ Les emails ne sont JAMAIS publics : la liste se charge avec la clé admin
+           (action listerClubsInvites) et n'apparaît pas dans les données publiques. -->
+      <section class="carte" id="bloc-clubs-invites">
+        <h2>Clubs invités</h2>
+        <p class="note-generation">
+          Ajoute chaque club avec son contact, puis <strong>envoie l'invitation</strong> (Phase 1) —
+          au club, ou à tous d'un coup via l'aperçu ci-dessous. Fais ensuite évoluer le
+          <strong>statut</strong> (Invité → <strong>Accepté</strong> ou Décliné). Quand un club passe
+          <strong>Accepté</strong>, choisis ses <strong>catégories engagées</strong> puis
+          <strong>« Générer le dossier final »</strong> (Phase 2).
+        </p>
+        <form id="form-club-invite" class="form-equipe">
+          <input id="champ-club-nom" type="text" placeholder="Nom du club" autocomplete="off" required>
+          <input id="champ-club-contact" type="text" placeholder="Contact (nom)" autocomplete="off">
+          <input id="champ-club-prenom" type="text" placeholder="Prénom du contact" autocomplete="off">
+          <input id="champ-club-email" type="email" placeholder="Email du contact" autocomplete="off">
+          <button type="submit" class="bouton" id="bouton-ajouter-club">Ajouter</button>
+        </form>
+        <div id="message-club-invite" class="message-form"></div>
+        <div id="liste-clubs-invites"><p class="vide">Connecte-toi pour voir la liste des clubs invités.</p></div>
+      </section>
+
+      <!-- 4 bis-2) APERÇU DE L'EMAIL D'INVITATION (Phase 1) : même principe que l'aperçu de la
+           carte « Infos du tournoi » — mise à jour EN DIRECT à partir des données du tournoi
+           (et des cartes « Sur place » / « Réponse » ci-dessous). Porte le bouton d'envoi GROUPÉ. -->
+      <section class="carte" id="bloc-apercu-invitation">
+        <h2>Aperçu de l'email d'invitation</h2>
+        <p class="note-generation">
+          L'email envoyé aux clubs (Phase 1). La salutation est <strong>personnalisée par club</strong>
+          (« Bonjour {prénom}, ») ; l'aperçu montre un exemple. <strong>Tu peux modifier l'objet et le
+          message</strong> ci-dessous. Tant que tu n'y touches pas, ils se mettent à jour tout seuls
+          quand tu changes les cartes <strong>« Sur place »</strong> ou <strong>« Réponse à l'invitation »</strong>
+          ci-dessous ; utilise <strong>« Régénérer »</strong> pour repartir du texte automatique.
+        </p>
+        <div class="apercu-email" id="apercu-invitation">
+          <label class="ae-champ"><span class="ae-label">Objet</span>
+            <input type="text" class="r-input" id="apercu-invitation-objet" autocomplete="off">
+          </label>
+          <label class="ae-champ"><span class="ae-label">Phrase d'introduction</span>
+            <textarea class="r-input" id="apercu-invitation-intro" rows="2"></textarea>
+          </label>
+          <p class="ae-salutation">
+            La salutation <strong>« Bonjour {prénom}, »</strong> et les sections ci-dessous
+            (catégories, jour J, sur place, réponse) sont générées automatiquement à partir des
+            infos du tournoi. Aperçu du <strong>rendu réel</strong> de l'email :
+          </p>
+          <iframe id="apercu-invitation-rendu" class="ae-iframe" title="Aperçu du rendu de l'email"></iframe>
+          <div class="ligne-action">
+            <button type="button" class="bouton bouton-doux" id="bouton-regenerer-invitation">↻ Régénérer depuis les infos du tournoi</button>
+          </div>
+        </div>
+        <p class="note-generation ae-confidentiel">
+          🔒 Chaque club reçoit un <strong>email individuel</strong> : les adresses ne sont
+          <strong>jamais partagées</strong> entre les clubs.
+        </p>
+        <label class="mini-toggle ae-toggle"><input type="checkbox" id="inv-renvoyer"> Renvoyer aussi aux clubs déjà invités</label>
+        <div class="ligne-action">
+          <button type="button" class="bouton" id="bouton-envoyer-invitations" data-ic="email">Envoyer les invitations à tous les clubs</button>
+          <span class="message-form" id="message-invitations"></span>
+        </div>
+      </section>
+
+      <!-- 4 bis-3) SUR PLACE (Phase 1) : services affichés en pastilles sur l'invitation,
+           uniquement s'ils sont cochés. -->
+      <section class="carte" id="bloc-surplace">
+        <h2>Sur place</h2>
+        <p class="note-generation">
+          Ces services apparaissent en <strong>pastilles</strong> sur l'invitation (Phase 1),
+          uniquement s'ils sont <strong>cochés</strong> (aucune ligne « non disponible » sinon).
+        </p>
+        <form id="form-surplace">
+          <label class="reglage"><span class="r-libelle">Buvette</span>
+            <span class="mini-toggle"><input type="checkbox" name="buvette_disponible"> Buvette sur place</span>
+          </label>
+          <label class="reglage"><span class="r-libelle">Espace sandwich</span>
+            <span class="mini-toggle"><input type="checkbox" name="espace_sandwich_disponible"> Espace sandwich sur place</span>
+          </label>
+          <label class="reglage"><span class="r-libelle">Boutique</span>
+            <span class="mini-toggle"><input type="checkbox" name="boutique_disponible"> Boutique sur place</span>
+          </label>
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-surplace">Enregistrer « Sur place »</button>
+            <span class="message-form" id="message-surplace"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- 4 bis-2) RÉPONSE À L'INVITATION (Phase 1) : date limite de réponse (distincte de la
+           date de confirmation des effectifs, Phase 2) + contact référent. Validation « au
+           moins un des deux » (tél / email) au blur/submit. -->
+      <section class="carte" id="bloc-reponse">
+        <h2>Réponse à l'invitation</h2>
+        <p class="note-generation">
+          Date limite de <strong>réponse</strong> à l'invitation (distincte de la date de
+          <em>confirmation des effectifs</em>, propre au dossier Phase 2) et <strong>contact
+          référent</strong>. Renseigne <strong>au moins</strong> un téléphone <strong>ou</strong> un email.
+        </p>
+        <form id="form-reponse">
+          <label class="reglage"><span class="r-libelle">Date limite de réponse</span>
+            <input class="r-input" type="date" name="date_limite_reponse">
+          </label>
+          <label class="reglage"><span class="r-libelle">Contact — nom</span>
+            <input class="r-input" type="text" name="contact_reponse_nom" placeholder="Ex : Camille Dupont" autocomplete="off">
+          </label>
+          <label class="reglage"><span class="r-libelle">Contact — téléphone</span>
+            <input class="r-input" type="tel" name="contact_reponse_tel" placeholder="Ex : 06 12 34 56 78" autocomplete="off">
+          </label>
+          <label class="reglage"><span class="r-libelle">Contact — email</span>
+            <input class="r-input" type="email" name="contact_reponse_email" placeholder="Ex : contact@club.fr" autocomplete="off">
+          </label>
+          <label class="reglage"><span class="r-libelle">Email expéditeur (alias Gmail, optionnel)</span>
+            <input class="r-input" type="email" name="email_expediteur" placeholder="Vide = adresse du compte exécutant le script" autocomplete="off">
+          </label>
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-reponse">Enregistrer « Réponse »</button>
+            <span class="message-form" id="message-reponse"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- 5) Cartes du DOSSIER D'INVITATION : modalités d'inscription, parking & accès,
+           encadrement & assurance. Tous les champs sont facultatifs — chaque carte
+           s'enregistre indépendamment (action backend commune enregistrerInvitation).
+           Les champs conditionnels (tarif) sont révélés par admin.js selon la case. -->
+      <section class="carte" id="bloc-modalites">
+        <h2>Modalités d'inscription</h2>
+        <p class="note-generation">
+          Ces informations apparaissent dans la section <strong>« Modalités d'inscription »</strong>
+          du dossier d'invitation. Tous les champs sont <strong>facultatifs</strong>.
+        </p>
+        <form id="form-modalites">
+          <label class="reglage"><span class="r-libelle">Date limite de confirmation</span>
+            <input class="r-input" type="date" name="date_limite_confirmation">
+          </label>
+          <label class="reglage">
+            <span class="r-libelle">Tarif d'engagement</span>
+            <span class="mini-toggle"><input type="checkbox" name="tarif_engagement_oui"> Un tarif d'engagement est demandé</span>
+          </label>
+          <div id="lignes-tarif-engagement" hidden>
+            <label class="reglage"><span class="r-libelle">Tarif — montant</span>
+              <input class="r-input" type="text" name="tarif_engagement_montant" placeholder="Ex : 50 € par équipe">
+            </label>
+            <label class="reglage"><span class="r-libelle">Tarif — modalités de paiement</span>
+              <textarea class="r-input" name="tarif_engagement_modalites" rows="3" placeholder="Ex : chèque à l'ordre de… , virement avant le…"></textarea>
+            </label>
+          </div>
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-modalites">Enregistrer les modalités</button>
+            <span class="message-form" id="message-modalites"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="carte" id="bloc-parking">
+        <h2>Parking &amp; accès</h2>
+        <p class="note-generation">
+          Explique aux clubs <strong>où se garer</strong> et comment accéder au site. La photo
+          (plan du parking, vue aérienne…) apparaîtra en pleine largeur dans le dossier.
+        </p>
+        <form id="form-parking">
+          <label class="reglage"><span class="r-libelle">Parking &amp; accès (texte)</span>
+            <input class="r-input" type="text" name="parking_texte" placeholder="Ex : parking gratuit rue des Sports, accès par l'entrée B">
+          </label>
+          <!-- Photo du parking : même mécanisme que l'affiche du tournoi (glisser-déposer
+               OU clic pour choisir ; upload Drive à l'enregistrement). -->
+          <label class="reglage"><span class="r-libelle">Photo du parking (image)</span>
+            <span class="zone-depot" id="zone-depot-parking">
+              <input type="file" name="parking_photo" accept="image/*" hidden>
+              <span class="zd-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5M7.5 9.5 12 5l4.5 4.5M4.5 19h15"></path></svg></span>
+              <span class="zd-texte"><strong>Glisse ta photo ici</strong><br>ou clique pour choisir une image</span>
+            </span>
+          </label>
+          <div id="apercu-parking" class="apercu-affiche" hidden>
+            <img id="apercu-parking-img" alt="Aperçu de la photo du parking">
+            <button type="button" class="bouton-suppr" id="bouton-retirer-parking">Retirer la photo</button>
+          </div>
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-parking">Enregistrer parking &amp; accès</button>
+            <span class="message-form" id="message-parking"></span>
+          </div>
+        </form>
+      </section>
+
+      <section class="carte" id="bloc-encadrement">
+        <h2>Encadrement &amp; assurance</h2>
+        <p class="note-generation">
+          Rappelle aux clubs le <strong>taux d'encadrement</strong> attendu, les
+          <strong>diplômes</strong> exigés et si une <strong>attestation d'assurance</strong>
+          est à fournir. Tous les champs sont <strong>facultatifs</strong>.
+        </p>
+        <form id="form-encadrement">
+          <label class="reglage"><span class="r-libelle">Ratio éducateurs / joueurs</span>
+            <input class="r-input" type="text" name="encadrement_ratio" placeholder="Ex : 1 éducateur pour 8 joueurs">
+          </label>
+          <label class="reglage"><span class="r-libelle">Diplômes exigés</span>
+            <input class="r-input" type="text" name="encadrement_diplomes" placeholder="Ex : Brevet fédéral EDR minimum">
+          </label>
+          <label class="reglage">
+            <span class="r-libelle">Attestation d'assurance</span>
+            <span class="mini-toggle"><input type="checkbox" name="assurance_attestation_requise"> Attestation d'assurance requise</span>
+          </label>
+          <div class="ligne-action">
+            <button type="button" class="bouton" id="bouton-enregistrer-encadrement">Enregistrer encadrement &amp; assurance</button>
+            <span class="message-form" id="message-encadrement"></span>
+          </div>
+        </form>
+      </section>
+
+      <!-- 5 bis) Dossier club : ouvre le générateur de dossier (page dédiée
+           dossier-club.html). L'état des sections est rempli par admin.js (majDossier).
+           Placé AVANT la publication : on envoie le dossier aux clubs, puis on publie. -->
+      <section class="carte" id="bloc-dossier">
+        <h2>Dossier complet (accepté) — Phase 2</h2>
+        <p class="note-generation">
+          Assemble automatiquement le <strong>dossier</strong> envoyé aux clubs qui ont
+          <strong>accepté</strong> : le jour J (journée, infos pratiques, parking, contact, sécurité,
+          suivi des scores), puis le rappel du format sportif, l'encadrement et les modalités.
+          Chaque club a son <strong>dossier personnel</strong> — son nom, ses catégories engagées.<br>
+          💡 Toute section <strong>sans donnée</strong> est simplement <strong>masquée</strong> —
+          tu peux générer le dossier à tout moment et le regénérer quand tu complètes les infos.<br>
+          👉 Pour l'<strong>envoi</strong> à un club (accueil personnalisé + email automatique),
+          utilise <strong>« Générer le dossier final »</strong> sur la ligne du club dans
+          <strong>« Clubs invités »</strong>.
+        </p>
+        <div id="etat-dossier"></div>
+        <!-- L'aperçu ouvre le dossier D'UN CLUB : les contacts jour J, le parking et les secours
+             sont protégés par le jeton personnel du club (le backend refuse sans lui). Rendu par
+             majApercuDossier() — sans club invité, la carte l'explique au lieu d'un lien mort. -->
+        <div class="ligne-action" id="ligne-apercu-dossier"></div>
+        <p class="note-generation">
+          Le dossier s'ouvre dans un nouvel onglet : vérifie-le, puis
+          <strong>« Exporter en PDF »</strong> si tu préfères l'envoyer manuellement.
+        </p>
+      </section>
+
+      <!-- Amont : demande d'autorisation de tournoi EDR (feuille de report du formulaire FFR) -->
+      <section class="carte" id="bloc-autorisation">
+        <h2>Demande d'autorisation de tournoi</h2>
+        <p class="note-generation">
+          <strong>Feuille de report</strong> du formulaire officiel FFR : l'app remplit ce qu'elle
+          sait, tu complètes le reste. Ce n'est <strong>pas</strong> le formulaire officiel (fourni
+          par la Ligue) — c'est un pense-bête à imprimer pour n'avoir plus qu'à recopier.<br>
+          Aucun champ n'est deviné : un champ inconnu reste <strong>vide et marqué « manquant »</strong>.
+        </p>
+        <div id="autorisation-saisie"></div>
+        <div class="ligne-action">
+          <button type="button" class="bouton" id="bouton-enregistrer-autorisation" data-ic="enregistrer">Enregistrer les champs saisis</button>
+          <button type="button" class="bouton" id="bouton-pdf-autorisation" data-ic="dossier">Télécharger le formulaire pré-rempli (PDF)</button>
+          <button type="button" class="bouton bouton-secondaire" id="bouton-imprimer-autorisation" data-ic="imprimer">Imprimer la feuille</button>
+        </div>
+        <p class="note-generation" style="margin-top:6px;">Le PDF téléchargé est le <strong>formulaire officiel FFR
+          pré-rempli</strong> avec ce que l'app connaît (organisateur, tournoi, niveau, sécurité, logistique,
+          récompenses…). Il <strong>reste modifiable</strong> : ouvre-le et complète le format sportif par
+          catégorie + les signatures.</p>
+        <div id="autorisation-message" class="message-form" role="status" aria-live="polite"></div>
+        <div id="autorisation-feuille"></div>
+      </section>
+
+      <!-- 6) Publication : rend le tournoi visible (ou non) sur la page publique -->
+      <section class="carte" id="bloc-publication">
+        <h2>Publier le tournoi</h2>
+        <p class="note-generation">
+          Rend le tournoi <strong>visible du public</strong> sur la page publique. Tant qu'il n'est
+          pas publié, les visiteurs voient un écran « à venir ».<br>
+          Indépendant de la génération des poules : prépare d'abord tout, publie quand c'est prêt.
+        </p>
+        <p class="publication-etat">État : <strong id="etat-publication">…</strong></p>
+
+        <!-- ⛔ CE QUE PUBLIER NE FAIT PAS — et c'est le seul endroit où le doute se pose.
+             Doctrine D-048 : « Publier ouvre une page. Publier ne parle à personne. »
+             Jusqu'au découplage M1-PUB / PUB-4 (2026-08-26), publier faisait réellement
+             apparaître une actualité sur le site d'une association tierce, sans que rien ne
+             le dise ici. Ce n'est plus le cas, et l'écran doit le dire.
+             ⭐ D-054 / ② : annoncer le tournoi ailleurs reste un geste ÉDITORIAL et MANUEL —
+             la note invite à le faire, elle ne l'automatise pas. -->
+        <p class="note-generation">
+          Publier rend le tournoi visible sur sa <strong>page publique du tournoi</strong>, à l'adresse
+          ci-dessous. L'application <strong>ne crée aucune annonce automatiquement</strong> sur le site
+          d'une association ou sur un autre site. Si tu veux annoncer le tournoi ailleurs,
+          <strong>communique cette adresse toi-même</strong>.
+        </p>
+
+        <!-- Accès à la page publique DU TOURNOI actuellement géré. Placé AVANT le bouton, et ce
+             n'est pas cosmétique : l'adresse ne dépend PAS du bouton, alors que le bouton est un
+             geste. Dans cet ordre, l'écran dit ce qui est vrai — l'adresse existe d'abord, publier
+             décide seulement de ce que le visiteur y voit. Placée après le bouton, elle se lirait
+             comme une CONSÉQUENCE de la publication, ce qui est faux.
+             ⛔ « Copier » et « Ouvrir » ne publient rien et n'écrivent rien sur le serveur.
+             ⛔ Cette adresse est celle DU TOURNOI, pas « celle du club » : L'application gère un tournoi
+             à la fois, et un même club en organisera un jour plusieurs (U10 samedi, U8 dimanche),
+             chacun avec son adresse. Ne rien écrire ici qui grave « un club = une URL ». -->
+        <div class="publication-acces">
+          <p class="publication-acces-lib">L'adresse de la page publique de ce tournoi</p>
+          <p class="publication-acces-url"><a id="acces-public-lien" href="#" target="_blank"
+             rel="noopener">…</a></p>
+          <div class="publication-acces-actions">
+            <button type="button" class="bouton" id="bouton-copier-adresse-publique">Copier l'adresse</button>
+            <button type="button" class="bouton" id="bouton-ouvrir-page-publique">Ouvrir la page</button>
+          </div>
+          <p class="publication-acces-note" id="acces-public-note">…</p>
+          <div id="message-acces-public" class="message-form" role="status" aria-live="polite"></div>
+        </div>
+
+        <button id="bouton-publier" class="bouton">…</button>
+        <!-- Pourquoi « Publier » est grisé, le cas échéant. Rempli par majVerrouPublier()
+             (admin-infos-publication.js) à partir du MÊME cerveau que le fil « Où en suis-je ? ».
+             ⛔ Ne concerne QUE l'action publier : « Masquer » n'est jamais grisé, et « Copier » /
+             « Ouvrir » restent actifs dans tous les cas. -->
+        <div id="message-verrou-publier" class="message-form" role="status" aria-live="polite"></div>
+        <div id="message-publication" class="message-form"></div>
+      </section>
+
+      <!-- 7) Réinitialisation : remet le tournoi à zéro (zone de danger).
+           Carte repliable, REPLIÉE par défaut : rarement utilisée + on évite de l'ouvrir par erreur. -->
+      <details class="carte carte-danger" id="bloc-reinitialisation">
+        <summary>Réinitialiser le tournoi</summary>
+        <p class="note-generation">
+          Remet le tournoi <strong>à zéro</strong> pour repartir d'une base vierge. Cela
+          <strong>supprime définitivement</strong> :
+        </p>
+        <ul class="liste-danger">
+          <li>toutes les <strong>catégories</strong> ;</li>
+          <li>toutes les <strong>équipes</strong> ;</li>
+          <li>toutes les <strong>poules</strong> et tous les <strong>matchs</strong> (planning + scores) ;</li>
+          <li>les <strong>infos du tournoi</strong> (nom, date, lieu, adresse, description, affiche) ;</li>
+          <li>les <strong>contacts &amp; sécurité</strong> (référent tournoi, poste de secours, référent sécurité) ;</li>
+          <li>le <strong>dossier d'invitation</strong> (modalités d'inscription, parking &amp; accès — photo comprise —, encadrement &amp; assurance) ;</li>
+          <li>la config <strong>Phase 1</strong> (« Sur place » et « Réponse à l'invitation » — l'email expéditeur est conservé) ;</li>
+          <li>tout l'<strong>engagement</strong> de chaque club dans cette édition : sa
+              <strong>réponse</strong> (Accepté / Décliné), ses <strong>catégories engagées</strong>,
+              le <strong>nombre d'équipes</strong>, les <strong>joueurs</strong>, les
+              <strong>éducateurs</strong> et le détail des effectifs, les dates d'envoi de
+              l'<strong>invitation</strong> et du <strong>dossier</strong>, les
+              <strong>alertes</strong>, la <strong>sélection enregistrée</strong> et son
+              <strong>ancien lien d'accès</strong> ;</li>
+          <li>les <strong>horaires de la journée</strong> (remis à zéro, à re-renseigner).</li>
+        </ul>
+        <p class="note-generation">
+          Le tournoi repasse en <strong>masqué</strong> s'il était public.<br>
+          ⭐ La règle tient en une phrase : <strong>on conserve le contact, on réinitialise
+          l'engagement.</strong><br>
+          ✅ Est <strong>conservé</strong> : l'historique des saisons (page Perfs), vos
+          <strong>partenaires</strong>, les informations <strong>permanentes de votre club</strong>
+          dans la demande d'autorisation (nom et code du club, label, président, représentant), et
+          le <strong>carnet d'adresses des clubs invités</strong> — nom du club, nom et prénom du
+          contact, adresse email, date d'ajout. Les clubs <strong>restent dans la liste</strong> et
+          redeviennent <strong>invitables</strong> : rien n'est à ressaisir pour les réinviter.<br>
+          🔑 Un <strong>nouveau lien d'accès</strong> est généré côté administration après la
+          réinitialisation. L'<strong>ancien lien cesse de fonctionner</strong> — c'est voulu : il
+          ouvrait un tournoi qui n'existe plus. Le nouveau lien n'est
+          <strong>communiqué au club</strong> qu'au <strong>prochain envoi d'invitation</strong>.<br>
+          ⚠️ Cette action est <strong>irréversible</strong>.
+        </p>
+        <button id="bouton-reinitialiser" class="bouton bouton-danger" data-ic="balai">Réinitialiser le tournoi</button>
+        <div id="message-reinitialisation" class="message-form"></div>
+      </details>
+
+    </main>
+
+  </div>
+
+  <!-- On charge les scripts DANS CET ORDRE :
+       1) config.js  → définit l'URL du backend
+       2) commun.js  → petites fonctions partagées par toutes les pages (echapper, estTermine…)
+       3) dialog.js  → fenêtres de dialogue maison (utilisées par api.js et admin.js)
+       4) api.js     → fournit apiGet()
+       5) admin.js   → utilise le tout pour afficher la page -->
+  <script src="js/config.js"></script>
+  <script src="js/commun.js"></script>
+  <script src="js/dialog.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/admin.js"></script>
+  <script src="js/admin-infos-publication.js"></script>
+  <script src="js/admin-invitations.js"></script>
+  <script src="js/admin-reglages.js"></script>
+  <script src="js/admin-conformite-ffr.js"></script>
+  <script src="js/admin-equipes.js"></script>
+  <script src="js/admin-tableau-bord.js"></script>
+  <script src="js/admin-generation.js"></script>
+  <script src="js/admin-terrains.js"></script>
+  <!-- Partenaires : le moteur partagé avec la page publique, puis l'écran d'administration. -->
+  <script src="js/sponsors.js"></script>
+  <script src="js/admin-sponsors.js"></script>
+  <!-- pdf-lib : remplissage du formulaire officiel FFR (AcroForm) côté navigateur, sans build. -->
+  <script src="js/vendor/pdf-lib.min.js"></script>
+  <script src="js/admin-autorisation.js"></script>
+  <!-- Feuille de fin de journée : réutilise pdf-lib (chargé juste au-dessus) pour le PDF. -->
+  <script src="js/admin-feuille-jour.js"></script>
+  <!-- Surcouches de présentation (déplacent les blocs ci-dessus SANS toucher à admin.js) :
+       6) ecrans.js    → barre latérale + onglets sur GRAND écran
+       7) assistant.js → assistant à cartes sur mobile (verrou « Suivant »),
+                         et aiguillage entre les deux modes au chargement. -->
+  <script src="js/ecrans.js"></script>
+  <script src="js/assistant.js"></script>
+
+</body>
+</html>

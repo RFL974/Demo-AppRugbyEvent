@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Invitation club</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-tournoi.svg">
+  <meta name="description" content="Invitation au tournoi : déroulé de la journée, cadre sportif détaillé par catégorie et réponse attendue. Le dossier complet est envoyé aux clubs qui acceptent.">
+  <!-- Pas d'indexation : document destiné aux clubs invités, pas au grand public. -->
+  <meta name="robots" content="noindex">
+  <!-- Ouverte depuis l'email, l'URL porte le jeton du club : aucun referrer ne doit le
+       laisser fuiter vers les liens externes (règlement FFR, Instagram, site). -->
+  <meta name="referrer" content="no-referrer">
+
+  <!-- Polices de la charte (mêmes familles que le reste du site) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Même feuille de style « document » que le dossier Phase 2 (fond blanc, format A4,
+       pensée pour l'impression). Refonte vitrine : la page se lit comme un carton
+       d'invitation (blason centré, affiche en héros, une carte par catégorie) ; l'export
+       PDF s'étale sur quelques pages équilibrées. -->
+  <link rel="stylesheet" href="css/dossier.css">
+</head>
+<body>
+
+  <!-- Bandeau d'outils (jamais imprimé) : export PDF pour tous ; le retour admin et le titre
+       « Phase 1 » ne s'affichent QUE si la page est ouverte depuis l'administration (?admin=1).
+       Les clubs qui reçoivent le lien par email ne voient jamais de lien vers la plateforme. -->
+  <div class="barre-outils no-print">
+    <a class="btn-outil admin-seul" href="admin.html" hidden>← Retour à l'administration</a>
+    <span class="barre-outils-titre admin-seul" hidden>Invitation club — Phase 1</span>
+    <!-- Même remarque que sur le dossier : ce pied de page appartient au navigateur. -->
+    <span class="barre-outils-astuce">Astuce : dans la fenêtre d'impression, décochez
+      « En-têtes et pieds de page » pour une feuille sans adresse ni date en marge.</span>
+    <button type="button" class="btn-outil btn-principal" id="bouton-imprimer">🖨️ Exporter en PDF</button>
+  </div>
+
+  <!-- L'invitation, entièrement construite par js/invitation.js à partir des données du
+       tournoi (Config Zone A + Zone B). Générique : même contenu pour tous les clubs
+       invités (aucune personnalisation à ce stade — réservée à la Phase 2). Toute section
+       sans donnée est masquée — pas de « non communiqué ». -->
+  <main class="feuille" id="invitation">
+    <div class="message-chargement" id="message-invitation">Chargement de l'invitation…</div>
+  </main>
+
+  <!-- Ordre de chargement : config.js (URL du backend) · commun.js (helpers) · api.js (apiGet)
+       · invitation.js (construit la page). Pas de QR / docx / itinéraire ici : réservés à la Phase 2. -->
+  <script src="js/config.js"></script>
+  <script src="js/commun.js"></script>
+  <script src="js/commun-dossier.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/invitation.js"></script>
+
+</body>
+</html>

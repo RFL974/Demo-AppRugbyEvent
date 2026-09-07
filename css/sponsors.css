@@ -1,0 +1,511 @@
+/* =========================================================
+   PARTENAIRES (sponsors) — feuille PARTAGÉE
+   ---------------------------------------------------------
+   Chargée par la page publique des scores (tournoi.html) ET par l'écran
+   d'administration (admin.html), qui a besoin des mêmes règles pour ses
+   aperçus : sans elles, l'aperçu d'un encart ou le test du message plein
+   écran s'affichaient en texte brut, sans rapport avec le résultat réel.
+   Le dossier club, lui, a ses propres règles d'impression (dossier.css).
+
+   PALETTE DE SECOURS. Les couleurs viennent normalement de la page hôte
+   (`:root` de tournoi-public.css). On les redonne ici sur `html`, dont la
+   spécificité est PLUS FAIBLE que `:root` : la page publique garde donc
+   sa palette quelle que soit l'ordre de chargement, et l'admin — qui a sa
+   propre charte et ne définit pas ces variables — trouve quand même de
+   quoi dessiner les encarts.
+   ========================================================= */
+
+html {
+  --navy:       #0C1C2E;
+  --ciel:       #B8D8F8;
+  --bleu-vif:   #2E8FE0;
+  --blanc:      #FFFFFF;
+  --gris-texte: #3B4A63;
+  --bordure:    #e6edf5;
+  --ombre:      0 1px 3px rgba(12, 28, 46, 0.06);
+}
+
+/* --- Briques communes --- */
+.sp-mention {
+  display: block;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #8a97a6;
+}
+.sp-accroche {
+  display: block;
+  font-size: 0.85rem;
+  color: var(--gris-texte);
+  line-height: 1.35;
+}
+/* TAILLE DES LOGOS — gouvernée ici, emplacement par emplacement.
+   Le balisage ne pose AUCUNE hauteur en ligne : un style en ligne l'emporterait sur ces
+   règles et interdirait d'agrandir le logo sur grand écran. Les valeurs ci-dessous sont
+   des hauteurs MAXIMALES : un logo large et plat (le cas courant) est limité par la
+   largeur de son conteneur et reste donc plus petit — c'est voulu, il ne doit jamais
+   pousser le texte hors de l'écran. */
+.sp-logo-img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  object-fit: contain;
+}
+/* Taille de référence par emplacement, multipliée par le zoom du partenaire
+   (--sp-zoom, posé sur l'image ; 1 par défaut). Le zoom sert aux fichiers qui
+   embarquent leurs propres marges blanches : le logo y paraît petit alors que
+   l'image est à la bonne taille, et seul un agrandissement au cas par cas le corrige. */
+.sp-logo-img { max-height: calc(var(--sp-ref, 48px) * var(--sp-zoom, 1)); }
+.sp-bandeau  .sp-logo-img { --sp-ref: 60px; }
+.sp-rail     .sp-logo-img { --sp-ref: 48px; }
+.sp-barre    .sp-logo-img { --sp-ref: 34px; }
+.sp-fil      .sp-logo-img { --sp-ref: 42px; }
+.sp-mur-case .sp-logo-img { --sp-ref: 52px; }
+@media (min-width: 700px) {
+  .sp-bandeau  .sp-logo-img { --sp-ref: 84px; }
+  .sp-rail     .sp-logo-img { --sp-ref: 56px; }
+  .sp-fil      .sp-logo-img { --sp-ref: 50px; }
+  .sp-mur-case .sp-logo-img { --sp-ref: 62px; }
+}
+/* Repli quand le partenaire n'a pas (encore) de logo : une pastille à son nom, sur sa
+   couleur de marque. Un commerçant sans fichier exploitable reste affichable. */
+.sp-logo-texte {
+  display: inline-grid;
+  place-items: center;
+  padding: 6px 12px;
+  border-radius: 6px;
+  color: #fff;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 0.95rem;
+  letter-spacing: 0.03em;
+  line-height: 1.1;
+  text-align: center;
+  /* Un nom long ne doit pas pousser le reste hors de l'écran sur téléphone. */
+  max-width: 100%;
+  overflow-wrap: break-word;
+}
+/* Le logo peut occuper jusqu'à la moitié de l'encart, mais jamais plus : au-delà, le texte
+   du partenaire passerait sous la ligne de flottaison sur téléphone. */
+.sp-bandeau .sp-bloc-logo { max-width: 50%; }
+.sp-fil     .sp-bloc-logo { max-width: 45%; }
+
+/* --- DISPOSITIONS — réglées par partenaire ET par emplacement -------------
+   Le balisage est toujours le même (logo, puis bloc de texte) ; c'est cette
+   classe, posée sur le conteneur, qui décide de l'agencement. Un même logo
+   peut donc être à gauche dans le bandeau large, au-dessus dans le rail
+   étroit, et seul sur la feuille imprimée. */
+.sp-dispo-gauche { flex-direction: row; align-items: center; }
+.sp-dispo-droite { flex-direction: row-reverse; align-items: center; text-align: right; }
+.sp-dispo-haut   { flex-direction: column; align-items: center; text-align: center; }
+.sp-dispo-seul   { flex-direction: row; align-items: center; justify-content: center; }
+/* « Seul » ne rend pas le bloc de texte : il n'est même pas construit (voir sponsorsCorps).
+   La règle ci-dessous n'est là que pour les rendus historiques encore en cache. */
+.sp-dispo-seul .sp-bloc-texte { display: none; }
+.sp-bloc-logo  { flex: 0 0 auto; display: grid; place-items: center; }
+.sp-bloc-texte { min-width: 0; }
+.sp-bloc-texte strong { display: block; color: var(--navy); line-height: 1.2; }
+
+/* PARTAGE DE LA LARGEUR quand le logo et le texte sont CÔTE À CÔTE.
+   Sans ces deux règles, un logo agrandi (150–200 %) prend toute la largeur de l'encart
+   et le texte tombe à un mot par ligne — constaté sur le bandeau du dossier club, où
+   l'accroche s'écrivait verticalement à côté d'un logo qui, lui, ne grandissait plus.
+   Le logo cède donc du terrain (`flex: 0 1`) et ne dépasse jamais 45 % de l'encart ;
+   le texte prend le reste. Au-dessus (`haut`) ou seul, rien de tout ça ne s'applique :
+   la largeur entière revient au logo. */
+.sp-dispo-gauche > .sp-bloc-logo,
+.sp-dispo-droite > .sp-bloc-logo { flex: 0 1 auto; min-width: 0; }
+.sp-dispo-gauche > .sp-bloc-texte,
+.sp-dispo-droite > .sp-bloc-texte { flex: 1 1 9rem; min-width: 0; }
+
+/* --- A · Bandeau partenaire principal --- */
+.sp-zone-bandeau { margin-bottom: 16px; }
+.sp-bandeau {
+  display: flex;
+  gap: 14px;
+  min-height: 84px;            /* hauteur réservée : pas de saut au chargement du logo */
+  background: var(--blanc);
+  border: 1px solid var(--bordure);
+  border-left: 4px solid var(--bleu-vif);
+  border-radius: 10px;
+  padding: 10px 16px;
+  box-shadow: var(--ombre);
+  text-decoration: none;
+  color: inherit;
+  transition: box-shadow 0.15s ease, transform 0.15s ease;
+}
+a.sp-bandeau:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px rgba(12, 28, 46, 0.12);
+}
+
+
+.sp-bandeau .sp-bloc-texte strong { font-size: 1.02rem; }
+
+/* --- B · Rail (ordinateur) --- */
+.sp-rail {
+  /* Blanc, comme le fond peint sous les logos au téléversement : sans ça, un logo détouré
+     laisserait un rectangle blanc visible sur une tuile bleutée. */
+  background: var(--blanc);
+  border: 1px solid var(--bordure);
+  border-radius: 12px;
+  padding: 12px 14px;
+  box-shadow: var(--ombre);
+  text-align: center;
+}
+.sp-rail-mention { margin-bottom: 8px; }
+/* Pile de vues superposées : une seule opaque à la fois → aucune variation de hauteur. */
+.sp-rail-vues { position: relative; min-height: 96px; }
+.sp-rail-vue {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.45s ease;
+}
+.sp-rail-vue.active { opacity: 1; visibility: visible; }
+/* La direction vient de la classe de disposition ; ici, seulement le socle commun. */
+.sp-rail-lien { display: flex; gap: 5px; text-decoration: none; color: inherit; }
+a.sp-rail-lien:hover { text-decoration: none; }
+.sp-points { display: flex; justify-content: center; gap: 5px; margin-top: 10px; }
+.sp-points i {
+  display: block;
+  width: 5px; height: 5px;
+  border-radius: 50%;
+  background: #c9d6e4;
+  transition: background 0.25s ease;
+}
+.sp-points i.on { background: var(--bleu-vif); }
+
+/* --- B · Barre basse (téléphone) --- */
+.sp-barre {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 90;
+  background: rgba(255, 255, 255, 0.97);
+  backdrop-filter: blur(6px);
+  border-top: 1px solid var(--bordure);
+  box-shadow: 0 -3px 12px rgba(12, 28, 46, 0.10);
+  padding: 6px 14px calc(6px + env(safe-area-inset-bottom));
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sp-barre .sp-rail-mention { margin: 0; flex: 0 0 auto; }
+.sp-barre .sp-rail-vues { flex: 1 1 auto; min-height: 40px; }
+
+
+.sp-barre .sp-accroche { display: none; }   /* trop étroit : le logo suffit */
+.sp-barre .sp-points { margin: 0; flex: 0 0 auto; }
+/* La barre ne recouvre JAMAIS le contenu : le corps de page réserve sa hauteur. */
+body.sp-barre-active { padding-bottom: 64px; }
+
+/* Une seule des deux formes à l'écran, selon la largeur. */
+@media (max-width: 720px) { .sp-rail  { display: none !important; } }
+@media (min-width: 721px) { .sp-barre { display: none !important; }
+                            body.sp-barre-active { padding-bottom: 0; } }
+
+/* --- C · Encart intégré au fil --- */
+.sp-fil {
+  display: flex;
+  gap: 12px;
+  min-height: 64px;
+  background: var(--blanc);
+  border: 1px dashed var(--bordure);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 14px 0 10px;
+  text-decoration: none;
+  color: inherit;
+}
+a.sp-fil:hover { text-decoration: none; border-color: var(--bleu-vif); }
+
+
+
+
+/* --- D · Plein écran (interstitiel) --- */
+body.sp-plein-ouvert { overflow: hidden; }
+.sp-plein {
+  position: fixed;
+  inset: 0;
+  z-index: 10001;              /* au-dessus du grain (9999) et de l'en-tête collant */
+  background: rgba(9, 20, 33, 0.94);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.sp-plein-boite {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 380px;
+}
+.sp-plein-visuel { display: block; width: 100%; text-decoration: none; }
+a.sp-plein-visuel:hover { text-decoration: none; }
+.sp-plein-image {
+  display: block;
+  width: 100%;
+  border-radius: 14px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+/* Composition automatique quand le partenaire n'a pas fourni de visuel dédié. */
+.sp-plein-compose {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  aspect-ratio: 4 / 5;
+  border-radius: 14px;
+  padding: 28px 24px;
+  text-align: center;
+  color: #fff;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
+}
+.sp-plein-marque {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 800;
+  font-size: 1.9rem;
+  line-height: 1.1;
+  letter-spacing: 0.02em;
+}
+.sp-plein-accroche { font-size: 0.95rem; opacity: 0.92; line-height: 1.4; }
+.sp-plein-cta {
+  margin-top: 4px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border: 1px solid rgba(255, 255, 255, 0.6);
+  border-radius: 999px;
+  padding: 6px 18px;
+}
+.sp-plein-mention { color: #93a9c2; }
+.sp-plein-jauge {
+  width: 150px; height: 3px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.22);
+  overflow: hidden;
+}
+.sp-plein-jauge i { display: block; height: 100%; width: 0; background: #7db8ec; }
+/* Bouton « Passer » : jamais caché, jamais minuscule (44 px de cible tactile). */
+.sp-plein-passer {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 1rem;
+  min-height: 44px;
+  padding: 10px 24px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.45);
+  border-radius: 999px;
+  cursor: pointer;
+}
+.sp-plein-passer:hover { background: rgba(255, 255, 255, 0.24); }
+.sp-plein-passer:disabled { opacity: 0.5; cursor: default; }
+
+/* --- E · Mur des partenaires --- */
+.sp-mur { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--bordure); }
+.sp-mur-titre {
+  text-align: center;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 0.8rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #8a97a6;
+  margin-bottom: 14px;
+}
+/* Grille centrée et auto-ajustée : elle rend aussi bien avec 3 partenaires qu'avec 12,
+   sans laisser une colonne vide en bout de ligne. */
+.sp-mur-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 150px));
+  justify-content: center;
+  gap: 10px;
+}
+.sp-mur-case {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;             /* un logo très agrandi reste dans sa tuile */
+  min-height: 78px;             /* hauteur réservée : la grille ne bouge pas au chargement */
+  padding: 10px;
+  background: var(--blanc);     /* voir .sp-rail : blanc pour se fondre avec le fond peint */
+  border: 1px solid var(--bordure);
+  border-radius: 8px;
+  text-decoration: none;
+  transition: border-color 0.15s ease, transform 0.15s ease;
+}
+a.sp-mur-case:hover { border-color: var(--bleu-vif); transform: translateY(-1px); text-decoration: none; }
+
+/* --- Mode démo (?demo=sponsors) : absent de la page publique normale --- */
+.sp-demo {
+  position: fixed;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  z-index: 95;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--navy);
+  color: var(--blanc);
+  border-radius: 999px;
+  padding: 7px 10px 7px 16px;
+  box-shadow: 0 8px 24px rgba(12, 28, 46, 0.35);
+  max-width: calc(100vw - 24px);
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.sp-demo-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ciel);
+}
+.sp-demo button {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--navy);
+  background: var(--ciel);
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 14px;
+  cursor: pointer;
+  min-height: 34px;
+}
+.sp-demo button:hover { background: var(--blanc); }
+/* Repères d'emplacement : uniquement en mode démo, pour la présentation. */
+body.sp-reperes .sp-bandeau,
+body.sp-reperes .sp-rail,
+body.sp-reperes .sp-barre,
+body.sp-reperes .sp-fil,
+body.sp-reperes .sp-mur { outline: 2px dashed #e9b53e; outline-offset: 3px; }
+
+/* Respect du réglage système « moins d'animations ». */
+@media (prefers-reduced-motion: reduce) {
+  .sp-rail-vue,
+  .sp-plein-jauge i,
+  .sp-bandeau,
+  .sp-mur-case { transition: none !important; }
+}
+
+/* =========================================================
+   F · DOSSIER CLUB — bandeau permanent en tête du dossier
+   ---------------------------------------------------------
+   Vit ici et non dans dossier.css : c'est un emplacement partenaire
+   comme les cinq autres, et l'écran d'administration en a besoin
+   pour montrer, à l'identique, ce que le club recevra.
+   ========================================================= */
+.sp-dossier {
+  margin: 0 0 22px;
+  padding: 14px 18px;
+  border: 1px solid var(--d-filet, #dbe3ec);
+  border-radius: 10px;
+  background: #fff;
+  text-align: center;
+  /* Ne jamais se faire couper en deux par un saut de page à l'impression. */
+  break-inside: avoid;
+  page-break-inside: avoid;
+}
+.sp-dossier-titre {
+  margin: 0 0 10px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--d-gris, #5b6570);
+}
+.sp-dossier-logos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px 26px;
+}
+.sp-dossier-case {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;      /* hauteur réservée : la page ne saute pas au chargement du logo */
+  /* 190 px : la largeur d'une TUILE DE GRILLE, quand plusieurs logos se rangent côte à côte.
+     C'est la bonne mesure pour « logo seul » — et seulement pour lui (voir juste dessous). */
+  max-width: 190px;
+  text-decoration: none;
+}
+.sp-dossier .sp-logo-img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  /* Même réglage de taille par partenaire que sur la page des scores (--sp-zoom). */
+  max-height: calc(52px * var(--sp-zoom, 1));
+  object-fit: contain;
+}
+/* Dispositions, comme sur la page des scores : le même partenaire peut être « logo seul »
+   ici et « logo + texte » ailleurs. Le balisage ne change pas, seule cette classe décide. */
+/* Le bandeau est centré ; un texte posé À CÔTÉ du logo, lui, se lit aligné de son côté. */
+.sp-dossier .sp-dispo-gauche { flex-direction: row; text-align: left; }
+.sp-dossier .sp-dispo-droite { flex-direction: row-reverse; text-align: right; }
+.sp-dossier .sp-dispo-haut   { flex-direction: column; text-align: center; }
+/* DÈS QU'UN TEXTE ACCOMPAGNE LE LOGO, la tuile de grille ne convient plus : 190 px, c'est
+   moins que le logo lui-même une fois agrandi, et l'accroche n'avait plus un pixel où
+   s'écrire. L'encart prend alors toute la place que la feuille lui laisse, dans la limite
+   d'une ligne de lecture confortable. Le partage logo/texte, lui, est générique (plus haut). */
+.sp-dossier-case:not(.sp-dispo-seul) {
+  /* Un seul partenaire prend toute la largeur de la feuille ; deux la partagent. C'est le
+     travail de flex, et c'est ce qui laisse un logo agrandi tenir sa taille SANS écraser
+     l'accroche : on ne rogne la place de personne tant que la feuille en a. */
+  flex: 1 1 320px;
+  max-width: 100%;
+  flex-wrap: wrap;      /* filet : sur un écran étroit, le texte passe sous le logo */
+}
+.sp-dossier .sp-bloc-texte   { font-size: 0.82rem; color: var(--d-gris, #5b6570); }
+.sp-dossier .sp-bloc-texte strong { display: block; color: var(--d-navy, #0C1C2E); }
+.sp-dossier .sp-mention {
+  display: block;
+  font-size: 0.68rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.sp-dossier .sp-logo-texte {
+  display: inline-grid;
+  place-items: center;
+  padding: 8px 14px;
+  border-radius: 6px;
+  color: #fff;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 0.95rem;
+  line-height: 1.15;
+  text-align: center;
+  max-width: 100%;
+  overflow-wrap: break-word;
+}
+
+
+@media print {
+  /* Les logos partenaires sont l'objet même de ce bandeau : on force l'impression des
+     couleurs, sans quoi une pastille de repli sortirait blanche sur blanc. */
+  .sp-dossier { border-color: #bbb; }
+  .sp-dossier .sp-logo-texte,
+  .sp-dossier .sp-logo-img {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}

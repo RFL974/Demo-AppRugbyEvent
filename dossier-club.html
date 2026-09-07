@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dossier club</title>
+  <link rel="icon" type="image/svg+xml" href="assets/logo-tournoi.svg">
+  <meta name="description" content="Dossier récapitulatif du tournoi pour les clubs invités : infos pratiques, programme, format sportif, sécurité et contacts.">
+  <!-- Pas d'indexation : document destiné aux clubs invités, pas au grand public. -->
+  <meta name="robots" content="noindex">
+
+  <!-- Polices de la charte (mêmes familles que le reste du site) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
+
+  <!-- Feuille de style DÉDIÉE : fond blanc, texte sombre, pensée pour l'impression A4
+       (contrairement aux autres pages, sombres et pensées pour l'écran). -->
+  <link rel="stylesheet" href="css/dossier.css">
+  <!-- Bandeau partenaires (emplacement F) : mêmes règles que la page des scores et que
+       l'aperçu de l'admin, pour que les trois montrent rigoureusement la même chose. -->
+  <link rel="stylesheet" href="css/sponsors.css">
+</head>
+<body>
+
+  <!-- Bandeau d'outils (jamais imprimé) : export PDF pour tous ; le retour admin et le
+       titre « aperçu avant envoi » ne s'affichent QUE si la page est ouverte depuis
+       l'administration (paramètre ?admin=1). Les clubs qui reçoivent le lien par email
+       (sans ce paramètre) ne voient donc jamais de lien vers la plateforme d'administration. -->
+  <div class="barre-outils no-print">
+    <a class="btn-outil admin-seul" href="admin.html" hidden>← Retour à l'administration</a>
+    <span class="barre-outils-titre admin-seul" hidden>Dossier club — aperçu avant envoi</span>
+    <!-- Le pied de page du navigateur (date, titre, adresse, n° de page) n'est pas
+         commandable en CSS : c'est une case de la fenêtre d'impression. Le JETON, lui, a
+         déjà quitté l'adresse (masquerJetonDeLUrl) — il ne s'imprime plus, quoi qu'on coche. -->
+    <span class="barre-outils-astuce">Astuce : dans la fenêtre d'impression, décochez
+      « En-têtes et pieds de page » pour une feuille sans adresse ni date en marge.</span>
+    <button type="button" class="btn-outil btn-principal" id="bouton-imprimer">🖨️ Exporter en PDF</button>
+  </div>
+
+  <!-- Le dossier lui-même, entièrement construit par js/dossier.js à partir des
+       données du tournoi (Config Zone A + Zone B). Toute section sans donnée
+       est masquée entièrement — pas de « non communiqué ». -->
+  <main class="feuille" id="dossier">
+    <div class="message-chargement" id="message-dossier">Chargement du dossier…</div>
+  </main>
+
+  <!-- Ordre de chargement identique aux autres pages :
+       1) config.js (URL du backend) · 2) commun.js (helpers purs) · 3) api.js (apiGet)
+       4) vendor/qrcode.js (générateur de QR code local, MIT — aucun appel externe)
+       5) sponsors.js (bandeau partenaires) · 6) dossier.js (construit la page) -->
+  <script src="js/config.js"></script>
+  <script src="js/commun.js"></script>
+  <script src="js/commun-dossier.js"></script>
+  <script src="js/api.js"></script>
+  <script src="js/vendor/qrcode.js"></script>
+  <!-- Partenaires : le même moteur que la page des scores. Seul le bandeau permanent
+       (emplacement F) est utilisé ici — jamais de message plein écran sur un dossier. -->
+  <script src="js/sponsors.js"></script>
+  <script src="js/dossier.js"></script>
+
+</body>
+</html>

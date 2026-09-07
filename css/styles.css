@@ -1,0 +1,2383 @@
+/* ==========================================================================
+   TOURNOI R92 — Feuille de style commune à toutes les pages
+   Charte : fond marine, bleu ciel, accent bleu vif, texte blanc cassé.
+   Pensée "mobile-first" : les styles de base visent le téléphone, on ajuste
+   ensuite pour les écrans plus larges avec une "media query".
+   ========================================================================== */
+
+/* --- Les couleurs et polices de la charte, définies une fois pour toutes.
+       On les réutilise partout via "var(--nom)". Pour changer une couleur
+       sur tout le site, on ne modifie qu'ici. --- */
+:root {
+  --marine:        #0B2138;  /* fond principal */
+  --marine-fonce:  #031024;  /* fond plus sombre (dégradé, cartes) */
+  --bleu-ciel:     #B8D8F8;  /* textes secondaires, labels */
+  --accent:        #2E8FE0;  /* boutons, éléments importants */
+  --texte:         #F2F6FB;  /* texte courant */
+
+  --rayon:         12px;      /* arrondi des cartes */
+  --espace:        16px;      /* espacement de base */
+}
+
+/* --- Remise à zéro simple + réglages de base --- */
+* {
+  box-sizing: border-box;   /* les paddings n'agrandissent pas la largeur */
+  margin: 0;
+  padding: 0;
+}
+
+/* L'attribut HTML `hidden` doit TOUJOURS masquer, même sur les éléments en display:flex
+   (sinon une règle .classe { display: flex } l'emporte sur le [hidden] du navigateur). */
+[hidden] { display: none !important; }
+
+body {
+  font-family: 'Barlow', system-ui, sans-serif;   /* texte courant */
+  color: var(--texte);
+  background: linear-gradient(160deg, var(--marine) 0%, var(--marine-fonce) 100%);
+  min-height: 100vh;
+  line-height: 1.5;
+  padding: var(--espace);
+}
+
+/* --- Titres : Bebas Neue (grosse typo d'affichage) --- */
+h1, h2, h3 {
+  font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif;
+  letter-spacing: 0.5px;
+  line-height: 1.1;
+}
+
+/* ==========================================================================
+   En-tête de page
+   ========================================================================== */
+.entete {
+  text-align: center;
+  padding: var(--espace) 0 calc(var(--espace) * 1.5);
+}
+
+.entete h1 {
+  font-size: 2.4rem;
+  color: var(--texte);
+}
+
+.entete .sous-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  color: var(--accent);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* ==========================================================================
+   Cartes (blocs d'information)
+   ========================================================================== */
+.carte {
+  background: rgba(255, 255, 255, 0.05);        /* léger voile clair sur le marine */
+  border: 1px solid rgba(184, 216, 248, 0.15);  /* fin liseré bleu ciel */
+  border-radius: var(--rayon);
+  padding: var(--espace);
+  margin-bottom: var(--espace);
+}
+
+.carte h2 {
+  font-size: 1.5rem;
+  color: var(--bleu-ciel);
+  margin-bottom: 12px;
+  border-bottom: 1px solid rgba(184, 216, 248, 0.15);
+  padding-bottom: 8px;
+}
+
+/* --- En-tête d'une carte catégorie : badge à gauche, interrupteur à droite --- */
+.ligne-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+/* ==========================================================================
+   Catégories (une carte par catégorie)
+   ========================================================================== */
+.categorie {
+  border-left: 4px solid var(--accent);   /* liseré d'accent à gauche */
+}
+
+.categorie .badge {
+  display: inline-block;
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.6rem;
+  background: var(--accent);
+  color: #fff;
+  padding: 2px 14px;
+  border-radius: 8px;
+  letter-spacing: 1px;
+}
+
+/* Grille des petits réglages d'une catégorie */
+.grille-reglages {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);   /* 2 colonnes sur mobile */
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* Champ « libellé au-dessus + saisie » : mise en page à plat (pas de cartouche sombre
+   individuel, qui donnait un effet de « bourrelets empilés » quand les champs se suivent). */
+.reglage {
+  padding: 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.reglage .r-libelle {
+  display: block;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.5px;
+  color: var(--bleu-ciel);
+}
+/* Champ modifiable d'une catégorie (input ou select) */
+.r-input {
+  width: 100%;
+  background: rgba(11, 33, 56, 0.8);
+  color: var(--texte);
+  border: 1px solid rgba(184, 216, 248, 0.25);
+  border-radius: 6px;
+  padding: 7px 8px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 1.05rem;
+}
+select.r-input { cursor: pointer; }
+
+/* --- Format de l'après-midi (choix par catégorie, dès le paramétrage) --- */
+.bloc-format {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px dashed rgba(184, 216, 248, 0.25);
+}
+.format-libelle {
+  display: block;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+  color: var(--bleu-ciel);
+  margin-bottom: 8px;
+}
+.format-cartes { display: grid; gap: 8px; }
+.format-carte {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  background: rgba(3, 16, 36, 0.4);
+  border: 1px solid rgba(184, 216, 248, 0.25);
+  border-radius: 10px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+.format-carte input {
+  margin-top: 3px;
+  accent-color: var(--accent);
+  width: 18px; height: 18px;
+  cursor: pointer; flex: none;
+}
+.format-carte .f-corps { display: flex; flex-direction: column; gap: 3px; }
+.format-carte .f-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600; font-size: 1.05rem;
+  color: var(--texte);
+}
+.format-carte .f-desc { font-size: 0.9rem; line-height: 1.35; color: var(--bleu-ciel); }
+.format-carte.est-choisi {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  background: rgba(46, 143, 224, 0.12);
+}
+
+/* Carte d'un format SIGNALÉ « hors cadre École de Rugby » (COUPE_PLATEAU) : elle reste cochable
+   comme les autres — seul son liseré ambre la distingue, pour qu'on la reconnaisse sans la fuir.
+   L'ambre est le même que celui de l'encart ci-dessous : une information, pas une alarme.
+   ⚠️ Le thème clair est traité dans theme-r92.css, qui est chargée APRÈS celle-ci et repeint les
+   cartes en navy — un titre sombre y serait illisible. Les deux feuilles vont ensemble. */
+.format-carte.est-hors-cadre { border-color: rgba(224, 158, 46, 0.55); }
+.format-carte.est-hors-cadre .f-titre { color: #ffe6b0; }
+
+/* Encart de rappel, affiché tant qu'une catégorie retient un format hors cadre EDR. */
+.format-interdit-edr {
+  margin: 0 0 10px;
+  font-size: 0.9rem; line-height: 1.4;
+  color: #ffe6b0;
+  background: rgba(224, 158, 46, 0.16);
+  border-radius: 8px; padding: 8px 10px;
+}
+.theme-clair .format-interdit-edr { color: #8a5a0c; background: #fdf4e3; }
+/* Encart « format d'après-midi non configuré » (session 10) : couleur via .ffr-orange, mise en page ici. */
+.format-defaut-histo { margin: 0 0 10px; font-size: 0.9rem; line-height: 1.4; border-radius: 8px; padding: 8px 10px; }
+
+/* Champ « qualifiés en Coupe » : masqué, révélé seulement si COUPE_PLATEAU est choisi */
+.format-coupe-param { margin-top: 10px; display: none; }
+.bloc-format[data-format="COUPE_PLATEAU"] .format-coupe-param { display: flex; }
+.f-aide { font-size: 0.82rem; color: var(--bleu-ciel); opacity: 0.9; }
+
+/* Récapitulatif : un seul visible, selon le format choisi */
+.format-recap-zone { margin-top: 10px; }
+.format-recap {
+  display: none;
+  font-size: 0.9rem; line-height: 1.4;
+  color: var(--texte);
+  background: rgba(46, 143, 224, 0.10);
+  border-radius: 8px; padding: 8px 10px;
+}
+.bloc-format[data-format="CROISE"] .r-CROISE,
+.bloc-format[data-format="CROISE_DIAGONAL"] .r-CROISE_DIAGONAL,
+.bloc-format[data-format="POULES_NIVEAU"] .r-POULES_NIVEAU,
+.bloc-format[data-format="LIBRE"] .r-LIBRE,
+.bloc-format[data-format="COUPE_PLATEAU"] .r-COUPE_PLATEAU { display: block; }
+
+/* Surcharge thème clair (admin) */
+.theme-clair .bloc-format { border-top-color: #e6edf5; }
+.theme-clair .format-libelle { color: #8a97a6; }
+.theme-clair .format-carte { background: #F5F9FD; border-color: #e6edf5; }
+.theme-clair .format-carte .f-titre { color: #0C1C2E; }
+.theme-clair .format-carte .f-desc { color: #55636f; }
+.theme-clair .format-carte.est-choisi { background: rgba(46, 143, 224, 0.10); border-color: var(--accent); }
+.theme-clair .f-aide { color: #8a97a6; }
+.theme-clair .format-recap { color: #0C1C2E; }
+
+/* -------- Contexte U14 (Super Challenge de France) — session 13 (déclaratif) --------
+   Réutilise le langage visuel des cartes de format. .bloc-contexte est rendu AVANT .bloc-format ;
+   en contexte SCF, on masque .bloc-format (sans objet) et on révèle le panneau .bloc-scf. */
+.bloc-contexte { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(184, 216, 248, 0.25); }
+.ctx-cartes { display: grid; gap: 8px; }
+.ctx-carte {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: rgba(3, 16, 36, 0.4);
+  border: 1px solid rgba(184, 216, 248, 0.25);
+  border-radius: 10px; padding: 10px 12px; cursor: pointer;
+}
+.ctx-carte input { margin-top: 3px; accent-color: var(--accent); width: 18px; height: 18px; cursor: pointer; flex: none; }
+.ctx-carte .f-corps { display: flex; flex-direction: column; gap: 3px; }
+.ctx-carte .f-titre { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 1.05rem; color: var(--texte); }
+.ctx-carte .f-desc { font-size: 0.9rem; line-height: 1.35; color: var(--bleu-ciel); }
+.ctx-carte.est-choisi { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: rgba(46, 143, 224, 0.12); }
+
+/* Panneau SCF : masqué par défaut, révélé quand le formulaire de la catégorie est en contexte SCF. */
+.bloc-scf { display: none; margin-top: 10px; }
+.form-categorie[data-contexte="SCF"] .bloc-scf { display: block; }
+/* En SCF, les cartes « format d'après-midi » n'ont pas d'objet → masquées. */
+.form-categorie[data-contexte="SCF"] .bloc-format { display: none; }
+
+.scf-forme, .scf-note { margin: 0 0 10px; font-size: 0.9rem; line-height: 1.4; }
+.scf-forme { color: var(--texte); background: rgba(46, 143, 224, 0.10); border-radius: 8px; padding: 8px 10px; }
+/* Deux notes phase-dépendantes : une seule visible selon data-phase (comme les récaps). */
+.scf-note { display: none; border-radius: 8px; padding: 8px 10px; }
+.scf-note.n-P2 { color: var(--texte); background: rgba(46, 143, 224, 0.10); }
+.scf-note.n-P3 { color: #ffe6b0; background: rgba(224, 158, 46, 0.16); }
+.bloc-scf[data-phase="P2"] .scf-note.n-P2,
+.bloc-scf[data-phase="P3"] .scf-note.n-P3 { display: block; }
+.scf-phases { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px; }
+.scf-phase-choix { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; color: var(--texte); }
+.scf-phase-choix input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+.scf-recap {
+  display: none; font-size: 0.9rem; line-height: 1.4; color: var(--texte);
+  background: rgba(46, 143, 224, 0.10); border-radius: 8px; padding: 8px 10px; margin-bottom: 10px;
+}
+.bloc-scf[data-phase="P2"] .r-P2,
+.bloc-scf[data-phase="P3"] .r-P3 { display: block; }
+
+/* Surcharge thème clair (admin) */
+.theme-clair .bloc-contexte { border-top-color: #e6edf5; }
+.theme-clair .ctx-carte { background: #F5F9FD; border-color: #e6edf5; }
+.theme-clair .ctx-carte .f-titre { color: #0C1C2E; }
+.theme-clair .ctx-carte .f-desc { color: #55636f; }
+.theme-clair .ctx-carte.est-choisi { background: rgba(46, 143, 224, 0.10); border-color: var(--accent); }
+.theme-clair .scf-forme, .theme-clair .scf-recap { color: #0C1C2E; }
+.theme-clair .scf-phase-choix { color: #0C1C2E; }
+.theme-clair .scf-note.n-P2 { color: #0C1C2E; background: rgba(46, 143, 224, 0.10); }
+.theme-clair .scf-note.n-P3 { color: #8a5a0c; background: #fdf4e3; }
+
+/* Arbitre désigné (Super Challenge) : petite étiquette discrète sur les matchs. */
+.arbitre-tag { font-size: 0.85em; color: var(--bleu-ciel); white-space: nowrap; }
+.theme-clair .arbitre-tag { color: #55636f; }
+
+/* -------- Pause méridienne échelonnée (réglage global, carte Horaires) -------- */
+.ech-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: var(--texte); font-weight: 600; }
+.ech-toggle input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; flex: none; }
+.theme-clair .ech-toggle { color: #0C1C2E; }
+/* Label « — début » (pause classique) vs « à partir de » (échelonnée) ; durée et fin selon data-ech. */
+.bloc-pause-dej .lbl-pause-dej-ech { display: none; }
+.bloc-pause-dej[data-ech="oui"] .lbl-pause-dej-fixe { display: none; }
+.bloc-pause-dej[data-ech="oui"] .lbl-pause-dej-ech { display: inline; }
+.bloc-pause-dej[data-ech="oui"] .champ-pause-duree { display: none; }
+.bloc-pause-dej .champ-pause-fin { display: none; }
+.bloc-pause-dej[data-ech="oui"] .champ-pause-fin { display: block; }
+.f-aide-mini { font-size: 0.82em; opacity: 0.8; }
+
+/* --- Terrains (choix Auto / Manuel par catégorie) --- */
+.bloc-terrains {
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px dashed rgba(184, 216, 248, 0.25);
+}
+.terr-mode { display: inline-flex; gap: 6px; margin-bottom: 8px; }
+.terr-choix {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: rgba(3, 16, 36, 0.4);
+  border: 1px solid rgba(184, 216, 248, 0.25);
+  border-radius: 8px; padding: 6px 12px; cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif; font-size: 1rem; color: var(--texte);
+}
+.terr-choix input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
+/* Révélation selon le mode (data-terrains sur le bloc). */
+.terr-manuel, .terr-conseils { display: none; }
+.bloc-terrains[data-terrains="manuel"] .terr-manuel { display: flex; }
+.bloc-terrains[data-terrains="manuel"] .terr-conseils { display: block; }
+.terr-auto-info {
+  display: none;
+  font-size: 0.9rem; line-height: 1.4; color: var(--bleu-ciel);
+  background: rgba(46, 143, 224, 0.10); border-radius: 8px; padding: 8px 10px;
+}
+.bloc-terrains[data-terrains="auto"] .terr-auto-info { display: block; }
+.terr-conseils { margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+.terr-conseil {
+  font-size: 0.9rem; line-height: 1.35; border-radius: 8px; padding: 7px 10px;
+}
+.terr-conseil.ko   { color: #ffd7d0; background: rgba(224, 76, 46, 0.16); }
+.terr-conseil.warn { color: #ffe6b0; background: rgba(224, 158, 46, 0.16); }
+.terr-conseil.ok   { color: #c7f0d2; background: rgba(46, 200, 120, 0.14); }
+
+.theme-clair .bloc-terrains { border-bottom-color: #e6edf5; }
+.theme-clair .terr-choix { background: #F5F9FD; border-color: #e6edf5; color: #0C1C2E; }
+.theme-clair .terr-auto-info { color: #55636f; }
+.theme-clair .terr-conseil.ko   { color: #8a1c0c; background: #fdece9; }
+.theme-clair .terr-conseil.warn { color: #8a5a0c; background: #fdf4e3; }
+.theme-clair .terr-conseil.ok   { color: #14683a; background: #e6f7ee; }
+
+/* Interrupteur "Présente" */
+.toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--bleu-ciel);
+  font-size: 0.95rem;
+}
+.toggle input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* ==========================================================================
+   Formulaire de réglages (horaires) — libellé à gauche, champ à droite
+   ========================================================================== */
+.form-reglages { display: flex; flex-direction: column; }
+
+.champ-reglage {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid rgba(184, 216, 248, 0.08);
+}
+.champ-reglage label {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--bleu-ciel);
+  font-size: 0.95rem;
+}
+.champ-reglage input {
+  background: rgba(3, 16, 36, 0.6);
+  color: var(--texte);
+  border: 1px solid rgba(184, 216, 248, 0.25);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 1.1rem;
+  width: 130px;
+  text-align: center;
+}
+/* Rend l'icône du sélecteur d'heure visible sur fond sombre */
+.champ-reglage input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.6);
+  cursor: pointer;
+}
+
+.ligne-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 14px;
+  flex-wrap: wrap;
+}
+
+/* Heure de fin : groupe "case auto + champ heure" */
+.fin-groupe { display: inline-flex; align-items: center; gap: 10px; }
+.mini-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  color: var(--bleu-ciel);
+}
+.mini-toggle input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.champ-reglage input:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ==========================================================================
+   Formulaire d'ajout d'équipe + liste des équipes
+   ========================================================================== */
+.form-equipe {
+  display: flex;
+  flex-wrap: wrap;                /* passe à la ligne sur petit écran */
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.form-equipe input[type="text"],
+.form-equipe input[type="email"],
+.form-equipe input[type="number"],
+.form-equipe select {
+  flex: 1 1 150px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(184, 216, 248, 0.25);
+  background: rgba(3, 16, 36, 0.5);
+  color: var(--texte);
+  font-family: 'Barlow', sans-serif;
+  font-size: 1rem;
+}
+.form-equipe input::placeholder { color: #7f92a8; }
+/* Retour visuel de casse pendant la saisie (le nom d'équipe et la carte clubs invités) :
+   MAJUSCULES pour les noms/prénoms, minuscules pour l'email. La valeur stockée est
+   normalisée à l'enregistrement (voir admin.js). */
+#champ-nom,
+#champ-club-nom, #champ-club-contact, #champ-club-prenom,
+.club-edit-nom, .club-edit-contact, .club-edit-prenom { text-transform: uppercase; }
+#champ-club-email, .club-edit-email { text-transform: lowercase; }
+
+/* Bouton générique (accent) */
+.bouton {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+  padding: 10px 18px;
+  border-radius: 8px;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  font-size: 1rem;
+}
+.bouton:hover { background: #2477bd; }
+.bouton:disabled { opacity: 0.6; cursor: default; }
+
+/* Bouton d'action destructive (réinitialisation) : rouge pour attirer l'attention. */
+.bouton-danger { background: #c0392b; }
+.bouton-danger:hover { background: #a93226; }
+
+/* Bouton d'action SÛRE (recalcul non destructif, garde les scores) : vert rassurant,
+   visuellement distinct du tirage complet. Placé juste sous « Générer ». */
+.bouton-doux { background: #2f9e5f; margin-top: 8px; }
+.bouton-doux:hover { background: #27824e; }
+.aide-recalculer { margin-top: 8px; }
+
+/* Carte « zone de danger » : liseré rouge pour la distinguer des cartes normales. */
+.carte-danger {
+  border: 1px solid rgba(255, 120, 120, 0.4);
+  border-left: 4px solid #c0392b;
+}
+.carte-danger h2 { color: #ff9b8f; }
+.liste-danger {
+  margin: 4px 0 12px 20px;
+  color: var(--bleu-ciel);
+}
+.liste-danger li { margin-bottom: 4px; }
+
+/* Message sous le formulaire */
+.message-form { min-height: 1.3em; font-family: 'Barlow Condensed', sans-serif; }
+.message-form.ok { color: #9fe0a0; }
+.message-form.ko { color: #ffb4b4; }
+
+/* Liste des équipes, groupée par catégorie */
+.groupe-categorie { margin-top: 14px; }
+.groupe-categorie h3 {
+  color: var(--bleu-ciel);
+  font-size: 1.3rem;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.groupe-categorie .cat-mini {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.9rem;
+  color: #7f92a8;
+}
+/* Le bouton "Tout supprimer" se cale à droite du titre de catégorie. */
+.groupe-categorie h3 .bouton-suppr-tout {
+  margin-left: auto;
+  font-size: 0.8rem;
+  padding: 3px 9px;
+}
+.equipe-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  background: rgba(3, 16, 36, 0.4);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+}
+.equipe-item .nom { font-weight: 600; }
+/* Regroupe les boutons Modifier + Supprimer (ou Enregistrer + Annuler). */
+.equipe-actions {
+  display: flex;
+  gap: 6px;
+  flex-shrink: 0;
+}
+/* Champs de saisie quand on édite une équipe en ligne — nom ET effectifs : UNE seule
+   définition de boîte pour les trois, pour qu'ils ne puissent pas diverger avec le temps. */
+.champ-edit-nom,
+.champ-edit-joueurs,
+.champ-edit-educateurs {
+  background: rgba(3, 16, 36, 0.6);
+  border: 1px solid rgba(120, 180, 255, 0.4);
+  color: #eaf2ff;
+  border-radius: 6px;
+  padding: 5px 9px;
+  font-family: inherit;
+  font-size: 0.95rem;
+}
+/* Propre au nom : il prend la place restante et s'affiche en MAJUSCULES. */
+.champ-edit-nom { flex: 1; min-width: 0; text-transform: uppercase; }
+
+/* ---- Effectifs déclarés par équipe (joueurs / éducateurs) ---- */
+/* Ces champs héritent de la boîte commune (formulaire d'ajout ou ligne en édition) : ici on ne
+   règle QUE ce qui leur est propre — une largeur courte, pour laisser la place au nom. */
+/* `min-width: 0` est INDISPENSABLE : un élément flex a un plancher `min-width: auto` égal à sa
+   largeur intrinsèque, et celle d'un champ `number` (~187 px) écrasait la base de 96 px. */
+.champ-effectif { text-align: center; text-transform: none; min-width: 0; }
+.form-equipe input.champ-effectif { flex: 0 0 96px; }
+.equipe-item .champ-effectif { flex: 0 0 84px; }
+/* Badge « 12 joueurs · 2 éducs » à côté du nom. */
+.equipe-effectifs {
+  margin-right: auto;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: .85rem;
+  opacity: .7;
+  white-space: nowrap;
+}
+.equipe-effectifs.est-auto { font-style: italic; opacity: .55; }
+/* En édition, la ligne peut passer sur deux lignes (3 champs + boutons + note). */
+.equipe-item.en-edition { flex-wrap: wrap; }
+.equipe-note-edition {
+  flex: 1 1 100%;
+  font-size: .82rem;
+  line-height: 1.45;
+  color: #d68d14;
+}
+
+.bouton-suppr,
+.bouton-modif {
+  background: transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 4px 10px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.85rem;
+}
+.bouton-suppr {
+  border: 1px solid rgba(255, 120, 120, 0.4);
+  color: #ffb4b4;
+}
+.bouton-suppr:hover { background: rgba(255, 80, 80, 0.15); }
+.bouton-modif {
+  border: 1px solid rgba(120, 180, 255, 0.4);
+  color: #bcd6ff;
+}
+.bouton-modif:hover { background: rgba(80, 150, 255, 0.15); }
+.bouton-suppr:disabled,
+.bouton-modif:disabled { opacity: 0.5; cursor: default; }
+/* Boutons réduits à une icône (crayon / corbeille / email) : icône BLANCHE, sans fond
+   ni contour (juste un léger fond au survol pour le retour visuel). */
+.bouton-icone {
+  padding: 4px 6px;
+  font-size: 1rem;
+  line-height: 1;
+  background: none;
+  border: none;
+  color: #ffffff;
+  box-shadow: none;
+}
+.bouton-icone:hover { background: rgba(255, 255, 255, 0.14); }
+.bouton-icone:disabled { opacity: 0.4; }
+
+/* Icônes SVG d'interface (svgIcone) — alignées avec le texte des boutons. */
+.ic {
+  width: 1.05em;
+  height: 1.05em;
+  vertical-align: -0.15em;
+  flex: none;
+}
+.bouton .ic,
+button .ic { margin-right: 0.45em; }
+/* Boutons à icône SEULE (crayon, corbeille, email…) : icône centrée, sans marge. */
+.bouton-icone { display: inline-flex; align-items: center; justify-content: center; }
+.bouton-icone .ic { margin: 0; width: 1.2em; height: 1.2em; }
+
+.vide { color: #7f92a8; font-style: italic; }
+
+/* ==========================================================================
+   Génération : bouton, note, poules et tableau de planning
+   ========================================================================== */
+.note-generation {
+  color: var(--bleu-ciel);
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+}
+#bloc-generation .message-form { white-space: pre-line; margin-top: 8px; }
+
+/* Badge d'avancement « X/Y saisis » à côté d'une catégorie / phase du planning admin. */
+.avancement {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  margin-left: 8px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+.avc-complet {
+  background: rgba(159, 224, 160, 0.16);
+  color: #9fe0a0;
+  border: 1px solid rgba(159, 224, 160, 0.5);
+}
+.avc-partiel {
+  background: rgba(184, 216, 248, 0.12);
+  color: var(--bleu-ciel);
+  border: 1px solid rgba(184, 216, 248, 0.35);
+}
+
+/* ==========================================================================
+   Éditeur manuel des poules du matin
+   ========================================================================== */
+.edit-poules {
+  border: 1px solid rgba(46, 143, 224, 0.4);
+  background: rgba(46, 143, 224, 0.06);
+  border-radius: var(--rayon);
+  padding: 12px 14px;
+  margin-top: 12px;
+}
+.edit-titre { color: var(--bleu-ciel); font-size: 1.3rem; margin-bottom: 6px; }
+.edit-cat { margin-top: 14px; }
+.edit-cat-titre {
+  color: var(--accent);
+  font-size: 1.25rem;
+  display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
+}
+.edit-equilibre {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.85rem; font-weight: 600;
+  padding: 1px 8px; border-radius: 999px;
+}
+.edit-equilibre.ok { color: #9fe0a0; background: rgba(159, 224, 160, 0.14); border: 1px solid rgba(159, 224, 160, 0.4); }
+.edit-equilibre.ko { color: #ffd9a8; background: rgba(255, 170, 80, 0.12); border: 1px solid rgba(255, 180, 100, 0.4); }
+
+/* Grille de poules côte à côte (empile sur mobile) */
+.edit-poules-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+.edit-poule {
+  background: rgba(3, 16, 36, 0.45);
+  border: 1px solid rgba(184, 216, 248, 0.15);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.edit-poule-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  color: var(--bleu-ciel); font-weight: 600; margin-bottom: 6px;
+}
+.edit-equipe {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  background: rgba(11, 33, 56, 0.7);
+  border-radius: 6px; padding: 5px 8px; margin-bottom: 5px;
+  font-size: 0.95rem;
+}
+.edit-x {
+  flex: 0 0 auto;
+  border: 1px solid rgba(255, 120, 120, 0.45);
+  color: #ffb4b4; background: transparent;
+  border-radius: 6px; cursor: pointer; padding: 1px 8px; font-size: 0.9rem; line-height: 1.3;
+}
+.edit-x:hover { background: rgba(255, 80, 80, 0.15); }
+
+/* Zone « à replacer » */
+.edit-bench {
+  margin-top: 10px;
+  border: 1px dashed rgba(255, 180, 100, 0.5);
+  background: rgba(255, 170, 80, 0.07);
+  border-radius: 8px; padding: 8px 10px;
+}
+.edit-bench-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  color: #ffd9a8; font-weight: 600; margin-bottom: 6px;
+}
+.edit-equipe-bench { flex-wrap: wrap; }
+.edit-cibles { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.edit-vers {
+  border: 1px solid rgba(120, 180, 255, 0.45);
+  color: #bcd6ff; background: transparent;
+  border-radius: 6px; cursor: pointer; padding: 3px 9px;
+  font-family: 'Barlow Condensed', sans-serif; font-size: 0.85rem;
+}
+.edit-vers:hover { background: rgba(80, 150, 255, 0.15); }
+
+.poule-compo {
+  background: rgba(3, 16, 36, 0.4);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 6px;
+}
+.poule-compo strong { color: var(--accent); }
+
+/* Le tableau peut défiler horizontalement sur petit écran */
+.table-scroll { overflow-x: auto; margin-top: 8px; }
+
+.table-planning {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+.table-planning th,
+.table-planning td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(184, 216, 248, 0.12);
+  white-space: nowrap;
+}
+.table-planning th {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--bleu-ciel);
+  font-size: 0.85rem;
+}
+.table-planning td:first-child { font-weight: 600; }
+.table-planning .vs { color: var(--bleu-ciel); font-size: 0.85rem; margin: 0 4px; }
+
+/* ==========================================================================
+   Arbitrages (pistes d'ajustement quand le planning dépasse l'heure de fin)
+   ========================================================================== */
+.arbitrages {
+  margin-top: 12px;
+  border: 1px solid rgba(255, 180, 100, 0.35);
+  background: rgba(255, 170, 80, 0.08);
+  border-radius: var(--rayon);
+  padding: 12px 14px;
+}
+.arb-titre { color: #ffd9a8; font-size: 0.95rem; margin-bottom: 8px; }
+.arb-note { color: var(--bleu-ciel); font-size: 0.85rem; }
+.arb-liste { list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.arb-item {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: rgba(3, 16, 36, 0.5);
+  color: var(--texte);
+  border: 1px solid rgba(184, 216, 248, 0.2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  font-family: 'Barlow', sans-serif;
+  font-size: 0.95rem;
+}
+.arb-item:hover { border-color: var(--accent); background: rgba(46, 143, 224, 0.15); }
+.arb-item.tient { border-color: rgba(120, 220, 130, 0.5); }
+.arb-item .arb-fin { color: var(--bleu-ciel); font-family: 'Barlow Condensed', sans-serif; }
+.arb-item:disabled { opacity: 0.5; cursor: default; }
+
+/* ==========================================================================
+   Messages (chargement, erreur)
+   ========================================================================== */
+.message {
+  text-align: center;
+  padding: var(--espace);
+  color: var(--bleu-ciel);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.1rem;
+}
+.message.erreur {
+  color: #ffb4b4;
+  background: rgba(255, 80, 80, 0.1);
+  border-radius: var(--rayon);
+}
+
+/* ==========================================================================
+   Écrans plus larges (tablette / ordinateur)
+   ========================================================================== */
+@media (min-width: 700px) {
+  body { padding: calc(var(--espace) * 2); }
+
+  /* On centre le contenu et on limite la largeur pour le confort de lecture */
+  .conteneur { max-width: 900px; margin: 0 auto; }
+
+  .entete h1 { font-size: 3.2rem; }
+
+  .grille-reglages { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* ==========================================================================
+   GRAND ÉCRAN (≥1024px) — la page admin devient un vrai TABLEAU DE BORD :
+   conteneur plus large + <main> en grille 2 colonnes. Les formulaires étroits se
+   placent côte à côte ; les blocs larges (récap, catégories, équipes, planning)
+   occupent toute la largeur. Le mobile (une colonne) reste inchangé.
+   La page admin est la seule à avoir une grille dans <main> (id="reglages" présent).
+   ========================================================================== */
+@media (min-width: 1024px) {
+  .conteneur:has(#reglages) { max-width: 1320px; }
+
+  main:has(#reglages) {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--espace);
+    align-items: start;
+  }
+  /* #reglages est un conteneur logique : ses deux zones deviennent des cellules. */
+  #reglages { display: contents; }
+
+  /* Blocs pleine largeur (contenu large ou récapitulatif). */
+  #barre-connexion,
+  #tableau-bord,
+  #zone-categories,
+  #bloc-equipes,
+  #bloc-generation,
+  #bloc-reinitialisation { grid-column: 1 / -1; }
+
+  /* Espacement géré par `gap` : on retire la marge basse des cellules directes. */
+  main:has(#reglages) > .carte,
+  main:has(#reglages) > #barre-connexion,
+  main:has(#reglages) > #tableau-bord,
+  #zone-horaires > .carte { margin-bottom: 0; }
+
+  /* Sur desktop uniquement : « Publier » à GAUCHE et « Phase après-midi » à DROITE.
+     `order` n'agit qu'en grille → l'ordre HTML (Après-midi puis Publier, logique sur
+     mobile) est préservé sur petit écran. On garde la Réinitialisation en dernier. */
+  #bloc-publication      { order: 1; }
+  #bloc-apresmidi        { order: 2; }
+  #bloc-reinitialisation { order: 3; }
+}
+
+/* ==========================================================================
+   Saisie des scores (page saisie.html)
+   ========================================================================== */
+.match {
+  background: rgba(3, 16, 36, 0.5);
+  border: 1px solid rgba(184, 216, 248, 0.15);
+  border-radius: var(--rayon);
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.match-termine { border-color: rgba(159, 224, 160, 0.4); }
+
+.match-meta {
+  color: var(--bleu-ciel);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.95rem;
+  margin-bottom: 8px;
+}
+.badge-ok { color: #9fe0a0; font-weight: 600; }
+
+/* Scoreboard VERTICAL : chaque équipe sur sa ligne, son score à droite.
+   Clair et sans ambiguïté sur téléphone (fini l'enroulement des scores). */
+.match-saisie {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* Une ligne = nom d'équipe (à gauche) + son champ de score (à droite). */
+.eq-ligne {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.eq-ligne .eq {
+  flex: 1 1 auto;
+  min-width: 0;            /* autorise un nom long à s'enrouler sans pousser le score */
+  font-weight: 600;
+  text-align: left;
+}
+/* Champ de score : compact et centré (on annule le width:100% de .r-input). */
+.match-saisie .score {
+  width: 72px;
+  flex: 0 0 auto;
+  text-align: center;
+  font-weight: 600;
+}
+/* Bouton Valider/Corriger : aligné à droite sous les deux équipes. */
+.match-saisie .bouton-valider {
+  align-self: flex-end;
+  flex: 0 0 auto;
+  padding: 8px 18px;
+}
+/* Champ de score verrouillé (score validé, définitif). */
+.match-saisie .score:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Carte en cours de correction (déverrouillée). */
+.match-edition { border-color: rgba(242, 193, 78, 0.6); }
+
+/* --- Après-midi : formats Coupe / Plateau / Libre --- */
+/* Match de Coupe : liseré d'accent pour signaler un match de bracket. */
+.match-coupe { border-left: 4px solid var(--accent); }
+
+/* Match de Coupe « en attente » (équipes pas encore connues) : verrouillé, atténué. */
+.match-attente {
+  border-style: dashed;
+  border-color: rgba(184, 216, 248, 0.3);
+  opacity: 0.85;
+}
+.bandeau-attente {
+  background: rgba(242, 193, 78, 0.12);
+  border: 1px solid rgba(242, 193, 78, 0.35);
+  color: #f2c14e;
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  line-height: 1.35;
+}
+
+/* Bandeaux contextuels au-dessus du scoreboard. */
+.bandeau-amical, .bandeau-coupe {
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.9rem;
+  line-height: 1.3;
+  margin-bottom: 8px;
+}
+.bandeau-amical {
+  background: rgba(159, 224, 160, 0.12);
+  border: 1px solid rgba(159, 224, 160, 0.35);
+  color: #9fe0a0;
+}
+.bandeau-coupe {
+  background: rgba(46, 143, 224, 0.12);
+  border: 1px solid rgba(46, 143, 224, 0.4);
+  color: var(--bleu-ciel);
+}
+
+/* Départage (Coupe) : désigner le vainqueur en cas d'égalité. */
+.departage {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  padding: 8px 0 2px;
+  border-top: 1px dashed rgba(184, 216, 248, 0.2);
+  margin-top: 4px;
+}
+.departage-lib {
+  width: 100%;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+  letter-spacing: 0.5px;
+  color: var(--bleu-ciel);
+}
+.departage-opt {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.departage-opt input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; }
+
+/* ==========================================================================
+   Saisie DÉTAILLÉE du score (tir au but, jeu à XV) — steppers gros doigts,
+   pensée pour un bénévole debout au bord du terrain, téléphone en main.
+   ========================================================================== */
+/* Deux blocs équipe côte à côte dès qu'il y a de la place, empilés sur petit écran. */
+.det-grille {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+.det-equipe {
+  border: 1px solid rgba(184, 216, 248, 0.18);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.det-equipe-tete {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.det-equipe-tete .eq { font-weight: 700; }
+/* Le total en points : affiché EN GRAND, calculé, jamais saisi. */
+.det-total {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.7rem;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.det-champ { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.det-lib {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+.det-pas-groupe { display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+/* Boutons − / + : grande cible tactile (44px), lisibles sous la pluie. */
+.det-pas {
+  width: 44px;
+  height: 44px;
+  border-radius: 10px;
+  border: 1px solid rgba(184, 216, 248, 0.35);
+  background: rgba(184, 216, 248, 0.08);
+  color: var(--texte, #eaf2fb);
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+.det-pas:active { background: rgba(184, 216, 248, 0.2); }
+.det-pas:disabled { opacity: 0.4; cursor: not-allowed; }
+.det-input {
+  width: 48px;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.1rem;
+}
+.det-input:disabled { opacity: 0.55; cursor: not-allowed; }
+/* Pénalités / drops : repliés derrière « Autres » pour ne pas encombrer l'essentiel. */
+.det-autres { margin-top: 2px; }
+.det-autres > summary {
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  font-size: 0.8rem;
+  letter-spacing: 0.5px;
+  color: var(--bleu-ciel);
+  padding: 4px 0;
+}
+.det-autres-corps { display: flex; flex-direction: column; gap: 12px; padding-top: 6px; }
+.det-autres-eq { display: flex; flex-direction: column; gap: 6px; }
+.det-autres-nom {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: var(--bleu-ciel);
+}
+/* Alerte « 5 essais d'écart » : informative, jamais bloquante. */
+.ecart-essais {
+  background: rgba(242, 193, 78, 0.12);
+  border: 1px solid rgba(242, 193, 78, 0.35);
+  color: #f2c14e;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 0.88rem;
+  line-height: 1.35;
+}
+
+/* ==========================================================================
+   Classement des poules (onglet « Classements » de tournoi.html)
+   ========================================================================== */
+.table-classement th,
+.table-classement td { text-align: center; }
+.table-classement .col-equipe { text-align: left; font-weight: 600; }
+.table-classement .col-pts { font-weight: 700; color: var(--texte); }
+
+/* Largeurs de colonnes FIXES pour que les tableaux d'une poule à l'autre s'alignent
+   (sinon chaque tableau se dimensionne selon son contenu → décalage). La colonne
+   « Équipe », sans largeur, prend l'espace restant. */
+.cl-full { table-layout: fixed; }
+/* Classement complet : # · Équipe · J V N D BP BC Diff Pts.
+   Largeurs explicites (Équipe comprise) : la somme dépasse l'écran mobile, donc le tableau
+   déborde et défile horizontalement dans .table-scroll (au lieu d'écraser la colonne Équipe). */
+.cl-full th:nth-child(1), .cl-full td:nth-child(1) { width: 32px; }
+.cl-full th:nth-child(2), .cl-full td:nth-child(2) { width: 120px; }
+.cl-full th:nth-child(n+3), .cl-full td:nth-child(n+3) { width: 44px; }
+
+/* Barre de rafraîchissement (utilisée par la page perfs interne). */
+.live-barre {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.live-maj { color: var(--bleu-ciel); font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem; }
+
+/* Libellé de champ (ex. filtre catégorie de la page saisie). */
+.mp-label {
+  display: block;
+  color: var(--bleu-ciel);
+  font-family: 'Barlow Condensed', sans-serif;
+  margin-bottom: 6px;
+}
+/* Ligne « adversaire · résultat » d'un match (page perfs). */
+.mp-ligne {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+.mp-adv { font-weight: 600; font-size: 1.05rem; }
+.mp-resultat { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; }
+.mp-resultat.gagne { color: #9fe0a0; }
+.mp-resultat.perd  { color: #ffb4b4; }
+.mp-resultat.nul   { color: var(--bleu-ciel); }
+
+/* Sous-titre de phase dans le planning admin (Matin / Après-midi) */
+.planning-phase {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  color: var(--texte);
+  margin: 16px 0 6px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid rgba(184, 216, 248, 0.2);
+}
+
+/* ==========================================================================
+   Accordéon de phase (page saisie) : le matin se replie une fois clôturé
+   ========================================================================== */
+.phase-accordeon { margin: 0; }
+/* Le <summary> reprend le look de .planning-phase, cliquable + chevron.
+   ⚠️ On NE met PAS `display:flex` sur le <summary> : sur Safari iOS, changer le
+   `display` d'un <summary> casse le pliage/dépliage natif. On garde donc l'affichage
+   par défaut (list-item) et on enlève juste le marqueur, en ajoutant un chevron inline. */
+.phase-sommaire {
+  cursor: pointer;
+  list-style: none;               /* enlève le marqueur natif (Firefox) */
+  user-select: none;
+}
+.phase-sommaire::-webkit-details-marker { display: none; } /* enlève la flèche native (WebKit) */
+.phase-sommaire::before {
+  content: '▸';
+  display: inline-block;
+  color: var(--bleu-ciel);
+  font-size: 0.9rem;
+  margin-right: 8px;
+  transition: transform 0.15s ease;
+}
+.phase-accordeon[open] .phase-sommaire::before { transform: rotate(90deg); }
+.phase-sommaire:hover { color: var(--accent); }
+.phase-resume {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 400;
+  font-size: 0.85rem;
+  color: var(--bleu-ciel);
+}
+.phase-contenu { margin-top: 8px; }
+
+/* ==========================================================================
+   PAGE PERFS DU CLUB (interne) — couleurs V/N/D reprises du planning :
+   vert #9fe0a0 (victoire), rouge #ffb4b4 (défaite), bleu ciel (nul).
+   ========================================================================== */
+
+/* Filtre catégorie (page saisie : « Catégorie à saisir »). */
+.mp-filtre { margin-bottom: 14px; }
+
+/* État de publication dans l'admin */
+.publication-etat { color: var(--bleu-ciel); margin: 4px 0 10px; }
+
+/* Accès à la page publique du tournoi (carte « Publier le tournoi »).
+   Encadré discret : l'adresse ne dépend PAS du bouton Publier/Masquer — le cadre le montre à
+   l'œil, en la distinguant du geste, sans crier plus fort que lui.
+   N'utilise que les variables globales (--accent, --texte, --bleu-ciel), que le thème
+   clair réaligne déjà : aucune règle .theme-clair n'est nécessaire. */
+.publication-acces {
+  border: 1px solid rgba(46, 143, 224, 0.35);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin: 0 0 14px;
+}
+.publication-acces-lib {
+  color: var(--bleu-ciel);
+  margin: 0 0 4px;
+  font-size: 0.9rem;
+}
+/* L'adresse peut être longue : sur smartphone elle DOIT se couper plutôt que déborder
+   (la carte est consultée debout, sur le terrain). */
+.publication-acces-url {
+  margin: 0 0 10px;
+  overflow-wrap: anywhere;
+}
+.publication-acces-url a { color: var(--accent); }
+/* Les deux boutons passent à la ligne sur petit écran plutôt que de se serrer. */
+.publication-acces-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.publication-acces-note {
+  color: var(--bleu-ciel);
+  margin: 10px 0 0;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+/* État de préparation de la phase après-midi (scores du matin saisis) */
+.apresmidi-etat { color: var(--bleu-ciel); margin: 4px 0 10px; }
+
+/* ==========================================================================
+   Barre de connexion admin : indique si la clé admin est active
+   ========================================================================== */
+.barre-connexion {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  border-radius: var(--rayon);
+  padding: 8px 14px;
+  margin-bottom: var(--espace);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.95rem;
+}
+.barre-connexion.connecte {
+  border: 1px solid rgba(159, 224, 160, 0.4);
+  background: rgba(159, 224, 160, 0.08);
+  color: #9fe0a0;
+}
+.barre-connexion.deconnecte {
+  border: 1px solid rgba(255, 180, 100, 0.45);
+  background: rgba(255, 170, 80, 0.1);
+  color: #ffd9a8;
+}
+/* Regroupe les boutons de la barre (Changer de clé + Verrouiller) */
+.barre-actions { display: inline-flex; gap: 8px; flex-wrap: wrap; }
+
+/* Bouton discret « Changer de clé » / « Verrouiller » (contour de la couleur ambiante) */
+.bouton-lien {
+  background: transparent;
+  border: 1px solid currentColor;
+  color: inherit;
+  border-radius: 8px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.85rem;
+}
+.bouton-lien:hover { background: rgba(255, 255, 255, 0.08); }
+
+/* ==========================================================================
+   Tableau de bord admin : l'état du tournoi en un coup d'œil (haut de page)
+   ========================================================================== */
+.tableau-bord {
+  border: 1px solid rgba(46, 143, 224, 0.35);
+  background: rgba(46, 143, 224, 0.08);
+  border-radius: var(--rayon);
+  padding: 12px 14px;
+  margin-bottom: var(--espace);
+}
+/* En-tête du tableau de bord : titre à gauche, horodatage + bouton Rafraîchir à droite */
+.tb-entete {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.tb-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.9rem;
+  color: var(--bleu-ciel);
+}
+.tb-refresh { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tb-grille {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);   /* 2 colonnes sur mobile */
+  gap: 10px;
+}
+.tb-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: rgba(3, 16, 36, 0.35);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.tb-val {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.5rem;
+  line-height: 1.1;
+  color: var(--texte);
+}
+.tb-lib {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.75rem;
+  color: var(--bleu-ciel);
+}
+/* Sur écran large, les 4 stats tiennent sur une seule ligne.
+   ⚠️ Cette media query DOIT rester APRÈS la règle de base `.tb-grille` ci-dessus :
+   à spécificité égale, c'est la dernière déclaration du fichier qui gagne. */
+@media (min-width: 700px) {
+  .tb-grille { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ==========================================================================
+   Cartes repliables (<details class="carte">) : le <summary> reprend le look
+   d'un <h2> de carte, avec un chevron. On NE met PAS display:flex sur le
+   <summary> (casse le pliage natif sur Safari iOS) — on garde list-item.
+   ========================================================================== */
+details.carte > summary {
+  cursor: pointer;
+  list-style: none;                /* enlève le marqueur natif (Firefox) */
+  user-select: none;
+  font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif;
+  letter-spacing: 0.5px;
+  font-size: 1.5rem;
+  color: var(--bleu-ciel);
+  border-bottom: 1px solid rgba(184, 216, 248, 0.15);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+}
+details.carte > summary::-webkit-details-marker { display: none; } /* WebKit */
+details.carte > summary::before {
+  content: '▸';
+  display: inline-block;
+  font-size: 0.9rem;
+  margin-right: 8px;
+  color: var(--bleu-ciel);
+  transition: transform 0.15s ease;
+}
+details.carte[open] > summary::before { transform: rotate(90deg); }
+details.carte > summary:hover { color: var(--accent); }
+/* Zone de danger repliable : titre en rouge, comme le <h2> équivalent. */
+details.carte-danger > summary { color: #ff9b8f; }
+
+/* Aperçu de l'affiche du tournoi dans l'admin */
+.apercu-affiche { margin: 4px 0 12px; }
+.apercu-affiche img {
+  max-width: 220px; width: 100%; height: auto; display: block;
+  border-radius: 10px; border: 1px solid rgba(184, 216, 248, 0.25);
+}
+
+/* Onglets « Ce tournoi » / « Saison » */
+.perfs-onglets { display: flex; gap: 8px; margin-bottom: 14px; }
+.onglet {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  font-size: 1rem;
+  color: var(--bleu-ciel);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(184, 216, 248, 0.2);
+  border-radius: var(--rayon);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.onglet.actif { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* Bandeau récapitulatif du club, tout en haut */
+.perfs-global {
+  border: 1px solid rgba(46, 143, 224, 0.35);
+  border-radius: var(--rayon);
+  background: rgba(46, 143, 224, 0.08);
+  padding: 12px 14px;
+  margin-bottom: 18px;
+}
+.perfs-global-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  color: var(--bleu-ciel);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.9rem;
+}
+.perfs-chiffres { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; align-items: baseline; }
+.pc { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; }
+.pc-v { color: #9fe0a0; }
+.pc-n { color: var(--bleu-ciel); }
+.pc-d { color: #ffb4b4; }
+.pc-pct { margin-left: auto; color: var(--texte); font-size: 1.2rem; }
+.perfs-moment-global { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
+.perfs-moment { color: var(--bleu-ciel); font-size: 0.95rem; }
+.perfs-moment strong { color: var(--texte); }
+
+/* Titre d'une catégorie (U8, U10, …) */
+.perfs-cat {
+  font-family: 'Bebas Neue', sans-serif;
+  font-size: 1.5rem;
+  color: var(--accent);
+  margin: 22px 0 8px;
+  border-bottom: 2px solid rgba(46, 143, 224, 0.35);
+}
+
+/* Carte d'une équipe du club */
+.perfs-equipe {
+  border: 1px solid rgba(184, 216, 248, 0.15);
+  border-radius: var(--rayon);
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.perfs-equipe-nom {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  font-size: 1.15rem;
+  color: var(--texte);
+}
+.perfs-poule { color: var(--bleu-ciel); font-weight: 500; font-size: 0.85rem; }
+
+/* Ligne de bilan chiffré */
+.perfs-bilan { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0 4px; }
+.perfs-stat { display: flex; flex-direction: column; align-items: center; min-width: 34px; }
+.perfs-stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; line-height: 1; color: var(--texte); }
+.perfs-stat-val.gagne { color: #9fe0a0; }
+.perfs-stat-val.perd  { color: #ffb4b4; }
+.perfs-stat-val.nul   { color: var(--bleu-ciel); }
+.perfs-stat-lib { font-size: 0.7rem; color: #7f92a8; text-transform: uppercase; letter-spacing: 0.5px; }
+
+/* Sous-titre dans une carte équipe (« À quel moment », « Contre qui ») */
+.perfs-sous-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 600;
+  color: var(--bleu-ciel);
+  margin: 14px 0 6px;
+  font-size: 0.95rem;
+}
+
+/* Frise horaire : pastilles V/N/D dans l'ordre de la journée */
+.frise { overflow-x: auto; padding-bottom: 4px; }
+.frise-rail { display: flex; align-items: center; gap: 0; min-width: min-content; }
+.frise-puce {
+  display: flex; flex-direction: column; align-items: center;
+  min-width: 48px; padding: 4px 6px; border-radius: 8px; flex: 0 0 auto;
+}
+.frise-puce.gagne { background: rgba(159, 224, 160, 0.16); border: 1px solid rgba(159, 224, 160, 0.5); }
+.frise-puce.perd  { background: rgba(255, 180, 180, 0.16); border: 1px solid rgba(255, 180, 180, 0.5); }
+.frise-puce.nul   { background: rgba(184, 216, 248, 0.16); border: 1px solid rgba(184, 216, 248, 0.5); }
+.frise-heure { font-size: 0.72rem; color: var(--bleu-ciel); }
+.frise-issue { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; line-height: 1; }
+.frise-puce.gagne .frise-issue { color: #9fe0a0; }
+.frise-puce.perd  .frise-issue { color: #ffb4b4; }
+.frise-puce.nul   .frise-issue { color: var(--bleu-ciel); }
+.frise-lien { flex: 0 0 auto; width: 14px; height: 2px; background: rgba(184, 216, 248, 0.25); }
+
+/* ==========================================================================
+   THÈME CLAIR — page admin, aligné sur la PAGE PUBLIQUE du tournoi.
+   Fond blanc, cartes BLANCHES (liseré fin + ombre douce), en-tête NAVY
+   (le logo bleu ciel y ressort), accents bleu vif, textes navy/gris.
+   Activé par la classe `theme-clair` sur <body> (scopé à admin.html) ;
+   saisie/perfs gardent le thème sombre ; la page publique a sa propre CSS.
+   ========================================================================== */
+body.theme-clair {
+  background: #ffffff;
+  color: #3B4A63;                 /* texte courant : gris-bleu (comme la page publique) */
+  /* On remappe deux variables : les couleurs posées via var(...) — y compris en style
+     inline (titres du planning) — deviennent alors lisibles sur fond clair. */
+  --texte: #0C1C2E;               /* texte fort (valeurs, champs) → navy */
+  --bleu-ciel: #33608f;           /* labels / sous-titres → bleu foncé lisible */
+}
+
+/* ---- En-tête : bandeau navy dégradé + fine barre bleue (comme le bandeau public) ---- */
+.theme-clair .entete {
+  position: relative;
+  background: linear-gradient(135deg, #16304a, #0C1C2E);
+  border-radius: var(--rayon);
+  padding: 20px 16px 24px;
+  margin-bottom: var(--espace);
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(12, 28, 46, 0.15);
+}
+.theme-clair .entete::before {
+  content: ""; position: absolute; top: 0; left: 0; right: 0; height: 4px;
+  background: var(--accent);
+}
+.theme-clair .entete h1 { color: #ffffff; }
+
+/* ---- Cartes : blanches, liseré fin, ombre douce ---- */
+.theme-clair .carte {
+  background: #ffffff;
+  border: 1px solid #e6edf5;
+  box-shadow: 0 1px 3px rgba(12, 28, 46, 0.06);
+}
+.theme-clair .carte h2 { color: #0C1C2E; border-bottom-color: #e6edf5; }
+.theme-clair #zone-categories > h2 { color: #0C1C2E; }
+.theme-clair .categorie { border-left-color: var(--accent); }
+
+/* ---- Champs de saisie : blancs, texte navy, bord clair, focus bleu ---- */
+.theme-clair .r-input,
+.theme-clair .champ-reglage input,
+.theme-clair .form-equipe input[type="text"],
+.theme-clair .form-equipe input[type="email"],
+.theme-clair .form-equipe input[type="number"],
+.theme-clair .form-equipe select,
+.theme-clair .champ-edit-nom,
+.theme-clair .champ-edit-joueurs,
+.theme-clair .champ-edit-educateurs {
+  background: #ffffff;
+  color: #0C1C2E;
+  border: 1px solid #e6edf5;
+}
+.theme-clair .r-input:focus,
+.theme-clair .champ-reglage input:focus,
+.theme-clair .form-equipe input:focus,
+.theme-clair .form-equipe select:focus {
+  outline: none; border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(46, 143, 224, 0.15);
+}
+.theme-clair .form-equipe input::placeholder { color: #9aa7b5; }
+.theme-clair .champ-reglage input[type="time"]::-webkit-calendar-picker-indicator { filter: none; }
+
+/* ---- Petits panneaux internes → surface claire ---- */
+.theme-clair .equipe-item,
+.theme-clair .poule-compo { background: #F5F9FD; border: 1px solid #e6edf5; }
+.theme-clair .champ-reglage { border-bottom-color: #e6edf5; }
+
+/* ---- Tableau de bord : panneau clair ---- */
+.theme-clair .tableau-bord { background: #F5F9FD; border-color: #e6edf5; }
+.theme-clair .tb-stat { background: #ffffff; }
+.theme-clair .tb-lib,
+.theme-clair .live-maj,
+.theme-clair .cat-mini { color: #8a97a6; }
+
+/* ---- Boutons secondaires (contour) contrastés sur blanc ---- */
+.theme-clair .bouton-suppr,
+.theme-clair .edit-x { color: #c0392b; border-color: rgba(192, 57, 43, 0.35); }
+.theme-clair .bouton-suppr:hover,
+.theme-clair .edit-x:hover { background: rgba(192, 57, 43, 0.08); }
+.theme-clair .bouton-modif,
+.theme-clair .edit-vers { color: var(--accent); border-color: rgba(46, 143, 224, 0.4); }
+.theme-clair .bouton-modif:hover,
+.theme-clair .edit-vers:hover { background: rgba(46, 143, 224, 0.08); }
+.theme-clair .bouton-lien { color: #0C1C2E; border-color: #d4dee9; }
+.theme-clair .bouton-lien:hover { background: rgba(12, 28, 46, 0.05); }
+
+/* ---- Barre de connexion : panneaux clairs, texte contrasté ---- */
+.theme-clair .barre-connexion.connecte {
+  background: rgba(26, 138, 74, 0.10); border-color: rgba(26, 138, 74, 0.35); color: #1a8a4a;
+}
+.theme-clair .barre-connexion.deconnecte {
+  background: rgba(214, 141, 20, 0.12); border-color: rgba(214, 141, 20, 0.4); color: #b26a00;
+}
+
+/* ---- Planning : titres + tableaux clairs ---- */
+.theme-clair .planning-phase { color: #0C1C2E; border-bottom-color: #e6edf5; }
+.theme-clair .table-planning th { color: var(--accent); }
+.theme-clair .table-planning td { border-bottom-color: #e6edf5; }
+.theme-clair .table-planning .vs { color: #8a97a6; }
+
+/* ---- Éditeur manuel des poules : clair ---- */
+.theme-clair .edit-poules { background: #F5F9FD; border-color: rgba(46, 143, 224, 0.3); }
+.theme-clair .edit-poule { background: #ffffff; border-color: #e6edf5; }
+.theme-clair .edit-equipe { background: #F5F9FD; }
+
+/* ---- Assistant d'arbitrage : pistes claires ---- */
+.theme-clair .arb-item { background: #ffffff; color: #0C1C2E; border-color: #e6edf5; }
+.theme-clair .arb-item .arb-fin { color: #8a97a6; }
+
+/* ---- Zone de danger : carte blanche à liseré rouge ---- */
+.theme-clair details.carte-danger { border-color: rgba(192, 57, 43, 0.4); border-left-color: #c0392b; }
+.theme-clair details.carte-danger > summary { color: #c0392b; }
+.theme-clair .liste-danger { color: #3B4A63; }
+
+/* ---- Messages / états vides ---- */
+.theme-clair .message { color: #8a97a6; }
+.theme-clair .message.erreur { color: #b3261e; background: rgba(179, 38, 30, 0.08); border-radius: var(--rayon); }
+.theme-clair .vide { color: #8a97a6; }
+.theme-clair .apercu-affiche img { border-color: #e6edf5; }
+
+/* ---- Repère visuel dans l'en-tête navy ----
+   Largeur adaptée à un symbole CARRÉ (l'ancienne image était un bandeau large :
+   `width:100%` l'aurait étiré à 260 px de côté). */
+.entete .logo {
+  display: block;
+  width: 64px;
+  height: auto;
+  margin: 0 auto 10px;
+}
+
+/* ==========================================================================
+   TERRAINS PHYSIQUES & RÉPARTITION (carte admin #bloc-terrains)
+   ========================================================================== */
+.terr-titre { margin: 18px 0 8px; font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.05rem; letter-spacing: .3px; }
+
+/* Une ligne = un grand terrain (nom, type, L × W, supprimer). */
+.terrain-ligne, .dim-ligne {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px;
+}
+.terrain-ligne .tp-nom { flex: 1 1 120px; min-width: 90px; }
+.terrain-ligne .tp-nature { flex: 0 0 auto; max-width: 140px; }
+.terrain-ligne .tp-type { flex: 0 0 auto; }
+.terrain-ligne .tp-l, .terrain-ligne .tp-w, .terrain-ligne .tp-enbut,
+.dim-ligne .dim-l, .dim-ligne .dim-w { width: 68px; flex: 0 0 auto; text-align: center; }
+.terr-enbut-lib { opacity: .6; margin-left: 4px; }
+.terr-x { opacity: .6; }
+.terr-unite { opacity: .6; margin-left: 2px; }
+.dim-ligne .dim-nom { flex: 0 0 56px; font-weight: 600; }
+.dim-taille[hidden] { display: none; }
+
+/* Petit bouton « ✕ » de suppression d'un grand terrain. */
+.terr-suppr {
+  flex: 0 0 auto; border: 1px solid transparent; background: transparent; cursor: pointer;
+  font-size: 1rem; line-height: 1; padding: 4px 8px; border-radius: var(--rayon); opacity: .7;
+}
+.terr-suppr:hover { opacity: 1; }
+
+/* Champs de saisie dans cette carte (harmonisés avec les inputs de réglages). */
+#bloc-terrains input[type="text"], #bloc-terrains input[type="number"], #bloc-terrains select {
+  padding: 8px 10px; border-radius: var(--rayon); font: inherit;
+  border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: inherit;
+}
+
+/* Tableau de capacité (défile horizontalement sur mobile). */
+.tab-capacite-wrap { overflow-x: auto; margin-top: 6px; }
+.tab-capacite { border-collapse: collapse; width: 100%; font-family: 'Barlow Condensed', sans-serif; }
+.tab-capacite th, .tab-capacite td {
+  border: 1px solid rgba(255,255,255,.14); padding: 7px 10px; text-align: center; white-space: nowrap;
+}
+.tab-capacite thead th { font-weight: 600; }
+.tab-capacite .cap-nom { text-align: left; }
+.tab-capacite .cap-dim { opacity: .6; font-size: .85em; }
+.tab-capacite .cap-plein { opacity: .55; font-size: .78em; }
+
+/* ---- Thème clair (page admin) ---- */
+.theme-clair #bloc-terrains input[type="text"],
+.theme-clair #bloc-terrains input[type="number"],
+.theme-clair #bloc-terrains select {
+  border-color: #d6e0ec; background: #ffffff; color: #0C1C2E;
+}
+.theme-clair .terr-titre { color: #0C1C2E; }
+.theme-clair .terr-suppr { color: #c0392b; }
+.theme-clair .terr-suppr:hover { background: rgba(192,57,43,.1); }
+.theme-clair .tab-capacite th, .theme-clair .tab-capacite td { border-color: #e6edf5; }
+.theme-clair .tab-capacite thead th { color: var(--accent); background: #F5F9FD; }
+.theme-clair .tab-capacite .cap-nom { color: #0C1C2E; }
+
+/* ---- Répartition automatique : résumé + carte SVG ---- */
+.repart-resume { list-style: none; padding: 0; margin: 10px 0; }
+.repart-resume li { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+.repart-puce { width: 12px; height: 12px; border-radius: 3px; flex: 0 0 auto; }
+.repart-detail { opacity: .65; font-size: .9em; }
+.repart-avert {
+  margin: 10px 0; padding: 8px 10px; border-radius: var(--rayon);
+  background: rgba(214, 141, 20, .14); color: #b26a00; line-height: 1.5;
+}
+.repart-carte-wrap { overflow-x: auto; margin: 10px 0; }
+.carte-svg { width: 100%; max-width: 520px; display: block; height: auto; }
+.carte-terrain { fill: #eef4ec; stroke: #9bb3a6; stroke-width: 1.5; }
+/* En-but : espace réel DERRIÈRE la ligne de but (la longueur déclarée va d'une ligne de poteaux
+   à l'autre). Pas de jeu dedans, mais la table de marque peut s'y poser. */
+.carte-enbut { fill: #dbe7d8; stroke: #9bb3a6; stroke-width: 1; stroke-dasharray: 3 3; }
+.carte-titre { font: 600 12px 'Barlow Condensed', sans-serif; fill: #0C1C2E; }
+.carte-tuile { font: 700 12px 'Barlow Condensed', sans-serif; text-anchor: middle; }
+.carte-table { fill: #b0b8c2; stroke: #7a8794; stroke-width: 1; }
+.carte-tm { font: 700 8px 'Barlow Condensed', sans-serif; fill: #2b3440; text-anchor: middle; }
+
+/* Nom du grand terrain sur la carte (bien visible) + menu emplacement */
+.carte-nomterrain { font-weight: 700; font-size: 13px; fill: #0C1C2E; }
+.terrain-ligne .tp-pos { flex: 0 0 auto; max-width: 150px; }
+
+/* ---- Ajustement manuel de la répartition (glisser-déposer) ---- */
+.carte-tuile-g { cursor: grab; }
+.carte-tuile-g:hover rect { stroke-width: 2.5; }
+.carte-terrain.est-cible { stroke: #2E8FE0; stroke-width: 3; }
+.repart-tray {
+  display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; margin: 8px 0 12px;
+  border: 1.5px dashed rgba(46, 143, 224, .55); border-radius: var(--rayon);
+}
+.repart-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
+  border: 1.5px solid; border-radius: 999px; cursor: grab; user-select: none;
+  -webkit-user-select: none; touch-action: none;
+  font-family: 'Barlow Condensed', sans-serif; background: rgba(255,255,255,.06);
+}
+.theme-clair .repart-chip { background: #ffffff; }
+.repart-ghost {
+  position: fixed; z-index: 10000; pointer-events: none;
+  transform: translate(-50%, -50%); opacity: .85; margin: 0;
+  background: #ffffff; color: #0C1C2E;
+}
+/* Bouton ⟳ de la pastille : pivote le mini-terrain (longueur ↔ largeur). */
+.repart-chip-pivot {
+  border: 0; background: transparent; cursor: pointer; padding: 0 2px; margin-left: 2px;
+  font-size: 1rem; line-height: 1; color: inherit; opacity: .65;
+}
+.repart-chip-pivot:hover { opacity: 1; }
+
+/* Aperçu à l'échelle pendant le glisser : montre l'emplacement EXACT avant de lâcher.
+   Vert = tenable, rouge = hors terrain ou couloir non respecté. */
+.repart-apercu {
+  position: fixed; z-index: 10000; pointer-events: none;
+  border-radius: 3px; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  font: 700 11px 'Barlow Condensed', sans-serif;
+}
+.repart-apercu.est-ok      { border: 2px solid #1e9e5a; background: rgba(30, 158, 90, .28);  color: #0b4d2b; }
+.repart-apercu.est-refuse  { border: 2px solid #c0392b; background: rgba(192, 57, 43, .28);  color: #7d1f16; }
+/* Hors terrain : simple étiquette suiveuse (pas d'emplacement à montrer). */
+.repart-apercu.est-libre {
+  transform: translate(-50%, -50%); padding: 5px 10px; border-radius: 999px;
+  background: #ffffff; color: #0C1C2E; border: 1.5px solid rgba(12, 28, 46, .35);
+}
+
+/* Champ « Table des marques » (longueur × largeur) dans la carte terrains */
+.tm-taille { display: inline-flex; align-items: center; gap: 6px; }
+.tm-taille input { width: 64px; text-align: center; }
+
+/* ==========================================================================
+   « OÙ EN SUIS-JE ? » — fil d'avancement + thermomètre de la journée (admin)
+   Bandeau clair placé sous le tableau de bord. Chaque étape est une pastille
+   cliquable (liseré coloré selon l'état). ÉTAPE 1 : affichage seul.
+   ========================================================================== */
+.etat-avancement {
+  border: 1px solid #e6edf5;
+  background: #F5F9FD;
+  border-radius: var(--rayon);
+  padding: 12px 14px;
+  margin-bottom: var(--espace);
+}
+.ea-entete {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
+}
+.ea-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  font-size: 0.95rem; color: #0C1C2E;
+}
+.ea-legende { font-size: 0.78rem; color: #6b7c93; }
+
+/* Verdict « prêt à publier ? » (en tête du cerveau, surtout utile sur la carte Résumé) */
+.ea-verdict {
+  margin-bottom: 10px; padding: 9px 12px; border-radius: 10px;
+  font-size: 0.92rem; line-height: 1.45;
+}
+.ea-verdict-ok { background: #f1faf4; border: 1px solid #bfe6cf; color: #1f7a47; }
+.ea-verdict-ko { background: #fff8ef; border: 1px solid #f0d9b8; color: #8a5a1a; }
+.ea-lien-etape {
+  border: 1px solid currentColor; background: #fff; color: #8a5a1a;
+  border-radius: 999px; padding: 2px 9px; margin: 2px 2px 0 0; cursor: pointer;
+  font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  letter-spacing: 0.3px; font-size: 0.8rem; font-weight: 600;
+}
+.ea-lien-etape:hover { background: #fdeede; }
+.ea-lien-etape:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.ea-fil {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.ea-etape {
+  display: inline-flex; align-items: center; gap: 8px;
+  background: #ffffff; border: 1px solid #e6edf5;
+  border-left: 4px solid #cbd6e4;
+  border-radius: 10px; padding: 7px 11px;
+  cursor: pointer; transition: box-shadow 0.15s ease, transform 0.05s ease;
+}
+.ea-etape:hover { box-shadow: 0 2px 8px rgba(12, 28, 46, 0.10); }
+.ea-etape:active { transform: translateY(1px); }
+.ea-etape:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ea-pastille { font-size: 1rem; line-height: 1; }
+.ea-nom { font-weight: 600; color: #0C1C2E; font-size: 0.9rem; }
+.ea-detail { font-size: 0.78rem; color: #6b7c93; }
+
+/* Liseré (et léger fond) selon l'état de l'étape */
+.ea-fait     { border-left-color: #2f9e5f; }
+.ea-arefaire { border-left-color: #e08a2e; background: #fff8ef; }
+.ea-attente  { border-left-color: #2E8FE0; }
+.ea-afaire   { border-left-color: #cbd6e4; }
+
+/* Thermomètre de la journée : début → pause → heure de fin prévue */
+.ea-thermo {
+  display: flex; flex-wrap: wrap; gap: 8px 18px;
+  margin-top: 12px; padding-top: 10px;
+  border-top: 1px dashed #dbe4f0;
+  font-size: 0.9rem;
+}
+.ea-t b { color: #33608f; font-weight: 600; margin-right: 4px; }
+.ea-therm-warn { color: #e08a2e; font-weight: 600; }
+
+/* Petit écran : on masque le détail pour garder des pastilles compactes
+   (l'info reste dans l'infobulle « title » et la couleur du liseré). */
+@media (max-width: 520px) {
+  .ea-detail { display: none; }
+}
+
+/* ==========================================================================
+   ASSISTANT À CARTES (étape 4a) — carrousel guidé de la page admin.
+   Les blocs existants sont déplacés dans .asst-slide ; on n'anime que le
+   décalage horizontal de la piste (.asst-track) + la hauteur du viewport.
+   ========================================================================== */
+/* <main> est une grille (2 colonnes sur grand écran) : l'assistant doit s'étendre sur
+   TOUTE la largeur (grid-column) et pouvoir rétrécir sous la taille de son contenu
+   (min-width:0) — sinon le carrousel « explose » la largeur de la page. */
+#assistant {
+  grid-column: 1 / -1;
+  min-width: 0;
+  margin-bottom: var(--espace);
+}
+
+/* En-tête : fil d'étapes + lien « vue classique » */
+.asst-tete {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
+}
+.asst-stepper {
+  list-style: none; margin: 0; padding: 0;
+  display: flex; gap: 6px; flex-wrap: nowrap; overflow-x: auto;
+  -webkit-overflow-scrolling: touch; scrollbar-width: thin;
+}
+.asst-step {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 10px; border-radius: 999px; cursor: pointer;
+  background: #eef4fb; border: 1px solid #e0e9f4; color: #33608f;
+  white-space: nowrap; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.asst-step:hover { background: #e3edf8; }
+.asst-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.asst-step-num { font-size: 0.95rem; line-height: 1; }
+.asst-step-nom {
+  font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  letter-spacing: 0.4px; font-size: 0.82rem; font-weight: 600;
+}
+.asst-step.est-faite { color: #2f9e5f; border-color: #bfe6cf; background: #f1faf4; }
+.asst-step.est-active {
+  background: var(--accent); border-color: var(--accent); color: #fff;
+  box-shadow: 0 2px 8px rgba(46, 143, 224, 0.30);
+}
+.asst-classique { flex: 0 0 auto; }
+
+/* Barre de progression (sous le fil d'étapes) */
+.asst-barre {
+  height: 4px; background: #e6edf5; border-radius: 999px;
+  overflow: hidden; margin: 0 0 14px;
+}
+.asst-barre-jauge {
+  display: block; height: 100%; width: 14%;
+  background: var(--accent); border-radius: 999px;
+  transition: width 0.35s ease;
+}
+
+/* Fenêtre + piste : on masque ce qui déborde, la piste glisse horizontalement */
+.asst-viewport { overflow: hidden; transition: height 0.35s ease; }
+.asst-track {
+  display: flex; align-items: flex-start;
+  transition: transform 0.35s ease;
+}
+.asst-slide {
+  flex: 0 0 100%; width: 100%; min-width: 0;
+  padding-bottom: 4px; /* contient la marge basse du bloc (mesure de hauteur juste) */
+}
+/* Dans une carte, les blocs déplacés gardent leur style ; on enlève juste la
+   marge basse superflue du dernier pour un rendu net. */
+.asst-slide > :last-child { margin-bottom: 0; }
+
+/* Pied : Précédent / compteur / Suivant */
+.asst-pied {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-top: 14px;
+}
+.asst-nav { min-width: 130px; }
+.asst-compteur {
+  font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  letter-spacing: 0.4px; font-size: 0.9rem; color: #33608f; text-align: center; flex: 1;
+}
+
+/* Verrou « Suivant » : bouton grisé + explication de ce qui reste à faire
+   (étape incomplète ou modifications non enregistrées) */
+.asst-nav:disabled { opacity: 0.45; cursor: not-allowed; }
+.asst-verrou {
+  margin-top: 12px; padding: 9px 12px; border-radius: 8px;
+  background: #fff7ea; border: 1px solid #f4cf8e; color: #8a5a17;
+  font-size: 0.92rem; line-height: 1.45;
+}
+.asst-verrou.est-secoue { animation: asst-secousse 0.3s ease; }
+@keyframes asst-secousse {
+  0%, 100% { transform: translateX(0); }
+  30% { transform: translateX(-5px); }
+  70% { transform: translateX(5px); }
+}
+/* Étapes du fil hors de portée (au-delà de la 1re étape bloquée) : estompées */
+.asst-step.est-verrouillee { opacity: 0.45; }
+.asst-step.est-verrouillee:hover { background: #eef4fb; }
+
+/* Bouton flottant pour revenir à l'assistant depuis la vue classique */
+.asst-reprise { display: block; margin: 0 0 var(--espace); }
+
+/* Accessibilité : respecte « animations réduites » */
+@media (prefers-reduced-motion: reduce) {
+  .asst-viewport, .asst-track, .asst-barre-jauge { transition: none; }
+  .asst-verrou.est-secoue { animation: none; }
+}
+
+/* Petit écran : le pied reste lisible, le compteur passe sous les boutons si besoin */
+@media (max-width: 520px) {
+  .asst-nav { min-width: 0; padding: 10px 12px; }
+  .asst-compteur { font-size: 0.8rem; }
+}
+
+/* ==========================================================================
+   Carte « Dossier club » (admin) : état des sections du dossier + bouton-lien
+   ========================================================================== */
+/* Le bouton d'ouverture est un <a> : mêmes styles que .bouton + pas de soulignement. */
+a.bouton { display: inline-block; text-decoration: none; }
+
+.dossier-etat {
+  list-style: none;
+  margin: 10px 0;
+  padding: 10px 12px;
+  background: rgba(3, 16, 36, 0.4);
+  border-radius: 8px;
+}
+.dossier-etat li { padding: 2px 0; }
+.dossier-etat li.est-vide { opacity: 0.65; }
+.dossier-etat-note { font-size: 0.8em; color: var(--bleu-ciel); }
+/* Aperçu du dossier : « Aperçu du dossier de [club] » + bouton. Le select porte .r-input,
+   déclarée dans les DEUX feuilles (styles.css sombre + theme-r92.css clair) — un nouveau nom
+   de classe n'aurait été stylé que dans l'une des deux. */
+.dossier-apercu-lib { color: var(--bleu-ciel); }
+
+/* Verrou « planning visible par les clubs » (carte Poules & planning) : l'état saute aux yeux,
+   parce qu'une publication oubliée ne se voit nulle part ailleurs. */
+.publi-planning {
+  margin: 12px 0; padding: 12px 14px; border-radius: var(--rayon);
+  border-left: 4px solid; background: rgba(3, 16, 36, 0.4);
+}
+.publi-planning.est-masque { border-left-color: #d68d14; }
+.publi-planning.est-visible { border-left-color: #2f9e63; }
+.publi-planning-etat { margin: 0 0 10px; line-height: 1.5; }
+.publi-planning-note { margin: 10px 0 0; font-size: 0.85rem; color: var(--bleu-ciel); line-height: 1.5; }
+#ligne-apercu-dossier select { max-width: 260px; }
+
+/* ==========================================================================
+   Carte « Clubs invités » (admin) : liste des clubs (réutilise .equipe-item)
+   avec le contact sous le nom, un menu déroulant de statut et un LISERÉ D'ÉTAT
+   (décisions Romain) : orange = « À enregistrer » (le club a répondu ou modifié
+   sa réponse, action requise), violet = « En attente de réponse », vert =
+   « Sélection enregistrée » (à jour), rouge = « Déclinée ». Le badge texte
+   porte la même info que la couleur (jamais la couleur seule). Quand un club
+   est Accepté, un panneau replié laisse choisir les catégories engagées et
+   générer/envoyer le dossier complet (Phase 2).
+   ========================================================================== */
+.club-invite-item { border-left: 4px solid rgba(120, 180, 255, 0.5); }
+.club-invite-item.club-etat-a-enregistrer { border-left-color: #e5a33c; }
+.club-invite-item.club-etat-attente       { border-left-color: #9b7fd4; }
+.club-invite-item.club-etat-a-envoyer     { border-left-color: #2E8FE0; }
+.club-invite-item.club-etat-complet       { border-left-color: #35c06a; }
+.club-invite-item.club-etat-decline       { border-left-color: #e07878; }
+/* Badge d'état assorti au liseré (pastille discrète, lisible sur fond navy). */
+.club-etat-badge {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.club-etat-badge.etat-a-enregistrer { background: rgba(229, 163, 60, 0.18); color: #f0b95e; }
+.club-etat-badge.etat-attente       { background: rgba(155, 127, 212, 0.18); color: #bda8ea; }
+.club-etat-badge.etat-a-envoyer     { background: rgba(46, 143, 224, 0.18); color: #8ec7f5; }
+.club-etat-badge.etat-complet       { background: rgba(53, 192, 106, 0.16); color: #6fd898; }
+.club-etat-badge.etat-decline       { background: rgba(224, 120, 120, 0.16); color: #eda3a3; }
+.club-invite-item { flex-wrap: wrap; }
+.club-invite-item .nom { display: flex; flex-direction: column; min-width: 0; }
+.club-contact {
+  font-weight: 400;
+  font-size: 0.82rem;
+  opacity: 0.75;
+  overflow-wrap: anywhere;
+}
+.statut-club {
+  background: rgba(3, 16, 36, 0.6);
+  border: 1px solid rgba(120, 180, 255, 0.4);
+  color: #eaf2ff;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font: inherit;
+  font-size: 0.85rem;
+}
+/* Indicateur « dossier envoyé le … » (icône + date) sur la ligne du club. */
+.club-envoye {
+  font-size: 0.78rem;
+  color: #8fe0a8;
+  white-space: nowrap;
+  margin-left: 4px;
+}
+/* Badge « écart d'engagement » (Sprint 6) : un club a réduit son nombre d'équipes. */
+.club-alerte-ecart {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #ffd777;
+  background: rgba(240, 180, 40, 0.18);
+  border: 1px solid rgba(240, 180, 40, 0.5);
+  border-radius: 999px;
+  padding: 2px 8px;
+  white-space: nowrap;
+  cursor: help;
+}
+.club-alerte-ecart:focus { outline: 2px solid #ffd777; outline-offset: 1px; }
+/* Bouton secondaire discret (Annuler l'édition d'un club…). */
+.bouton-discret {
+  background: rgba(120, 180, 255, 0.12);
+  color: #cfe4ff;
+  border: 1px solid rgba(120, 180, 255, 0.3);
+}
+/* Édition inline des coordonnées d'un club (Sprint 6, point 6e). */
+.club-en-edition { flex-wrap: wrap; align-items: flex-start; }
+.club-en-edition .equipe-actions { align-items: flex-start; }
+.club-edit-champs { display: flex; flex-direction: column; gap: 6px; flex: 1 1 220px; min-width: 0; }
+.club-edit-champs input {
+  background: rgba(3, 16, 36, 0.6);
+  border: 1px solid rgba(120, 180, 255, 0.4);
+  color: #eaf2ff;
+  border-radius: 6px;
+  padding: 7px 9px;
+  font: inherit;
+  font-size: 0.9rem;
+}
+.club-edit-champs input:focus { outline: none; border-color: #78b4ff; }
+.club-edit-avert { margin: 2px 0 0; font-size: 0.78rem; color: #ffd777; line-height: 1.35; }
+/* Résumé (lecture seule) de la réponse remontée par le club en libre-service. */
+.club-reponse {
+  background: rgba(53, 192, 106, 0.12);
+  border: 1px solid rgba(53, 192, 106, 0.4);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 10px;
+}
+.club-reponse-titre {
+  margin: 0 0 4px;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  font-size: 0.8rem;
+  color: #8fe0a8;
+}
+.club-rep-ligne { font-size: 0.9rem; color: #eaf2ff; }
+
+/* Panneau « Accepté » : sélection des catégories engagées + prénom + génération. */
+.club-panneau {
+  flex: 1 1 100%;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(3, 16, 36, 0.45);
+  border: 1px solid rgba(120, 180, 255, 0.25);
+  border-radius: 8px;
+}
+.club-panneau-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.85rem;
+  color: var(--bleu-ciel, #b8d8f8);
+  margin: 0 0 6px;
+}
+.club-cats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-bottom: 8px; }
+.club-cats label { display: inline-flex; align-items: center; gap: 5px; font-size: 0.9rem; }
+.club-prenom-champ {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 8px;
+  font-size: 0.82rem;
+}
+.club-prenom-champ input {
+  background: rgba(3, 16, 36, 0.6);
+  border: 1px solid rgba(120, 180, 255, 0.4);
+  color: #eaf2ff;
+  border-radius: 6px;
+  padding: 6px 8px;
+  font: inherit;
+}
+.club-panneau-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+
+/* Aperçu email (Phase 2) — fenêtre modale d'envoi du dossier complet. */
+.eml-overlay {
+  position: fixed; inset: 0; z-index: 9998;
+  background: rgba(3, 16, 36, 0.72);
+  display: flex; align-items: center; justify-content: center; padding: 16px;
+}
+.eml-carte {
+  background: linear-gradient(160deg, #0B2138, #031024);
+  color: #F2F6FB;
+  border: 1px solid rgba(184, 216, 248, 0.25);
+  border-radius: 12px;
+  padding: 18px;
+  max-width: 560px; width: 100%;
+  max-height: 90vh; overflow-y: auto;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  font-family: 'Barlow', system-ui, sans-serif;
+}
+.eml-titre { margin: 0 0 12px; font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.6px; color: #b8d8f8; }
+.eml-champ { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 0.85rem; }
+.eml-champ input, .eml-champ textarea {
+  background: rgba(11, 33, 56, 0.8);
+  color: #F2F6FB;
+  border: 1px solid rgba(184, 216, 248, 0.35);
+  border-radius: 8px;
+  padding: 9px 11px;
+  font: 1rem 'Barlow', sans-serif;
+  box-sizing: border-box;
+}
+.eml-champ input[readonly] { opacity: 0.75; cursor: default; }
+.eml-champ textarea { min-height: 150px; resize: vertical; }
+/* Aperçu HTML du dossier final : phrase d'intro courte + rendu réel dans une iframe. */
+.eml-carte-large { max-width: 680px; }
+.eml-carte-large textarea#eml-intro { min-height: 60px; }
+.eml-apercu-label { font-size: 0.85rem; color: #cfe0f4; margin: 8px 0 6px; }
+.eml-apercu-label strong { color: #eaf2ff; }
+.eml-iframe {
+  width: 100%; height: 420px;
+  border: 1px solid rgba(120, 180, 255, 0.28);
+  border-radius: 8px; background: #ffffff;
+  margin-bottom: 12px;
+}
+.eml-actions { display: flex; gap: 10px; justify-content: flex-end; flex-wrap: wrap; margin-top: 4px; }
+.eml-msg { font-size: 0.85rem; margin: 0 0 10px; min-height: 1.2em; }
+.eml-msg.ko { color: #ffb3ab; }
+.eml-msg.ok { color: #8fe0a8; }
+
+/* Bouton d'envoi INDIVIDUEL de l'invitation (icône, sur la ligne du club). */
+.bouton-inviter-club {
+  background: rgba(46, 143, 224, 0.18);
+  border: 1px solid rgba(120, 180, 255, 0.45);
+  border-radius: 6px;
+  cursor: pointer;
+  padding: 4px 8px;
+  font-size: 1rem;
+  line-height: 1;
+}
+.bouton-inviter-club:hover:not([disabled]) { background: rgba(46, 143, 224, 0.32); }
+.bouton-inviter-club[disabled] { opacity: 0.4; cursor: not-allowed; }
+.club-badge-invite { color: #b8d8f8; }
+
+/* Aperçu de l'email d'invitation (Phase 1) — objet + message ÉDITABLES. */
+.apercu-email {
+  background: rgba(3, 16, 36, 0.55);
+  border: 1px solid rgba(120, 180, 255, 0.28);
+  border-radius: 10px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+}
+.ae-champ { display: block; margin-bottom: 10px; }
+.ae-label {
+  display: block;
+  margin-bottom: 4px;
+  font-family: 'Barlow Condensed', sans-serif;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-size: 0.8rem;
+  color: var(--bleu-ciel, #b8d8f8);
+}
+.apercu-email textarea.r-input { min-height: 48px; resize: vertical; line-height: 1.4; }
+.ae-salutation { font-size: 0.86rem; color: #cfe0f4; margin: 8px 0; }
+.ae-salutation strong { color: #eaf2ff; }
+/* Aperçu du rendu HTML réel de l'email, isolé du thème admin via une iframe. */
+.ae-iframe {
+  width: 100%;
+  height: 560px;
+  border: 1px solid rgba(120, 180, 255, 0.28);
+  border-radius: 8px;
+  background: #ffffff;
+}
+.ae-confidentiel { margin: 0 0 10px; font-size: 0.82rem; }
+.ae-toggle { display: inline-flex; align-items: center; gap: 6px; margin-bottom: 10px; font-size: 0.9rem; }
+
+/* ============================================================================
+   CONFORMITÉ FFR (bloc sous la date du tournoi + « Forme FFR attendue » des cartes)
+   Mêmes conventions de couleur que .terr-conseil : thème sombre par défaut,
+   surcharge .theme-clair pour le mode clair.
+   ============================================================================ */
+.ffr-zone { margin: 10px 0 4px; }
+.ffr-bloc {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  margin-bottom: 8px;
+}
+.ffr-bloc ul { margin: 6px 0 0; padding-left: 18px; }
+.ffr-bloc li { margin: 3px 0; }
+.ffr-motif { opacity: 0.85; }
+.ffr-note { margin: 4px 0 0; font-size: 0.8rem; opacity: 0.8; }
+
+/* Thème sombre (défaut) */
+.ffr-neutre { color: var(--bleu-ciel); background: rgba(184, 216, 248, 0.10); }
+.ffr-vert   { color: #c7f0d2; background: rgba(46, 200, 120, 0.14); }
+.ffr-orange { color: #ffe6b0; background: rgba(224, 158, 46, 0.16); }
+.ffr-rouge  { color: #ffd7d0; background: rgba(224, 76, 46, 0.16); }
+
+/* Forme FFR attendue (dans une carte catégorie) */
+.ffr-forme {
+  margin: 4px 0 10px;
+  font-size: 0.85rem;
+  color: var(--bleu-ciel);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.ffr-forme-libelle strong { color: inherit; }
+.ffr-tag {
+  font-size: 0.72rem;
+  padding: 2px 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ffr-tag-rouge  { color: #ffd7d0; background: rgba(224, 76, 46, 0.22); }
+.ffr-tag-orange { color: #ffe6b0; background: rgba(224, 158, 46, 0.22); }
+.ffr-alerte-eff { color: #ffe6b0; font-size: 0.78rem; }
+
+/* Prescriptions FFR par catégorie (session 5) : détail sous le verdict. */
+.ffr-detail { font-size: 0.85rem; }
+.ffr-detail-cat { margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(184, 216, 248, 0.20); }
+.ffr-detail-titre { display: inline-block; font-weight: 600; margin-bottom: 2px; color: var(--bleu-ciel); }
+.ffr-ligne { margin: 2px 0; line-height: 1.35; }
+.ffr-ligne-label { opacity: 0.8; }
+.ffr-note-inline { font-size: 0.78rem; opacity: 0.7; font-weight: 400; } /* précision « borne haute » (session 8) */
+.ffr-ligne-val strong { color: inherit; }
+.ffr-attendu { color: #ffe6b0; font-size: 0.8rem; }
+/* Bouton « Appliquer les valeurs FFR » (session 6) : discret, une catégorie à la fois. */
+.ffr-appliquer {
+  display: inline-block; margin: 6px 6px 2px 0; padding: 5px 12px;
+  font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  color: #ffe6b0; background: rgba(224, 158, 46, 0.16);
+  border: 1px solid rgba(224, 158, 46, 0.5); border-radius: 8px;
+}
+.ffr-appliquer:hover { background: rgba(224, 158, 46, 0.28); }
+.ffr-appliquer:disabled { opacity: 0.5; cursor: default; }
+/* Carte catégorie : bloc du bouton « Appliquer la norme FFR » + son aide. */
+.ffr-appliquer-carte { margin: 2px 0 8px; }
+.ffr-appliquer-aide { margin: 2px 0 4px; font-size: 0.78rem; color: var(--bleu-ciel); opacity: 0.85; }
+
+/* « Trouver une date compatible » (carte Date & conformité FFR, session 17) */
+.date-finder { margin: 6px 0 12px; }
+.date-finder-panneau {
+  margin-top: 8px; padding: 12px 14px; border-radius: 12px;
+  border: 1px solid rgba(184, 216, 248, 0.20); background: rgba(184, 216, 248, 0.05);
+}
+.date-finder-aide { margin: 0 0 10px; font-size: 0.82rem; color: var(--bleu-ciel); opacity: 0.9; }
+.date-finder-controles { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
+.date-finder-controles .reglage { margin: 0; flex: 1 1 180px; }
+.date-finder-vide { margin: 12px 0 0; font-size: 0.85rem; opacity: 0.75; }
+.date-finder-liste { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.df-jour {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
+  padding: 8px 12px; border-radius: 10px;
+  border: 1px solid rgba(184, 216, 248, 0.18); background: rgba(184, 216, 248, 0.04);
+}
+.df-jour.df-compatible { border-left: 4px solid #4bbf7b; }
+.df-jour.df-vigilance  { border-left: 4px solid #e09e2e; }
+.df-date { font-weight: 600; text-transform: capitalize; }
+.df-tag { font-size: 0.78rem; opacity: 0.9; }
+.df-vigilance .df-tag { color: #ffe6b0; }
+.df-raison { flex-basis: 100%; font-size: 0.76rem; color: #ffe6b0; opacity: 0.9; }
+.df-appliquer {
+  margin-left: auto; padding: 4px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
+  color: #dff3ff; background: rgba(94, 160, 232, 0.22);
+  border: 1px solid rgba(94, 160, 232, 0.5); border-radius: 8px;
+}
+.df-appliquer:hover { background: rgba(94, 160, 232, 0.34); }
+.date-finder-conflits { margin: 10px 0 0; font-size: 0.78rem; opacity: 0.65; }
+.theme-clair .date-finder-panneau { border-color: #e6edf5; background: #f6f9fc; }
+.theme-clair .date-finder-aide { color: #33608f; }
+.theme-clair .df-jour { border-color: #e6edf5; background: #ffffff; }
+.theme-clair .df-tag, .theme-clair .df-raison, .theme-clair .df-vigilance .df-tag { color: #8a5a0c; }
+.theme-clair .df-appliquer { color: #1c4e80; background: #eaf3fc; border-color: #bcd6f0; }
+
+/* Thème clair */
+.theme-clair .ffr-detail-cat { border-top-color: #e6edf5; }
+.theme-clair .ffr-appliquer { color: #8a5a0c; background: #fdf4e3; border-color: #e6c98a; }
+
+/* ── Demande d'autorisation de tournoi (session 7) ── */
+.autorisation-groupe { border: 1px solid rgba(184, 216, 248, 0.22); border-radius: 10px; padding: 8px 12px 12px; margin: 10px 0; }
+/* Champ lié à une question Oui/Non répondue « non » : grisé + non éditable (le champ .r-input
+   porte aussi `disabled`, qui bloque la saisie ; l'opacité grise le libellé et le contrôle). */
+.autorisation-saisie .reglage.est-grise { opacity: 0.45; }
+.autorisation-saisie .reglage.est-grise .r-input { cursor: not-allowed; }
+/* Champ pré-rempli depuis les modalités d'inscription : liseré + petite note explicative. */
+.autorisation-saisie .reglage.est-prefill .r-input { border-color: rgba(94, 160, 232, 0.6); }
+.autorisation-prefill-note { display: block; margin-top: 3px; font-size: 0.74rem; color: var(--bleu-ciel); opacity: 0.85; }
+.theme-clair .autorisation-prefill-note { color: #1c4e80; }
+.autorisation-groupe legend { padding: 0 6px; font-weight: 600; color: var(--bleu-ciel); font-size: 0.9rem; }
+.autorisation-rappel { font-size: 0.85rem; background: rgba(184, 216, 248, 0.10); border-radius: 8px; padding: 8px 10px; }
+.autorisation-memo { margin: 10px 0; font-size: 0.85rem; border-left: 3px solid rgba(184, 216, 248, 0.4); padding: 4px 0 4px 12px; }
+.autorisation-memo ul { margin: 4px 0; padding-left: 18px; }
+.autorisation-memo-note { opacity: 0.8; font-size: 0.8rem; }
+.autorisation-feuille-report h3 { font-size: 1.05rem; margin: 14px 0 8px; }
+.autorisation-section { margin-top: 12px; }
+.autorisation-section h4 { margin: 6px 0; font-size: 0.95rem; color: var(--bleu-ciel); }
+.autorisation-section-note { font-size: 0.8rem; opacity: 0.85; margin: 2px 0 6px; }
+.autorisation-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.autorisation-table th { text-align: left; font-weight: 500; padding: 4px 8px; width: 55%; vertical-align: top; }
+.autorisation-table td { padding: 4px 8px; vertical-align: top; }
+.autorisation-table tr { border-bottom: 1px solid rgba(184, 216, 248, 0.12); }
+.autorisation-table .autorisation-etat { text-align: right; font-size: 0.72rem; text-transform: uppercase; opacity: 0.7; white-space: nowrap; }
+.autorisation-table tr.ffr-orange th, .autorisation-table tr.ffr-orange td { color: #ffe6b0; }
+.autorisation-table tr.ffr-orange em { color: #ffe6b0; font-style: italic; }
+.autorisation-pied { font-size: 0.8rem; opacity: 0.85; margin-top: 12px; }
+.theme-clair .autorisation-table tr.ffr-orange th, .theme-clair .autorisation-table tr.ffr-orange td { color: #8a5a0c; }
+
+/* Impression : ne garder QUE la feuille de report (nav, saisie et reste masqués). */
+@media print {
+  body * { visibility: hidden; }
+  #feuille-report, #feuille-report * { visibility: visible; }
+  #feuille-report { position: absolute; left: 0; top: 0; width: 100%; color: #000; }
+  #feuille-report .ffr-bloc, #feuille-report h3, #feuille-report h4 { color: #000; }
+  #feuille-report .autorisation-table tr.ffr-orange th,
+  #feuille-report .autorisation-table tr.ffr-orange td,
+  #feuille-report .autorisation-table tr.ffr-orange em { color: #000; }
+  #feuille-report .autorisation-table th, #feuille-report .autorisation-table td { border-bottom: 1px solid #999; }
+}
+.theme-clair .ffr-detail-titre { color: #33608f; }
+.theme-clair .ffr-attendu { color: #8a5a0c; }
+.theme-clair .ffr-neutre { color: #33608f; background: #eef4fb; }
+.theme-clair .ffr-vert   { color: #14683a; background: #e6f7ee; }
+.theme-clair .ffr-orange { color: #8a5a0c; background: #fdf4e3; }
+.theme-clair .ffr-rouge  { color: #8a1c0c; background: #fdece9; }
+.theme-clair .ffr-forme  { color: #33608f; }
+.theme-clair .ffr-tag-rouge  { color: #8a1c0c; background: #fbe0da; }
+.theme-clair .ffr-tag-orange { color: #8a5a0c; background: #fbeecd; }
+.theme-clair .ffr-alerte-eff { color: #8a5a0c; }
+
+/* ==========================================================================
+   FEUILLE DE FIN DE JOURNÉE (carte admin #bloc-feuille-jour)
+   ========================================================================== */
+.feuille-jour-titre { margin: 4px 0 2px; font-size: 1.05rem; }
+.feuille-jour-bilan { margin: 0 0 10px; opacity: .7; font-family: 'Barlow Condensed', sans-serif; }
+.tab-feuille-jour { border-collapse: collapse; width: 100%; font-family: 'Barlow Condensed', sans-serif; }
+.tab-feuille-jour th, .tab-feuille-jour td {
+  border-bottom: 1px solid rgba(255,255,255,.12); padding: 6px 10px; text-align: left; white-space: nowrap;
+}
+.tab-feuille-jour thead th { font-weight: 600; opacity: .75; }
+.tab-feuille-jour .fj-match { white-space: normal; }
+.tab-feuille-jour .fj-score { font-weight: 700; text-align: center; }
+.tab-feuille-jour .fj-phase { opacity: .6; }
+/* Match dont le score n'est pas encore saisi : présent, mais visiblement en attente. */
+.tab-feuille-jour tr.fj-attente td { opacity: .55; }
+.tab-feuille-jour tr.fj-attente .fj-score { font-weight: 400; }
+
+.theme-clair .tab-feuille-jour th, .theme-clair .tab-feuille-jour td { border-bottom-color: #e6edf5; }
+.theme-clair .tab-feuille-jour thead th { color: var(--accent); background: #F5F9FD; }

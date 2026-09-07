@@ -1,0 +1,893 @@
+/* ==========================================================================
+   TOURNOI R92 — SURCOUCHE « MODERNE NAVY / BLANC / CIEL »
+   --------------------------------------------------------------------------
+   Re-skin (option A) à charger APRÈS css/styles.css, UNIQUEMENT sur admin.html :
+
+       <link rel="stylesheet" href="css/styles.css">
+       <link rel="stylesheet" href="css/theme-r92.css">   <!-- cette ligne -->
+
+   Ne touche NI au HTML NI au JS : cible les classes existantes de la page admin
+   (toutes scopées sous .theme-clair, donc aucun effet sur saisie/perfs/tournoi).
+   Pour revenir en arrière : retirer la ligne <link> ci-dessus.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,ital,wght@9..144,0,400..600;9..144,1,400..500&family=Familjen+Grotesk:wght@400;500;600;700&display=swap');
+
+/* Palette de la maquette (variables locales à la surcouche) */
+.theme-clair {
+  --r92-navy:      #0E2340;
+  --r92-navy-2:    #16335C;
+  --r92-accent:    #3E8FD6;
+  --r92-accent-ink:#2C6FB0;
+  --r92-ciel-soft: #E6F1FB;
+  --r92-ligne:     #E2EAF2;
+  --r92-champ-bg:  #ffffff;   /* champs de texte : fond BLANC */
+  --r92-champ-bd:  #D3E1F0;
+  --r92-txt-doux:  #44536A;   /* libellés : ardoise plus soutenue (lisibilité sur blanc) */
+
+  /* On réaligne les variables globales du site sur la maquette */
+  --accent:    #3E8FD6;
+  --texte:     #0E2340;
+  --bleu-ciel: #5A6B80;
+}
+
+/* --------------------------------------------------------------------------
+   TYPOGRAPHIE — corps en Familjen Grotesk, titres/nombres en Fraunces (serif)
+   -------------------------------------------------------------------------- */
+body.theme-clair {
+  font-family: 'Familjen Grotesk', ui-sans-serif, system-ui, sans-serif;
+  color: #3B4A63;
+  -webkit-font-smoothing: antialiased;
+}
+.theme-clair h1,
+.theme-clair h2,
+.theme-clair h3,
+.theme-clair details.carte > summary {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  text-transform: none;
+}
+
+/* --------------------------------------------------------------------------
+   EN-TÊTE — bandeau navy dégradé plus doux, logo mis en valeur
+   -------------------------------------------------------------------------- */
+.theme-clair .entete {
+  background: linear-gradient(135deg, #0E2340 0%, #16335C 70%, #234978 100%);
+  border-radius: 24px;
+  padding: 26px 20px 28px;
+  box-shadow: 0 18px 40px -24px rgba(14, 35, 64, 0.55);
+}
+.theme-clair .entete::before {
+  height: 4px;
+  background: linear-gradient(90deg, var(--r92-accent), #7CC0EC);
+}
+.theme-clair .entete h1 { font-size: 2.6rem; }
+@media (min-width: 700px) { .theme-clair .entete h1 { font-size: 3.2rem; } }
+
+/* --------------------------------------------------------------------------
+   CARTES — plus arrondies, liseré fin, ombre douce, plus d'air
+   -------------------------------------------------------------------------- */
+.theme-clair .carte {
+  background: #ffffff;
+  border: 1px solid var(--r92-ligne);
+  border-radius: 22px;
+  box-shadow: 0 1px 2px rgba(14, 35, 64, 0.04), 0 18px 40px -30px rgba(14, 35, 64, 0.25);
+  padding: 26px 28px;
+}
+.theme-clair .carte h2 {
+  font-size: 1.7rem;
+  color: var(--r92-navy);
+  border-bottom: none;
+  padding-bottom: 0;
+  margin-bottom: 6px;
+}
+.theme-clair .note-generation { color: var(--r92-txt-doux); }
+/* Verrou « planning visible par les clubs » : le fond sombre de styles.css devient illisible
+   sur la carte blanche du thème clair — piège des DEUX feuilles de style du projet. */
+.theme-clair .publi-planning { background: #f2f7fd; }
+.theme-clair .publi-planning-note { color: var(--r92-txt-doux); }
+
+/* --------------------------------------------------------------------------
+   BOUTONS — pilules, tous NAVY (la couleur de la barre latérale)
+   -------------------------------------------------------------------------- */
+.theme-clair .bouton {
+  background: var(--r92-navy);
+  border-radius: 999px;
+  font-family: 'Familjen Grotesk', sans-serif;
+  text-transform: none;
+  letter-spacing: 0;
+  font-weight: 600;
+  font-size: 0.95rem;
+  padding: 12px 22px;
+  transition: background .15s, transform .1s, box-shadow .15s;
+}
+.theme-clair .bouton:hover { background: var(--r92-navy-2); transform: translateY(-1px); }
+.theme-clair .form-equipe .bouton {
+  background: var(--r92-navy);
+  border-radius: 13px;
+}
+.theme-clair .form-equipe .bouton:hover { background: var(--r92-navy-2); }
+.theme-clair .bouton-doux  { background: #2E8B57; border-radius: 999px; }
+.theme-clair .bouton-doux:hover { background: #26744a; }
+.theme-clair .bouton-danger { background: #C0483C; border-radius: 999px; }
+.theme-clair .bouton-danger:hover { background: #a53c31; }
+/* Boutons contour (secondaires) → pilule */
+.theme-clair .bouton-lien,
+.theme-clair .bouton-suppr,
+.theme-clair .bouton-modif { border-radius: 999px; }
+
+/* --------------------------------------------------------------------------
+   CHAMPS — arrondis, fond blanc, focus navy
+   -------------------------------------------------------------------------- */
+.theme-clair .r-input,
+.theme-clair .champ-reglage input,
+.theme-clair .form-equipe input[type="text"],
+.theme-clair .form-equipe input[type="number"],
+.theme-clair .form-equipe select,
+.theme-clair .champ-edit-nom,
+.theme-clair .champ-edit-joueurs,
+.theme-clair .champ-edit-educateurs,
+.theme-clair #bloc-terrains input[type="text"],
+.theme-clair #bloc-terrains input[type="number"],
+.theme-clair #bloc-terrains select {
+  background: var(--r92-champ-bg);
+  color: var(--r92-navy);
+  border: 1px solid var(--r92-champ-bd);
+  border-radius: 12px;
+  font-family: 'Familjen Grotesk', sans-serif;
+  padding: 10px 13px;
+}
+.theme-clair .r-input:focus,
+.theme-clair .champ-reglage input:focus,
+.theme-clair .form-equipe input:focus,
+.theme-clair .form-equipe select:focus,
+.theme-clair .champ-edit-nom:focus,
+.theme-clair .champ-edit-joueurs:focus,
+.theme-clair .champ-edit-educateurs:focus,
+.theme-clair #bloc-terrains input:focus,
+.theme-clair #bloc-terrains select:focus {
+  outline: none;
+  border-color: var(--r92-navy-2);
+  box-shadow: 0 0 0 3px rgba(14, 35, 64, 0.14);
+}
+/* Libellés de champs : gris-bleu, discrets */
+.theme-clair .r-libelle,
+.theme-clair .format-libelle,
+.theme-clair .champ-reglage label,
+.theme-clair .tb-lib,
+.theme-clair .terr-choix,
+.theme-clair .toggle { color: var(--r92-txt-doux); }
+
+/* --------------------------------------------------------------------------
+   TABLEAU DE BORD — 4 cartes-stats blanches avec pastille dégradée en coin
+   -------------------------------------------------------------------------- */
+.theme-clair .tableau-bord {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin-bottom: calc(var(--espace) * 1.4);
+}
+.theme-clair .tb-titre { color: var(--r92-txt-doux); }
+.theme-clair .tb-grille { gap: 16px; }
+.theme-clair .tb-stat {
+  background: #ffffff;
+  border: 1px solid var(--r92-ligne);
+  border-radius: 18px;
+  padding: 20px 22px;
+  position: relative;
+  overflow: hidden;
+  gap: 8px;
+}
+.theme-clair .tb-stat::before {
+  content: "";
+  position: absolute; top: -26px; right: -26px;
+  width: 92px; height: 92px; border-radius: 50%;
+  background: linear-gradient(145deg, var(--r92-navy-2), var(--r92-navy));
+  opacity: 1;
+}
+.theme-clair .tb-val {
+  font-family: 'Fraunces', Georgia, serif;
+  font-weight: 500;
+  font-size: 2.6rem;
+  letter-spacing: -0.03em;
+  color: var(--r92-navy);
+}
+
+/* --------------------------------------------------------------------------
+   CATÉGORIES, TABLEAUX, ÉDITEURS — arrondis + badges NAVY (couleur sidebar)
+   -------------------------------------------------------------------------- */
+.theme-clair .categorie { border-left: 4px solid var(--r92-navy); }
+.theme-clair .categorie .badge {
+  font-family: 'Familjen Grotesk', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  background: var(--r92-navy);
+  color: #ffffff;
+  border-radius: 999px;
+  font-size: 1rem;
+  padding: 4px 14px;
+}
+.theme-clair .equipe-item,
+.theme-clair .poule-compo,
+.theme-clair .edit-poule,
+.theme-clair .edit-equipe,
+.theme-clair .format-carte,
+.theme-clair .terr-choix { border-radius: 12px; }
+.theme-clair .table-planning th { color: var(--r92-navy); }
+.theme-clair .table-planning th,
+.theme-clair .table-planning td { border-bottom-color: #EDF3F9; }
+
+/* --------------------------------------------------------------------------
+   BADGES D'AVANCEMENT / ÉTATS — navy sur blanc, cohérents avec la sidebar
+   -------------------------------------------------------------------------- */
+.theme-clair .avc-partiel {
+  background: var(--r92-navy);
+  color: #ffffff;
+  border: 1px solid var(--r92-navy);
+}
+.theme-clair .publication-etat,
+.theme-clair .apresmidi-etat { color: var(--r92-txt-doux); }
+
+/* --------------------------------------------------------------------------
+   AFFICHE / APERÇU — arrondi cohérent
+   -------------------------------------------------------------------------- */
+.theme-clair .apercu-affiche img { border-radius: 14px; border-color: var(--r92-ligne); }
+
+/* --------------------------------------------------------------------------
+   BOUTONS DISCRETS (.bouton-lien : « 🔄 Rafraîchir », « Changer de clé »…)
+   Le style d'origine (padding 4×12, MAJUSCULES condensées) les serrait trop
+   dans le nouveau look → plus d'air, casse normale, jamais coupés en deux.
+   -------------------------------------------------------------------------- */
+.theme-clair .bouton-lien {
+  font-family: 'Familjen Grotesk', sans-serif;
+  text-transform: none;
+  letter-spacing: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 8px 16px;
+  white-space: nowrap;
+  border-radius: 999px;
+}
+.theme-clair .tb-refresh .bouton-lien {
+  color: var(--r92-navy);
+  border-color: var(--r92-champ-bd);
+  background: #ffffff;
+}
+.theme-clair .tb-refresh .bouton-lien:hover { background: rgba(14, 35, 64, 0.06); }
+
+/* --------------------------------------------------------------------------
+   SOUS-TITRES DE CARTE — petit intertitre majuscule à l'intérieur d'une carte.
+   ⚡ Ce bandeau annonçait « les sous-titres des DEUX aperçus (La carte / La
+   page) » : l'aperçu du site a été supprimé (M1-PUB / PUB-5, M9). La classe,
+   elle, RESTE — elle sert aux partenaires et au message plein écran.
+   -------------------------------------------------------------------------- */
+.theme-clair .apercu-sous-titre {
+  font-family: 'Familjen Grotesk', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--r92-txt-doux);
+  margin: 18px 0 10px;
+}
+
+/* ==========================================================================
+   ZONE DE DÉPÔT DE L'AFFICHE — glisser-déposer (ou clic : le <label> parent
+   ouvre le sélecteur de fichier). Sur le fond navy de la ligne .reglage.
+   ========================================================================== */
+.theme-clair .zone-depot {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 16px;
+  border: 2px dashed rgba(255, 255, 255, 0.4);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.theme-clair .zone-depot:hover,
+.theme-clair .zone-depot.est-survolee {
+  border-color: #7CC0EC;
+  background: rgba(124, 192, 236, 0.12);
+}
+.theme-clair .zd-icone { display: inline-flex; color: #7CC0EC; }
+.theme-clair .zd-icone svg { width: 26px; height: 26px; }
+.theme-clair .zd-texte { font-size: 0.9rem; line-height: 1.45; color: #C7D5E8; }
+.theme-clair .zd-texte strong { color: #FFFFFF; }
+
+/* ==========================================================================
+   FONDS NAVY — les sous-blocs des cartes qui étaient bleu ciel très clair
+   (#F5F9FD) passent NAVY, avec polices claires adaptées. Les champs restent
+   BLANCS (contraste fort sur le navy).
+   ========================================================================== */
+.theme-clair .equipe-item,
+.theme-clair .poule-compo {
+  background: var(--r92-navy);
+  border-color: var(--r92-navy);
+  color: #E7EEF7;
+}
+/* Champs « libellé + saisie » À PLAT sur la carte blanche (plus de cartouche navy
+   individuel → fini l'effet « bourrelets empilés »). Libellé bleu lisible sur blanc. */
+.theme-clair .reglage { background: transparent; border: none; }
+.theme-clair .reglage .r-libelle { color: var(--r92-accent); }
+/* Équipes : nom blanc, catégorie estompée, boutons ✏️/🗑 recolorés pour le navy */
+.theme-clair .equipe-item .nom { color: #FFFFFF; }
+.theme-clair .equipe-item .cat-mini { color: #9FB6D0; }
+/* Boutons à icône seule (email / crayon / corbeille des listes clubs & équipes) :
+   icône BLANCHE, sans fond ni contour — juste un léger fond translucide au survol. */
+.theme-clair .bouton-icone,
+.theme-clair .equipe-item .bouton-icone,
+.theme-clair .club-invite-item .bouton-icone {
+  background: none;
+  border: none;
+  color: #ffffff;
+  box-shadow: none;
+}
+.theme-clair .bouton-icone:hover,
+.theme-clair .equipe-item .bouton-icone:hover,
+.theme-clair .club-invite-item .bouton-icone:hover { background: rgba(255, 255, 255, 0.16); }
+
+/* ----- LISERÉS D'ÉTAT des clubs invités (à REPRENDRE ICI, piège des 2 feuilles) -------------
+   `.theme-clair .equipe-item` (plus haut) repeint TOUTE la bordure en navy — à spécificité
+   égale avec les règles de styles.css et chargé après, il gagnait : le liseré restait navy
+   sur navy, donc invisible. On redéclare donc les 4 états ici, avec la classe de thème.
+   Orange = « À enregistrer » · violet = « En attente » · vert = « Enregistrée » · rouge =
+   « Déclinée ». Toute nouvelle couleur d'état doit être ajoutée AUX DEUX feuilles. */
+.theme-clair .club-invite-item { border-left: 4px solid rgba(120, 180, 255, 0.5); }
+.theme-clair .club-invite-item.club-etat-a-enregistrer { border-left-color: #e5a33c; }
+.theme-clair .club-invite-item.club-etat-attente       { border-left-color: #9b7fd4; }
+.theme-clair .club-invite-item.club-etat-a-envoyer     { border-left-color: #2E8FE0; }
+.theme-clair .club-invite-item.club-etat-complet       { border-left-color: #35c06a; }
+.theme-clair .club-invite-item.club-etat-decline       { border-left-color: #e07878; }
+/* Cartes de format d'après-midi */
+.theme-clair .format-carte { background: var(--r92-navy); border-color: var(--r92-navy); }
+.theme-clair .format-carte .f-titre { color: #FFFFFF; }
+.theme-clair .format-carte .f-desc { color: #AFC3DC; }
+.theme-clair .format-carte.est-choisi {
+  background: var(--r92-navy-2);
+  border-color: var(--r92-accent);
+  box-shadow: 0 0 0 2px rgba(62, 143, 214, 0.35);
+}
+/* Format signalé « hors cadre École de Rugby » (COUPE_PLATEAU). Le pendant clair de la règle de
+   styles.css : ici la carte est NAVY, donc le titre reste en ambre CLAIR — un ambre foncé y
+   serait illisible. La carte demeure cochable ; seul son liseré la distingue. */
+.theme-clair .format-carte.est-hors-cadre { border-color: #d9a047; }
+.theme-clair .format-carte.est-hors-cadre .f-titre { color: #ffd98a; }
+/* Choix Auto / Manuel des terrains (chips radio) */
+.theme-clair .terr-choix { background: var(--r92-navy); border-color: var(--r92-navy); color: #E7EEF7; }
+/* Éditeur de poules du matin : conteneur navy, poules blanches, équipes navy clair */
+.theme-clair .edit-poules { background: var(--r92-navy); border-color: var(--r92-navy-2); }
+.theme-clair .edit-equipe { background: var(--r92-navy-2); color: #E7EEF7; }
+/* Tableau de capacité des terrains : en-tête navy */
+.theme-clair .tab-capacite thead th { background: var(--r92-navy); color: #FFFFFF; }
+
+/* --------------------------------------------------------------------------
+   TABLEAU DE BORD — icône d'état de la tuile « Planning matin » (SVG filaire,
+   injectée par majTableauBord dans admin.js) : ✓ vert validé, horloge en attente.
+   -------------------------------------------------------------------------- */
+.theme-clair .tb-ic {
+  display: inline-block;
+  width: 0.72em;
+  height: 0.72em;
+  margin-right: 10px;
+  vertical-align: -0.04em;
+}
+/* La demi-sphère (désormais opaque) reste DERRIÈRE le contenu de la tuile. */
+.theme-clair .tb-stat > * { position: relative; z-index: 1; }
+/* Valeurs en toutes lettres (« Validé », « En attente ») : un cran plus petites
+   que les grands nombres, pour tenir dans la tuile. */
+.theme-clair .tb-val .tb-val-texte {
+  font-size: 1.5rem;
+  line-height: 1.2;
+}
+.theme-clair .tb-ic.est-valide { color: var(--r92-navy); }
+.theme-clair .tb-ic.est-attente { color: var(--r92-txt-doux); }
+/* Icône et texte de la tuile parfaitement alignés (centrage vertical), et la
+   valeur n'empiète jamais sur la demi-sphère navy du coin (texte navy sur fond
+   navy = illisible) : on réserve la zone, le texte passe à la ligne au besoin. */
+.theme-clair .tb-val { display: flex; align-items: center; padding-right: 44px; }
+.theme-clair .tb-val .tb-val-texte { flex: 1; min-width: 0; }
+/* Les libellés (CATÉGORIES, ÉQUIPES, PLANNING MATIN…) se calent tous EN BAS de
+   leur tuile : ils restent alignés même quand la valeur est moins haute
+   (« ✓ Validé » vs les grands chiffres). Les tuiles d'une même rangée ont la
+   même hauteur (grille), le libellé est donc sur une seule et même ligne. */
+.theme-clair .tb-lib { margin-top: auto; }
+
+/* --------------------------------------------------------------------------
+   FORMULAIRE DES INFOS — champs à plat (comme partout ailleurs) + espace avant
+   l'aperçu de l'affiche et la ligne d'action.
+   -------------------------------------------------------------------------- */
+.theme-clair #form-infos-tournoi { display: flex; flex-direction: column; }
+.theme-clair #form-infos-tournoi .apercu-affiche,
+.theme-clair #form-infos-tournoi .ligne-action { margin-top: 14px; }
+
+/* --------------------------------------------------------------------------
+   « OÙ EN SUIS-JE ? » (verdict + thermomètre) — fond NAVY, polices claires.
+   Le verdict « Tout est prêt » reprend le style de l'ITEM CHOISI de la barre
+   latérale : fond blanc, texte navy.
+   -------------------------------------------------------------------------- */
+.theme-clair .etat-avancement {
+  background: var(--r92-navy);
+  border-color: var(--r92-navy);
+  border-radius: 18px;
+  padding: 16px 18px;
+}
+.theme-clair .ea-titre { color: #ffffff; }
+.theme-clair .ea-legende { color: #9FB6D0; }
+.theme-clair .ea-verdict-ok,
+.theme-clair .ea-verdict-ko {
+  background: #ffffff;
+  border-color: #ffffff;
+  box-shadow: 0 8px 18px -10px rgba(3, 12, 26, 0.6);
+}
+.theme-clair .ea-verdict-ok { color: var(--r92-navy); }
+.theme-clair .ea-verdict-ko { color: #8a5a1a; }
+.theme-clair .ea-thermo { border-top-color: rgba(255, 255, 255, 0.18); color: #DCE8F5; }
+.theme-clair .ea-t b { color: #9CC9F0; }
+.theme-clair .ea-therm-warn { color: #FFC98A; }
+
+/* --------------------------------------------------------------------------
+   VERDICT « TOUT EST PRÊT » — coche bleu ciel sur pastille circulaire navy
+   (remplace l'émoji ✅ ; dessinée par majEtatAvancement dans admin.js).
+   -------------------------------------------------------------------------- */
+.theme-clair .ea-verdict-ok {
+  display: flex;                      /* pastille et texte parfaitement centrés */
+  align-items: center;
+  gap: 9px;
+}
+.theme-clair .ea-coche {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #7CC0EC;                /* la pastille, bleu ciel */
+  color: var(--r92-navy);             /* la coche, navy */
+}
+.theme-clair .ea-coche svg { width: 13px; height: 13px; }
+
+/* --------------------------------------------------------------------------
+   BARRE DE CONNEXION (état connecté) — fond navy, texte clair, boutons
+   contour blanc, pour matcher le reste de la page.
+   -------------------------------------------------------------------------- */
+.theme-clair .barre-connexion.connecte {
+  background: var(--r92-navy);
+  border-color: var(--r92-navy);
+  color: #DCE8F5;
+}
+.theme-clair .barre-connexion.connecte .bouton-lien {
+  color: #ffffff;
+  border-color: rgba(255, 255, 255, 0.35);
+  background: transparent;
+}
+.theme-clair .barre-connexion.connecte .bouton-lien:hover { background: rgba(255, 255, 255, 0.10); }
+
+/* --------------------------------------------------------------------------
+   RESPIRATIONS — de l'air entre la barre de connexion et « État du tournoi »,
+   et entre les tuiles du tableau de bord et le bandeau « Tout est prêt ».
+   -------------------------------------------------------------------------- */
+.theme-clair .barre-connexion { margin-bottom: 38px; padding: 12px 16px; }
+.theme-clair .etat-avancement { margin-top: 26px; }
+
+/* --------------------------------------------------------------------------
+   ÉCRAN « PARTENAIRES » (sponsors)
+   Trois cartes : réglages d'affichage, fiches partenaires, fiche de visibilité.
+   Tout est scopé sous .theme-clair, comme le reste de cette surcouche.
+   -------------------------------------------------------------------------- */
+
+/* --- Emplacements : une carte par emplacement, dépliant ses propres réglages --- */
+.theme-clair .sponsor-emplacements {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 6px 0 16px;
+}
+.theme-clair .sp-emp {
+  border: 1px solid var(--r92-ligne);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #fff;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+/* Un emplacement coché se distingue nettement : c'est lui qui porte des réglages. */
+.theme-clair .sp-emp.est-actif {
+  border-color: var(--r92-accent);
+  background: var(--r92-ciel-soft);
+}
+.theme-clair .sp-emp-tete { font-weight: 600; }
+.theme-clair .sp-emp-tete b {
+  display: inline-grid;
+  place-items: center;
+  width: 20px; height: 20px;
+  margin-right: 4px;
+  border-radius: 5px;
+  background: var(--r92-navy);
+  color: #fff;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+.theme-clair .sp-emp-aide {
+  margin: 4px 0 0 26px;
+  font-size: 0.8rem;
+  color: var(--r92-txt-doux);
+}
+.theme-clair .sp-emp-reglages {
+  margin: 12px 0 0 26px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--r92-champ-bd);
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+}
+.theme-clair .sp-emp-reglages .reglage { margin: 0; }
+
+/* Avertissement « logo seul » : le texte saisi juste au-dessus ne sera pas affiché.
+   Sans lui, on tape une accroche, on enregistre, et on cherche pourquoi elle n'apparaît
+   nulle part — c'est exactement le piège du dossier club, réglé sur « logo seul ». */
+.theme-clair .sp-emp-muet {
+  grid-column: 1 / -1;
+  margin: -4px 0 0;
+  padding: 7px 10px;
+  border-radius: 8px;
+  background: #fdf3dd;
+  border: 1px solid #e9c96a;
+  font-size: 0.78rem;
+  color: #6b5312;
+}
+
+/* Aperçu de l'encart : le MÊME balisage et les MÊMES règles que la page publique
+   (css/sponsors.css), à la taille réelle. C'est la réponse immédiate à « qu'est-ce que
+   ça donne ? », sans enregistrer ni recharger la page des scores. */
+.theme-clair .sp-emp-apercu {
+  grid-column: 1 / -1;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px dashed var(--r92-champ-bd);
+  background: #fff;
+}
+.theme-clair .sp-emp-apercu-titre {
+  display: block;
+  margin-bottom: 6px;
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--r92-txt-doux);
+}
+.theme-clair .sp-emp-rendu {
+  display: flex;
+  gap: 10px;
+  min-height: 40px;   /* hauteur réservée : la carte ne saute pas au chargement du logo */
+  flex-wrap: wrap;
+  /* Largeur du VRAI encart, posée par le script. Un aperçu plus large que la réalité
+     rassure à tort : c'est ainsi qu'une accroche « à plat » ici se retrouvait coupée
+     en un mot par ligne sur le dossier du club. */
+  max-width: min(100%, var(--sp-largeur, 400px));
+}
+.theme-clair .sp-emp-rendu .sp-bloc-logo { flex: 0 0 auto; display: grid; place-items: center; }
+.theme-clair .sp-emp-rendu .sp-bloc-texte { min-width: 0; }
+.theme-clair .sp-emp-rendu .sp-bloc-texte strong { display: block; color: var(--r92-navy); }
+
+/* --- Contrôle « ce que reçoit le public » --- */
+.theme-clair .sp-verif {
+  width: 100%;
+  margin: 10px 0;
+  border-collapse: collapse;
+  font-size: 0.84rem;
+}
+.theme-clair .sp-verif th,
+.theme-clair .sp-verif td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--r92-ligne);
+  text-align: left;
+  vertical-align: top;
+}
+.theme-clair .sp-verif thead th {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 0.74rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--r92-txt-doux);
+}
+.theme-clair .sp-verif tbody th { color: var(--r92-navy); white-space: nowrap; }
+/* Pastille d'origine : elle dit d'où vient la valeur servie. Le « défaut » est en ambre —
+   c'est le cas où l'organisateur croit avoir réglé quelque chose qui n'a jamais été saisi. */
+.theme-clair .sp-src {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 0.7rem;
+  white-space: nowrap;
+}
+.theme-clair .sp-src-encart  { background: var(--r92-ciel-soft); color: var(--r92-navy); }
+.theme-clair .sp-src-general { background: #eef1f5; color: #55606d; }
+.theme-clair .sp-src-defaut  { background: #fdf3dd; color: #6b5312; }
+.theme-clair .sp-verif-titre {
+  margin: 14px 0 6px;
+  font-weight: 600;
+  color: var(--r92-navy);
+}
+/* Le bandeau du dossier est rendu tel quel : fond blanc, comme la feuille imprimée. */
+.theme-clair .sp-verif-dossier {
+  padding: 10px;
+  border-radius: 8px;
+  background: #eef1f5;
+}
+
+/* --- Liste des fiches partenaires --- */
+.theme-clair .sponsor-cartes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-bottom: 22px;
+}
+.theme-clair .sponsor-carte {
+  display: grid;
+  grid-template-columns: 74px 1fr;
+  gap: 4px 12px;
+  align-items: start;
+  padding: 12px 14px;
+  background: #fff;
+  border: 1px solid var(--r92-ligne);
+  border-radius: 12px;
+}
+.theme-clair .sponsor-carte.est-inactif { opacity: 0.55; }
+.theme-clair .sponsor-carte-logo {
+  grid-row: 1 / span 2;
+  display: grid;
+  place-items: center;
+  min-height: 46px;
+}
+.theme-clair .sponsor-carte-logo img { max-width: 100%; max-height: 46px; object-fit: contain; }
+.theme-clair .sponsor-pastille {
+  display: inline-grid;
+  place-items: center;
+  padding: 6px 8px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.15;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.theme-clair .sponsor-carte-corps { min-width: 0; }
+.theme-clair .sponsor-carte-corps strong { display: block; color: var(--r92-navy); }
+.theme-clair .sponsor-accroche { display: block; font-size: 0.85rem; color: var(--r92-txt-doux); }
+.theme-clair .sponsor-tags { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 7px; }
+.theme-clair .sp-tag {
+  font-size: 0.7rem;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--r92-ciel-soft);
+  color: var(--r92-accent-ink);
+  border: 1px solid var(--r92-ligne);
+  white-space: nowrap;
+}
+.theme-clair .sp-tag-poids { background: #fff; color: var(--r92-txt-doux); }
+.theme-clair .sp-tag-off { background: #FDECEA; color: #B03A2C; border-color: #F5C6C0; }
+.theme-clair .sponsor-carte-actions {
+  grid-column: 2;
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.theme-clair .bouton-lien.danger { color: #B03A2C; }
+
+/* --- Fiche de visibilité --- */
+.theme-clair .bilan-avertissement {
+  background: var(--r92-ciel-soft);
+  border: 1px solid var(--r92-ligne);
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin: 14px 0;
+  font-size: 0.9rem;
+}
+/* Le bandeau de projection doit être IMPOSSIBLE à confondre avec un bilan réel. */
+.theme-clair .bilan-avertissement.bilan-projection {
+  background: #FFF6DF;
+  border-color: #E9B53E;
+  color: #6B4E00;
+}
+
+.theme-clair .fiche-sponsor {
+  background: #fff;
+  border: 1px solid var(--r92-ligne);
+  border-radius: 14px;
+  overflow: hidden;
+  margin-bottom: 18px;
+}
+.theme-clair .fs-tete {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  background: var(--r92-navy);
+  border-bottom: 3px solid var(--r92-accent);
+}
+.theme-clair .fs-marque {
+  background: var(--r92-accent);
+  color: #fff;
+  font-weight: 700;
+  padding: 6px 12px;
+  border-radius: 6px;
+}
+.theme-clair .fs-qui { display: flex; flex-direction: column; }
+.theme-clair .fs-qui b { color: #fff; }
+.theme-clair .fs-qui span { color: var(--r92-ciel-soft); font-size: 0.82rem; }
+
+.theme-clair .fs-tuiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+  gap: 10px;
+  padding: 16px 18px 4px;
+}
+.theme-clair .fs-tuile {
+  background: var(--r92-ciel-soft);
+  border: 1px solid var(--r92-ligne);
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+.theme-clair .fs-tuile .v {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--r92-navy);
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.theme-clair .fs-tuile .k {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--r92-txt-doux);
+}
+
+.theme-clair .fs-fig { padding: 16px 18px 4px; }
+.theme-clair .fs-fig-titre { display: block; font-weight: 600; color: var(--r92-navy); }
+.theme-clair .fs-fig-sous {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--r92-txt-doux);
+  margin-bottom: 10px;
+}
+
+/* Histogramme : série UNIQUE → teinte unique, la hauteur porte la grandeur.
+   Pas de légende (le titre nomme la série), étiquette directe sur le seul sommet. */
+.theme-clair .fs-histo {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  align-items: end;
+  height: 150px;
+  padding-top: 18px;
+  border-bottom: 1px solid var(--r92-champ-bd);
+}
+.theme-clair .fs-barre {
+  position: relative;
+  background: var(--r92-accent);
+  border-radius: 4px 4px 0 0;
+  min-height: 2px;
+}
+.theme-clair .fs-barre.pic { background: var(--r92-accent-ink); }
+.theme-clair .fs-etiq {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  margin-bottom: 3px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--r92-navy);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.theme-clair .fs-axe {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 2px;
+  margin-top: 5px;
+}
+.theme-clair .fs-axe span {
+  font-size: 0.62rem;
+  text-align: center;
+  color: var(--r92-txt-doux);
+  font-variant-numeric: tabular-nums;
+}
+.theme-clair .fs-axe span.creux { visibility: hidden; }
+
+/* Barres classées : une seule teinte, la longueur porte la grandeur. */
+.theme-clair .fs-rang { display: flex; flex-direction: column; gap: 6px; }
+.theme-clair .fs-rang-l {
+  display: grid;
+  grid-template-columns: minmax(90px, 150px) 1fr 68px;
+  gap: 10px;
+  align-items: center;
+}
+.theme-clair .fs-rang-l .n { font-size: 0.82rem; color: var(--r92-txt-doux); }
+.theme-clair .fs-rang-l .p {
+  background: var(--r92-ciel-soft);
+  border-radius: 4px;
+  height: 14px;
+  overflow: hidden;
+}
+.theme-clair .fs-rang-l .p i { display: block; height: 100%; background: var(--r92-accent); }
+.theme-clair .fs-rang-l .v {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--r92-navy);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.theme-clair .fs-table { margin-top: 10px; }
+.theme-clair .fs-table summary { cursor: pointer; font-size: 0.82rem; color: var(--r92-accent-ink); }
+.theme-clair .fs-note,
+.theme-clair .fs-methode {
+  padding: 10px 18px;
+  font-size: 0.8rem;
+  color: var(--r92-txt-doux);
+  line-height: 1.5;
+}
+.theme-clair .fs-methode { border-top: 1px solid var(--r92-ligne); margin-top: 12px; }
+
+/* À l'impression : seule la fiche de visibilité part sur le papier. */
+@media print {
+  body.theme-clair .barre-laterale,
+  body.theme-clair .entete,
+  body.theme-clair #tableau-bord,
+  body.theme-clair #etat-avancement,
+  body.theme-clair .ligne-action,
+  body.theme-clair #bloc-sponsors-reglages,
+  body.theme-clair #bloc-sponsors-liste,
+  body.theme-clair #ligne-projection { display: none !important; }
+  body.theme-clair .fiche-sponsor { break-inside: avoid; border-color: #999; }
+  body.theme-clair .fs-tete { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* Sélecteur de couleur : sans hauteur explicite, il se réduit à un trait dans le thème clair. */
+.theme-clair input.r-input[type="color"] {
+  height: 42px;
+  padding: 4px;
+  cursor: pointer;
+}
+
+/* La vignette de la liste des partenaires suit le zoom saisi dans la fiche : l'aperçu de
+   l'admin doit montrer ce que la page publique affichera, pas une taille de convention. */
+.theme-clair .sponsor-carte-logo img { max-height: calc(46px * var(--sp-zoom, 1)); }
+
+/* Autodiagnostic de la remontée des relevés (écran Partenaires). */
+.theme-clair .diagnostic-remontee {
+  border: 1px solid var(--r92-ligne);
+  border-radius: 10px;
+  padding: 12px 16px;
+  margin: 12px 0;
+  background: var(--r92-ciel-soft);
+  font-size: 0.9rem;
+}
+.theme-clair .diagnostic-remontee.diag-ok { border-color: #9FD3B4; background: #F0FAF4; }
+.theme-clair .diagnostic-remontee.diag-ko { border-color: #F0B6AE; background: #FDF3F1; }
+.theme-clair .diagnostic-remontee ul { margin: 0; padding-left: 20px; }
+.theme-clair .diagnostic-remontee li { margin: 5px 0; }
+.theme-clair .diagnostic-remontee code {
+  background: #fff;
+  border: 1px solid var(--r92-ligne);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 0.85em;
+}
+.theme-clair .diag-verdict {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--r92-ligne);
+  line-height: 1.55;
+}
