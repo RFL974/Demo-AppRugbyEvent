@@ -441,7 +441,7 @@ function autorisationSaisieModifiee() {
 }
 
 /** La feuille est-elle SOUS LES YEUX de l'organisateur en ce moment ?
- *  Trois modes d'affichage, trois réponses — l'écran « autorisation » ne contient QUE
+ *  Deux modes guidés et un repli, trois réponses — l'écran « autorisation » ne contient QUE
  *  `bloc-autorisation`, donc en mode écrans/assistant nul ne peut enregistrer une autre
  *  carte tout en la regardant : la relecture y attend légitimement la navigation. */
 function autorisationEstAffichee() {
@@ -449,7 +449,7 @@ function autorisationEstAffichee() {
   const ecran = document.getElementById('ecran-autorisation');   // mode « écrans » (≥ 1024px)
   if (ecran) return !ecran.hidden;
   if (document.getElementById('asst-track')) return false;       // assistant : relu à l'arrivée
-  return true;                                                   // vue classique : page longue
+  return true;                                    // repli HTML sans mode guidé : page longue
 }
 
 /** Une écriture vient de rendre la feuille fausse : on l'EFFACE tout de suite, on la relira. */
@@ -543,8 +543,46 @@ async function majAutorisation(opt) {
     zoneSaisie.innerHTML = rendreSaisieAutorisation(questionsDejaRepondues(dossier));
     if (typeof autorisationPhotographierSaisie === 'function') autorisationPhotographierSaisie();
   }
+  // ⛔ AUCUNE INSCRIPTION ICI (R2). Cette fonction est une lecture BRUTE : c'est le registre
+  //   qui retient, et lui seul — sinon une lecture ancienne pourrait remettre « chargée » une
+  //   feuille qu'une écriture vient de périmer. ⚠️ Ne l'appelle pas directement : passe par
+  //   `assurerRessourceAdmin` / `rafraichirRessourceAdmin`, ou par `enfilerLectureAdmin` si tu
+  //   as besoin du verdict détaillé (c'est le cas du rattrapage d'obsolescence ci-dessous).
   if (!reseauOk) return { ok: false, motif: 'reseau', saisie: saisie };
   return { ok: true, feuille: 'relue', saisie: saisie };
+}
+
+/**
+ * ⭐ LA SEULE PORTE DE RELECTURE DE LA FEUILLE (R2A) — enfilée, donc jamais concurrente.
+ *
+ * ⛔ POURQUOI ELLE EXISTE. `majAutorisation` est une lecture BRUTE, et TROIS chemins la
+ * relisent : l'arrivée sur l'écran (par le registre), le rattrapage d'obsolescence, et
+ * l'enregistrement des champs `org_*`. Les deux derniers ont besoin du VERDICT DÉTAILLÉ —
+ * `revision-depassee` n'est PAS une panne — que le contrat booléen de
+ * `rafraichirRessourceAdmin` ne rend pas. Chacun s'était donc arrangé de son côté, et
+ * l'enregistrement appelait carrément `majAutorisation` EN DIRECT, hors de toute file : sa
+ * relecture pouvait voler en même temps qu'une lecture différée ou qu'un rattrapage, et la
+ * plus ANCIENNE des deux repeindre l'écran en dernier.
+ *
+ * ⭐ Une seule porte désormais, sur LA MÊME file et LA MÊME mémoire que toutes les autres
+ * lectures de `dossierAutorisation` (`enfilerLectureAdmin` / `marquerRessourceAdmin`,
+ * admin.js). ⛔ Aucune seconde file, aucune seconde mémoire.
+ *
+ * ⛔ `revision-depassee` NE TOUCHE PAS à la mémoire : rien n'a été peint, la dette est intacte,
+ * et le rattrapage normal s'en chargera. Une panne, elle, remet la ressource « à relire ».
+ *
+ * @param  {Object} opt  options passées TELLES QUELLES à `majAutorisation`
+ * @return {Promise<Object>} le bilan BRUT — { ok, motif, saisie, feuille }
+ */
+async function relireAutorisation(opt) {
+  const relire = function () { return majAutorisation(opt); };
+  const bilan = (typeof enfilerLectureAdmin === 'function')
+    ? await enfilerLectureAdmin('dossierAutorisation', relire)
+    : await relire();
+  if (typeof marquerRessourceAdmin === 'function' && bilan && bilan.motif !== 'revision-depassee') {
+    marquerRessourceAdmin('dossierAutorisation', !!bilan.ok);
+  }
+  return bilan;
 }
 
 /**
@@ -581,7 +619,10 @@ async function majAutorisationSiObsolete() {
         if (cible !== autorisationRevision) continue;  // ⛔ instantané périmé : on le jette
         configCourante = instantaneConfig;
       }
-      const bilan = await majAutorisation({ preserverSaisie: true, revisionCible: cible });
+      // ⭐ R2A — le rattrapage passe par la PORTE UNIQUE : enfilé sur la file de la ressource,
+      //   il ne peut croiser ni une lecture de navigation, ni un rafraîchissement forcé, ni la
+      //   relecture qui suit un enregistrement de champs.
+      const bilan = await relireAutorisation({ preserverSaisie: true, revisionCible: cible });
       // ⛔ « Dépassée » n'est PAS une panne : rien n'a été peint, la dette est intacte, et on
       //   repart immédiatement sur la dernière révision connue.
       if (bilan.motif === 'revision-depassee') continue;
@@ -644,7 +685,12 @@ async function onEnregistrerAutorisation() {
         else configCourante = instantaneConfig;
       }
       if (!cibleDepassee) {
-        const bilan = await majAutorisation({ revisionCible: cible });
+        // ⭐ R2A — PAR LA PORTE UNIQUE, jamais `majAutorisation` en direct. C'était le dernier
+        //   contournement de la file : cette relecture-ci suit une écriture, elle pouvait donc
+        //   partir pendant qu'une lecture différée volait encore, et se faire doubler par elle.
+        //   ⛔ La distinction réussite / panne / « dépassée » est conservée : la porte rend le
+        //   bilan BRUT, elle ne le réduit pas à un booléen.
+        const bilan = await relireAutorisation({ revisionCible: cible });
         if (bilan && bilan.motif === 'revision-depassee') cibleDepassee = true;
         else relueOk = !!(bilan && bilan.ok);
       }

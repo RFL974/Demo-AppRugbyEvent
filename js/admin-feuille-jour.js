@@ -288,6 +288,31 @@ async function onEnvoyerFeuilleJour() {
   const lignes = lignesFeuilleJour();
   if (!lignes.length) { afficherMessage(message, 'Aucun match : rien à envoyer.', 'ko'); return; }
 
+  // ⭐ ÉCHEC FERMÉ SUR LA LISTE DES CLUBS (R1).
+  //
+  // ⚠️ La liste des clubs est chargée À LA DEMANDE : elle peut n'avoir jamais été lue si
+  //    l'organisateur n'a ouvert aucun écran qui l'exige. ⛔ Sans cette garantie, la suite
+  //    lirait un tableau VIDE et l'envoi s'arrêterait sur « Aucun club accepté avec une adresse
+  //    email » — une affirmation FAUSSE, et du pire genre : elle ressemble à un état légitime,
+  //    donc personne ne cherche l'erreur, et l'organisateur croit sa journée close.
+  // ⛔ ATTENDRE LA LECTURE NE SUFFIT PAS : il faut savoir si elle a RÉUSSI. Une lecture en
+  //    panne laisse `clubsInvitesCourants` vide, exactement comme une liste réellement vide —
+  //    les deux situations sont indiscernables en aval. On exploite donc le booléen : en cas
+  //    d'échec on s'arrête ICI, avant tout calcul de destinataires, avant toute confirmation,
+  //    et donc sans jamais atteindre `envoyerFeuilleJour`.
+  // ⭐ « Aucun club accepté… » n'est désormais prononçable qu'après une lecture RÉUSSIE ayant
+  //    réellement renvoyé zéro destinataire.
+  if (typeof assurerRessourceAdmin === 'function') {
+    const clubsLus = await assurerRessourceAdmin('clubsInvites');
+    if (!clubsLus) {
+      afficherMessage(message,
+        '⚠️ Impossible de lire la liste des clubs invités : envoi ANNULÉ. ' +
+        'Ce n\'est pas « aucun destinataire » — la liste n\'a pas pu être obtenue. ' +
+        'Ouvre « Inviter un club » pour réessayer, puis relance l\'envoi.', 'ko');
+      return;
+    }
+  }
+
   // Destinataires : les clubs acceptés qui ont une adresse d'invitation.
   const clubs = (typeof clubsInvitesCourants !== 'undefined' && clubsInvitesCourants) ? clubsInvitesCourants : [];
   const accepte = function (c) {

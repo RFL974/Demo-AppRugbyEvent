@@ -342,8 +342,8 @@ function majEtatAvancement() {
 
 /**
  * Clic (ou touche Entrée/Espace) sur une étape du fil OU un lien du verdict.
- * En mode assistant, on va à l'ÉTAPE correspondante (sinon la cible serait masquée) ;
- * en vue classique, on défile jusqu'à la section.
+ * En mode guidé, on va à l'ÉTAPE correspondante (sinon la cible serait masquée) ; dans le
+ * repli HTML sans mode guidé, on défile jusqu'à la section.
  */
 function onClicEtatAvancement(evenement) {
   if (evenement.type === 'keydown' && evenement.key !== 'Enter' && evenement.key !== ' ') return;

@@ -167,21 +167,98 @@ function estRefusCle(message) {
   return /incorrecte|non\s*configur/i.test(String(message));
 }
 
+/* Identifiant SENTINELLE de la sonde de validation : il n'existe dans AUCUN classeur, donc
+   la seule réponse honnête du serveur est « introuvable ». */
+const CLE_SONDE_ID = '__verif_cle__';
+
+/* Préfixe des messages d'ÉCHEC TECHNIQUE de la vérification. ⚠️ Volontairement distinct de
+   « Clé incorrecte » : confondre les deux est exactement le défaut que ce lot corrige. */
+const MESSAGE_VERIF_IMPOSSIBLE = 'Vérification de la clé impossible (problème technique, la clé n\'a pas été mémorisée).\n\nDétail : ';
+
+/** Texte réduit : sans accents, sans casse. Le backend renvoie « Équipe » tantôt composé,
+ *  tantôt décomposé (piège NFC/NFD du Sheet, déjà connu de memeTexteSouple). */
+function texteNuCle(s) {
+  return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+/** Le serveur a-t-il EXPLICITEMENT refusé la clé ? Le drapeau structuré d'abord, le texte
+ *  ensuite (les anciens déploiements ne renvoient que le message). */
+function estRefusCleExplicite(err) {
+  const rep = (err && err.reponse) || {};
+  if (rep.acces_refuse === true) return true;
+  return estRefusCle((err && err.message) || '');
+}
+
 /**
- * Vérifie une clé SANS rien modifier : on envoie une action d'écriture avec un
- * identifiant bidon. Si la clé est bonne, le serveur répond « introuvable » (donc
- * une erreur qui n'est PAS un refus de clé) ; si elle est mauvaise, « Clé incorrecte ».
+ * La réponse est-elle EXACTEMENT celle attendue de la sonde sentinelle ?
+ *
+ * DEUX conditions, toutes deux OBLIGATOIRES :
+ *   ① le libellé PROPRE AU RÔLE — « Équipe introuvable » pour admin, « Match introuvable » pour
+ *      scores. Une erreur métier inattendue (quota, classeur verrouillé, onglet manquant) ne
+ *      vaut jamais validation, et le libellé de l'AUTRE rôle non plus ;
+ *   ② le jeton `__verif_cle__`, dans le message OU dans le champ structuré PROPRE AU RÔLE.
+ *
+ * ⛔ LE REPLI « AUCUN JETON ⇒ VRAI » A ÉTÉ SUPPRIMÉ (R1). Il raisonnait ainsi : la sonde ne
+ * portant qu'un identifiant, un « introuvable » ne pouvait concerner que lui. Le raisonnement
+ * est juste — mais c'est une DÉDUCTION, pas une preuve, et elle ouvrait la seule porte qui
+ * restait : n'importe quel « Équipe introuvable » sans jeton (message tronqué, reformulé,
+ * traduit, produit par une autre couche) validait la clé. ⭐ Le backend renvoie le jeton
+ * (`Équipe introuvable : <id>`) : rien ne justifie d'accepter une réponse qui ne le porte pas.
+ * ⛔ Dans le doute, on refuse — et l'appelant lève. C'est le sens sûr de l'erreur.
+ *
+ * ⛔ ET LE CHAMP STRUCTURÉ EST LIÉ AU RÔLE (R2). La corroboration acceptait auparavant
+ * `id_match || id_equipe || id`, quel que soit le rôle : une réponse « Équipe introuvable »
+ * accompagnée d'un `id_match` validait la clé ADMIN, et réciproquement. Les deux rôles ouvrent
+ * des pouvoirs différents — la clé de saisie des scores n'administre pas le tournoi : croiser
+ * leurs preuves était le dernier endroit où l'un pouvait se faire passer pour l'autre.
+ * ⛔ Le champ générique `id` a été retiré : il ne figure dans AUCUNE réponse du backend
+ * (`backend/Code.gs` renvoie `{ error: 'Équipe introuvable : ' + id }`, sans champ d'identifiant).
+ * ⚠️ `id_equipe` / `id_match` non plus, aujourd'hui : la preuve réelle est celle du MESSAGE. Ils
+ * sont conservés — liés au rôle — pour qu'une réponse structurée ne soit pas rejetée si le
+ * backend en ajoute un ; ⛔ jamais pour élargir ce qui est accepté.
+ */
+function estReponseSentinelleCle(role, err) {
+  const scores = (role === 'scores');
+  const attendu = scores ? 'match introuvable' : 'equipe introuvable';
+  const brut = String((err && err.message) || '');
+  if (texteNuCle(brut).indexOf(attendu) === -1) return false;   // ① libellé du rôle
+  if (brut.indexOf(CLE_SONDE_ID) !== -1) return true;           // ② jeton dans le message
+  const rep = (err && err.reponse) || {};
+  const echo = scores ? rep.id_match : rep.id_equipe;           // ② champ DU RÔLE, et lui seul
+  return String(echo || '') === CLE_SONDE_ID;
+}
+
+/**
+ * Vérifie une clé SANS rien modifier : on envoie une action d'écriture avec l'identifiant
+ * SENTINELLE `__verif_cle__`, qui n'existe pas. Trois issues, et TROIS SEULEMENT :
+ *   · refus explicite de la clé            → `false` ;
+ *   · réponse sentinelle du bon rôle       → `true` ;
+ *   · tout le reste (panne réseau, HTTP, JSON invalide, délai, erreur métier inattendue,
+ *     et même un succès inexplicable)      → l'erreur est LEVÉE.
+ *
+ * ⛔ CE QUI EST CORRIGÉ ICI. Cette fonction concluait `return !estRefusCle(err.message)` :
+ * toute erreur qui n'était pas TEXTUELLEMENT « clé incorrecte » valait donc validation. Une
+ * simple coupure réseau (« Failed to fetch ») suffisait à déclarer la connexion réussie SANS
+ * qu'aucune clé n'ait jamais été vérifiée — et la mémorisait. Le sens de l'erreur était
+ * inversé : l'incertitude ouvrait la porte au lieu de la fermer.
+ * ⚠️ Une clé n'est désormais mémorisée que sur une preuve POSITIVE de son acceptation.
+ *
+ * @throws {Error} dès que la réponse n'est ni un refus reconnu ni la sentinelle attendue.
  */
 async function cleValide(role, cle) {
   const sonde = (role === 'scores')
-    ? { action: 'enregistrerScore', id_match: '__verif_cle__', score_A: 0, score_B: 0 }
-    : { action: 'supprimerEquipe', id_equipe: '__verif_cle__' };
+    ? { action: 'enregistrerScore', id_match: CLE_SONDE_ID, score_A: 0, score_B: 0 }
+    : { action: 'supprimerEquipe', id_equipe: CLE_SONDE_ID };
   try {
     await apiPost(sonde.action, Object.assign(sonde, { cle: cle }));
-    return true; // improbable (id bidon), mais si ça passe la clé est valide
   } catch (err) {
-    return !estRefusCle(err.message);
+    if (estRefusCleExplicite(err)) return false;
+    if (estReponseSentinelleCle(role, err)) return true;
+    throw err; // ⛔ inconnu : on ne devine pas, on remonte
   }
+  // ⛔ SUCCÈS NU. L'identifiant sentinelle n'existe pas : le serveur ne peut pas honnêtement
+  //    répondre « c'est fait ». Ne pas comprendre une réponse n'autorise pas à s'y fier.
+  throw new Error('Réponse inattendue du serveur à la vérification de la clé.');
 }
 
 /**
@@ -192,12 +269,29 @@ async function cleValide(role, cle) {
  */
 async function connexion(role, libelle) {
   const memo = lireCleLocale(role);
-  if (memo && await cleValide(role, memo)) return true;
+  if (memo) {
+    let memoOk;
+    try { memoOk = await cleValide(role, memo); }
+    catch (err) { await dialogAlerter(MESSAGE_VERIF_IMPOSSIBLE + err.message); return false; }
+    if (memoOk) return true;
+    definirCleLocale(role, ''); // ⛔ clé de session REFUSÉE : on l'oublie au lieu de la garder
+  }
   while (true) {
     const saisie = await dialogDemander('🔒 Accès ' + libelle + '\n\nEntre la clé :', '', { ok: 'Se connecter' });
     if (saisie == null) return false; // annulé
     const cle = saisie.trim();
-    if (cle && await cleValide(role, cle)) { definirCleLocale(role, cle); return true; }
+    if (!cle) { await dialogAlerter('Clé incorrecte. Réessaie.'); continue; }
+    let ok;
+    try {
+      ok = await cleValide(role, cle);
+    } catch (err) {
+      // ⛔ PANNE, PAS REFUS. On ne dit pas « clé incorrecte » — ce serait accuser l'utilisateur
+      //    d'une erreur qu'il n'a pas commise et l'enfermer dans une boucle de saisie inutile.
+      //    ⚠️ Et on ne mémorise RIEN : une clé non vérifiée n'est pas une clé acceptée.
+      await dialogAlerter(MESSAGE_VERIF_IMPOSSIBLE + err.message);
+      return false;
+    }
+    if (ok) { definirCleLocale(role, cle); return true; }
     await dialogAlerter('Clé incorrecte. Réessaie.');
   }
 }
@@ -212,7 +306,18 @@ async function demanderCleValide(role, message) {
     const saisie = await dialogDemander(message, '', { ok: 'Valider' });
     if (saisie == null) return null; // annulé
     const cle = saisie.trim();
-    if (cle && await cleValide(role, cle)) { definirCleLocale(role, cle); return cle; }
+    if (cle) {
+      let ok;
+      try {
+        ok = await cleValide(role, cle);
+      } catch (err) {
+        // ⛔ Même règle que `connexion` : une panne n'est pas un refus, et une clé non
+        //    vérifiée n'est jamais mémorisée.
+        await dialogAlerter(MESSAGE_VERIF_IMPOSSIBLE + err.message);
+        return null;
+      }
+      if (ok) { definirCleLocale(role, cle); return cle; }
+    }
     await dialogAlerter('Clé incorrecte.');
   }
 }

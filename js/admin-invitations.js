@@ -740,7 +740,10 @@ async function onEnvoyerInvitationsGroupe() {
       base_reponse: baseReponseInvitation(), base_invitation: lienInvitationPublique(),
       renvoyer: renvoyer ? 'oui' : 'non'
     });
-    await chargerClubsInvites(); // rafraîchit invitation_envoyee + l'aperçu (exemple prénom)
+    // ⭐ R2 — rafraîchissement FORCÉ : la relecture doit être postérieure à l'envoi qu'on
+    //   vient de faire. Passer par le registre garantit qu'aucune lecture commencée AVANT
+    //   ne sera resservie, et regroupe plusieurs envois rapprochés sur une seule relecture.
+    if (typeof rafraichirRessourceAdmin === 'function') await rafraichirRessourceAdmin('clubsInvites'); // invitation_envoyee + aperçu
     const nbOk = (res.envoyes || []).length;
     const ech = res.echecs || [];
     let msg = '✅ ' + nbOk + ' invitation(s) envoyée(s).';
@@ -973,6 +976,12 @@ function memeTexteSouple(a, b) {
 
 /**
  * Charge la liste des clubs invités depuis le backend (clé admin) et l'affiche.
+ *
+ * ⛔ LECTURE BRUTE — RÉSERVÉE AU REGISTRE (R2). Ne l'appelle JAMAIS directement : passe par
+ * `assurerRessourceAdmin('clubsInvites')` pour une lecture de navigation, ou par
+ * `rafraichirRessourceAdmin('clubsInvites')` après une écriture. L'appel direct court-circuite
+ * la file de la ressource : deux lectures pourraient voler ensemble, et la plus ANCIENNE
+ * repeindre l'écran en dernier.
  *
  * ⭐ RENVOIE si la relecture a RÉUSSI (M1-B2 / B2-0). L'erreur reste absorbée ici — c'est
  * délibéré : sur les quatre autres appels (après un ajout, un envoi, une synchronisation), une
@@ -1254,7 +1263,7 @@ async function onAjouterClubInvite(evenement) {
     champNom.value = ''; champContact.value = ''; champPrenom.value = ''; champEmail.value = '';
     champNom.focus();
     afficherMessage(message, '✅ « ' + nom + ' » ajouté (statut : Invité).', 'ok');
-    await chargerClubsInvites();
+    if (typeof rafraichirRessourceAdmin === 'function') await rafraichirRessourceAdmin('clubsInvites');
   } catch (erreur) {
     afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
   } finally {
@@ -1333,7 +1342,7 @@ async function enregistrerEditionClub(nomActuel) {
     });
     clubEnEdition = null;
     afficherMessage(message, '✅ Coordonnées mises à jour.', 'ok');
-    await chargerClubsInvites();
+    if (typeof rafraichirRessourceAdmin === 'function') await rafraichirRessourceAdmin('clubsInvites');
   } catch (erreur) {
     afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
     btn.disabled = false; btn.textContent = 'Enregistrer';
@@ -1371,7 +1380,7 @@ async function supprimerClubInviteUI(bouton) {
     const retirees = (res && res.equipes_supprimees) || [];
     afficherMessage(message, '🗑️ « ' + nom + ' » retiré' +
       (retirees.length ? ' avec ' + retirees.length + ' équipe(s)' : '') + '.', 'ok');
-    await chargerClubsInvites();
+    if (typeof rafraichirRessourceAdmin === 'function') await rafraichirRessourceAdmin('clubsInvites');
     // L'écran Équipes + le tableau de bord suivent immédiatement (best-effort).
     if (retirees.length && typeof rechargerEquipes === 'function') {
       try { await rechargerEquipes(); } catch (e) { /* best-effort */ }

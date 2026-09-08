@@ -20,8 +20,13 @@
  *  (déplacer un nœud DOM conserve ses écouteurs) → admin.js continue de
  *  fonctionner SANS AUCUNE modification.
  *
- *  Réversible : « Vue classique » (bas de la barre latérale) remet la page
- *  longue ; sans JavaScript, la page longue s'affiche telle quelle.
+ *  ⛔ PLUS DE « VUE CLASSIQUE » (CORR-UX-PERF-DR-3B). Le mode guidé est le SEUL
+ *  mode : barre latérale ici, cartes sur mobile. La page longue du HTML reste le
+ *  REPLI NATUREL si JavaScript ne démarre pas — ce n'est plus un mode qu'on
+ *  choisit, c'est ce que le navigateur affiche faute de mieux.
+ *  ⭐ Et c'est cette suppression qui rend possible le chargement différé : un seul
+ *  écran étant visible à la fois, plus rien n'oblige à remplir les autres d'avance
+ *  (voir `ouvrirEtapeAdmin`, admin.js).
  * ============================================================================
  */
 
@@ -30,7 +35,7 @@
    Publication en queue. `blocs` = quels blocs EXISTANTS l'écran regroupe
    (par leur id) ; `cles` = quelles étapes du cerveau disent s'il est ✅ fait.
    zone-horaires / zone-categories vivent dans la section #reglages : on les
-   déplace individuellement (et on les y remettra en « Vue classique »). */
+   déplace individuellement. */
 const ECRANS_DEF = [
   { id: 'infos',       titre: 'Infos du tournoi',  icone: 'info',     blocs: ['bloc-cadre-tournoi', 'bloc-infos-tournoi'], cles: [] },
   { id: 'horaires',    titre: 'Horaires',          icone: 'horloge',  blocs: ['zone-horaires'],           cles: ['horaires'] },
@@ -67,8 +72,8 @@ const ECRANS_DEF = [
      Catégories, Équipes, Terrains et Poules ne sont pas ✅ — d'après le MÊME cerveau
      (`calculerEtatsEtapes`), sans seconde liste de prérequis.
      ⭐ Et il protège MIEUX qu'avant : porté par le bouton, il suit dans TOUS les modes
-     d'affichage — barre latérale, assistant mobile et « Vue classique », qui échappait
-     complètement au verrou d'écran.
+     d'affichage — barre latérale, assistant mobile, et jusqu'au repli sans JavaScript, qui
+     échappait complètement au verrou d'écran.
      🔬 `cles: []` : cet écran n'a jamais rien exigé par lui-même — il HÉRITAIT du blocage
      accumulé en amont. `libre` ne change donc la séquence d'AUCUN autre écran. */
   { id: 'publication', titre: 'Publication',       icone: 'monde',    blocs: ['bloc-publication'],        cles: [], libre: true },
@@ -111,20 +116,6 @@ function svgEcr(nom) {
          (ECRANS_ICONES[nom] || '') + '</svg>';
 }
 
-/* Ordre d'origine des blocs dans <main>, pour restaurer la page longue
-   (« Vue classique »). #reglages reste dans <main> : on y remet ses 2 zones. */
-const ECRANS_ORDRE_ORIGINE = [
-  'bloc-cadre-tournoi', 'bloc-infos-tournoi', 'bloc-contacts-securite', 'reglages',
-  'bloc-equipes', 'bloc-terrains', 'bloc-generation', 'bloc-apresmidi',
-  'bloc-clubs-invites', 'bloc-apercu-invitation', 'bloc-surplace', 'bloc-reponse',
-  'bloc-modalites', 'bloc-parking', 'bloc-encadrement', 'bloc-dossier',
-  'bloc-autorisation', 'bloc-publication',
-  'bloc-sponsors-reglages', 'bloc-sponsors-liste', 'bloc-sponsors-bilan',
-  'bloc-reinitialisation'
-];
-
-const ECRANS_CLE_ACTIF = 'r92_ecran_admin'; // dernier écran ouvert (mémorisé)
-
 /** Vrai si l'écran est assez grand pour la barre latérale (sinon : assistant). */
 function ecransSontAdaptes() {
   return window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
@@ -140,7 +131,6 @@ function construireEcrans() {
   const main = document.querySelector('main');
   const conteneur = document.querySelector('.conteneur');
   if (!main || !conteneur || ecransEstActif()) return;
-  if (typeof retirerBoutonReprise === 'function') retirerBoutonReprise();
 
   document.body.classList.add('avec-ecrans');
 
@@ -166,10 +156,7 @@ function construireEcrans() {
            '<span class="ecr-pastille" id="ecr-pastille-' + e.id + '" hidden></span>' +
          '</button></li>';
   });
-  h += '</ul>' +
-       '<div class="ecr-pied">' +
-         '<button type="button" class="bouton-lien ecr-classique" id="ecr-vue-classique">Vue classique ✕</button>' +
-       '</div>';
+  h += '</ul>';
   nav.innerHTML = h;
   conteneur.insertBefore(nav, conteneur.firstChild);
 
@@ -194,7 +181,6 @@ function construireEcrans() {
     const btn = evenement.target.closest('.ecr-onglet');
     if (btn) ecransActiver(btn.getAttribute('data-ecran'));
   });
-  nav.querySelector('#ecr-vue-classique').addEventListener('click', quitterEcrans);
 
   // Verrou : toute saisie ou clic dans un écran peut changer l'état (champ
   // modifié, répartition calculée, enregistrement réussi…) → on réévalue les
@@ -209,15 +195,28 @@ function construireEcrans() {
     zone.addEventListener('focusin', assistantNoterZoneInconnue);
   }
 
-  // Écran de départ : le dernier ouvert s'il est accessible, sinon l'écran
-  // « du moment » (la première étape pas encore ✅ faite).
-  const etats = ecransEtats();
-  const verrous = ecransCalculerVerrous(etats);
-  let depart = null;
-  try { depart = localStorage.getItem(ECRANS_CLE_ACTIF); } catch (e) { /* stockage indisponible */ }
-  const iDepart = ECRANS_DEF.findIndex(function (e) { return e.id === depart; });
-  if (iDepart === -1 || verrous[iDepart]) depart = ecransEcranCourant(etats);
-  ecransActiver(depart, { sansScroll: true });
+  ecransActiver(ecransEcranDeDepart(), { sansScroll: true });
+}
+
+/**
+ * ⭐ L'ÉCRAN D'OUVERTURE — toujours « Infos », et c'est une GARANTIE, pas une préférence.
+ *
+ * ⛔ CE QUI A ÉTÉ RETIRÉ, ET POURQUOI (R1). Cette fonction restaurait le dernier écran ouvert
+ * (`r92_ecran_admin`), et à défaut ouvrait « l'écran du moment » — la première étape pas encore
+ * faite. Les deux pouvaient désigner Inviter, Dossier, Autorisation ou Partenaires : l'ouverture
+ * déclenchait alors leurs lectures différées AVANT toute action de l'organisateur, et la page
+ * partait à 4 ou 5 appels au lieu de 3. ⚠️ Le défaut ne se voyait pas sur un navigateur neuf —
+ * il n'apparaissait qu'à la DEUXIÈME visite, celle de tous les jours.
+ *
+ * ⭐ Ouvrir sur « Infos » rend la garantie DÉTERMINISTE : cet écran ne réclame aucune lecture
+ * (il est absent d'`ADMIN_ETAPES`), donc l'ouverture coûte exactement `getAll`,
+ * `getConfigAdmin` et `getRefFFR`, quel que soit l'état du navigateur ou du tournoi.
+ * ⛔ Les lectures différées ne partent QUE sur une navigation explicite.
+ * ⚠️ Si un écran de départ mémorisé revenait un jour, il faudrait le restreindre aux écrans
+ * SANS ressource — sans quoi ce plafond de trois appels retomberait.
+ */
+function ecransEcranDeDepart() {
+  return 'infos';
 }
 
 /** Les états des étapes calculés par le « cerveau » (null si pas encore prêts). */
@@ -333,15 +332,13 @@ function ecransActiver(id, opt) {
       btn.removeAttribute('aria-current');
     }
   });
-  try { localStorage.setItem(ECRANS_CLE_ACTIF, id); } catch (e) { /* stockage indisponible */ }
   ecransMajPastilles();
-  // ⭐ B2-0.5 — on ARRIVE sur la feuille FFR : si des écritures l'ont rendue fausse depuis, on la
-  //   relit MAINTENANT. Une seule route vers le serveur, quel que soit le nombre d'écritures —
-  //   et zéro route si rien n'a changé. ⚠️ JUMEAU du crochet d'assistant.js : l'écart entre ces
-  //   deux fichiers est exactement ce qui avait produit R-098, ils se modifient ENSEMBLE.
-  if (id === 'autorisation' && typeof majAutorisationSiObsolete === 'function') {
-    majAutorisationSiObsolete().catch(function () { /* la feuille garde son message */ });
-  }
+  // ⭐ ARRIVÉE SUR UNE ÉTAPE — point de passage UNIQUE, partagé avec `allerA` (assistant.js) :
+  //   il porte À LA FOIS le chargement différé des lectures de l'écran et le rattrapage
+  //   d'obsolescence de la feuille FFR (B2-0.5). ⚠️ Les deux parcours appellent la MÊME
+  //   fonction : c'est l'écart entre ces deux fichiers qui avait produit R-098, il n'y a
+  //   désormais plus rien à tenir en double.
+  if (typeof ouvrirEtapeAdmin === 'function') ouvrirEtapeAdmin(id);
   if (!opt.sansScroll) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -439,33 +436,5 @@ function ecransMajPastilles() {
   if (idxActif !== -1 && verrous[idxActif]) {
     ecransActiver(ecransEcranCourant(etats), { sansScroll: true });
   }
-}
-
-/** Quitte le mode écrans : remet les blocs à leur place d'origine (page longue),
- *  mémorise le choix, et propose le bouton de retour au mode guidé. */
-function quitterEcrans() {
-  const main = document.querySelector('main');
-  const zone = document.getElementById('ecrans');
-  if (!main || !zone) return;
-
-  // Les 2 zones de réglages retournent dans leur section #reglages…
-  const reglages = document.getElementById('reglages');
-  ['zone-horaires', 'zone-categories'].forEach(function (id) {
-    const el = document.getElementById(id);
-    if (el && reglages) reglages.appendChild(el);
-  });
-  // …puis chaque bloc retrouve sa place dans <main>, dans l'ordre d'origine.
-  ECRANS_ORDRE_ORIGINE.forEach(function (id) {
-    const el = document.getElementById(id);
-    if (el) main.appendChild(el);
-  });
-
-  zone.remove();
-  const nav = document.getElementById('ecr-nav');
-  if (nav) nav.remove();
-  document.body.classList.remove('avec-ecrans');
-
-  try { localStorage.setItem(ASSISTANT_CLE_PREF, 'classique'); } catch (e) { /* stockage indisponible */ }
-  if (typeof afficherBoutonReprise === 'function') afficherBoutonReprise();
 }
 

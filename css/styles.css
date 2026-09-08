@@ -1840,7 +1840,7 @@ body.theme-clair {
   margin-bottom: var(--espace);
 }
 
-/* En-tête : fil d'étapes + lien « vue classique » */
+/* En-tête : fil d'étapes */
 .asst-tete {
   display: flex; align-items: center; justify-content: space-between;
   gap: 10px; flex-wrap: wrap; margin-bottom: 12px;
@@ -1868,8 +1868,6 @@ body.theme-clair {
   background: var(--accent); border-color: var(--accent); color: #fff;
   box-shadow: 0 2px 8px rgba(46, 143, 224, 0.30);
 }
-.asst-classique { flex: 0 0 auto; }
-
 /* Barre de progression (sous le fil d'étapes) */
 .asst-barre {
   height: 4px; background: #e6edf5; border-radius: 999px;
@@ -1923,9 +1921,6 @@ body.theme-clair {
 /* Étapes du fil hors de portée (au-delà de la 1re étape bloquée) : estompées */
 .asst-step.est-verrouillee { opacity: 0.45; }
 .asst-step.est-verrouillee:hover { background: #eef4fb; }
-
-/* Bouton flottant pour revenir à l'assistant depuis la vue classique */
-.asst-reprise { display: block; margin: 0 0 var(--espace); }
 
 /* Accessibilité : respecte « animations réduites » */
 @media (prefers-reduced-motion: reduce) {

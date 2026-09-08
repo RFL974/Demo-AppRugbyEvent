@@ -21,6 +21,17 @@
 
 let sponsorsAdmin = [];          // fiches telles que renvoyées par le backend
 let sponsorsConsolide = null;    // relevés de TOUS les appareils, consolidés (null = pas encore lu)
+
+/* ⛔ PAS DE MÉMOIRE ICI (R1, resserré en R2). Une première version tenait deux drapeaux
+   `sponsorsFichesLues` / `sponsorsRelevesLus` dans ce fichier, EN PLUS du registre d'admin.js ;
+   deux mémoires pour un seul fait divergent forcément. Les lectures ont ensuite inscrit
+   elles-mêmes leur résultat — puis R2 le leur a retiré aussi : ⛔ une lecture ANCIENNE
+   terminant après une écriture aurait pu remettre la ressource « chargée » toute seule.
+   ⭐ Les deux fonctions ci-dessous sont des lectures BRUTES : elles lisent, remplissent l'état
+   et posent leur message d'erreur. C'est le REGISTRE (`lancerLectureAdmin`, admin.js) qui
+   décide seul de ce que la mémoire retient — et qui sérialise les lectures d'une ressource.
+   ⛔ Ne les appelle jamais directement : passe par `assurerRessourceAdmin` (navigation) ou
+   `rafraichirRessourceAdmin` (après écriture). */
 let sponsorLogoDataURI = null;   // logo choisi mais pas encore enregistré
 let sponsorLogoRetirer = false;  // l'utilisateur a demandé à retirer le logo existant
 
@@ -67,36 +78,27 @@ function initAdminSponsors() {
   document.getElementById('projection-appareils').addEventListener('input', afficherBilanSponsors);
 }
 
-/** Appelé par admin.js une fois la config chargée : remplit les réglages puis la liste.
+/* ⛔ `majSponsors()` A ÉTÉ RETIRÉ (R1). Il orchestrait « lire les deux, puis rendre » et portait
+ * sa propre mémoire. Cette orchestration vit désormais dans `ADMIN_ETAPES.sponsors` (admin.js) :
+ * `avant` injecte les réglages, les deux ressources `fichesSponsors` et `relevesSponsors`
+ * partent ENSEMBLE par le registre commun, `apres` rend une fois les deux retombées.
  *
- * ⚡ Les deux lectures partent ENSEMBLE. `listerSponsors` et `lireMesuresSponsors` sont deux
- * appels Apps Script indépendants : les enchaîner ajoutait une ronde réseau complète au
- * chargement de l'administration, pour rien. Chaque démarrage Apps Script coûte une à
- * plusieurs secondes — c'est le poste le plus cher de cet écran.
- *
- * ⚠️ Ce qui n'est PAS parallélisable, c'est le RENDU. `afficherBilanSponsors()` lit les fiches
- * via `sponsorsActifsAdmin()` : rendu trop tôt, il verrait `sponsorsAdmin` encore vide et
- * afficherait « aucun relevé » — un faux état vide, qui ne serait jamais corrigé. D'où la
- * séparation lecture / rendu : on lit en parallèle, on rend une fois les deux lectures finies.
- */
-async function majSponsors() {
-  if (!document.getElementById('bloc-sponsors-liste')) return;
-  injecterReglagesSponsors(configCourante.global || {});
-  // Aucune des deux ne rejette (chacune traite son propre échec) : Promise.all ne peut pas
-  // court-circuiter, et un échec d'un côté laisse l'autre section s'afficher normalement.
-  const [fichesOk] = await Promise.all([lireFichesSponsors(), lireRelevesSponsors()]);
-  if (fichesOk) afficherListeSponsors(); // sinon : le message d'erreur posé par la lecture reste
-  afficherBilanSponsors();
-}
+ * ⚡ Les deux lectures restent parallèles : `listerSponsors` et `lireMesuresSponsors` sont deux
+ * appels Apps Script indépendants, et chaque démarrage Apps Script coûte une à plusieurs
+ * secondes — c'est le poste le plus cher de cet écran.
+ * ⚠️ Ce qui n'est PAS parallélisable, c'est le RENDU : `afficherBilanSponsors()` lit les fiches
+ * via `sponsorsActifsAdmin()` ; rendu trop tôt, il verrait `sponsorsAdmin` encore vide et
+ * afficherait « aucun relevé » — un faux état vide que rien ne corrigerait. D'où la séparation
+ * lecture / rendu, conservée telle quelle dans `ADMIN_ETAPES.sponsors`. */
 
 /**
  * Récupère les relevés déposés par les navigateurs des spectateurs et les consolide.
  * En cas d'échec (backend pas encore redéployé, réseau), on retombe sur les compteurs
  * de CET appareil : la fiche reste affichable, et elle le dit.
  *
- * ⛔ NE REND RIEN — le rendu appartient à l'appelant. C'est ce qui permet à `majSponsors` de
- * lancer cette lecture en même temps que celle des fiches sans risquer d'afficher le bilan
- * avant que `sponsorsAdmin` soit rempli. Ne jamais rejeter : l'échec est déjà traduit en
+ * ⛔ NE REND RIEN — le rendu appartient à l'appelant (`ADMIN_ETAPES.sponsors.apres`). C'est ce
+ * qui permet de lancer cette lecture en même temps que celle des fiches sans risquer d'afficher
+ * le bilan avant que `sponsorsAdmin` soit rempli. Ne jamais rejeter : l'échec est déjà traduit en
  * `sponsorsConsolide = null`, que `afficherBilanSponsors` sait interpréter (repli appareil).
  */
 async function lireRelevesSponsors() {
@@ -112,8 +114,12 @@ async function lireRelevesSponsors() {
     } else {
       sponsorsConsolide = null;
     }
+    return true;
   } catch (err) {
     sponsorsConsolide = null;
+    // ⛔ Le repli « compteurs de cet appareil » n'est PAS une lecture réussie : le registre
+    //   en fera une ressource « à relire », pour qu'une visite ultérieure retente vraiment.
+    return false;
   }
 }
 
@@ -123,7 +129,10 @@ async function lireRelevesSponsors() {
  * inchangé. (Branchée directement comme écouteur de clic : elle ne prend aucun argument.)
  */
 async function chargerMesuresSponsors() {
-  await lireRelevesSponsors();
+  // ⭐ R2 — même règle : « Rafraîchir le bilan » et la fin de `onViderBilan` suivent une
+  //   action, la relecture passe donc par le registre (et s'y regroupe si on insiste).
+  if (typeof rafraichirRessourceAdmin === 'function') await rafraichirRessourceAdmin('relevesSponsors');
+  else await lireRelevesSponsors();
   afficherBilanSponsors();
 }
 
@@ -459,7 +468,7 @@ function sponsorsActifsAdmin() {
 
 /**
  * Lit les fiches partenaires. ⛔ NE REND RIEN — comme `lireRelevesSponsors`, pour que les deux
- * lectures puissent partir ensemble depuis `majSponsors`.
+ * lectures puissent partir ensemble depuis le registre (`ADMIN_ETAPES.sponsors`).
  * ⚠️ En cas d'échec, le message d'erreur est posé ICI et `false` est renvoyé : l'appelant ne
  * doit alors PAS appeler `afficherListeSponsors()`, qui écraserait ce message par un
  * « Aucun partenaire pour l'instant » mensonger — une panne de lecture n'est pas une absence.
@@ -482,7 +491,13 @@ async function lireFichesSponsors() {
  * enregistrement ou suppression d'un partenaire. Comportement inchangé.
  */
 async function chargerSponsors() {
-  if (await lireFichesSponsors()) afficherListeSponsors();
+  // ⭐ R2 — rafraîchissement FORCÉ : cette fonction suit un enregistrement ou une suppression,
+  //   la relecture doit donc être postérieure à cette écriture. Le registre l'garantit et
+  //   empêche qu'une lecture de navigation commencée avant ne soit resservie.
+  const ok = (typeof rafraichirRessourceAdmin === 'function')
+    ? await rafraichirRessourceAdmin('fichesSponsors')
+    : await lireFichesSponsors();
+  if (ok) afficherListeSponsors();
 }
 
 function afficherListeSponsors() {

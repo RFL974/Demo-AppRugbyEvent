@@ -185,9 +185,10 @@ async function ecrireAdmin(action, data) {
     if (typeof ecritureImpacteAutorisation === 'function' &&
         ecritureImpacteAutorisation(action, data, res)) {
       signalerAutorisationObsolete();
-      // Vue classique (page longue) : personne ne « naviguera » vers la feuille, elle est déjà
-      // sous les yeux — on lance la relecture EN ARRIÈRE-PLAN. En mode écrans / assistant, elle
-      // attend l'ouverture de l'étape (voir ecrans.js et assistant.js).
+      // Repli sans mode guidé (JavaScript d'affichage non démarré : la page longue du HTML) :
+      // personne ne « naviguera » vers la feuille, elle est déjà sous les yeux — on lance la
+      // relecture EN ARRIÈRE-PLAN. En mode écrans / assistant, elle attend l'ouverture de
+      // l'étape (point de passage unique : `ouvrirEtapeAdmin`).
       if (autorisationEstAffichee()) {
         majAutorisationSiObsolete().catch(function () { /* la feuille garde son message */ });
       }
@@ -377,6 +378,312 @@ function redimensionnerImage(fichier, maxDim, qualite, typeSortie, fondCouleur) 
   });
 }
 
+/* ==========================================================================
+ *  CHARGEMENT DIFFÉRÉ DES ÉCRANS SECONDAIRES (PERF-DR-3B)
+ * ==========================================================================
+ *
+ * ⭐ POURQUOI. Tant qu'existait la « Vue classique » (page longue), TOUT était à l'écran d'un
+ * seul coup : chaque carte devait donc être remplie au démarrage, sinon la page longue montrait
+ * des trous. L'ouverture de l'administration payait ainsi QUATRE lectures Apps Script dont
+ * l'organisateur n'avait, la plupart du temps, aucun besoin immédiat — et chaque démarrage
+ * Apps Script coûte une à plusieurs secondes.
+ * ⛔ La vue classique supprimée, plus rien ne justifie de les payer d'avance : en mode guidé,
+ * un seul écran est visible à la fois. On charge donc à l'ARRIVÉE sur l'écran.
+ *
+ * ⚠️ LA MÉMOÏSATION EST PAR RESSOURCE, PAS PAR ÉCRAN — et ce n'est pas un détail. La liste des
+ * clubs invités est lue par QUATRE écrans (Inviter, Dossier, Autorisation, et la feuille de
+ * journée au moment de l'envoi) : mémoriser « l'écran Inviter est chargé » laisserait les trois
+ * autres réclamer leur propre copie. Une ressource = une requête réussie, quel que soit
+ * l'écran qui la demande en premier.
+ *
+ * ⛔ CE QUI EST INTERDIT ICI, et qui a guidé chaque ligne :
+ *   ① marquer une ressource « chargée » avant la RÉUSSITE effective de sa lecture — un écran
+ *      vide se présenterait alors comme un écran à jour, exactement le « faux état vide » que
+ *      `lireFichesSponsors` documente déjà ;
+ *   ② lancer deux fois la même lecture parce que l'utilisateur navigue vite : une lecture EN
+ *      COURS est rendue telle quelle au second appelant ;
+ *   ③ condamner une ressource sur un échec : un échec RÉEL efface la promesse, donc la visite
+ *      suivante retente — une fois, comme la première.
+ *
+ * ⭐ CE MÉCANISME GOUVERNE TOUTES LES LECTURES, sans exception — navigation comme
+ * rafraîchissements explicitement demandés après une écriture (bouton « Rafraîchir »,
+ * enregistrement d'un partenaire, envoi ou ajout d'un club, réinitialisation, enregistrement
+ * des champs `org_*`, rattrapage d'obsolescence de la feuille FFR). Tous entrent par
+ * `assurerRessourceAdmin`, `rafraichirRessourceAdmin` ou `enfilerLectureAdmin`, et le registre
+ * est le SEUL écrivain de l'état des ressources.
+ *
+ * ⚠️ CE QUI DIFFÈRE entre les deux familles n'est donc pas « qui consulte la mémoire », mais ce
+ * qu'elles exigent de la lecture : une navigation se contente d'une lecture déjà en vol ; un
+ * rafraîchissement qui suit une écriture, lui, REFUSE toute lecture commencée avant elle —
+ * elle décrirait l'état d'avant. ⛔ Une version antérieure laissait ces rafraîchissements
+ * relire hors du registre, sans le consulter ni l'écrire : ils pouvaient alors croiser une
+ * lecture de navigation, et la plus ancienne des deux repeindre l'écran en dernier.
+ */
+
+/* ⭐ UNE SEULE MÉMOIRE, ET UN SEUL ÉCRIVAIN : LE REGISTRE.
+ *
+ * ⛔ LE PIÈGE ÉVITÉ ICI : deux systèmes de cache concurrents. La première version tenait des
+ * drapeaux `sponsorsFichesLues` / `sponsorsRelevesLus` DANS `admin-sponsors.js`, en plus de ce
+ * registre. Deux mémoires pour un seul fait, c'est une divergence programmée : un
+ * rafraîchissement explicite (bouton « Rafraîchir », enregistrement d'un partenaire) passait
+ * par les lectures SANS toucher le registre, si bien qu'une lecture retombée en panne restait
+ * annoncée « chargée » — et l'écran ne retentait plus jamais.
+ *
+ * ⚠️ UNE ÉTAPE INTERMÉDIAIRE A ÉTÉ DÉPASSÉE, et le commentaire l'a suivie : les lectures ont un
+ * temps inscrit elles-mêmes leur résultat. C'était la bonne réponse tant que les
+ * rafraîchissements contournaient le registre. ⛔ Depuis R2 ils y passent tous, et ce marquage
+ * est devenu dangereux : une lecture ANCIENNE, terminant après qu'une écriture a périmé la
+ * ressource, pouvait la remettre « chargée » toute seule.
+ * ⭐ Règle actuelle : les lectures sont BRUTES — elles lisent, remplissent l'état de l'écran et
+ * posent leur message d'erreur. Seul le registre inscrit, dans `lancerLectureAdmin`, et
+ * seulement pour la lecture la plus récemment lancée. Navigation, rafraîchissement forcé et
+ * relecture après écriture décrivent donc toujours le même état réel.
+ */
+
+/* Une ressource = UNE lecture réseau. ⛔ Jamais un écran : la liste des clubs invités est lue
+   par quatre écrans, et mémoriser « l'écran Inviter est chargé » ferait redemander la même
+   liste aux trois autres. Chaque fonction renvoie `true` UNIQUEMENT si la lecture a réussi. */
+const ADMIN_RESSOURCES = {
+  clubsInvites: function () {
+    if (typeof chargerClubsInvites !== 'function') return Promise.resolve(false);
+    return Promise.resolve(chargerClubsInvites());
+  },
+  dossierAutorisation: function (opt) {
+    if (typeof majAutorisation !== 'function') return Promise.resolve(false);
+    // ⭐ La révision est capturée AVANT la lecture : c'est elle, et non la valeur d'arrivée, qui
+    //   devient la base du rattrapage d'obsolescence. Une écriture survenue PENDANT la lecture
+    //   laisse donc une dette (revision > revisionLue) et sera rattrapée à la visite suivante.
+    //   ⛔ Inscrire la révision d'arrivée effacerait cette écriture-là sans l'avoir lue.
+    const cible = (typeof autorisationRevision === 'number') ? autorisationRevision : null;
+    // ⭐ R2 — LA CIBLE EST TRANSMISE À LA LECTURE. Sans elle, `majAutorisation` peignait la
+    //   réponse SANS contrôler sa fraîcheur : une écriture survenue pendant le trajet remettait
+    //   à l'écran un état que le classeur n'avait plus, ne serait-ce qu'une fraction de seconde.
+    //   ⛔ Avec la cible, la réponse dépassée n'est PAS peinte : la lecture renvoie
+    //   `revision-depassee`, la ressource reste « à relire », et la visite suivante la relit.
+    const options = Object.assign({}, opt || {});
+    if (options.revisionCible === undefined && cible !== null) options.revisionCible = cible;
+    return Promise.resolve(majAutorisation(options)).then(function (bilan) {
+      const ok = !!(bilan && bilan.ok);
+      if (ok && cible !== null) autorisationRevisionLue = cible;
+      return ok;
+    });
+  },
+  fichesSponsors: function () {
+    if (typeof lireFichesSponsors !== 'function') return Promise.resolve(false);
+    return Promise.resolve(lireFichesSponsors());
+  },
+  relevesSponsors: function () {
+    if (typeof lireRelevesSponsors !== 'function') return Promise.resolve(false);
+    return Promise.resolve(lireRelevesSponsors());
+  }
+};
+
+/* Ce que chaque étape exige pour être HONNÊTE à l'affichage.
+   ⚠️ Les identifiants sont ceux d'`ECRANS_DEF` (ecrans.js) ET d'`ASSISTANT_ETAPES`
+   (assistant.js) : les deux parcours partagent le même vocabulaire, donc la même table.
+   ⛔ `dossier` et `autorisation` réclament aussi `clubsInvites` — sans elle, le sélecteur de
+   club du dossier annoncerait « aucun club invité » et le PDF officiel compterait zéro club
+   accepté : deux affirmations FAUSSES, pas des écrans incomplets.
+   ⛔ `infos` n'y figure pas, et c'est LA garantie des trois appels d'ouverture : l'écran de
+   départ ne réclame rien. */
+const ADMIN_ETAPES = {
+  invitation:   { ressources: ['clubsInvites'] },
+  dossier:      { ressources: ['clubsInvites'] },
+  autorisation: { ressources: ['clubsInvites', 'dossierAutorisation'] },
+  /* Partenaires : DEUX lectures indépendantes, mémorisées séparément — un échec partiel ne doit
+     faire relire que celle qui a échoué. Le rendu, lui, n'est PAS parallélisable : le bilan lit
+     les fiches, le peindre trop tôt afficherait « aucun relevé », un faux état vide. D'où
+     `avant` (réglages, immédiat) et `apres` (rendu, une fois les deux lectures retombées). */
+  sponsors: {
+    ressources: ['fichesSponsors', 'relevesSponsors'],
+    avant: function () {
+      if (!document.getElementById('bloc-sponsors-liste')) return;
+      if (typeof injecterReglagesSponsors === 'function' && typeof configCourante !== 'undefined') {
+        injecterReglagesSponsors((configCourante && configCourante.global) || {});
+      }
+    },
+    apres: function () {
+      if (!document.getElementById('bloc-sponsors-liste')) return;
+      // ⛔ La liste n'est peinte que si les fiches ont VRAIMENT été lues : sinon on écraserait
+      //   le message d'erreur par « Aucun partenaire pour l'instant », qui serait un mensonge.
+      if (ressourceAdminChargee('fichesSponsors') && typeof afficherListeSponsors === 'function') {
+        afficherListeSponsors();
+      }
+      if (typeof afficherBilanSponsors === 'function') afficherBilanSponsors();
+    }
+  }
+};
+
+/* ⭐ UN ÉTAT PAR RESSOURCE — et une FILE, ce qui est le point de R2.
+ *
+ *   · `chargee`    : la dernière lecture a réussi et rien ne l'a périmée depuis ;
+ *   · `file`       : la chaîne des lectures de cette ressource. ⛔ Deux lectures d'une même
+ *                    ressource ne sont JAMAIS en vol ensemble — c'est ce qui rend impossible
+ *                    qu'une réponse ancienne double une fraîche et repeigne du passé ;
+ *   · `enVol`      : la dernière lecture lancée, partageable par les lectures NORMALES ;
+ *   · `programmee` : un rafraîchissement forcé DÉJÀ EN FILE ET PAS ENCORE PARTI. Comme il lira
+ *                    forcément après l'écriture en cours, il couvre les demandes suivantes :
+ *                    elles se regroupent dessus au lieu d'ajouter chacune sa lecture.
+ */
+const adminEtatsRessources = Object.create(null);
+
+/* Vrai quand la clé admin a été acceptée : sans elle, aucune lecture protégée ne doit partir
+   (elle ouvrirait une demande de clé à la simple navigation). */
+let adminConnecte = false;
+
+/** Déclare l'état de connexion — `initAdmin` à l'ouverture, « Verrouiller » pour le couper. */
+function definirAdminConnecte(valeur) {
+  adminConnecte = !!valeur;
+}
+
+/** L'état d'une ressource, créé à la demande. */
+function etatRessourceAdmin(id) {
+  if (!adminEtatsRessources[id]) {
+    adminEtatsRessources[id] = { chargee: false, file: null, enVol: null, programmee: null };
+  }
+  return adminEtatsRessources[id];
+}
+
+/**
+ * ⭐ LE SEUL POINT D'ÉCRITURE DE LA MÉMOIRE, et il n'est appelé que par le registre.
+ *
+ * ⛔ CE QUI A CHANGÉ EN R2 : les lectures elles-mêmes n'inscrivent plus rien. Elles le
+ * faisaient parce que les rafraîchissements explicites contournaient le registre ; ils y
+ * passent désormais tous, donc ce double marquage n'avait plus d'objet — et il était devenu
+ * dangereux : une lecture ANCIENNE, terminant après qu'une écriture a périmé la ressource,
+ * aurait pu la remettre « chargée » toute seule. Un seul écrivain, aucune résurrection.
+ *
+ * ⛔ Un échec EFFACE la marque : une ressource retombée en panne redevient « à relire ».
+ */
+function marquerRessourceAdmin(id, reussie) {
+  etatRessourceAdmin(id).chargee = !!reussie;
+}
+
+/** Cette ressource a-t-elle été lue avec succès et pas invalidée depuis ? */
+function ressourceAdminChargee(id) {
+  return !!etatRessourceAdmin(id).chargee;
+}
+
+/**
+ * ⭐ ENFILE une lecture DERRIÈRE celle en cours et renvoie SON résultat brut.
+ *
+ * C'est la brique de sérialisation. Elle sert aussi aux lectures qui ont besoin du verdict
+ * DÉTAILLÉ plutôt que du booléen du registre — la feuille FFR et son rattrapage d'obsolescence.
+ * ⚠️ La file avale les rejets (`catch`) pour qu'une lecture en panne ne bloque jamais la
+ * suivante : c'est une file d'attente, pas une chaîne de dépendances.
+ */
+function enfilerLectureAdmin(id, faire) {
+  const etat = etatRessourceAdmin(id);
+  const attente = etat.file || Promise.resolve();
+  const suite = attente.then(function () { return faire(); });
+  etat.file = suite.then(function () {}, function () {});
+  return suite;
+}
+
+/** Lance une lecture registrée : sérialisée, puis inscrite dans la mémoire. */
+function lancerLectureAdmin(id, opt) {
+  const etat = etatRessourceAdmin(id);
+  const lecture = enfilerLectureAdmin(id, function () {
+    // ⭐ Elle PART : à partir d'ici elle a commencé AVANT toute nouvelle écriture, donc elle ne
+    //   couvre plus aucune demande de rafraîchissement — la suivante devra en programmer une.
+    if (etat.programmee === lecture) etat.programmee = null;
+    return ADMIN_RESSOURCES[id](opt);
+  })
+    .then(function (ok) { return !!ok; }, function () { return false; })
+    .then(function (ok) {
+      // ⛔ Seule la lecture la PLUS RÉCEMMENT LANCÉE a le droit d'inscrire. La sérialisation
+      //   rend déjà le cas impossible ; ce garde-fou le dit noir sur blanc, et tiendrait même
+      //   si quelqu'un desserrait la file un jour.
+      if (etat.enVol === lecture) { marquerRessourceAdmin(id, ok); etat.enVol = null; }
+      return ok;
+    });
+  etat.enVol = lecture;
+  return lecture;
+}
+
+/**
+ * Garantit qu'une ressource est chargée. Renvoie `true` si elle l'est (déjà, ou à l'issue de
+ * cet appel). ⛔ Ne rejette jamais : l'échec est déjà affiché par la lecture elle-même.
+ * ⭐ Une lecture déjà en vol est PARTAGÉE : naviguer vite ne multiplie pas les requêtes.
+ */
+function assurerRessourceAdmin(id) {
+  // ⛔ Déconnecté : aucune lecture protégée ne part. Sans ce garde-fou, une simple navigation
+  //   après « Verrouiller » rouvrirait une demande de clé — l'inverse d'un verrouillage.
+  if (!ADMIN_RESSOURCES[id] || !adminConnecte) return Promise.resolve(false);
+  const etat = etatRessourceAdmin(id);
+  if (etat.chargee) return Promise.resolve(true);
+  if (etat.enVol) return etat.enVol;
+  return lancerLectureAdmin(id);
+}
+
+/**
+ * ⭐ RAFRAÎCHISSEMENT FORCÉ — le point d'entrée de TOUT gestionnaire qui vient d'écrire.
+ *
+ * ⛔ CE QU'IL NE FAIT SURTOUT PAS : réutiliser une lecture commencée AVANT l'écriture. Une
+ * telle lecture décrit l'état d'avant ; s'en contenter afficherait le tournoi tel qu'il n'est
+ * plus, et le marquerait « à jour ». C'est le défaut que R2 ferme : les gestionnaires
+ * appelaient directement `chargerClubsInvites` / `lireFichesSponsors` / `lireRelevesSponsors`,
+ * hors de toute coordination, et pouvaient croiser une lecture de navigation en vol.
+ *
+ * ⭐ CE QU'IL FAIT : périme la ressource immédiatement, ATTEND la lecture en cours (sans la
+ * partager), puis en lance EXACTEMENT UNE fraîche. Plusieurs écritures rapprochées se
+ * regroupent sur cette même lecture fraîche tant qu'elle n'est pas partie — une seule requête
+ * pour toutes, et elle est postérieure à toutes leurs écritures.
+ *
+ * @return {Promise<boolean>} true si la lecture fraîche a réussi
+ */
+function rafraichirRessourceAdmin(id, opt) {
+  if (!ADMIN_RESSOURCES[id] || !adminConnecte) return Promise.resolve(false);
+  const etat = etatRessourceAdmin(id);
+  // ⛔ Périmée DÈS MAINTENANT : plus personne ne doit la croire à jour entre l'écriture et la
+  //   fin de la relecture — pas même une navigation qui arriverait entre-temps.
+  etat.chargee = false;
+  if (etat.programmee) return etat.programmee;   // déjà en file et pas encore partie : elle nous couvre
+  const forcee = lancerLectureAdmin(id, opt);
+  etat.programmee = forcee;
+  return forcee;
+}
+
+/** Garantit plusieurs ressources EN PARALLÈLE (elles sont indépendantes). */
+function assurerRessourcesAdmin(ids) {
+  return Promise.all((ids || []).map(assurerRessourceAdmin));
+}
+
+/**
+ * ⭐ LE POINT DE PASSAGE UNIQUE de l'arrivée sur une étape — appelé À L'IDENTIQUE par
+ * `ecransActiver` (ordinateur) et `allerA` (mobile).
+ * ⚠️ Les deux parcours ne doivent JAMAIS diverger : l'écart entre ecrans.js et assistant.js est
+ * exactement ce qui avait produit R-098. Toute la logique vit donc ICI, et eux n'ont qu'un
+ * appel à faire.
+ *
+ * @param {string} idEtape identifiant logique ('invitation', 'autorisation', 'sponsors', …)
+ * @return {Promise<Array<boolean>>} l'état de chaque ressource de l'étape
+ */
+function ouvrirEtapeAdmin(idEtape) {
+  const def = ADMIN_ETAPES[idEtape];
+  if (!def) return Promise.resolve([]);
+  // ⭐ Constaté AVANT de lancer quoi que ce soit : « la feuille était déjà lue ». C'est ce qui
+  //   distingue une PREMIÈRE lecture (complète, ci-dessous) d'un simple retour sur l'écran, où
+  //   seul le rattrapage d'obsolescence a encore quelque chose à faire.
+  const dejaLue = ressourceAdminChargee('dossierAutorisation');
+  if (typeof def.avant === 'function') def.avant();
+
+  const fini = assurerRessourcesAdmin(def.ressources).then(function (etats) {
+    if (typeof def.apres === 'function') def.apres();
+    return etats;
+  });
+
+  // ⭐ B2-0.5 — on ARRIVE sur la feuille FFR déjà lue : si des écritures l'ont rendue fausse
+  //   depuis, on la relit MAINTENANT. ⛔ Jamais lors de la première lecture : elle vient
+  //   d'inscrire sa base de révision, il n'y a rien à rattraper. ⛔ Et jamais déconnecté :
+  //   cette relecture est protégée par la clé, elle rouvrirait une demande de saisie.
+  if (idEtape === 'autorisation' && dejaLue && adminConnecte &&
+      typeof majAutorisationSiObsolete === 'function') {
+    majAutorisationSiObsolete().catch(function () { /* la feuille garde son message */ });
+  }
+  return fini;
+}
+
 /**
  * Au chargement de la page : on récupère tout (config + équipes) en un appel,
  * puis on remplit la page.
@@ -396,6 +703,10 @@ async function initAdmin() {
   try {
     const session = await ouvrirSessionAdmin();
     connecte = session.connecte;
+    // ⚠️ AVANT toute construction d'interface : le mode guidé active un écran dès sa
+    // construction, et cet écran peut réclamer une lecture différée. Sans cette ligne posée
+    // ici, la demande partirait en se croyant déconnectée et ne chargerait rien.
+    definirAdminConnecte(connecte);
     majBarreConnexion(connecte);
 
     if (connecte) {
@@ -427,9 +738,11 @@ async function initAdmin() {
       majPublication();
       majDossier();
       majPublicationPlanning(); // verrou « planning visible par les clubs »
-      // 5) Partenaires (sponsors de la page publique) : réglages + fiches + fiche de visibilité.
-      if (typeof majSponsors === 'function') majSponsors();
-      if (typeof majAutorisation === 'function') majAutorisation(); // feuille de report FFR (session 7)
+      // ⛔ PARTENAIRES et DEMANDE D'AUTORISATION ne sont plus lus ici : leurs trois lectures
+      //    (listerSponsors, lireMesuresSponsors, getDossierAutorisation) partent désormais à
+      //    l'ARRIVÉE sur leur écran, via `ouvrirEtapeAdmin`. Voir le bloc « CHARGEMENT DIFFÉRÉ »
+      //    plus haut : leurs déclencheurs sont installés AVANT que ces lancements soient
+      //    retirés, de sorte qu'aucun écran ne se retrouve sans source.
 
       // 5) Tableau de bord + horodatage.
       majTableauBord();
@@ -630,9 +943,10 @@ async function initAdmin() {
   // laisse assistant.js réorganiser la page en cartes (ou non, selon la préférence mémorisée).
   if (typeof initAssistant === 'function') initAssistant();
 
-  // Clubs invités : la liste contient des emails → elle ne se charge qu'une fois connecté
-  // (clé admin déjà obtenue en tête de fonction). Sans clé : rien à charger.
-  if (connecte) chargerClubsInvites();
+  // ⛔ CLUBS INVITÉS : plus de lecture ici. La liste contient des emails, elle ne concerne que
+  //    les écrans « Inviter », « Dossier » et « Autorisation », et elle part maintenant à
+  //    l'arrivée sur l'un d'eux (`ouvrirEtapeAdmin`). Le mode guidé ayant été construit
+  //    juste au-dessus, l'écran de départ a déjà réclamé ce dont il a besoin.
 }
 
 /* Les INFOS DU TOURNOI (+ affiche + aperçu publication), CONTACTS & SÉCURITÉ, « Sur place »,
@@ -761,18 +1075,33 @@ async function onClicConnexion(evenement) {
   }
   // Verrouiller : efface la clé mémorisée → la page repasse en « Non connecté »
   // et toute écriture redemandera la clé (utile si l'ordinateur est laissé ouvert).
+  //
+  // ⛔ ET COUPE AUSSI L'ÉTAT DE SESSION (R1). Effacer la clé ne suffisait pas : `adminConnecte`
+  //   restait vrai, si bien qu'une simple navigation vers Inviter, Dossier, Autorisation ou
+  //   Partenaires relançait une lecture protégée — qui, ne trouvant plus de clé en session,
+  //   ROUVRAIT une fenêtre de saisie. Verrouiller redemandait donc la clé au premier clic
+  //   suivant : exactement ce dont on venait de se protéger.
+  // ⚠️ Les données déjà lues restent à l'écran ; ce verrou ferme les lectures À VENIR.
   if (evenement.target.closest('#bouton-verrouiller')) {
     definirCleLocale('admin', '');
+    definirAdminConnecte(false);
     majBarreConnexion(false);
     return;
   }
-  // Se connecter : demande la clé en boucle jusqu'à la bonne (ou annulation).
+  // Se connecter (depuis l'état verrouillé) : on RECHARGE, et c'est tout.
+  //
+  // ⭐ POURQUOI PLUS DE SONDE ICI (CORR-UX-PERF-DR-3B). Ce bouton passait par `connexion()`,
+  //   donc par `cleValide()`, donc par une sonde `supprimerEquipe` portant un identifiant
+  //   bidon : une action d'ÉCRITURE employée comme test d'accès, pour un simple oui/non — puis
+  //   la page était rechargée de toute façon, et `ouvrirSessionAdmin()` revalidait la clé.
+  //   ⛔ L'aller-retour était donc payé DEUX FOIS, dont une sous un nom d'écriture.
+  // ⭐ Le rechargement suffit : `initAdmin` → `ouvrirSessionAdmin()` demande la clé et la valide
+  //   par le SUCCÈS de `getConfigAdmin` — une lecture dont l'écran a besoin de toute manière,
+  //   protégée côté serveur par la MÊME clé. Rien n'est affaibli : la preuve d'acceptation reste
+  //   exigée, elle est simplement portée par une lecture utile plutôt que par une fausse écriture.
+  // ⚠️ La clé verrouillée vient d'être effacée de la session : le rechargement la redemandera.
   if (evenement.target.closest('#bouton-se-connecter')) {
-    const ok = await connexion('admin', "à l'administration");
-    majBarreConnexion(ok);
-    // Connexion réussie depuis l'état verrouillé (aucune config chargée) : on recharge la page
-    // pour charger la config admin et rendre les réglages. initAdmin retrouvera la clé en session.
-    if (ok) location.reload();
+    rechargerLaPage();
   }
 }
 
@@ -880,7 +1209,8 @@ async function onReinitialiser() {
     if (typeof invaliderAutorisationAffichee === 'function') invaliderAutorisationAffichee();
     if (typeof invaliderConformiteFFRAffichee === 'function') invaliderConformiteFFRAffichee();
 
-    const clubsRelus = (typeof chargerClubsInvites === 'function') && await chargerClubsInvites();
+    const clubsRelus = (typeof rafraichirRessourceAdmin === 'function') &&
+      await rafraichirRessourceAdmin('clubsInvites');
 
     // ⭐ LE FILET DE SECOURS, et c'est la garantie de fond de ce lot.
     //
@@ -915,11 +1245,11 @@ async function onReinitialiser() {
     // ⛔ Les CINQ autres n'ont rien à voir avec l'édition : `chargerClubsInvites` (déjà relue plus
     //    haut), `injecterIcones` (décoration), `majBarreConnexion` (état de connexion),
     //    `majFormesCategories` (rappelée par `majConformiteFFR`, et ses cartes viennent d'être
-    //    reconstruites) et `majSponsors` — les partenaires SURVIVENT délibérément au reset.
+    //    reconstruites) et les lectures PARTENAIRES — elles SURVIVENT délibérément au reset.
     // ⛔ Aucune règle du backend n'est recopiée ici : on relit, on repeint.
     let ecranComplet = true;
     try {
-      if (typeof majAutorisation === 'function') await majAutorisation();
+      if (typeof rafraichirRessourceAdmin === 'function') await rafraichirRessourceAdmin('dossierAutorisation');
       if (typeof majSurPlace === 'function') majSurPlace();
       if (typeof majReponse === 'function') majReponse();
       if (typeof majApercuInvitation === 'function') majApercuInvitation();

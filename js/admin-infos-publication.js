@@ -546,9 +546,9 @@ function majPublication() {
  * préexistait. C'était un défaut de PLACEMENT, constaté en réel le 2026-08-24.
  *
  * ⭐ CE VERROU-CI PROTÈGE MIEUX QUE CELUI QU'IL REMPLACE. Le verrou d'écran ne s'appliquait
- * qu'aux modes guidés : le bouton « Vue classique » remettait la carte dans la page longue
- * et laissait publier un tournoi vide sans rien pour le retenir. Porté par le bouton, le
- * garde-fou suit partout — barre latérale, assistant mobile, vue classique.
+ * qu'aux modes guidés : hors d'eux, la carte revenait dans la page longue et laissait publier
+ * un tournoi vide sans rien pour le retenir. Porté par le bouton, le garde-fou suit partout —
+ * barre latérale, assistant mobile, et jusqu'au repli HTML si le JavaScript ne démarre pas.
  *
  * ⛔ UNE SEULE DÉFINITION DES PRÉREQUIS. On relit `calculerEtatsEtapes()` — le « cerveau »
  * qui alimente déjà le fil « Où en suis-je ? » — avec EXACTEMENT son filtre du verdict

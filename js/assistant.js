@@ -7,9 +7,12 @@
  *  dans un carrousel (déplacer un nœud DOM conserve ses écouteurs), donc toute
  *  la logique déjà en place (formulaires, boutons, cerveau) continue de marcher.
  *
- *  Une échappatoire « Vue classique » remet les blocs à leur place d'origine :
- *  la page telle qu'elle existait reste accessible en un clic (filet de sécurité).
- *  Le choix (assistant / classique) est mémorisé dans le navigateur.
+ *  ⛔ PLUS D'ÉCHAPPATOIRE « VUE CLASSIQUE » (CORR-UX-PERF-DR-3B) : le mode guidé
+ *  est le seul mode, et il s'adapte — cartes ici (mobile), barre latérale sur
+ *  ordinateur (ecrans.js). Le filet de sécurité n'a pas disparu pour autant : la
+ *  page longue du HTML reste ce que le navigateur affiche si ce JavaScript ne
+ *  démarre pas. ⚠️ Ce n'est simplement plus un mode que l'on CHOISIT, donc plus
+ *  une préférence à mémoriser.
  *
  *  VERROU « SUIVANT » : pendant la préparation, on ne passe à la carte suivante
  *  que si l'étape en cours est COMPLÈTE (enregistrée / générée / répartie, d'après
@@ -62,35 +65,19 @@ const ASSISTANT_ETAPES = [
   { id: 'resume',    titre: 'Résumé',       icone: '📋', blocs: ['tableau-bord', 'etat-avancement', 'bloc-reinitialisation'] }
 ];
 
-/* ⭐ ORDRE CANONIQUE DES BLOCS DANS <main> — la « Vue classique » restitue CET ordre-là.
+/* ⛔ PRÉFÉRENCES DEVENUES OBSOLÈTES — conservées UNIQUEMENT pour être effacées.
  *
- * ⚠️ POURQUOI CETTE LISTE EXISTE, et c'est une leçon à part entière. Cet ordre était jusqu'ici
- * DÉDUIT de `ASSISTANT_ETAPES` (une simple concaténation de leurs `blocs`). Deux conséquences,
- * toutes deux mauvaises :
- *   ① la page longue sortait de l'assistant dans l'ordre du PARCOURS GUIDÉ, pas dans le sien —
- *      `tableau-bord` et `etat-avancement`, qui ouvrent la page dans `admin.html`, se
- *      retrouvaient rejetés À LA FIN, parce qu'ils vivent dans la carte « Résumé » ;
- *   ② et surtout : ⛔ **déplacer un bloc d'une carte à une autre changeait silencieusement
- *      l'ordre de la page longue.** Un découpage d'écrans n'a rien à faire dans la définition
- *      d'un ordre de page — c'est exactement ce qui a rendu PUB-2 risqué à corriger.
+ *  · `r92_mode_admin` valait 'assistant' | 'classique' et décidait du mode d'affichage. Le mode
+ *    guidé étant désormais le seul, une valeur 'classique' héritée empêcherait la page de se
+ *    construire.
+ *  · `r92_ecran_admin` mémorisait le dernier écran ouvert et le restaurait à l'ouverture (R1).
+ *    ⛔ Restaurer Inviter, Dossier, Autorisation ou Partenaires déclenchait leurs lectures
+ *    différées AVANT toute action de l'organisateur : l'ouverture coûtait 4 ou 5 appels au lieu
+ *    de 3, et seulement à partir de la DEUXIÈME visite — un défaut invisible sur navigateur
+ *    neuf, donc invisible en test. L'ouverture part désormais toujours d'« Infos ».
  *
- * ⭐ La liste est donc LITTÉRALE et figée, comme `ECRANS_ORDRE_ORIGINE` le fait déjà côté
- * grand écran. Elle reprend l'ordre RÉEL des enfants de `<main>` dans `admin.html`.
- * ⛔ `barre-connexion` n'y figure pas : l'assistant ne le déplace jamais, il reste en tête.
- * ⚠️ Tout bloc AJOUTÉ à `admin.html` doit être ajouté ici à sa place — sinon il finira
- * en tête de page au retour en « Vue classique ». */
-const ASSISTANT_ORDRE_ORIGINE = [
-  'tableau-bord', 'etat-avancement',
-  'bloc-cadre-tournoi', 'bloc-infos-tournoi', 'bloc-contacts-securite',
-  'bloc-sponsors-reglages', 'bloc-sponsors-liste', 'bloc-sponsors-bilan',
-  'reglages', 'bloc-equipes', 'bloc-terrains', 'bloc-generation', 'bloc-apresmidi',
-  'bloc-feuille-jour',
-  'bloc-clubs-invites', 'bloc-apercu-invitation', 'bloc-surplace', 'bloc-reponse',
-  'bloc-modalites', 'bloc-parking', 'bloc-encadrement', 'bloc-dossier',
-  'bloc-autorisation', 'bloc-publication', 'bloc-reinitialisation'
-];
-
-const ASSISTANT_CLE_PREF = 'r92_mode_admin'; // 'assistant' (défaut) | 'classique'
+ * ⚠️ On retire CES clés et elles seules : aucune autre préférence n'est touchée. */
+const ASSISTANT_CLES_OBSOLETES = ['r92_mode_admin', 'r92_ecran_admin'];
 
 let assistantIndex = 0;
 
@@ -121,22 +108,21 @@ let assistantIndex = 0;
  */
 let assistantAtteint = 0;
 
-let assistantOrdreOrigine = null; // ids des blocs dans leur ordre DOM d'origine (pour restaurer)
 let assistantObserver = null;
 
-/** Point d'entrée : appelé à la fin de initAdmin(). Respecte la préférence mémorisée. */
+/** Point d'entrée : appelé à la fin de initAdmin(). Le mode guidé est le SEUL mode ; il
+ *  s'adapte à la largeur, et rien ne peut plus le désactiver. */
 function initAssistant() {
-  // Ordre d'origine des blocs (pour la « vue classique ») : ⭐ l'ordre CANONIQUE de la page,
-  // et non plus celui du parcours guidé — voir ASSISTANT_ORDRE_ORIGINE et le pourquoi.
-  if (!assistantOrdreOrigine) {
-    assistantOrdreOrigine = ASSISTANT_ORDRE_ORIGINE
-      .filter(function (id) { return document.getElementById(id); });
-  }
-  const pref = (function () { try { return localStorage.getItem(ASSISTANT_CLE_PREF); } catch (e) { return null; } })();
-  if (pref === 'classique') afficherBoutonReprise();
-  // Mode guidé : sur GRAND écran, barre latérale + onglets (ecrans.js) ;
-  // sur mobile, l'assistant à cartes (avec son verrou « Suivant »).
-  else if (typeof ecransSontAdaptes === 'function' && ecransSontAdaptes()) construireEcrans();
+  // ⛔ Purge des préférences obsolètes : ni le mode d'affichage ni l'écran de départ ne sont
+  //    plus des choix. On les EFFACE au lieu de les ignorer — une clé laissée en place
+  //    ferait ressurgir la question à chaque relecture du code, et pourrait être relue par
+  //    erreur un jour.
+  ASSISTANT_CLES_OBSOLETES.forEach(function (cle) {
+    try { localStorage.removeItem(cle); } catch (e) { /* stockage indisponible */ }
+  });
+  // Sur GRAND écran, barre latérale + onglets (ecrans.js) ; sur mobile, l'assistant à cartes
+  // (avec son verrou « Suivant »). ⛔ On n'impose pas le carrousel aux ordinateurs.
+  if (typeof ecransSontAdaptes === 'function' && ecransSontAdaptes()) construireEcrans();
   else construireAssistant();
 }
 
@@ -144,14 +130,12 @@ function initAssistant() {
 function construireAssistant() {
   const main = document.querySelector('main');
   if (!main || document.getElementById('assistant')) return;
-  retirerBoutonReprise();
 
   const asst = document.createElement('div');
   asst.id = 'assistant';
   asst.innerHTML =
     '<header class="asst-tete">' +
       '<ol class="asst-stepper" id="asst-stepper"></ol>' +
-      '<button type="button" class="bouton-lien asst-classique" id="asst-vue-classique">Vue classique ✕</button>' +
     '</header>' +
     '<div class="asst-barre"><span class="asst-barre-jauge" id="asst-barre-jauge"></span></div>' +
     '<div class="asst-viewport"><div class="asst-track" id="asst-track"></div></div>' +
@@ -193,7 +177,6 @@ function construireAssistant() {
   stepper.addEventListener('keydown', onStepperClic);
   asst.querySelector('#asst-prec').addEventListener('click', function () { allerA(assistantIndex - 1, -1); });
   asst.querySelector('#asst-suiv').addEventListener('click', function () { allerA(assistantIndex + 1, 1); });
-  asst.querySelector('#asst-vue-classique').addEventListener('click', quitterAssistant);
 
   // Navigation au clavier (flèches ← →), sauf quand on saisit dans un champ.
   document.removeEventListener('keydown', onClavierAssistant);
@@ -286,13 +269,13 @@ function allerA(i, direction) {
 
   track.style.transform = 'translateX(' + (-i * 100) + '%)';
 
-  // ⭐ B2-0.5 — JUMEAU du crochet de `ecransActiver` (ecrans.js) : on arrive sur la feuille FFR,
-  //   on la relit si des écritures l'ont rendue fausse depuis. ⚠️ Le parcours mobile doit faire
-  //   EXACTEMENT ce que fait le parcours ordinateur — l'écart entre ces deux fichiers est
-  //   précisément ce qui avait produit R-098. Ils se modifient ENSEMBLE.
-  if ((ASSISTANT_ETAPES[i] || {}).id === 'autorisation' &&
-      typeof majAutorisationSiObsolete === 'function') {
-    majAutorisationSiObsolete().catch(function () { /* la feuille garde son message */ });
+  // ⭐ ARRIVÉE SUR UNE ÉTAPE — MÊME appel que `ecransActiver` (ecrans.js), au mot près : le
+  //   chargement différé des lectures de la carte ET le rattrapage d'obsolescence de la feuille
+  //   FFR (B2-0.5) vivent tous deux dans `ouvrirEtapeAdmin` (admin.js).
+  //   ⚠️ Il n'y a plus deux crochets jumeaux à tenir synchronisés : c'est précisément leur
+  //   divergence qui avait produit R-098. Un seul point de passage, donc plus d'écart possible.
+  if (typeof ouvrirEtapeAdmin === 'function') {
+    ouvrirEtapeAdmin((ASSISTANT_ETAPES[i] || {}).id);
   }
 
   // Fil d'étapes : marque l'active + les précédentes comme « faites ».
@@ -555,7 +538,7 @@ function assistantMajVerrou() {
   }
   const suiv = document.getElementById('asst-suiv');
   const zone = document.getElementById('asst-verrou');
-  if (!suiv || !zone) return; // assistant non affiché (vue classique)
+  if (!suiv || !zone) return; // assistant non affiché (repli HTML sans mode guidé)
 
   const etats = (typeof calculerEtatsEtapes === 'function') ? calculerEtatsEtapes() : [];
   const derniere = ASSISTANT_ETAPES.length - 1;
@@ -621,54 +604,6 @@ function assistantSecouerVerrou() {
   zone.classList.remove('est-secoue');
   void zone.offsetWidth; // relance l'animation CSS
   zone.classList.add('est-secoue');
-}
-
-/** Quitte l'assistant : remet les blocs à leur place d'origine + mémorise le choix. */
-function quitterAssistant() {
-  const asst = document.getElementById('assistant');
-  const main = document.querySelector('main');
-  if (!asst || !main) return;
-  if (assistantObserver) { assistantObserver.disconnect(); assistantObserver = null; }
-  window.removeEventListener('resize', ajusterHauteur);
-
-  // Remet chaque bloc dans <main>, dans l'ordre d'origine.
-  (assistantOrdreOrigine || []).forEach(function (id) {
-    const el = document.getElementById(id);
-    if (el) main.appendChild(el);
-  });
-  asst.remove();
-
-  try { localStorage.setItem(ASSISTANT_CLE_PREF, 'classique'); } catch (e) {}
-  afficherBoutonReprise();
-}
-
-/** En vue classique : petit bouton flottant pour revenir au mode guidé
- *  (écrans à barre latérale sur grand écran, assistant à cartes sur mobile). */
-function afficherBoutonReprise() {
-  if (document.getElementById('asst-reprise')) return;
-  const main = document.querySelector('main');
-  if (!main) return;
-  const surEcrans = (typeof ecransSontAdaptes === 'function' && ecransSontAdaptes());
-  const btn = document.createElement('button');
-  btn.type = 'button';
-  btn.id = 'asst-reprise';
-  btn.className = 'bouton asst-reprise';
-  btn.textContent = surEcrans ? '🗂️ Mode écrans' : '🎴 Mode assistant';
-  btn.addEventListener('click', function () {
-    try { localStorage.setItem(ASSISTANT_CLE_PREF, 'assistant'); } catch (e) {}
-    // On re-teste la largeur AU CLIC (la fenêtre a pu être redimensionnée entre-temps).
-    if (typeof ecransSontAdaptes === 'function' && ecransSontAdaptes()) construireEcrans();
-    else construireAssistant();
-  });
-  // Placé juste après la barre de connexion (en haut).
-  const ref = document.getElementById('barre-connexion');
-  if (ref && ref.parentNode) ref.parentNode.insertBefore(btn, ref.nextSibling);
-  else main.insertBefore(btn, main.firstChild);
-}
-
-function retirerBoutonReprise() {
-  const b = document.getElementById('asst-reprise');
-  if (b) b.remove();
 }
 
 /** Vrai si un mode guidé est affiché : assistant à cartes OU écrans à barre
