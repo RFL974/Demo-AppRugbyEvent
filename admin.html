@@ -25,6 +25,29 @@
 <!-- theme-clair : fond blanc + cartes navy translucides (thème propre à la page admin). -->
 <body class="theme-clair">
 
+  <!-- ⭐ ÉCRAN DE CHARGEMENT (UX-INIT-ADMIN-DR-4A).
+       Ce petit script est VOLONTAIREMENT ici, en tête de <body> : il pose la classe qui masque
+       la page AVANT que le navigateur n'ait dessiné quoi que ce soit du contenu qui suit. Une
+       page d'administration met une à plusieurs secondes à s'ouvrir ; sans cela, on voyait
+       d'abord des formulaires et des listes VIDES — un tournoi déjà rempli semblait effacé.
+       ⚠️ Si JavaScript est indisponible, la classe n'est jamais posée et la page s'affiche
+       telle quelle : on ne peut pas rester coincé sur un écran d'attente définitif. -->
+  <script>document.body.classList.add('admin-chargement');</script>
+
+  <div class="ecran-chargement" id="ecran-chargement">
+    <div class="ecran-chargement-boite">
+      <p class="ecran-chargement-titre" id="ecran-chargement-attente" role="status" aria-live="polite">
+        Chargement de l'administration…
+      </p>
+      <div id="ecran-chargement-erreur" hidden>
+        <!-- Rempli par admin.js (afficherErreurChargement) via textContent : jamais de HTML,
+             jamais la clé saisie. -->
+        <p class="message erreur" id="ecran-chargement-message"></p>
+        <button type="button" class="bouton" id="bouton-reessayer-init">Réessayer</button>
+      </div>
+    </div>
+  </div>
+
   <div class="conteneur">
 
     <header class="entete">
@@ -388,6 +411,10 @@
       <!-- 1) Les réglages (horaires + catégories), injectés par admin.js dans deux zones
            distinctes (pour les placer côte à côte / indépendamment sur grand écran). -->
       <section id="reglages">
+        <!-- ⚠️ RIEN D'AUTRE ICI. Cette carte ne porte QUE ses deux zones de contenu : le mode
+             écrans (ordinateur) les déplace vers `ecran-horaires` / `ecran-categories` et laisse
+             `#reglages` vide et masqué. Tout message ajouté ici serait donc écrit sans jamais
+             être vu. L'état de connexion est porté par `#barre-connexion`, en haut de page. -->
         <div id="zone-horaires"><div class="message">Chargement des réglages…</div></div>
         <div id="zone-categories"></div>
       </section>

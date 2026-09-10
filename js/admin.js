@@ -253,14 +253,31 @@ function estRefusCleAdmin(err) {
  *
  * @return {Promise<Object>} { connecte: true, data, cfg }, ou { connecte: false } si annulation.
  */
+/**
+ * Clé saisie mais NON ENCORE VALIDÉE, gardée le temps d'un réessai — en mémoire vive seulement.
+ *
+ * ⭐ POURQUOI. Quand le réseau tombe pendant la vérification, la clé n'a été ni acceptée ni
+ * refusée : on ne sait rien d'elle. La retenir évite de la redemander au clic sur « Réessayer »,
+ * alors que l'organisateur vient tout juste de la taper.
+ * ⛔ ELLE N'EST JAMAIS ENREGISTRÉE. Ni `localStorage`, ni `sessionStorage` : cette variable
+ *    disparaît au rechargement de la page. Une clé n'est rangée par `definirCleLocale()` que
+ *    sur preuve POSITIVE de son acceptation par le serveur — la règle du lot CORR-UX-PERF-DR-3B
+ *    est inchangée.
+ * ⛔ ELLE N'EST JAMAIS AFFICHÉE ni journalisée : aucun message d'erreur ne la reprend.
+ * ⛔ ELLE EST EFFACÉE dès qu'on sait à quoi s'en tenir — clé acceptée, ou clé refusée.
+ */
+let adminCleVolatile = '';
+
 async function ouvrirSessionAdmin() {
-  let cle = lireCleLocale('admin');
+  // Une clé déjà validée cette session passe devant ; sinon, celle qu'une panne a laissée en
+  // suspens ; sinon, on la demande.
+  let cle = lireCleLocale('admin') || adminCleVolatile;
   let getAll = null; // promesse UNIQUE : lancée au premier essai, jamais relancée ensuite
 
   while (true) {
     if (!cle) {
       const saisie = await dialogDemander(
-        '🔒 Accès à l\'administration\n\nEntre la clé :', '', { ok: 'Se connecter' });
+        '🔒 Accès à l\'administration\n\nEntre la clé :', '', { ok: 'Se connecter', secret: true });
       if (saisie == null) return { connecte: false }; // annulé : aucun appel, aucune clé mémorisée
       cle = saisie.trim();
       // Clé vide : on redemande SANS rien envoyer — aucun appel réseau tant qu'il n'y a pas de clé.
@@ -277,8 +294,14 @@ async function ouvrirSessionAdmin() {
     try {
       cfg = await lireConfigAdmin(cle);
     } catch (err) {
-      if (!estRefusCleAdmin(err)) throw err; // panne : ce n'est PAS un problème de clé
+      if (!estRefusCleAdmin(err)) {
+        // ⛔ PANNE, PAS REFUS. On ne sait pas si la clé est bonne : on ne la RANGE pas, mais on
+        //    la garde en mémoire vive pour que « Réessayer » n'oblige pas à la retaper.
+        adminCleVolatile = cle;
+        throw err;
+      }
       definirCleLocale('admin', '');         // on efface la clé refusée (cas d'une clé de session)
+      adminCleVolatile = '';                 // refus EXPLICITE : cette clé-là est mauvaise, on l'oublie
       cle = '';
       await dialogAlerter('Clé incorrecte. Réessaie.');
       continue;                              // on redemande, et on ne relance QUE getConfigAdmin
@@ -288,6 +311,7 @@ async function ouvrirSessionAdmin() {
     // d'attendre `getAll` — si cette seconde lecture tombe en panne, le chargement échoue, mais la
     // clé reste acquise : le rechargement suivant repartira sans redemander la saisie.
     definirCleLocale('admin', cle);
+    adminCleVolatile = '';                   // acceptée : elle est désormais rangée, plus rien en suspens
     const data = await getAll;
     return { connecte: true, data: data, cfg: cfg };
   }
@@ -684,12 +708,144 @@ function ouvrirEtapeAdmin(idEtape) {
   return fini;
 }
 
+/* ============================================================================
+ *  ÉCRAN DE CHARGEMENT (UX-INIT-ADMIN-DR-4A)
+ * ============================================================================
+ *  L'administration met une à plusieurs secondes à s'ouvrir : elle demande la clé, puis lit
+ *  la configuration et les équipes. Pendant ce temps, la page HTML brute était visible —
+ *  formulaires vides, listes vides, « Chargement des réglages… » — ce qui donnait à voir un
+ *  tournoi VIDE alors qu'il ne l'était pas. Un écran d'attente couvre désormais la page
+ *  jusqu'à ce qu'elle soit réellement prête.
+ * ========================================================================== */
+
+/** L'écran d'attente couvre la page. Repart toujours de l'état « attente », jamais « erreur ». */
+function afficherEcranChargement() {
+  if (document.body && document.body.classList) document.body.classList.add('admin-chargement');
+  const attente = document.getElementById('ecran-chargement-attente');
+  if (attente) attente.hidden = false;
+  const erreur = document.getElementById('ecran-chargement-erreur');
+  if (erreur) erreur.hidden = true;
+}
+
+/** L'administration est prête : on découvre la page. */
+function masquerEcranChargement() {
+  if (document.body && document.body.classList) document.body.classList.remove('admin-chargement');
+}
+
 /**
- * Au chargement de la page : on récupère tout (config + équipes) en un appel,
- * puis on remplit la page.
+ * Bascule l'écran d'attente en écran d'ERREUR : message compréhensible + bouton « Réessayer ».
+ *
+ * ⛔ NE DÉCOUVRE PAS LA PAGE. Un chargement raté laisse des formulaires vides et des listes
+ * vides : les dévoiler ferait croire à un tournoi effacé. On reste sur l'écran.
+ * ⛔ NE DIT JAMAIS « clé incorrecte ». Une panne réseau ou HTTP n'est pas un refus de clé —
+ *    confondre les deux accuse l'organisateur d'une faute qu'il n'a pas commise.
+ * ⛔ N'AFFICHE JAMAIS LA CLÉ. Seul le message de l'erreur technique est repris, via
+ *    `textContent` (jamais `innerHTML`) : aucune saisie ne peut s'y retrouver ni s'y exécuter.
+ */
+function afficherErreurChargement(erreur) {
+  const attente = document.getElementById('ecran-chargement-attente');
+  if (attente) attente.hidden = true;
+  const zone = document.getElementById('ecran-chargement-message');
+  if (zone) {
+    zone.textContent = 'Impossible de charger l\'administration. Il s\'agit d\'un problème ' +
+      'technique (réseau ou serveur), pas d\'une clé refusée.\n\nDétail : ' +
+      ((erreur && erreur.message) || 'erreur inconnue');
+  }
+  const boite = document.getElementById('ecran-chargement-erreur');
+  if (boite) boite.hidden = false;
+}
+
+/**
+ * Pose un écouteur sur un élément désigné par son id, SANS supposer qu'il existe.
+ *
+ * ⭐ POURQUOI CE DÉTOUR. `document.getElementById(id).addEventListener(…)` lève un TypeError
+ * dès que l'élément manque. Comme le branchement est une longue suite d'instructions, un seul
+ * élément absent interrompait toute la suite — un défaut local devenait une page morte.
+ * Ici, un élément absent est simplement ignoré : les autres écouteurs sont posés quand même.
+ *
+ * @return {boolean} true si l'écouteur a bien été posé.
+ */
+function ecouter(id, type, gestionnaire, options) {
+  const element = document.getElementById(id);
+  if (!element) return false;
+  element.addEventListener(type, gestionnaire, options);
+  return true;
+}
+
+/** Même garde, pour un élément désigné par un sélecteur CSS. */
+function ecouterSel(selecteur, type, gestionnaire, options) {
+  const element = document.querySelector(selecteur);
+  if (!element) return false;
+  element.addEventListener(type, gestionnaire, options);
+  return true;
+}
+
+/* Écouteurs posés ? Ils ne doivent l'être QU'UNE FOIS : un second branchement doublerait chaque
+   gestionnaire (une soumission enverrait deux enregistrements). C'est ce drapeau qui rend le
+   bouton « Réessayer » sûr. */
+let adminEcouteursPoses = false;
+
+/* Un chargement est-il en vol ? Empêche « Réessayer » d'en lancer plusieurs en parallèle. */
+let adminChargementEnCours = false;
+
+/* Le bouton « Réessayer » est-il branché ? ⚠️ Il l'est SÉPARÉMENT du reste, et AVANT le premier
+   chargement : c'est le seul bouton qui doit fonctionner alors même que l'ouverture a échoué —
+   or, dans ce cas, `brancherEcouteursAdmin()` n'est jamais atteint. */
+let adminReessaiBranche = false;
+
+/**
+ * Ouverture de l'administration — et réouverture après un échec.
+ *
+ * Trois issues, et trois seulement :
+ *   · clé acceptée      → page remplie, écouteurs posés, parcours guidé, écran retiré ;
+ *   · saisie annulée    → page découverte avec un message d'invitation à se connecter ;
+ *   · PANNE technique   → on reste sur l'écran, avec un message et un bouton « Réessayer ».
  */
 async function initAdmin() {
-  const zoneReglages = document.getElementById('reglages');
+  // ⛔ Un second appel pendant qu'un chargement est en vol ne relance RIEN : sans cette garde,
+  //    deux clics sur « Réessayer » lanceraient deux sessions concurrentes, chacune capable de
+  //    redemander la clé.
+  if (adminChargementEnCours) return false;
+  adminChargementEnCours = true;
+  afficherEcranChargement();
+
+  // Bouton « Réessayer » : branché au tout premier appel, avant même de tenter quoi que ce soit.
+  if (!adminReessaiBranche && ecouter('bouton-reessayer-init', 'click', initAdmin)) {
+    adminReessaiBranche = true;
+  }
+
+  try {
+    await chargerAdmin();
+  } catch (erreur) {
+    afficherErreurChargement(erreur);
+    return false;                       // ⛔ la page reste couverte : rien d'à moitié rempli
+  } finally {
+    adminChargementEnCours = false;
+  }
+
+  // Branchement UNIQUE — y compris après un premier essai raté (là, rien n'avait été posé).
+  if (!adminEcouteursPoses) {
+    brancherEcouteursAdmin();
+    adminEcouteursPoses = true;
+    // Assistant à cartes (surcouche de présentation) : une fois tout rendu et branché, on
+    // laisse assistant.js réorganiser la page en cartes (ou non, selon la préférence mémorisée).
+    if (typeof initAssistant === 'function') initAssistant();
+  }
+
+  masquerEcranChargement();
+  return true;
+}
+
+/**
+ * Récupère tout (config + équipes) et remplit la page.
+ *
+ * ⭐ REJOUABLE. Le bouton « Réessayer » le relance sans recharger la page. Il ne pose donc
+ * AUCUN écouteur : c'est `brancherEcouteursAdmin()` qui s'en charge, une seule fois.
+ *
+ * @return {Promise<boolean>} true si la clé a été acceptée, false si la saisie a été annulée.
+ * @throws {Error} sur PANNE technique — l'appelant affiche l'erreur et propose un réessai.
+ */
+async function chargerAdmin() {
   if (typeof injecterIcones === 'function') injecterIcones(); // icônes SVG des boutons statiques
 
   // La page d'administration édite des données PERSONNELLES (contacts, sécurité, réponse). Elle
@@ -747,44 +903,60 @@ async function initAdmin() {
       // 5) Tableau de bord + horodatage.
       majTableauBord();
       majHeureAdmin();
-    } else {
-      zoneReglages.innerHTML =
-        '<div class="message">🔒 Connecte-toi avec la clé admin pour accéder aux réglages du tournoi.</div>';
     }
+    // ⛔ SAISIE ANNULÉE : on n'écrit RIEN dans la carte « Réglages ».
+    //    Un message y était affiché, mais le mode écrans (ordinateur ≥ 1024 px) déplace
+    //    `zone-horaires` et `zone-categories` vers leurs propres écrans et laisse `#reglages`
+    //    vide et masqué : le message s'y trouvait écrit sans jamais être visible.
+    //    La barre de connexion, en haut de page, porte déjà l'information — « Non connecté —
+    //    les enregistrements seront refusés » et son bouton « Se connecter » — et elle, elle
+    //    est visible dans les DEUX présentations. `majBarreConnexion(connecte)` ci-dessus l'a
+    //    déjà mise à jour ; il n'y a rien à ajouter.
+    return connecte;
   } catch (erreur) {
     // Panne technique (réseau, HTTP, exception serveur) : JAMAIS présentée comme une clé refusée.
     // Survenue avant la connexion, elle laisse la barre sur « Non connecté » ; survenue pendant le
     // rendu (déjà connecté), elle ne touche pas la barre — comportement d'avant conservé.
     if (!connecte) majBarreConnexion(false);
-    zoneReglages.innerHTML =
-      '<div class="message erreur">Impossible de charger les réglages.<br>' +
-      'Détail : ' + erreur.message + '</div>';
+    // ⛔ ON NE TOUCHE PLUS À `#reglages`. Le message d'erreur et le bouton « Réessayer » vivent
+    //    sur l'écran de chargement ; la carte des réglages garde ses deux zones intactes.
+    throw erreur;
   }
+}
 
+/**
+ * Branche TOUS les gestionnaires de la page. Appelé une seule fois par `initAdmin()`.
+ *
+ * ⭐ SÉPARÉ DU CHARGEMENT (UX-INIT-ADMIN-DR-4A) : les données peuvent être relues autant de
+ * fois qu'il le faut (bouton « Réessayer ») sans jamais reposer un écouteur — sans quoi un
+ * second essai dédoublerait chaque gestionnaire, et un clic sur « Enregistrer » enverrait
+ * deux écritures.
+ * ⭐ CHAQUE branchement passe par `ecouter()` / `ecouterSel()` : un élément manquant est
+ * ignoré au lieu d'interrompre tout le reste.
+ */
+function brancherEcouteursAdmin() {
   // Barre de connexion : boutons « Se connecter » / « Changer de clé » (délégué).
-  document.getElementById('barre-connexion').addEventListener('click', onClicConnexion);
+  ecouter('barre-connexion', 'click', onClicConnexion);
 
   // Bouton « Rafraîchir » : recharge scores/planning depuis le backend (utile le jour J).
-  document.getElementById('bouton-rafraichir-admin').addEventListener('click', rafraichirAdmin);
+  ecouter('bouton-rafraichir-admin', 'click', rafraichirAdmin);
 
   // Fil d'avancement « Où en suis-je ? » : clic/clavier sur une étape → défile jusqu'à sa section
   // (délégué sur le conteneur, valable même après re-rendu du fil).
-  const zoneEtat = document.getElementById('etat-avancement');
-  zoneEtat.addEventListener('click', onClicEtatAvancement);
-  zoneEtat.addEventListener('keydown', onClicEtatAvancement);
+  ecouter('etat-avancement', 'click', onClicEtatAvancement);
+  ecouter('etat-avancement', 'keydown', onClicEtatAvancement);
 
   // On branche le formulaire d'ajout et les boutons de suppression (équipes).
-  document.getElementById('form-equipe').addEventListener('submit', onAjouterEquipe);
-  document.getElementById('liste-equipes').addEventListener('click', onClicListe);
+  ecouter('form-equipe', 'submit', onAjouterEquipe);
+  ecouter('liste-equipes', 'click', onClicListe);
   // Réglage « Identifier mes équipes dans Perfs » (même carte : la valeur est un bout de nom d'équipe).
-  document.getElementById('bouton-enregistrer-perfs-club')
-    .addEventListener('click', onEnregistrerPerfsMotCle);
+  ecouter('bouton-enregistrer-perfs-club', 'click', onEnregistrerPerfsMotCle);
   // ⚠️ Garde OBLIGATOIRE, comme les 10 autres formulaires de cette page. Un formulaire à champ
   // unique se soumet TOUT SEUL sur la touche Entrée, même sans bouton `submit` : sans cette
   // ligne, la page se rechargerait et la saisie serait perdue SANS message — au pire, un champ
   // vidé pour désactiver Perfs réafficherait l'ancienne valeur, laissant croire à une
   // désactivation qui n'a pas eu lieu. Ici, Entrée enregistre, comme le bouton.
-  document.getElementById('form-perfs-club').addEventListener('submit', function (e) {
+  ecouter('form-perfs-club', 'submit', function (e) {
     e.preventDefault();
     onEnregistrerPerfsMotCle();
   });
@@ -799,62 +971,61 @@ async function initAdmin() {
   document.addEventListener('input', onReglagesInput); // vérif. terrains manuels en direct
 
   // Zone terrains : écouteurs délégués (recalcul de capacité en direct + boutons).
-  const zoneTerrains = document.getElementById('zone-terrains');
-  zoneTerrains.addEventListener('input', onZoneTerrainsInput);
-  zoneTerrains.addEventListener('change', onZoneTerrainsChange);
-  zoneTerrains.addEventListener('click', onZoneTerrainsClick);
+  ecouter('zone-terrains', 'input', onZoneTerrainsInput);
+  ecouter('zone-terrains', 'change', onZoneTerrainsChange);
+  ecouter('zone-terrains', 'click', onZoneTerrainsClick);
 
   // Bouton de génération des poules et du planning.
-  document.getElementById('bouton-generer').addEventListener('click', onGenerer);
+  ecouter('bouton-generer', 'click', onGenerer);
 
   // Bouton « Recalculer les horaires » (régénération non destructive, garde les scores).
-  document.getElementById('bouton-recalculer-horaires').addEventListener('click', onRecalculerHoraires);
+  ecouter('bouton-recalculer-horaires', 'click', onRecalculerHoraires);
 
   // Modification manuelle des poules du matin : bouton d'entrée + clics dans l'éditeur (délégués).
-  document.getElementById('bouton-modifier-poules').addEventListener('click', onModifierPoules);
-  document.getElementById('edition-poules').addEventListener('click', onClicEditionPoules);
+  ecouter('bouton-modifier-poules', 'click', onModifierPoules);
+  ecouter('edition-poules', 'click', onClicEditionPoules);
 
   // Clic sur une piste d'arbitrage (délégué, car le contenu est régénéré).
-  document.getElementById('arbitrages').addEventListener('click', onClicArbitrage);
+  ecouter('arbitrages', 'click', onClicArbitrage);
 
   // Bouton de génération de la phase après-midi (classement croisé).
-  document.getElementById('bouton-apresmidi').addEventListener('click', onGenererApresMidi);
+  ecouter('bouton-apresmidi', 'click', onGenererApresMidi);
   // Bouton du brassage du dimanche (Super Challenge Phase 3) — bloc révélé par majDimancheScf().
-  document.getElementById('bouton-dimanche-scf').addEventListener('click', onGenererDimancheScf);
+  ecouter('bouton-dimanche-scf', 'click', onGenererDimancheScf);
 
   // Carte « Dossier » : le bouton d'aperçu est RECONSTRUIT à chaque majApercuDossier() (la liste
   // des clubs change) — écouteur DÉLÉGUÉ sur la carte, jamais sur le bouton lui-même.
-  document.getElementById('bloc-dossier').addEventListener('click', onClicApercuDossier);
+  ecouter('bloc-dossier', 'click', onClicApercuDossier);
 
   // Verrou « planning visible par les clubs » : bouton reconstruit à chaque état → délégué.
-  document.getElementById('publication-planning').addEventListener('click', onPublierPlanning);
+  ecouter('publication-planning', 'click', onPublierPlanning);
 
   // Bouton publier / masquer le tournoi.
-  document.getElementById('bouton-publier').addEventListener('click', onPublier);
+  ecouter('bouton-publier', 'click', onPublier);
 
   // Accès à la page publique : deux boutons STATIQUES (jamais reconstruits) → écouteurs directs,
   // comme le bouton ci-dessus. ⛔ Ni l'un ni l'autre ne publie, ne masque, ni n'écrit sur le serveur.
-  document.getElementById('bouton-copier-adresse-publique').addEventListener('click', onCopierAdressePublique);
-  document.getElementById('bouton-ouvrir-page-publique').addEventListener('click', onOuvrirPagePublique);
+  ecouter('bouton-copier-adresse-publique', 'click', onCopierAdressePublique);
+  ecouter('bouton-ouvrir-page-publique', 'click', onOuvrirPagePublique);
 
   // Bouton de réinitialisation complète du tournoi (zone de danger).
-  document.getElementById('bouton-reinitialiser').addEventListener('click', onReinitialiser);
+  ecouter('bouton-reinitialiser', 'click', onReinitialiser);
 
   // Carte « Date & conformité FFR » (date + zone + contrôle FFR) : formulaire dédié, bouton dédié.
-  document.getElementById('form-cadre-tournoi').addEventListener('submit', function (e) { e.preventDefault(); });
-  document.getElementById('bouton-enregistrer-cadre').addEventListener('click', onEnregistrerCadre);
+  ecouter('form-cadre-tournoi', 'submit', function (e) { e.preventDefault(); });
+  ecouter('bouton-enregistrer-cadre', 'click', onEnregistrerCadre);
   // « Trouver une date compatible » : ouvre le panneau, lance la recherche, applique un jour cliqué.
-  document.getElementById('bouton-trouver-date').addEventListener('click', onToggleTrouverDate);
-  document.getElementById('bouton-chercher-dates').addEventListener('click', onChercherDatesCompatibles);
-  document.getElementById('finder-resultats').addEventListener('click', onClicResultatDate);
+  ecouter('bouton-trouver-date', 'click', onToggleTrouverDate);
+  ecouter('bouton-chercher-dates', 'click', onChercherDatesCompatibles);
+  ecouter('finder-resultats', 'click', onClicResultatDate);
 
   // Les infos du tournoi se sauvegardent via leur bouton « Enregistrer les infos »
   // (onEnregistrerInfos) — et aussi lors de la publication (onPublier), par sécurité.
   // On empêche juste la soumission du formulaire (touche Entrée) qui rechargerait la page.
-  document.getElementById('form-infos-tournoi').addEventListener('submit', function (e) { e.preventDefault(); });
+  ecouter('form-infos-tournoi', 'submit', function (e) { e.preventDefault(); });
   // Bouton dédié : enregistre les infos (nom/date/lieu/description + affiche) à tout moment,
   // indépendamment de la publication.
-  document.getElementById('bouton-enregistrer-infos').addEventListener('click', onEnregistrerInfos);
+  ecouter('bouton-enregistrer-infos', 'click', onEnregistrerInfos);
   // Zone d'affiche : sélecteur de fichier + glisser-déposer, aperçu immédiat (helper commun).
   brancherZoneImage({
     champFichier: '#form-infos-tournoi [name="tournoi_affiche"]',
@@ -862,86 +1033,85 @@ async function initAdmin() {
     traiter: traiterFichierAffiche
   });
   // Bouton « Retirer l'affiche » (annule un choix non enregistré, ou supprime l'affiche enregistrée).
-  document.getElementById('bouton-retirer-affiche').addEventListener('click', onRetirerAffiche);
+  ecouter('bouton-retirer-affiche', 'click', onRetirerAffiche);
 
   // Contacts & sécurité : enregistrement via son bouton dédié + champs conditionnels
   // (précisions du poste de secours, référent sécurité distinct) pilotés par les cases.
-  document.getElementById('form-contacts-securite').addEventListener('submit', function (e) { e.preventDefault(); });
-  document.getElementById('form-contacts-securite').addEventListener('change', onContactsChange);
-  document.getElementById('bouton-enregistrer-contacts').addEventListener('click', onEnregistrerContacts);
+  ecouter('form-contacts-securite', 'submit', function (e) { e.preventDefault(); });
+  ecouter('form-contacts-securite', 'change', onContactsChange);
+  ecouter('bouton-enregistrer-contacts', 'click', onEnregistrerContacts);
 
   // Dossier d'invitation — carte « Modalités d'inscription » : bouton dédié + champs
   // du tarif révélés par la case à cocher.
-  document.getElementById('form-modalites').addEventListener('submit', function (e) { e.preventDefault(); });
-  document.getElementById('form-modalites').addEventListener('change', onModalitesChange);
-  document.getElementById('bouton-enregistrer-modalites').addEventListener('click', onEnregistrerModalites);
+  ecouter('form-modalites', 'submit', function (e) { e.preventDefault(); });
+  ecouter('form-modalites', 'change', onModalitesChange);
+  ecouter('bouton-enregistrer-modalites', 'click', onEnregistrerModalites);
 
   // Carte « Parking & accès » : texte + photo (même mécanisme que l'affiche du tournoi :
   // clic OU glisser-déposer, aperçu immédiat, upload Drive à l'enregistrement).
-  document.getElementById('form-parking').addEventListener('submit', function (e) { e.preventDefault(); });
-  document.getElementById('bouton-enregistrer-parking').addEventListener('click', onEnregistrerParking);
+  ecouter('form-parking', 'submit', function (e) { e.preventDefault(); });
+  ecouter('bouton-enregistrer-parking', 'click', onEnregistrerParking);
   // Zone photo parking : même mécanique que l'affiche (helper commun).
   brancherZoneImage({
     champFichier: '#form-parking [name="parking_photo"]',
     zoneDepot: 'zone-depot-parking',
     traiter: traiterFichierParking
   });
-  document.getElementById('bouton-retirer-parking').addEventListener('click', onRetirerPhotoParking);
+  ecouter('bouton-retirer-parking', 'click', onRetirerPhotoParking);
 
   // Carte « Encadrement & assurance » : bouton dédié.
-  document.getElementById('form-encadrement').addEventListener('submit', function (e) { e.preventDefault(); });
-  document.getElementById('bouton-enregistrer-encadrement').addEventListener('click', onEnregistrerEncadrement);
+  ecouter('form-encadrement', 'submit', function (e) { e.preventDefault(); });
+  ecouter('bouton-enregistrer-encadrement', 'click', onEnregistrerEncadrement);
 
   // Phase 1 — carte « Sur place » (3 cases à cocher) : bouton dédié.
-  document.getElementById('form-surplace').addEventListener('submit', function (e) { e.preventDefault(); });
-  document.getElementById('bouton-enregistrer-surplace').addEventListener('click', onEnregistrerSurPlace);
+  ecouter('form-surplace', 'submit', function (e) { e.preventDefault(); });
+  ecouter('bouton-enregistrer-surplace', 'click', onEnregistrerSurPlace);
 
   // Phase 1 — carte « Réponse à l'invitation » : bouton dédié + validation « au moins un
   // des deux » (tél / email) au blur des champs de contact.
-  document.getElementById('form-reponse').addEventListener('submit', function (e) { e.preventDefault(); });
-  document.getElementById('bouton-enregistrer-reponse').addEventListener('click', onEnregistrerReponse);
-  document.getElementById('form-reponse').addEventListener('blur', onReponseBlur, true);
+  ecouter('form-reponse', 'submit', function (e) { e.preventDefault(); });
+  ecouter('bouton-enregistrer-reponse', 'click', onEnregistrerReponse);
+  ecouter('form-reponse', 'blur', onReponseBlur, true);
 
   // Phase 1 — aperçu de l'email d'invitation : mise à jour EN DIRECT quand on modifie les
   // cartes « Sur place » / « Réponse » (comme l'aperçu des Infos), + bouton d'envoi groupé.
-  document.getElementById('form-surplace').addEventListener('change', majApercuInvitation);
-  document.getElementById('form-reponse').addEventListener('input', majApercuInvitation);
-  document.getElementById('form-reponse').addEventListener('change', majApercuInvitation);
-  document.getElementById('apercu-invitation-intro').addEventListener('input', majApercuInvitation);
-  document.getElementById('bouton-regenerer-invitation').addEventListener('click', onRegenererInvitation);
-  document.getElementById('bouton-envoyer-invitations').addEventListener('click', onEnvoyerInvitationsGroupe);
+  ecouter('form-surplace', 'change', majApercuInvitation);
+  ecouter('form-reponse', 'input', majApercuInvitation);
+  ecouter('form-reponse', 'change', majApercuInvitation);
+  ecouter('apercu-invitation-intro', 'input', majApercuInvitation);
+  ecouter('bouton-regenerer-invitation', 'click', onRegenererInvitation);
+  ecouter('bouton-envoyer-invitations', 'click', onEnvoyerInvitationsGroupe);
 
   // Clubs invités : ajout via le formulaire, statut/suppression/actions délégués sur la liste.
-  document.getElementById('form-club-invite').addEventListener('submit', onAjouterClubInvite);
-  document.getElementById('liste-clubs-invites').addEventListener('change', onChangerStatutClub);
-  document.getElementById('liste-clubs-invites').addEventListener('click', onClicClubsInvites);
+  ecouter('form-club-invite', 'submit', onAjouterClubInvite);
+  ecouter('liste-clubs-invites', 'change', onChangerStatutClub);
+  ecouter('liste-clubs-invites', 'click', onClicClubsInvites);
 
   // Champ date : ouvre le calendrier dès qu'on clique n'importe où sur la barre
   // (par défaut, seul le clic sur la petite icône l'ouvre). showPicker() peut ne pas
   // exister sur de vieux navigateurs → on ignore l'erreur, l'icône reste utilisable.
-  document.querySelector('#form-cadre-tournoi [name="tournoi_date"]')
-    .addEventListener('click', function () {
+  ecouterSel('#form-cadre-tournoi [name="tournoi_date"]', 'click', function () {
       try { this.showPicker(); } catch (e) { /* navigateur non compatible : comportement normal */ }
     });
 
   // Conformité FFR : re-vérifie dès que la date OU la zone de vacances change (carte cadre).
-  document.getElementById('form-cadre-tournoi').addEventListener('change', function (e) {
+  ecouter('form-cadre-tournoi', 'change', function (e) {
     const n = e.target && e.target.name;
     if ((n === 'tournoi_date' || n === 'zone_vacances') && typeof majConformiteFFR === 'function') {
       majConformiteFFR();
     }
   });
   // « Forme FFR attendue » des cartes : rafraîchit l'avertissement d'effectif à la saisie.
-  document.getElementById('zone-categories').addEventListener('input', function (e) {
+  ecouter('zone-categories', 'input', function (e) {
     const n = e.target && e.target.name;
     if ((n === 'effectif_min' || n === 'effectif_max') && typeof majFormesCategories === 'function') {
       majFormesCategories();
     }
   });
 
-  // Assistant à cartes (surcouche de présentation) : une fois tout rendu et branché, on
-  // laisse assistant.js réorganiser la page en cartes (ou non, selon la préférence mémorisée).
-  if (typeof initAssistant === 'function') initAssistant();
+  // ⛔ L'ASSISTANT N'EST PLUS LANCÉ ICI : `initAdmin()` s'en charge juste après ce branchement.
+  //    Il doit tourner APRÈS le rendu des données, y compris quand ce rendu n'a réussi qu'au
+  //    second essai — cet ordre est plus simple à garantir depuis l'orchestrateur.
 
   // ⛔ CLUBS INVITÉS : plus de lecture ici. La liste contient des emails, elle ne concerne que
   //    les écrans « Inviter », « Dossier » et « Autorisation », et elle part maintenant à
@@ -1063,7 +1233,8 @@ async function onClicConnexion(evenement) {
   // ACTUELLE, PUIS on demande la nouvelle (validée côté serveur).
   if (evenement.target.closest('#bouton-changer-cle')) {
     const actuelle = await dialogDemander(
-      'Sécurité : entre d\'abord la clé ACTUELLE pour pouvoir la changer :', '', { ok: 'Continuer' });
+      'Sécurité : entre d\'abord la clé ACTUELLE pour pouvoir la changer :', '',
+      { ok: 'Continuer', secret: true });
     if (actuelle == null) return; // annulé
     if (actuelle.trim() !== lireCleLocale('admin')) {
       await dialogAlerter('Clé actuelle incorrecte. Changement refusé.');

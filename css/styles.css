@@ -2376,3 +2376,45 @@ a.bouton { display: inline-block; text-decoration: none; }
 
 .theme-clair .tab-feuille-jour th, .theme-clair .tab-feuille-jour td { border-bottom-color: #e6edf5; }
 .theme-clair .tab-feuille-jour thead th { color: var(--accent); background: #F5F9FD; }
+
+/* ==========================================================================
+   Écran de chargement de l'administration (UX-INIT-ADMIN-DR-4A)
+   --------------------------------------------------------------------------
+   L'administration met une à plusieurs secondes à s'ouvrir (clé + deux lectures).
+   Pendant ce temps, la page brute montrait des formulaires et des listes VIDES :
+   un tournoi déjà rempli avait l'air effacé. Cet écran la couvre jusqu'à ce
+   qu'elle soit prête — et y reste si le chargement échoue.
+
+   ⚠️ Le masquage dépend de la classe `admin-chargement`, posée par un petit script
+   en tête de <body>. Si JavaScript est indisponible, la classe n'est jamais posée
+   et la page s'affiche telle quelle : on ne bloque jamais sur un écran d'attente
+   qui ne pourrait plus être retiré.
+   ========================================================================== */
+.ecran-chargement { display: none; }
+
+body.admin-chargement .conteneur { display: none; }
+
+body.admin-chargement .ecran-chargement {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: var(--espace);
+}
+
+.ecran-chargement-boite {
+  max-width: 34rem;
+  width: 100%;
+  text-align: center;
+}
+
+.ecran-chargement-titre {
+  font-family: 'Barlow Condensed', sans-serif;
+  font-size: 1.3rem;
+  color: var(--bleu-ciel);
+}
+
+/* Le détail technique de l'erreur peut contenir des retours à la ligne : on les respecte. */
+#ecran-chargement-message { white-space: pre-line; text-align: left; }
+
+.ecran-chargement-boite .bouton { margin-top: var(--espace); }

@@ -93,8 +93,30 @@
       if (opts.type === 'demander') {
         input = document.createElement('input');
         input.className = 'dlg-input';
-        input.type = 'text';
-        input.autocomplete = 'off';
+        if (opts.secret) {
+          // ⭐ SAISIE SECRÈTE (SEC-DIALOG-CLES-DR-4E) — réservée aux clés admin / scores.
+          //    Le champ était en clair : la clé s'affichait à l'écran pendant la frappe, donc
+          //    devant qui passait derrière l'organisateur, et sur toute capture d'écran ou
+          //    partage d'écran. Un tournoi se saisit au bord du terrain, entouré de monde.
+          input.type = 'password';
+          // ⛔ Ni correction, ni majuscule automatique, ni correcteur : une clé n'est pas un mot
+          //    de la langue, et ces aides la déformeraient (« Cle » pour « cle ») ou l'enverraient
+          //    à un service de correction distant.
+          input.setAttribute('autocorrect', 'off');
+          input.setAttribute('autocapitalize', 'off');
+          input.spellcheck = false;
+          // ⛔ `new-password` plutôt que `off` : les navigateurs IGNORENT largement `off` sur un
+          //    champ de mot de passe (ils proposent quand même de l'enregistrer et de le
+          //    re-remplir). `new-password` est la valeur qu'ils respectent pour s'en abstenir.
+          input.autocomplete = 'new-password';
+          // ⛔ Aucun `name` : sans nom, le champ n'est candidat ni à une soumission de
+          //    formulaire, ni aux heuristiques d'enregistrement des gestionnaires de mots de passe.
+        } else {
+          input.type = 'text';
+          input.autocomplete = 'off';
+        }
+        // ⚠️ `value` est une PROPRIÉTÉ, pas un attribut : la valeur n'apparaît donc jamais dans
+        //    le HTML sérialisé (`outerHTML`), et rien ici ne la journalise ni ne l'affiche.
         input.value = (opts.defaut != null) ? String(opts.defaut) : '';
         if (opts.placeholder) input.placeholder = opts.placeholder;
         carte.appendChild(input);
@@ -166,12 +188,21 @@
     return ouvrir({ type: 'alerter', message: message, ok: o.ok || 'OK' });
   };
 
-  /** Demande une saisie. Renvoie le texte, ou null si annulé. */
+  /**
+   * Demande une saisie. Renvoie le texte, ou null si annulé.
+   * @param {Object} [o]
+   *   ok/annuler   libellés des boutons
+   *   placeholder  indication dans le champ
+   *   secret       true → champ MASQUÉ (`type="password"`), pour les clés uniquement.
+   *                ⚠️ Opt-in EXPLICITE : `secret: o.secret === true`. Un dialogue ordinaire
+   *                (copier une adresse, un lien de dossier) doit rester lisible — masquer un
+   *                texte que l'utilisateur doit justement LIRE et recopier le rendrait inutile.
+   */
   window.dialogDemander = function (message, defaut, o) {
     o = o || {};
     return ouvrir({
       type: 'demander', message: message, defaut: defaut, placeholder: o.placeholder,
-      ok: o.ok || 'Valider', annuler: o.annuler || 'Annuler'
+      ok: o.ok || 'Valider', annuler: o.annuler || 'Annuler', secret: o.secret === true
     });
   };
 })();

@@ -129,7 +129,7 @@ function definirCleLocale(role, cle) {
 
 /** Demande la clé à l'utilisateur (pré-remplie avec la mémorisée). Renvoie null si annulé. */
 async function demanderCle(role, message) {
-  const saisie = await dialogDemander(message, lireCleLocale(role), { ok: 'Valider' });
+  const saisie = await dialogDemander(message, lireCleLocale(role), { ok: 'Valider', secret: true });
   if (saisie == null) return null;
   const propre = saisie.trim();
   definirCleLocale(role, propre);
@@ -277,7 +277,8 @@ async function connexion(role, libelle) {
     definirCleLocale(role, ''); // ⛔ clé de session REFUSÉE : on l'oublie au lieu de la garder
   }
   while (true) {
-    const saisie = await dialogDemander('🔒 Accès ' + libelle + '\n\nEntre la clé :', '', { ok: 'Se connecter' });
+    const saisie = await dialogDemander('🔒 Accès ' + libelle + '\n\nEntre la clé :', '',
+      { ok: 'Se connecter', secret: true });
     if (saisie == null) return false; // annulé
     const cle = saisie.trim();
     if (!cle) { await dialogAlerter('Clé incorrecte. Réessaie.'); continue; }
@@ -303,7 +304,7 @@ async function connexion(role, libelle) {
  */
 async function demanderCleValide(role, message) {
   while (true) {
-    const saisie = await dialogDemander(message, '', { ok: 'Valider' });
+    const saisie = await dialogDemander(message, '', { ok: 'Valider', secret: true });
     if (saisie == null) return null; // annulé
     const cle = saisie.trim();
     if (cle) {
