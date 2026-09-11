@@ -111,7 +111,7 @@ async function apiPost(action, data) {
 /* ============================================================================
  *  CLÉS D'ÉCRITURE (admin / scores)
  *  Les actions d'écriture sont protégées côté backend par une clé. Ici on gère
- *  la clé côté navigateur : on la stocke sur l'appareil (localStorage) et on
+ *  la clé côté navigateur : on la stocke sur l'appareil (sessionStorage) et on
  *  l'ajoute à chaque requête. `role` vaut 'admin' ou 'scores'.
  * ========================================================================== */
 
@@ -127,17 +127,23 @@ function definirCleLocale(role, cle) {
   sessionStorage.setItem('r92_cle_' + role, cle || '');
 }
 
-/** Demande la clé à l'utilisateur (pré-remplie avec la mémorisée). Renvoie null si annulé. */
+/** Demande la clé à l'utilisateur. Renvoie la valeur saisie (nettoyée), ou null si annulé.
+ *  ⛔ NE MÉMORISE RIEN (SEC-CLE-STOCKAGE-DR-5B). Elle rangeait la clé dès la frappe, AVANT toute
+ *     réponse du serveur : une clé jamais confirmée — voire refusée — restait alors en session.
+ *     C'est `apiPostProtege` qui la range, et seulement après la réussite confirmée de l'action.
+ *  ⚠️ Le pré-remplissage lit la clé rangée : dans `apiPostProtege`, elle est toujours vide à cet
+ *     instant (absente, ou effacée juste avant après un refus) — le champ s'ouvre donc vide. */
 async function demanderCle(role, message) {
   const saisie = await dialogDemander(message, lireCleLocale(role), { ok: 'Valider', secret: true });
   if (saisie == null) return null;
-  const propre = saisie.trim();
-  definirCleLocale(role, propre);
-  return propre;
+  return saisie.trim();
 }
 
 /**
  * Comme apiPost, mais ajoute la clé du rôle et la redemande une fois si elle est refusée.
+ * ⭐ SEC-CLE-STOCKAGE-DR-5B — une clé NOUVELLE (tapée ici) n'est rangée qu'après la réussite
+ *    confirmée de l'action ; une clé refusée est effacée AVANT la redemande ; une panne ou une
+ *    réponse ambiguë ne range rien, n'efface pas une clé déjà rangée, et ne rejoue rien.
  * @param {string} action
  * @param {Object} data
  * @param {string} role     'admin' ou 'scores'
@@ -145,18 +151,24 @@ async function demanderCle(role, message) {
  */
 async function apiPostProtege(action, data, role, libelle) {
   let cle = lireCleLocale(role);
-  if (!cle) cle = await demanderCle(role, 'Entre la clé ' + libelle + ' :');
+  const neuve = !cle;   // tapée maintenant : le serveur ne l'a pas encore acceptée
+  if (neuve) cle = await demanderCle(role, 'Entre la clé ' + libelle + ' :');
   if (cle == null) throw new Error('Action annulée.');
   try {
-    return await apiPost(action, Object.assign({}, data, { cle: cle }));
+    const res = await apiPost(action, Object.assign({}, data, { cle: cle }));
+    if (neuve) definirCleLocale(role, cle);      // ⭐ rangée APRÈS la réussite confirmée, pas avant
+    return res;
   } catch (err) {
-    // Clé absente/incorrecte côté serveur → on la redemande une fois.
+    // Clé absente/incorrecte côté serveur → on l'efface, puis on la redemande une fois.
     if (estRefusCle(err.message)) {
+      definirCleLocale(role, '');                // ⛔ refusée : effacée AVANT la redemande (champ vide, rien si on annule)
       const nouvelle = await demanderCle(role, 'Clé ' + libelle + ' incorrecte. Réessaie :');
       if (nouvelle == null) throw new Error('Action annulée.');
-      return await apiPost(action, Object.assign({}, data, { cle: nouvelle }));
+      const res = await apiPost(action, Object.assign({}, data, { cle: nouvelle }));
+      definirCleLocale(role, nouvelle);          // ⭐ rangée après la réussite du rejeu, pas avant
+      return res;
     }
-    throw err;
+    throw err;   // ⛔ panne, réponse ambiguë, erreur métier : rien n'est rangé, rien n'est rejoué
   }
 }
 
@@ -283,14 +295,22 @@ async function connexion(role, libelle) {
     const cle = saisie.trim();
     if (!cle) { await dialogAlerter('Clé incorrecte. Réessaie.'); continue; }
     let ok;
-    try {
-      ok = await cleValide(role, cle);
-    } catch (err) {
-      // ⛔ PANNE, PAS REFUS. On ne dit pas « clé incorrecte » — ce serait accuser l'utilisateur
-      //    d'une erreur qu'il n'a pas commise et l'enfermer dans une boucle de saisie inutile.
-      //    ⚠️ Et on ne mémorise RIEN : une clé non vérifiée n'est pas une clé acceptée.
-      await dialogAlerter(MESSAGE_VERIF_IMPOSSIBLE + err.message);
-      return false;
+    while (ok === undefined) {
+      try {
+        ok = await cleValide(role, cle);
+      } catch (err) {
+        // ⛔ PANNE, PAS REFUS. On ne dit pas « clé incorrecte » — ce serait accuser l'utilisateur
+        //    d'une erreur qu'il n'a pas commise et l'enfermer dans une boucle de saisie inutile.
+        //    ⚠️ Et on ne mémorise RIEN : une clé non vérifiée n'est pas une clé acceptée.
+        // ⭐ RÉESSAI EXPLICITE (UX-CLE-SCORES-RETRY-DR-5A) — clé SCORES seulement. La clé tapée
+        //    reste dans `cle`, en mémoire vive, le temps de CET appel : jamais rangée, jamais
+        //    affichée. « Réessayer » relance la même vérification, sans ressaisie ; rien ne
+        //    repart tout seul. « Annuler » (ou Échap) abandonne, et `cle` disparaît avec l'appel.
+        //    ⚠️ Clé admin : comportement inchangé (alerte, abandon).
+        if (role !== 'scores') { await dialogAlerter(MESSAGE_VERIF_IMPOSSIBLE + err.message); return false; }
+        if (!await dialogConfirmer(MESSAGE_VERIF_IMPOSSIBLE + err.message,
+            { ok: 'Réessayer', annuler: 'Annuler' })) return false;
+      }
     }
     if (ok) { definirCleLocale(role, cle); return true; }
     await dialogAlerter('Clé incorrecte. Réessaie.');
@@ -309,13 +329,19 @@ async function demanderCleValide(role, message) {
     const cle = saisie.trim();
     if (cle) {
       let ok;
-      try {
-        ok = await cleValide(role, cle);
-      } catch (err) {
-        // ⛔ Même règle que `connexion` : une panne n'est pas un refus, et une clé non
-        //    vérifiée n'est jamais mémorisée.
-        await dialogAlerter(MESSAGE_VERIF_IMPOSSIBLE + err.message);
-        return null;
+      while (ok === undefined) {
+        try {
+          ok = await cleValide(role, cle);
+        } catch (err) {
+          // ⛔ Même règle que `connexion` : une panne n'est pas un refus, et une clé non
+          //    vérifiée n'est jamais mémorisée.
+          // ⭐ Et même réessai explicite, clé SCORES seulement (UX-CLE-SCORES-RETRY-DR-5A) :
+          //    « Réessayer » revérifie la même clé ; « Annuler » abandonne — l'appelant ne reçoit
+          //    rien, donc rien n'est déverrouillé. Clé admin : alerte et abandon, comme avant.
+          if (role !== 'scores') { await dialogAlerter(MESSAGE_VERIF_IMPOSSIBLE + err.message); return null; }
+          if (!await dialogConfirmer(MESSAGE_VERIF_IMPOSSIBLE + err.message,
+              { ok: 'Réessayer', annuler: 'Annuler' })) return null;
+        }
       }
       if (ok) { definirCleLocale(role, cle); return cle; }
     }
