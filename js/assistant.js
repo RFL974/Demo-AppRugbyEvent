@@ -293,6 +293,62 @@ function allerA(i, direction) {
     li.classList.toggle('est-faite', k < Math.min(i, assistantAtteint));
   });
 
+  /* ⭐ LE PARCOURS DE FOCUS SUIT LA CARTE VISIBLE (CORR-UX-ACCES-SCORES-DR-5E)
+   *
+   * ⛔ LE DÉFAUT, préexistant et invisible à l'œil : les treize cartes vivent TOUTES dans le
+   * document en même temps — le carrousel ne fait que faire glisser la piste (`translateX`),
+   * il n'en retire aucune. Les douze cartes hors écran gardaient donc tous leurs champs et
+   * tous leurs boutons dans l'ordre de tabulation ET dans l'arbre d'accessibilité.
+   * 🔬 MESURÉ AU CLAVIER, sur téléphone simulé, en traversant une à une des commandes
+   * INVISIBLES pour atteindre « Ouvrir la table de marque » sur la carte Publication :
+   * 138 tabulations à la revue de réception du lot 5E ; 72 tabulations depuis le fil d'étapes
+   * lors du recontrôle du 2026-09-12, sur une page ouverte sans clé admin (donc avec des listes
+   * vides, moins de commandes à traverser). ⚠️ Le chiffre dépend de l'état du classeur — le
+   * défaut, lui, n'en dépend pas. Après ce correctif : 8 tabulations, et aucune carte invisible
+   * traversée. Le lien était techniquement focalisable, donc les contrôles automatiques le
+   * déclaraient accessible — il ne l'était pas pour une personne réelle.
+   *
+   * ⭐ `inert` fait exactement, et seul, ce qu'il faut : la carte et TOUTE sa descendance
+   * sortent du parcours de focus, de l'arbre d'accessibilité et du test de survol, sans
+   * déplacer un pixel — la hauteur que mesure `ajusterHauteur()` juste en dessous est
+   * inchangée, et l'animation de glissement aussi. ⛔ C'est pour cela qu'on ne peut PAS
+   * employer `hidden` ici comme le fait la barre latérale (`ecrans.js`, `ecran.hidden`) : une
+   * carte retirée de la mise en page ne peut plus glisser ni être mesurée.
+   * `aria-hidden` est posé EN PLUS, pour les technologies d'assistance dont le moteur ne
+   * connaîtrait pas encore `inert`. Les deux marques sont retirées de la carte active : elle
+   * retrouve son état accessible ordinaire, sans mémoire de son passage en inerte.
+   *
+   * ⛔ CE BLOC NE DÉCIDE DE RIEN. Il ne fait que recopier `i`, déjà arrêté plus haut par le
+   * verrou : aucune règle métier, aucun prérequis, aucune étape `libre`, aucune progression
+   * acquise n'est lue ni écrite ici. ⛔ Et ce n'est pas une seconde navigation : rien dans ce
+   * bloc ne change de carte — la seule chose qui puisse bouger est le focus, et seulement
+   * pour le rattraper là où le navigateur allait le perdre (voir juste en dessous). */
+  const slides = track.querySelectorAll('.asst-slide');
+  if (slides.length) {
+    /* ⚠️ RATTRAPAGE DU FOCUS. Si le focus se tient DANS la carte que l'on quitte (flèches
+       ← → depuis un bouton de la carte, par exemple), la rendre inerte le laisse sans hôte :
+       le navigateur le rend au document, et la tabulation suivante repartirait du TOUT DÉBUT
+       de la page. ⭐ On le confie alors à l'étape active du fil — le repère du parcours guidé,
+       et rien d'autre. ⛔ Jamais au premier champ de la carte : ce serait décider à la place
+       de l'organisateur où il en est. */
+    const focusCourant = document.activeElement;
+    let focusDevientInerte = false;
+    for (let k = 0; k < slides.length; k++) {
+      const estActive = (k === i);
+      if (!estActive && focusCourant && slides[k].contains && slides[k].contains(focusCourant)) {
+        focusDevientInerte = true;
+      }
+      if (estActive) {
+        slides[k].removeAttribute('inert');
+        slides[k].removeAttribute('aria-hidden');
+      } else {
+        slides[k].setAttribute('inert', '');
+        slides[k].setAttribute('aria-hidden', 'true');
+      }
+    }
+    if (focusDevientInerte && steps[i] && steps[i].focus) steps[i].focus();
+  }
+
   // Compteur + boutons Précédent/Suivant.
   const compteur = document.getElementById('asst-compteur');
   if (compteur) compteur.textContent = 'Étape ' + (i + 1) + ' / ' + ASSISTANT_ETAPES.length + ' — ' + ASSISTANT_ETAPES[i].titre;

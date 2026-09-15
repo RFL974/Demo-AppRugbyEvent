@@ -65,6 +65,11 @@ async function initSaisie() {
   const btnMaj = document.getElementById('bouton-rafraichir-saisie');
   if (btnMaj) btnMaj.addEventListener('click', rafraichirSaisie);
 
+  // ⭐ IMPL-RACCORDEMENT-ACCES-SCORES-DR-5R — page servie par la passerelle PROTÉGÉE (js/saisie-protegee.js
+  //   chargé après ce fichier) : ⛔ aucune lecture avant le jeton ET la clé scores, et plus jamais
+  //   `getAll` ni `getCapacitesCategories`. Sans ce fichier, le parcours ci-dessous est inchangé.
+  if (typeof initSaisieProtegee === 'function') return initSaisieProtegee();
+
   try {
     // ⚡ getAll (matchs) et getCapacitesCategories (tir au but) partent EN MÊME TEMPS. Les capacités
     // sont tolérantes à l'échec (backend pas encore redéployé) : la saisie reste alors en mode simple.
@@ -93,6 +98,8 @@ async function initSaisie() {
  * pourquoi c'est un bouton manuel (on rafraîchit quand on ne saisit rien).
  */
 async function rafraichirSaisie() {
+  // ⭐ 5R — page protégée : la relecture passe par `getSaisieScores` (jeton + clé), jamais par getAll.
+  if (typeof rafraichirSaisieProtegee === 'function') return rafraichirSaisieProtegee();
   const bouton = document.getElementById('bouton-rafraichir-saisie');
   const texte = bouton.textContent;
   bouton.disabled = true;
@@ -611,7 +618,11 @@ document.addEventListener('click', async function (evenement) {
   // 1) Score validé (définitif) et verrouillé → « Corriger » redemande la clé scores
   //    (confirmation forte), puis déverrouille les champs sans encore rien envoyer.
   if (verrouille) {
-    const cle = await demanderCleValide('scores', '🔒 Corriger un score définitif\n\nEntre la clé scores :');
+    // ⭐ 5R — page protégée : la clé est revalidée AVEC le jeton, et un match modifié ailleurs est
+    //   rechargé au lieu d'être déverrouillé. Sans saisie-protegee.js, parcours historique inchangé.
+    const cle = (typeof confirmerCleCorrectionProtegee === 'function')
+      ? await confirmerCleCorrectionProtegee(carte.getAttribute('data-id'))
+      : await demanderCleValide('scores', '🔒 Corriger un score définitif\n\nEntre la clé scores :');
     if (cle == null) return; // annulé → le score reste verrouillé
     deverrouiller(carte);
     afficherMessage(msg, 'Corrige le score puis valide.', 'ok');
@@ -658,6 +669,9 @@ document.addEventListener('click', async function (evenement) {
     const data = Object.assign({ id_match: id, modification: enEdition }, champsScore);
     if (coupe && vainqueur) data.vainqueur = vainqueur;
     if (forcerCascade) data.forcerCascade = true;
+    // ⭐ 5R — page protégée : jeton, `requete_id` neuf et `version_lue` du match ; ⛔ aucun renvoi
+    //   automatique. Sans saisie-protegee.js, parcours historique inchangé.
+    if (typeof envoyerScoreProtege === 'function') return envoyerScoreProtege(data);
     return apiPostProtege('enregistrerScore', data, 'scores', 'de saisie des scores');
   }
 
@@ -684,6 +698,8 @@ document.addEventListener('click', async function (evenement) {
     // liste pour que l'équipe gagnante apparaisse tout de suite dans le match suivant.
     if (m) {
       m.score_A = res.match.score_A; m.score_B = res.match.score_B; m.statut = 'terminé';
+      // ⭐ 5R — la version du match RÉELLEMENT écrit devient la version lue du prochain envoi.
+      if (res.version_apres) m.version_lue = res.version_apres;
       // Détail éventuel (mode tir au but) : mémorise les compteurs recalculés côté serveur.
       if (res.detail) {
         ['essais_A', 'essais_B', 'transfo_A', 'transfo_B', 'pen_A', 'pen_B', 'drop_A', 'drop_B']

@@ -35,11 +35,15 @@ poules et du planning, partenaires, publication. Sur grand écran, une barre lat
 onglets ; sur mobile, un assistant à cartes qui guide pas à pas. **Protégée par une clé
 administrateur.**
 
-### La saisie des scores — `saisie.html`
+### La saisie des scores — `saisie.html` (page fermée) et la saisie protégée
 
-L'écran de la table de marque le jour du tournoi : filtres par catégorie et par terrain,
-accordéons par match, saisie rapide. **Protégée par une clé scores**, distincte de la clé
-administrateur.
+`saisie.html` n'est plus la table de marque : c'est une **page fermée d'information**, sans script
+ni donnée. La vraie saisie (filtres par catégorie et par terrain, accordéons par match, saisie
+rapide) est servie par une petite passerelle Apps Script séparée, derrière un **lien et un QR code propres à
+chaque tournoi**, que l'organisateur prépare, ouvre, met en pause, renouvelle ou clôture depuis
+l'administration (carte « Publier le tournoi »). Cette page protégée réutilise les styles et les
+scripts de ce dépôt (`js/saisie.js`, `js/saisie-protegee.js`) et demande ensuite la **clé scores**,
+distincte de la clé administrateur et jamais présente dans le lien.
 
 ### Les invitations et les dossiers clubs
 

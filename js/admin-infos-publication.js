@@ -531,6 +531,9 @@ function majPublication() {
   }
   majAccesPublic();   // l'adresse, elle, ne dépend pas de l'état : seule la NOTE change
   majVerrouPublier(); // le GESTE, lui, reste soumis aux prérequis — mais lui SEUL
+  // ⭐ 5R — l'accès de la table de marque, relu APRÈS la connexion admin (cette fonction n'est
+  //   appelée qu'une fois connecté). ⛔ Lecture seule, sans verrou ; aucun changement d'état ici.
+  chargerAccesScores();
 }
 
 /**
@@ -658,6 +661,401 @@ async function onCopierAdressePublique() {
  *  ⛔ AUCUNE écriture serveur, AUCUN effet sur l'état de publication. */
 function onOuvrirPagePublique() {
   window.open(urlPagePublique(configCourante.global || {}), '_blank', 'noopener');
+}
+
+/* --------------------------------------------------------------------------
+   L'ACCÈS À LA TABLE DE MARQUE (UX-ACCES-SCORES-DR-5E, raccordé par IMPL-RACCORDEMENT-ACCES-SCORES-DR-5R)
+
+   ⭐ CE QUI A CHANGÉ AVEC 5R. Le lot 5E fabriquait ici une adresse GÉNÉRIQUE (`saisie.html`), la
+   même pour tous les tournois et valable pour toujours. ⛔ Elle n'existe plus. Le lien vient du
+   SERVEUR (`getAccesScoresAdmin`), propre à l'édition, et seulement quand un accès est préparé ;
+   le QR code est dessiné en local à partir de ce seul lien.
+
+   ⛔ CE QUE CE CODE NE FAIT PAS, et chaque ligne y veille :
+     · aucun changement d'état automatique : chaque geste part d'un clic, et la rotation, la pause
+       et la clôture passent par une confirmation explicite ;
+     · aucune clé dans le lien ou le QR (la page de saisie demande la clé scores pour elle-même) ;
+     · aucune lecture avant la connexion admin, et jamais de fenêtre de clé ouverte spontanément ;
+     · aucun réessai automatique d'une écriture : une panne se montre, l'organisateur décide.
+   -------------------------------------------------------------------------- */
+
+const ACCES_SCORES_LIBELLES_ETAT = {
+  ABSENT: 'Aucun accès — le lien n\'existe pas encore',
+  PREPARE: 'Préparé — le lien existe, mais la saisie est fermée',
+  OUVERT: 'Ouvert — la table de marque peut saisir les scores',
+  FIGE: 'En pause — la saisie est fermée ; le même lien pourra reprendre',
+  CLOTURE: 'Clôturé — le lien est définitivement inutilisable'
+};
+
+/* L'ordre d'affichage des gestes. ⛔ Seuls ceux que le SERVEUR déclare possibles sont montrés. */
+const ACCES_SCORES_GESTES = [
+  { action: 'PREPARER', libelle: 'Préparer le lien' },
+  { action: 'OUVRIR', libelle: 'Ouvrir la saisie' },
+  { action: 'FIGER', libelle: 'Mettre en pause' },
+  { action: 'REPRENDRE', libelle: 'Reprendre la saisie' },
+  { action: 'ROTATION', libelle: 'Renouveler le lien' },
+  { action: 'CLOTURER', libelle: 'Clôturer définitivement', danger: true }
+];
+
+let accesScoresCourant = null;     // le dernier état RENDU PAR LE SERVEUR (jamais deviné ici)
+let accesScoresSequence = 0;       // une réponse plus ancienne ne remplace jamais une plus récente
+let accesScoresEcouteursPoses = false;
+let matchsLitige = [];
+
+/** Un identifiant de demande NEUF par geste (il n'est pas secret : il doit être unique). */
+function nouvelIdRequeteAdmin() {
+  const c = (typeof crypto !== 'undefined') ? crypto : null;
+  if (c && typeof c.randomUUID === 'function') return 'adm-' + c.randomUUID();
+  if (c && typeof c.getRandomValues === 'function') {
+    const octets = new Uint8Array(16);
+    c.getRandomValues(octets);
+    return 'adm-' + Array.from(octets, function (b) { return (b < 16 ? '0' : '') + b.toString(16); }).join('');
+  }
+  return 'adm-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2) +
+    Math.random().toString(36).slice(2);
+}
+
+/**
+ * Appelée UNE fois à l'ouverture (`initAdmin`), avant que le mode guidé ne déplace les blocs :
+ * branche les gestes du bloc et affiche son état « non chargé ». ⛔ Aucun appel réseau.
+ */
+function majAccesSaisie() {
+  if (!document.getElementById('acces-saisie')) return;   // bloc absent : on ne casse rien
+  if (!accesScoresEcouteursPoses) {
+    const brancher = function (id, type, fn) {
+      const el = document.getElementById(id);
+      if (el) el.addEventListener(type, fn);
+    };
+    brancher('acces-saisie-actions', 'click', onClicGesteAccesScores);
+    brancher('bouton-litige-charger', 'click', function () { chargerMatchsLitige(false); });
+    brancher('bouton-litige-corriger', 'click', onCorrigerScoreLitige);
+    brancher('litige-match', 'change', majFormulaireLitige);
+    accesScoresEcouteursPoses = true;
+  }
+  if (!accesScoresCourant) rendreAccesScores(null);
+}
+
+/** « Verrouiller » : le lien porte un jeton, il quitte l'écran avec la session. */
+function masquerAccesScores() {
+  accesScoresSequence++;
+  accesScoresCourant = null;
+  matchsLitige = [];
+  rendreAccesScores(null);
+  const formulaire = document.getElementById('litige-formulaire');
+  if (formulaire) formulaire.hidden = true;
+}
+
+/**
+ * Lit l'état de l'accès (clé admin). ⭐ Appelée après la connexion (`majPublication`) et après chaque
+ * geste. ⛔ Sans clé admin rangée, elle ne fait RIEN : elle n'ouvre jamais de fenêtre de clé.
+ */
+async function chargerAccesScores() {
+  if (!document.getElementById('acces-saisie')) return false;
+  let cle = '';
+  try { cle = lireCleLocale('admin'); } catch (e) { cle = ''; }
+  if (!cle) { masquerAccesScores(); return false; }
+  const numero = ++accesScoresSequence;
+  try {
+    const etat = await apiPostProtege('getAccesScoresAdmin', {}, 'admin', 'admin');
+    if (numero !== accesScoresSequence) return false;
+    accesScoresCourant = etat;
+    rendreAccesScores(etat);
+    return true;
+  } catch (err) {
+    if (numero !== accesScoresSequence) return false;
+    const message = document.getElementById('message-acces-saisie');
+    if (message) afficherMessage(message, '⚠️ État de l\'accès indisponible : ' + err.message, 'ko');
+    return false;
+  }
+}
+
+/** Le texte d'avertissement du calcul de fin. ⛔ Il n'empêche jamais la pause manuelle. */
+function avertissementFinAcces(etat) {
+  const fin = etat && etat.fin;
+  if (!fin) return null;
+  const cats = (fin.en_cause || []).join(', ');
+  if (fin.suggestion === 'GEL_POSSIBLE') {
+    return { texte: '✅ Tous les matchs prévus sont terminés : tu peux mettre la saisie en pause.', type: 'ok' };
+  }
+  if (fin.suggestion === 'GENERER_SUITE') {
+    return { texte: 'ℹ️ Une phase suivante est attendue' + (cats ? ' (' + cats + ')' : '') +
+      '. La pause reste possible, avec une confirmation.', type: 'ko' };
+  }
+  if (fin.motif === 'categories_incompletes') {
+    return { texte: '⚠️ Des matchs ne sont pas terminés' + (cats ? ' (' + cats + ')' : '') +
+      '. La pause reste possible, avec une confirmation renforcée.', type: 'ko' };
+  }
+  return { texte: '⚠️ La fin du tournoi ne peut pas être confirmée' + (cats ? ' (' + cats + ')' : '') +
+    '. La pause reste possible, avec une confirmation renforcée.', type: 'ko' };
+}
+
+/** Rend l'état, les gestes possibles, l'avertissement et — seulement s'il est rendu — le lien. */
+function rendreAccesScores(etat) {
+  const libelle = document.getElementById('acces-saisie-etat');
+  const gestes = document.getElementById('acces-saisie-actions');
+  const avert = document.getElementById('acces-saisie-avertissement');
+  if (!libelle) return;
+  if (gestes) gestes.innerHTML = '';
+  if (avert) afficherMessage(avert, '', 'ok');
+  afficherLienAccesScores('');
+  if (!etat) { libelle.textContent = 'Connecte-toi à l\'administration pour voir l\'accès.'; return; }
+  if (etat.disponible === false) { libelle.textContent = etat.message || 'Accès indisponible.'; return; }
+  if (etat.anomalie) { libelle.textContent = '⚠️ ' + (etat.message || 'Ligne d\'accès illisible.'); return; }
+
+  libelle.textContent = ACCES_SCORES_LIBELLES_ETAT[etat.etat] || ('État inconnu : ' + etat.etat);
+  const possibles = etat.actions_possibles || [];
+  if (gestes) {
+    ACCES_SCORES_GESTES.forEach(function (g) {
+      if (possibles.indexOf(g.action) === -1) return;
+      const bouton = document.createElement('button');
+      bouton.type = 'button';
+      bouton.className = 'bouton' + (g.danger ? ' bouton-danger' : '');
+      bouton.textContent = g.libelle;
+      bouton.setAttribute('data-geste-acces', g.action);
+      gestes.appendChild(bouton);
+    });
+  }
+  const aviso = (etat.etat === 'OUVERT' || etat.etat === 'FIGE') ? avertissementFinAcces(etat) : null;
+  let indispo = '';
+  if (etat.lien_indisponible) {
+    /* ⭐ CORR-SURFACE-HTML-ACCES-SCORES-DR-5S — l'adresse de la passerelle de saisie n'est pas réglée sur
+       le serveur : renouveler le lien ne servirait à rien. ⛔ Aucun lien n'est fabriqué ici pour autant. */
+    indispo = (etat.lien_motif === 'PASSERELLE_NON_CONFIGUREE')
+      ? '⚠️ La page de saisie des scores n\'est pas encore configurée sur le serveur : aucun lien ni QR code ne peut être affiché pour l\'instant. Renouveler le lien n\'y changera rien — ce réglage doit d\'abord être fait.'
+      : '⚠️ Le lien de ce tournoi ne peut pas être réaffiché. Renouvelle-le pour en obtenir un nouveau (l\'ancien ne fonctionnera plus).';
+  }
+  if (avert && (aviso || indispo)) {
+    afficherMessage(avert, [aviso ? aviso.texte : '', indispo].filter(Boolean).join('\n'),
+      (indispo || (aviso && aviso.type === 'ko')) ? 'ko' : 'ok');
+  }
+  afficherLienAccesScores(etat.lien || '');
+}
+
+/** Le lien et le QR : ⛔ affichés seulement pour une adresse https rendue par le serveur. */
+function afficherLienAccesScores(url) {
+  const valide = /^https:\/\//.test(String(url || ''));
+  const corps = document.getElementById('acces-saisie-corps');
+  const lien = document.getElementById('acces-saisie-lien');
+  const texte = document.getElementById('acces-saisie-url');
+  const qr = document.getElementById('acces-saisie-qr');
+  if (corps) corps.hidden = !valide;
+  if (lien) lien.href = valide ? url : '#';
+  if (texte) texte.textContent = valide ? url : '';   // ⛔ textContent, jamais innerHTML
+  if (!qr) return;
+  if (valide) {
+    qr.hidden = false;
+    qr.setAttribute('data-url', url);                  // ⭐ UNE seule source pour le lien et le QR
+    dessinerQrSaisie();
+  } else {
+    qr.removeAttribute('data-url');
+    qr.removeAttribute('data-qr');
+    const ancien = qr.querySelector('svg');
+    if (ancien) ancien.remove();
+  }
+}
+
+async function onClicGesteAccesScores(evenement) {
+  const cible = evenement && evenement.target;
+  const bouton = (cible && cible.closest) ? cible.closest('[data-geste-acces]') : null;
+  if (!bouton || bouton.disabled) return;
+  await executerGesteAccesScores(bouton.getAttribute('data-geste-acces'));
+}
+
+async function creerConfirmationGeste(transition, versionLue) {
+  return ecrireAdmin('creerConfirmationAccesScores',
+    { transition: transition, version_lue: versionLue, requete_id: nouvelIdRequeteAdmin() });
+}
+
+/**
+ * ⭐ UN GESTE D'ORGANISATEUR. La version lue part avec la demande : un écran périmé est refusé par le
+ * serveur (jamais appliqué). Rotation, pause et clôture exigent une confirmation explicite ; quand le
+ * calcul de fin ne conclut pas, une confirmation renforcée est créée CÔTÉ SERVEUR, puis consommée.
+ * ⛔ Aucun réessai automatique : une panne se montre, et l'écran est relu dans tous les cas.
+ */
+async function executerGesteAccesScores(action) {
+  const etat = accesScoresCourant;
+  const message = document.getElementById('message-acces-saisie');
+  if (!etat || etat.disponible === false || (etat.actions_possibles || []).indexOf(action) === -1) return false;
+  const versionLue = String(etat.version);
+  const donnees = { transition: action, version_lue: versionLue, requete_id: nouvelIdRequeteAdmin() };
+  const aviso = avertissementFinAcces(etat);
+  const texteAviso = aviso ? aviso.texte : '';
+
+  if (action === 'ROTATION' && !await dialogConfirmer('Renouveler le lien de la table de marque ?\n\n' +
+      'L\'ancien lien et l\'ancien QR code ne fonctionneront PLUS : il faudra distribuer le nouveau.',
+      { ok: 'Renouveler', danger: true })) return false;
+
+  if (action === 'FIGER') {
+    const renforcee = !!(etat.gel && etat.gel.decision === 'CONFIRMATION_REQUISE');
+    const question = renforcee
+      ? '⚠️ Le calcul ne confirme pas la fin du tournoi.\n\n' + texteAviso +
+        '\n\nMettre la saisie en pause quand même ? Le même lien pourra reprendre.'
+      : 'Mettre la saisie en pause ?\n\nLa table de marque ne pourra plus saisir. Le même lien pourra reprendre.';
+    if (!await dialogConfirmer(question, { ok: 'Mettre en pause', danger: renforcee })) return false;
+    if (renforcee) {
+      try { donnees.confirmation_id = (await creerConfirmationGeste('FIGER', versionLue)).confirmation_id; }
+      catch (err) { if (message) afficherMessage(message, '⚠️ ' + err.message, 'ko'); await chargerAccesScores(); return false; }
+    }
+  }
+
+  if (action === 'CLOTURER') {
+    if (!await dialogConfirmer('Clôturer DÉFINITIVEMENT l\'accès de la table de marque ?\n\n' +
+        'Le lien et le QR code seront morts pour toujours, sans reprise possible. ' +
+        'Tu pourras encore corriger un score depuis l\'administration.',
+        { ok: 'Clôturer', danger: true })) return false;
+    if (etat.cloture && etat.cloture.decision === 'CONFIRMATION_RENFORCEE') {
+      if (!await dialogConfirmer('⚠️ Le calcul ne confirme pas la fin du tournoi.\n\n' + texteAviso +
+          '\n\nClôturer quand même un tournoi peut-être seulement interrompu ?',
+          { ok: 'Oui, clôturer', danger: true })) return false;
+      try { donnees.confirmation_id = (await creerConfirmationGeste('CLOTURER', versionLue)).confirmation_id; }
+      catch (err) { if (message) afficherMessage(message, '⚠️ ' + err.message, 'ko'); await chargerAccesScores(); return false; }
+    }
+    donnees.confirme = true;
+  }
+
+  const gestes = document.getElementById('acces-saisie-actions');
+  if (gestes) gestes.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+  try {
+    const res = await ecrireAdmin('changerAccesScores', donnees);
+    if (message) afficherMessage(message, '✅ ' + (ACCES_SCORES_LIBELLES_ETAT[res.etat] || 'Accès mis à jour.'), 'ok');
+  } catch (err) {
+    if (message) afficherMessage(message, '⚠️ ' + err.message, 'ko');
+  }
+  await chargerAccesScores();   // ⭐ l'écran suit le serveur, jamais l'inverse
+  return true;
+}
+
+/* ---- Correction d'un score suite à un litige (organisateur seulement) ---- */
+
+function matchLitigeChoisi() {
+  const select = document.getElementById('litige-match');
+  const id = select ? String(select.value) : '';
+  return matchsLitige.find(function (m) { return String(m.id_match) === id; }) || null;
+}
+
+function majFormulaireLitige() {
+  const m = matchLitigeChoisi();
+  if (!m) return;
+  const libA = document.getElementById('litige-lib-a');
+  const libB = document.getElementById('litige-lib-b');
+  const a = document.getElementById('litige-score-a');
+  const b = document.getElementById('litige-score-b');
+  if (libA) libA.textContent = 'Score ' + String(m.nom_A || 'équipe A');
+  if (libB) libB.textContent = 'Score ' + String(m.nom_B || 'équipe B');
+  if (a) a.value = (m.score_A === '' || m.score_A == null) ? '' : String(m.score_A);
+  if (b) b.value = (m.score_B === '' || m.score_B == null) ? '' : String(m.score_B);
+}
+
+/** Relit les matchs ET leur version (clé admin). */
+async function chargerMatchsLitige(conserverMessage) {
+  const message = document.getElementById('message-litige');
+  try {
+    const res = await apiPostProtege('getMatchsLitige', {}, 'admin', 'admin');
+    const select = document.getElementById('litige-match');
+    const avant = select ? String(select.value) : '';
+    matchsLitige = res.matchs || [];
+    if (select) {
+      select.innerHTML = '';
+      matchsLitige.forEach(function (m) {
+        const option = document.createElement('option');
+        option.value = String(m.id_match);
+        const score = (m.score_A === '' || m.score_A == null) ? 'à jouer' : m.score_A + ' – ' + m.score_B;
+        option.textContent = String(m.categorie) + ' · ' + String(m.nom_A) + ' – ' + String(m.nom_B) + ' (' + score + ')';
+        select.appendChild(option);
+      });
+      if (avant && matchsLitige.some(function (m) { return String(m.id_match) === avant; })) select.value = avant;
+    }
+    const formulaire = document.getElementById('litige-formulaire');
+    if (formulaire) formulaire.hidden = matchsLitige.length === 0;
+    majFormulaireLitige();
+    if (message && !conserverMessage) {
+      afficherMessage(message, matchsLitige.length ? '' : 'Aucun match à corriger.', matchsLitige.length ? 'ok' : 'ko');
+    }
+  } catch (err) {
+    if (message) afficherMessage(message, '⚠️ ' + err.message, 'ko');
+  }
+}
+
+/**
+ * ⭐ LA CORRECTION DE LITIGE : motif obligatoire, confirmation explicite, version lue, `requete_id`.
+ * ⛔ Elle ne touche jamais à l'accès de la table de marque. Une cascade de Coupe exige une seconde
+ * décision explicite ; ⛔ rien n'est régénéré en silence.
+ */
+async function onCorrigerScoreLitige() {
+  const message = document.getElementById('message-litige');
+  const m = matchLitigeChoisi();
+  if (!m) { afficherMessage(message, 'Choisis un match.', 'ko'); return; }
+  const a = String(document.getElementById('litige-score-a').value || '').trim();
+  const b = String(document.getElementById('litige-score-b').value || '').trim();
+  const motif = String(document.getElementById('litige-motif').value || '').trim();
+  if (a === '' || b === '') { afficherMessage(message, 'Entre les deux scores.', 'ko'); return; }
+  if (!motif) { afficherMessage(message, 'Le motif du litige est obligatoire.', 'ko'); return; }
+  const avant = (m.score_A === '' || m.score_A == null) ? 'aucun score' : m.score_A + ' – ' + m.score_B;
+  if (!await dialogConfirmer('Corriger le score de ' + m.nom_A + ' – ' + m.nom_B + ' ?\n\n' +
+      'Avant : ' + avant + '\nAprès : ' + a + ' – ' + b + '\nMotif : ' + motif + '\n\n' +
+      'La correction est tracée et ne rouvre pas la saisie de la table de marque.',
+      { ok: 'Corriger', danger: true })) return;
+
+  const donnees = { id_match: m.id_match, score_A: a, score_B: b, motif: motif, confirme: true,
+                    version_lue: m.version_lue, requete_id: nouvelIdRequeteAdmin() };
+  const bouton = document.getElementById('bouton-litige-corriger');
+  if (bouton) bouton.disabled = true;
+  try {
+    let res;
+    try {
+      res = await ecrireAdmin('corrigerScoreLitige', donnees);
+    } catch (err) {
+      const rep = err.reponse || {};
+      if (!rep.cascade_requise) throw err;
+      if (!await dialogConfirmer('⚠️ ' + err.message + '\n\nConfirmer la correction en cascade ?',
+          { ok: 'Corriger quand même', danger: true })) {
+        afficherMessage(message, 'Correction annulée.', 'ko');
+        return;
+      }
+      res = await ecrireAdmin('corrigerScoreLitige',
+        Object.assign({}, donnees, { forcerCascade: true, requete_id: nouvelIdRequeteAdmin() }));
+    }
+    afficherMessage(message, '✅ Score corrigé et tracé.' + (res && res.avertissement_phase_suivante
+      ? ' ⚠️ La phase suivante de cette catégorie est déjà générée : elle n\'a PAS été régénérée.' : ''), 'ok');
+  } catch (err) {
+    afficherMessage(message, '⚠️ ' + err.message, 'ko');
+  } finally {
+    if (bouton) bouton.disabled = false;
+  }
+  await chargerMatchsLitige(true);   // ⭐ versions relues : un second envoi partirait d'un état à jour
+}
+
+/**
+ * Dessine le QR code de la table de marque, en local, dans `#acces-saisie-qr`.
+ *
+ * ⭐ Même bibliothèque et mêmes réglages que le QR du dossier club (js/dossier.js, `dessinerQR`) :
+ * `qrcode(0, 'M')` = version automatique, correction moyenne, rendu SVG net à l'écran comme à
+ * l'impression. ⛔ Aucun service en ligne : la bibliothèque calcule la matrice ici.
+ *
+ * ⚠️ La valeur encodée est lue sur `data-url`, que seule `afficherLienAccesScores()` écrit, avec le
+ * lien RENDU PAR LE SERVEUR — c'est ce qui garantit que le QR et le lien disent la MÊME chose.
+ * ⛔ Ne jamais encoder autre chose ici.
+ *
+ * Échec possible et assumé : bibliothèque absente (script non chargé) ou adresse trop longue.
+ * On masque alors le QR — le lien, lui, reste là. ⛔ Jamais d'erreur qui casserait la page.
+ */
+function dessinerQrSaisie() {
+  const conteneur = document.getElementById('acces-saisie-qr');
+  if (!conteneur || typeof qrcode !== 'function') return;
+  const url = conteneur.getAttribute('data-url');
+  if (!url) return;
+  const ancien = conteneur.querySelector('svg');
+  if (ancien && conteneur.getAttribute('data-qr') === url) return; // déjà dessiné POUR CETTE adresse
+  if (ancien) ancien.remove();                                     // adresse changée : on redessine
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    conteneur.insertAdjacentHTML('afterbegin', qr.createSvgTag({ cellSize: 4, margin: 8 }));
+    conteneur.setAttribute('data-qr', url);
+  } catch (e) {
+    conteneur.hidden = true;
+  }
 }
 
 /**

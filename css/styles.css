@@ -1242,6 +1242,70 @@ button .ic { margin-right: 0.45em; }
 /* État de préparation de la phase après-midi (scores du matin saisis) */
 .apresmidi-etat { color: var(--bleu-ciel); margin: 4px 0 10px; }
 
+/* --------------------------------------------------------------------------
+   Accès à la table de marque (UX-ACCES-SCORES-DR-5E) — lien + QR vers saisie.html.
+   Réutilise le cadre `.publication-acces` ci-dessus : même bordure, même respiration,
+   donc les deux adresses de la journée se lisent comme une seule famille.
+   -------------------------------------------------------------------------- */
+.acces-saisie-quoi {
+  color: var(--bleu-ciel);
+  margin: 0 0 10px;
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+/* Le texte et le QR côte à côte sur ordinateur ; le QR passe SOUS le texte dès que la carte
+   se resserre (téléphone) plutôt que de comprimer l'adresse — elle doit rester lisible et
+   recopiable à la main sur le terrain. */
+.acces-saisie-corps {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
+}
+.acces-saisie-texte { flex: 1 1 200px; min-width: 0; }
+.acces-saisie-action { margin: 0 0 8px; }
+/* Le lien EST le bouton d'ouverture : il garde l'apparence `.bouton` tout en restant un vrai
+   lien (donc focusable au clavier et ouvrable dans un nouvel onglet par le navigateur). */
+.acces-saisie-action .bouton {
+  display: inline-block;
+  text-decoration: none;
+}
+.acces-saisie-qr { flex: none; text-align: center; max-width: 100%; }
+.acces-saisie-qr svg {
+  width: 124px;
+  height: 124px;
+  display: block;
+  margin: 0 auto;
+  background: #fff;          /* fond clair obligatoire : un QR sur fond sombre ne se scanne pas */
+  border-radius: 6px;
+}
+.acces-saisie-qr-legende {
+  display: block;
+  font-size: 0.72rem;
+  color: var(--bleu-ciel);
+  margin-top: 4px;
+  max-width: 140px;
+}
+/* IMPL-RACCORDEMENT-ACCES-SCORES-DR-5R — état de l'accès, gestes explicites, correction de litige.
+   Les boutons se replient sur plusieurs lignes plutôt que de déborder sur téléphone. */
+.acces-saisie-etat { margin: 0 0 8px; }
+.acces-saisie-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 8px 0;
+}
+.acces-saisie-actions .bouton { margin: 0; }
+.acces-saisie-litige { margin-top: 12px; }
+.acces-saisie-litige summary { cursor: pointer; font-weight: 600; }
+.litige-formulaire {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  max-width: 420px;
+}
+.litige-formulaire textarea { resize: vertical; }
+
 /* ==========================================================================
    Barre de connexion admin : indique si la clé admin est active
    ========================================================================== */

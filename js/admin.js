@@ -827,6 +827,16 @@ async function initAdmin() {
   if (!adminEcouteursPoses) {
     brancherEcouteursAdmin();
     adminEcouteursPoses = true;
+    // ⭐ ACCÈS À LA TABLE DE MARQUE (UX-ACCES-SCORES-DR-5E, raccordé par 5R) : `majAccesSaisie()`
+    //    branche les gestes du bloc et affiche son état « non chargé ». Posé ICI, et pas dans
+    //    `chargerAdmin()`, pour deux raisons :
+    //      · ses écouteurs ne doivent être posés qu'UNE fois, même après un « Réessayer » ;
+    //      · il doit être prêt AVANT `initAssistant()` juste en dessous, qui DÉPLACE les blocs
+    //        dans les cartes.
+    //    ⛔ Aucun appel réseau ici : l'état réel de l'accès (et son lien, s'il existe) n'est lu
+    //    qu'après la connexion admin, par `chargerAdmin()` → `majPublication()` → `chargerAccesScores()`
+    //    (admin-infos-publication.js).
+    if (typeof majAccesSaisie === 'function') majAccesSaisie();
     // Assistant à cartes (surcouche de présentation) : une fois tout rendu et branché, on
     // laisse assistant.js réorganiser la page en cartes (ou non, selon la préférence mémorisée).
     if (typeof initAssistant === 'function') initAssistant();
@@ -1257,6 +1267,8 @@ async function onClicConnexion(evenement) {
     definirCleLocale('admin', '');
     definirAdminConnecte(false);
     majBarreConnexion(false);
+    // ⭐ 5R — le lien de la table de marque porte un jeton : verrouiller le retire de l'écran.
+    if (typeof masquerAccesScores === 'function') masquerAccesScores();
     return;
   }
   // Se connecter (depuis l'état verrouillé) : on RECHARGE, et c'est tout.

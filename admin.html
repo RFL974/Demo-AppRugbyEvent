@@ -867,6 +867,78 @@
           <div id="message-acces-public" class="message-form" role="status" aria-live="polite"></div>
         </div>
 
+        <!-- ⭐ ACCÈS À LA TABLE DE MARQUE (UX-ACCES-SCORES-DR-5E, raccordé par
+             IMPL-RACCORDEMENT-ACCES-SCORES-DR-5R).
+
+             ⭐ POURQUOI ICI, dans « Publier le tournoi » : c'est la carte des ADRESSES à
+             communiquer, et la SEULE que le parcours guidé déclare `libre` dans ses DEUX modes
+             (assistant.js sur mobile, ecrans.js sur ordinateur) — donc joignable le matin du
+             tournoi. ⛔ Aucun écran n'est ajouté, aucun bloc n'est déplacé.
+
+             ⭐ CE QUI CHANGE AVEC 5R : il n'y a plus d'adresse générique calculée par la page. Le
+             lien (et son QR code) vient du SERVEUR, propre à CE tournoi, et n'existe qu'une fois
+             l'accès préparé. L'organisateur ouvre, met en pause, reprend, renouvelle ou clôture
+             l'accès par des boutons explicites : ⛔ rien ne change d'état tout seul.
+
+             ⛔ Le lien ne contient AUCUNE clé : la page de saisie demande la clé scores pour
+             elle-même. Le contenu dynamique est rempli par admin-infos-publication.js, après la
+             connexion à l'administration. -->
+        <div class="publication-acces acces-saisie" id="acces-saisie">
+          <p class="publication-acces-lib">L'accès de la table de marque (saisie des scores)</p>
+          <p class="acces-saisie-quoi">
+            C'est la page sur laquelle la personne à la table de marque <strong>saisit les scores
+            des matchs</strong> pendant le tournoi. Chaque tournoi reçoit son propre lien et son
+            propre QR code, qui ne fonctionnent que lorsque tu as <strong>ouvert</strong> la saisie.
+          </p>
+          <p class="acces-saisie-etat">État : <strong id="acces-saisie-etat">Connecte-toi à l'administration pour voir l'accès.</strong></p>
+          <div id="acces-saisie-avertissement" class="message-form" role="status" aria-live="polite"></div>
+          <div class="acces-saisie-actions" id="acces-saisie-actions"></div>
+          <div class="acces-saisie-corps" id="acces-saisie-corps" hidden>
+            <div class="acces-saisie-texte">
+              <p class="acces-saisie-action">
+                <a class="bouton" id="acces-saisie-lien" href="#"
+                   target="_blank" rel="noopener noreferrer">Ouvrir la table de marque</a>
+              </p>
+              <p class="publication-acces-url"><span id="acces-saisie-url"></span></p>
+            </div>
+            <!-- QR code DÉDIÉ, dessiné en local par js/vendor/qrcode.js à partir du SEUL lien rendu
+                 par le serveur. `aria-hidden` : l'image redit le lien écrit juste à côté. -->
+            <div class="acces-saisie-qr" id="acces-saisie-qr" aria-hidden="true">
+              <span class="acces-saisie-qr-legende">Scanner pour ouvrir la table de marque</span>
+            </div>
+          </div>
+          <p class="publication-acces-note">
+            Ce lien n'est <strong>pas un accès libre</strong> : la page demande ensuite la
+            <strong>clé scores</strong>. Le lien et le QR code ne contiennent <strong>aucune clé</strong>
+            — transmets la clé scores séparément. <strong>Renouveler</strong> le lien rend l'ancien
+            QR code inutilisable ; <strong>clôturer</strong> ferme l'accès définitivement.
+          </p>
+          <div id="message-acces-saisie" class="message-form" role="status" aria-live="polite"></div>
+
+          <!-- Correction d'un score suite à un litige : réservée à l'organisateur (clé admin).
+               ⛔ Elle ne rouvre jamais l'accès de la table de marque. -->
+          <details class="acces-saisie-litige" id="acces-saisie-litige">
+            <summary>Corriger un score suite à un litige</summary>
+            <p class="note-generation">
+              Réservé à l'organisateur. La correction est <strong>tracée</strong> (avant, après,
+              motif) et <strong>ne rouvre pas</strong> la saisie de la table de marque.
+            </p>
+            <button type="button" class="bouton" id="bouton-litige-charger">Charger les matchs</button>
+            <div class="litige-formulaire" id="litige-formulaire" hidden>
+              <label class="mp-label" for="litige-match">Match</label>
+              <select id="litige-match" class="r-input"></select>
+              <label class="mp-label" for="litige-score-a" id="litige-lib-a">Score équipe A</label>
+              <input id="litige-score-a" class="r-input" type="number" min="0" inputmode="numeric">
+              <label class="mp-label" for="litige-score-b" id="litige-lib-b">Score équipe B</label>
+              <input id="litige-score-b" class="r-input" type="number" min="0" inputmode="numeric">
+              <label class="mp-label" for="litige-motif">Motif du litige (obligatoire)</label>
+              <textarea id="litige-motif" class="r-input" maxlength="500" rows="3"></textarea>
+              <button type="button" class="bouton bouton-danger" id="bouton-litige-corriger">Corriger ce score</button>
+            </div>
+            <div id="message-litige" class="message-form" role="status" aria-live="polite"></div>
+          </details>
+        </div>
+
         <button id="bouton-publier" class="bouton">…</button>
         <!-- Pourquoi « Publier » est grisé, le cas échéant. Rempli par majVerrouPublier()
              (admin-infos-publication.js) à partir du MÊME cerveau que le fil « Où en suis-je ? ».
@@ -952,6 +1024,18 @@
   <script src="js/admin-autorisation.js"></script>
   <!-- Feuille de fin de journée : réutilise pdf-lib (chargé juste au-dessus) pour le PDF. -->
   <script src="js/admin-feuille-jour.js"></script>
+  <!-- Générateur de QR code LOCAL (MIT, js/vendor/qrcode.js — déjà utilisé par le dossier club).
+       Sert ici au QR de la table de marque (carte « Publier le tournoi »). ⛔ Aucune dépendance
+       ajoutée, aucun appel réseau : la bibliothèque dessine un SVG à partir d'une chaîne.
+       `defer` dit exactement UNE chose, et il faut s'en tenir à elle : le téléchargement
+       n'interrompt pas l'analyse du document, et l'exécution est repoussée à la fin de celle-ci.
+       ⛔ Il ne rend PAS ce script gratuit : les 56 694 octets sont bel et bien téléchargés,
+       analysés et exécutés — et les scripts différés s'exécutent AVANT `DOMContentLoaded`, donc
+       avant `initAdmin()`. ⚠️ Le coût réel de ce chargement à l'ouverture de l'administration
+       n'est PAS mesuré dans ce lot : aucune affirmation n'est faite ici sur du temps gagné ou
+       perdu. `dessinerQrSaisie()` vérifie de toute façon la présence de `qrcode` avant de s'en
+       servir. -->
+  <script src="js/vendor/qrcode.js" defer></script>
   <!-- Surcouches de présentation (déplacent les blocs ci-dessus SANS toucher à admin.js) :
        6) ecrans.js    → barre latérale + onglets sur GRAND écran
        7) assistant.js → assistant à cartes sur mobile (verrou « Suivant »),
