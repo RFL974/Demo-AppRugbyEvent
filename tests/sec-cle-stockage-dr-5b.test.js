@@ -243,6 +243,9 @@ function fabriquerDom() {
 
 const repJson = (corps) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(corps) });
 
+/* 5Y — le refus neutre du futur backend, tel qu'un ANCIEN onglet de saisie le recevra. */
+const MESSAGE_ACCES_FERME = 'Accès fermé ou lien expiré. Rechargez la page ou demandez un lien à jour.';
+
 const REPONSES = {
   'succes':         () => repJson({ success: true, match: { score_A: '3', score_B: '1' } }),
   'refus':          () => repJson({ error: 'Clé incorrecte.', acces_refuse: true }),
@@ -250,7 +253,8 @@ const REPONSES = {
   'panne-http-500': () => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) }),
   'json-illisible': () => Promise.resolve({ ok: true, status: 200,
     json: () => Promise.reject(new SyntaxError('Unexpected token < in JSON at position 0')) }),
-  'erreur-metier':  () => repJson({ error: 'Service momentanément indisponible.' })
+  'erreur-metier':  () => repJson({ error: 'Service momentanément indisponible.' }),
+  'acces-ferme':    () => repJson({ error: MESSAGE_ACCES_FERME, acces_ferme: true })
 };
 
 /**
@@ -614,6 +618,18 @@ async function scenarios(page, P) {
     verifier(P + '6.' + (k + 1), GENRES6[k][1] + ' : clé conservée, aucune écriture ni saisie, un envoi, aucun rejeu',
       rangee(b) === CLE_MEMO && ecritures(b).length === 0 && nbSaisies(b) === 0 &&
       b.reseau.posts().length === 1 && b.reseau.imprevus.length === 0 && !iss.ok, etat(b));
+  }
+  if (page === 'saisie') {
+    /* ⭐ 5Y — ancien onglet (clé rangée) face au refus neutre du futur backend. */
+    const b = banc({ page, plan: ['acces-ferme'], memo: CLE_MEMO });
+    const s = lancer(b);
+    await jusqua(() => s.fini);
+    await patienter(PATIENCE);
+    const iss = issue(b, s);
+    verifier(P + '6.3', 'accès fermé (5Y) : message affiché tel quel, clé conservée, aucun dialogue ni redemande, un envoi, aucun rejeu',
+      !iss.ok && iss.message === MESSAGE_ACCES_FERME && rangee(b) === CLE_MEMO && ecritures(b).length === 0 &&
+      b.dom.stats.dialogues.length === 0 && b.reseau.posts().length === 1 && b.reseau.imprevus.length === 0,
+      etat(b) + ' / ' + masquer(iss.message));
   }
 
   /* ⑦ — clé déjà rangée refusée, puis nouvelle clé refusée à son tour. */
