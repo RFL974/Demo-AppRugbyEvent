@@ -672,8 +672,10 @@ function onOuvrirPagePublique() {
    le QR code est dessiné en local à partir de ce seul lien.
 
    ⛔ CE QUE CE CODE NE FAIT PAS, et chaque ligne y veille :
-     · aucun changement d'état automatique : chaque geste part d'un clic, et la rotation, la pause
-       et la clôture passent par une confirmation explicite ;
+     · aucun changement d'état décidé par le navigateur : chaque geste part d'un clic, et la rotation, la
+       pause et la clôture passent par une confirmation explicite. ⭐ CORR-ACCES-45MIN-DEMO : la fermeture
+       automatique (45 min après la fin prévue, ou après une reprise) est calculée par le SERVEUR ; l'écran
+       ne fait qu'afficher son échéance, ou dire qu'elle n'est pas calculable — ⛔ jamais la recalculer ;
      · aucune clé dans le lien ou le QR (la page de saisie demande la clé scores pour elle-même) ;
      · aucune lecture avant la connexion admin, et jamais de fenêtre de clé ouverte spontanément ;
      · aucun réessai automatique d'une écriture : une panne se montre, l'organisateur décide.
@@ -686,6 +688,8 @@ const ACCES_SCORES_LIBELLES_ETAT = {
   FIGE: 'En pause — la saisie est fermée ; le même lien pourra reprendre',
   CLOTURE: 'Clôturé — le lien est définitivement inutilisable'
 };
+/* ⭐ CORR-ACCES-45MIN-DEMO — l'accès est encore enregistré ouvert, mais le serveur le déclare échu. */
+const ACCES_SCORES_LIBELLE_FERME_AUTO = 'Fermé automatiquement — la table de marque ne peut plus saisir ; « Reprendre la saisie » rouvre 45 minutes avec le même lien, « Mettre en pause » la garde fermée';
 
 /* L'ordre d'affichage des gestes. ⛔ Seuls ceux que le SERVEUR déclare possibles sont montrés. */
 const ACCES_SCORES_GESTES = [
@@ -789,6 +793,75 @@ function avertissementFinAcces(etat) {
     '. La pause reste possible, avec une confirmation renforcée.', type: 'ko' };
 }
 
+/** « le 10/10 à 17:35 » — ⭐ la DATE est toujours écrite : une date de tournoi erronée se voit à l'écran. */
+function momentEcheanceAcces(instant) {
+  const texte = String(instant || '');
+  const m = /^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/.exec(texte);
+  return m ? 'le ' + m[3] + '/' + m[2] + ' à ' + m[4] + ':' + m[5] : texte;
+}
+
+/**
+ * ⭐ CORR-ACCES-45MIN-DEMO — la fermeture automatique, telle que le SERVEUR l'a calculée (`echeance_auto`).
+ * ⛔ Aucune heure n'est calculée ici, et une échéance non calculable n'est JAMAIS présentée comme une protection.
+ */
+function texteEcheanceAcces(etat) {
+  const e = etat && etat.echeance_auto;
+  if (!e) return null;
+  const fermee = etat.fermee_automatiquement === true;
+  const ouvert = etat.etat === 'OUVERT';
+  const nature = e.nature || (e.calculable === true ? 'PLANNING' : 'PLANNING_INCOMPLET');
+  const quand = momentEcheanceAcces(e.echeance);
+  const correction = ' Tu peux toujours corriger un score depuis l\'administration.';
+  const repriseIllisible = e.reprise_illisible === true
+    ? ' ⚠️ La date de la dernière reprise est illisible : elle ne prolonge rien.' : '';
+  const motif = e.message || 'échéance non calculable.';
+
+  /* ⛔ DONNÉES INVALIDES : aucune échéance fiable — la saisie n'est ouverte que pendant une fenêtre de reprise. */
+  if (nature === 'DONNEES_INVALIDES') {
+    const cause = 'données du planning invalides — ' + motif;
+    if (fermee && e.source === 'reprise') {
+      return { texte: '⛔ Saisie fermée ' + quand + ' (45 minutes après la reprise) : ' + cause +
+        ' Corrige ces données, ou « Reprendre la saisie » pour 45 minutes.' + correction + repriseIllisible, type: 'ko' };
+    }
+    if (fermee) {
+      return { texte: '⛔ Saisie fermée : ' + cause + ' Aucune échéance fiable : corrige ces données, ou « Reprendre la saisie » pour 45 minutes.' +
+        correction + repriseIllisible, type: 'ko' };
+    }
+    if (ouvert && e.source === 'reprise') {
+      return { texte: '⚠️ Fermeture automatique prévue ' + quand + ' (45 minutes après la reprise) : ' + cause + repriseIllisible, type: 'ko' };
+    }
+    /* ⛔ Sans donnée fiable, une saisie OUVERTE maintenant serait fermée aussitôt — et non « pour 45 minutes ». */
+    const suite = etat.etat === 'PREPARE'
+      ? 'une saisie ouverte maintenant serait aussitôt fermée ; « Reprendre la saisie » la rouvrirait ensuite pour 45 minutes.'
+      : '« Reprendre la saisie » ne rouvrira la saisie que pour 45 minutes.';
+    return { texte: '⚠️ Données du planning invalides — ' + motif + ' ' + suite + repriseIllisible, type: 'ko' };
+  }
+
+  /* ⚠️ PLANNING INCOMPLET (attente normale) ou NON PRIS EN CHARGE : aucune échéance tirée du planning. */
+  if (nature !== 'PLANNING') {
+    if (ouvert && e.source === 'reprise') {
+      return { texte: '⏱️ ' + (fermee ? 'Saisie fermée automatiquement ' : 'Fermeture automatique prévue ') + quand +
+        ' (45 minutes après la reprise). Planning incomplet : ' + motif + (fermee ? correction : ''), type: 'ko' };
+    }
+    return { texte: '⚠️ Fermeture automatique NON programmée : ' + motif +
+      (ouvert ? ' La saisie reste ouverte tant que tu ne la mets pas en pause.' : '') + repriseIllisible, type: 'ko' };
+  }
+
+  const pourquoi = e.source === 'reprise'
+    ? '45 minutes après la reprise'
+    : '45 minutes après la fin prévue du dernier match, ' + momentEcheanceAcces(e.fin_prevue);
+  if (fermee) {
+    return { texte: '⏱️ Saisie fermée automatiquement ' + quand + ' (' + pourquoi + ').' + correction + repriseIllisible, type: 'ko' };
+  }
+  if (e.atteinte === true) {
+    const suite = etat.etat === 'PREPARE'
+      ? 'une saisie ouverte maintenant serait aussitôt fermée ; « Reprendre la saisie » la rouvrirait ensuite pour 45 minutes.'
+      : '« Reprendre la saisie » ne rouvrira la saisie que pour 45 minutes.';
+    return { texte: '⏱️ Échéance de fermeture automatique dépassée (' + quand + ') : ' + suite + repriseIllisible, type: 'ko' };
+  }
+  return { texte: '⏱️ Fermeture automatique prévue ' + quand + ' (' + pourquoi + ').' + repriseIllisible, type: repriseIllisible ? 'ko' : 'ok' };
+}
+
 /** Rend l'état, les gestes possibles, l'avertissement et — seulement s'il est rendu — le lien. */
 function rendreAccesScores(etat) {
   const libelle = document.getElementById('acces-saisie-etat');
@@ -802,7 +875,9 @@ function rendreAccesScores(etat) {
   if (etat.disponible === false) { libelle.textContent = etat.message || 'Accès indisponible.'; return; }
   if (etat.anomalie) { libelle.textContent = '⚠️ ' + (etat.message || 'Ligne d\'accès illisible.'); return; }
 
-  libelle.textContent = ACCES_SCORES_LIBELLES_ETAT[etat.etat] || ('État inconnu : ' + etat.etat);
+  const fermeAuto = etat.fermee_automatiquement === true;
+  libelle.textContent = fermeAuto ? ACCES_SCORES_LIBELLE_FERME_AUTO
+    : (ACCES_SCORES_LIBELLES_ETAT[etat.etat] || ('État inconnu : ' + etat.etat));
   const possibles = etat.actions_possibles || [];
   if (gestes) {
     ACCES_SCORES_GESTES.forEach(function (g) {
@@ -816,6 +891,7 @@ function rendreAccesScores(etat) {
     });
   }
   const aviso = (etat.etat === 'OUVERT' || etat.etat === 'FIGE') ? avertissementFinAcces(etat) : null;
+  const echeance = texteEcheanceAcces(etat);
   let indispo = '';
   if (etat.lien_indisponible) {
     /* ⭐ CORR-SURFACE-HTML-ACCES-SCORES-DR-5S — l'adresse de la passerelle de saisie n'est pas réglée sur
@@ -824,9 +900,9 @@ function rendreAccesScores(etat) {
       ? '⚠️ La page de saisie des scores n\'est pas encore configurée sur le serveur : aucun lien ni QR code ne peut être affiché pour l\'instant. Renouveler le lien n\'y changera rien — ce réglage doit d\'abord être fait.'
       : '⚠️ Le lien de ce tournoi ne peut pas être réaffiché. Renouvelle-le pour en obtenir un nouveau (l\'ancien ne fonctionnera plus).';
   }
-  if (avert && (aviso || indispo)) {
-    afficherMessage(avert, [aviso ? aviso.texte : '', indispo].filter(Boolean).join('\n'),
-      (indispo || (aviso && aviso.type === 'ko')) ? 'ko' : 'ok');
+  if (avert && (echeance || aviso || indispo)) {
+    afficherMessage(avert, [echeance ? echeance.texte : '', aviso ? aviso.texte : '', indispo].filter(Boolean).join('\n'),
+      (indispo || (aviso && aviso.type === 'ko') || (echeance && echeance.type === 'ko')) ? 'ko' : 'ok');
   }
   afficherLienAccesScores(etat.lien || '');
 }
@@ -887,10 +963,13 @@ async function executerGesteAccesScores(action) {
 
   if (action === 'FIGER') {
     const renforcee = !!(etat.gel && etat.gel.decision === 'CONFIRMATION_REQUISE');
+    /* ⭐ CORR-ACCES-45MIN-DEMO — déjà fermé automatiquement, la pause rend la fermeture PERSISTANTE. */
+    const dejaFermee = etat.fermee_automatiquement === true
+      ? '\n\nLa saisie est déjà fermée automatiquement : la pause la gardera fermée, même si le planning change.' : '';
     const question = renforcee
       ? '⚠️ Le calcul ne confirme pas la fin du tournoi.\n\n' + texteAviso +
-        '\n\nMettre la saisie en pause quand même ? Le même lien pourra reprendre.'
-      : 'Mettre la saisie en pause ?\n\nLa table de marque ne pourra plus saisir. Le même lien pourra reprendre.';
+        '\n\nMettre la saisie en pause quand même ? Le même lien pourra reprendre.' + dejaFermee
+      : 'Mettre la saisie en pause ?\n\nLa table de marque ne pourra plus saisir. Le même lien pourra reprendre.' + dejaFermee;
     if (!await dialogConfirmer(question, { ok: 'Mettre en pause', danger: renforcee })) return false;
     if (renforcee) {
       try { donnees.confirmation_id = (await creerConfirmationGeste('FIGER', versionLue)).confirmation_id; }
@@ -915,13 +994,23 @@ async function executerGesteAccesScores(action) {
 
   const gestes = document.getElementById('acces-saisie-actions');
   if (gestes) gestes.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+  let applique = false;
   try {
     const res = await ecrireAdmin('changerAccesScores', donnees);
+    applique = true;
     if (message) afficherMessage(message, '✅ ' + (ACCES_SCORES_LIBELLES_ETAT[res.etat] || 'Accès mis à jour.'), 'ok');
   } catch (err) {
     if (message) afficherMessage(message, '⚠️ ' + err.message, 'ko');
   }
   await chargerAccesScores();   // ⭐ l'écran suit le serveur, jamais l'inverse
+  /* ⭐ CORR-ACCES-45MIN-DEMO — un accès OUVERT ou REPRIS alors que la saisie est déjà échue est aussitôt refermé
+     par le serveur : le « ✅ Ouvert » ne doit pas rester affiché. ⛔ Les autres gestes (pause, renouvellement,
+     clôture) ne « referment » rien : leur message reste celui du serveur. */
+  if (applique && message && (action === 'OUVRIR' || action === 'REPRENDRE') &&
+      accesScoresCourant && accesScoresCourant.fermee_automatiquement === true) {
+    afficherMessage(message, '⚠️ Saisie aussitôt fermée automatiquement (voir la raison ci-dessus). ' +
+      '« Reprendre la saisie » la rouvre pour 45 minutes.', 'ko');
+  }
   return true;
 }
 
