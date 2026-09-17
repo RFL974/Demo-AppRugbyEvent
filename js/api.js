@@ -11,12 +11,95 @@
  * ============================================================================
  */
 
+/* ============================================================================
+ *  REJEU UNIQUE D'UNE LECTURE APRÈS UN 404 (CORR-RETRY-LECTURES-404-DR-6F, R1, R3)
+ *  Google répond parfois 404 au second saut de la Web App (script.google.com → 302 →
+ *  script.googleusercontent.com), alors que l'exécution Apps Script est « Terminée ».
+ *  ⚠️ Mitigation seulement : la cause, côté Google, n'est pas corrigée ici.
+ *  ⭐ Une action d'une des deux LISTES FERMÉES ci-dessous qui reçoit un 404 est réémise au plus UNE fois.
+ *  ⛔ Toute autre action — écriture, action inconnue, future, vide ou ressemblante — ne l'est JAMAIS :
+ *     elle a pu produire un effet avant que Google livre le 404.
+ *  ⛔ La rejouabilité ne se déduit jamais du nom de l'action ni de la méthode HTTP.
+ * ========================================================================== */
+
+/** Pause fixe avant l'unique réémission (500 ms au plus). */
+const DELAI_REJEU_404_MS = 300;
+
+/** GET rejouables après un 404 : LISTE FERMÉE (6F-R3). Aucune n'écrit dans le classeur, Drive ou
+ *  une propriété persistante ; `getAll` et `getRefFFR` peuvent reconstruire leur cache technique,
+ *  dérivé et idempotent — effet accepté.
+ *  ⛔ `getHistorique` en est EXCLUE : doGet → lireHistorique → assurerOngletHistorique →
+ *     creerOngletAvecEntetes peut créer l'onglet (en-têtes, style, première ligne figée).
+ *  ⛔ `getPoules`, `getClassement` et toute action absente restent à UNE émission. */
+const ACTIONS_GET_REJOUABLES = Object.freeze([
+  'getAll', 'getRefFFR', 'getConfig', 'getEquipes', 'getMatchs', 'getConformiteFFR',
+  'datesCompatiblesFFR', 'getCapacitesCategories', 'getConfigClub', 'getClubDossier', 'getReponseInvitation'
+]);
+
+/** POST rejouables après un 404 : LISTE FERMÉE. Leur corps métier n'écrit ni dans le classeur, ni
+ *  dans Drive, ni dans une propriété persistante.
+ *  ⚠️ Réserve : l'enveloppe d'authentification de doPost lit les propriétés et met à jour le cache
+ *     anti-force-brute — un refus de clé rejoué peut y être compté deux fois.
+ *  ⛔ `listerSponsors` en est EXCLUE : elle appelle `assurerOngletSponsors`, qui peut créer
+ *     l'onglet, ajouter des colonnes et réécrire les en-têtes. */
+const ACTIONS_POST_REJOUABLES = Object.freeze([
+  'getConfigAdmin', 'getDossierAutorisation', 'lireMesuresSponsors',
+  'listerClubsInvites', 'getAccesScoresAdmin', 'getMatchsLitige', 'getSaisieScores'
+]);
+
+/**
+ * SEUL mécanisme de tentative, commun à apiGet et apiPost : DEUX émissions au plus par invocation.
+ * Réémet uniquement si `rejouable` ET si la réponse HTTP finale est exactement 404.
+ * ⛔ Rejet de fetch, abandon, autre statut, JSON illisible, `{ error }` : aucune réémission.
+ *
+ * ⏱️ CONTRAT TEMPOREL, quand apiGet fournit `abandon` (option `delaiMs`) :
+ *   · un seul minuteur d'abandon, posé par apiGet et jamais réarmé ; même signal pour les deux émissions ;
+ *   · si la pause ne tient pas avant l'échéance nominale, pas de pause ni de rejeu : le premier 404
+ *     est rendu aussitôt ;
+ *   · si le rappel d'abandon s'exécute pendant la pause, il la RÉVEILLE : l'appel n'attend pas le
+ *     minuteur de pause ;
+ *   · immédiatement avant le second fetch, l'échéance (horloge monotone) et le signal sont relus :
+ *     échéance atteinte ou signal abandonné → 404 rendu, aucun second fetch. Le signal compte à part :
+ *     l'abandon peut s'exécuter un peu AVANT l'échéance lue (durée tronquée, arrondi d'horloge).
+ *     ⚠️ Ce contrôle n'est pas atomique avec l'émission : aucun code ne s'intercale avant l'appel à
+ *     fetch, mais l'horloge continue d'avancer et l'envoi réseau reste asynchrone ;
+ *   · si l'abandon survient pendant une émission ou la lecture de son corps : AbortError ; pendant la
+ *     pause : le 404 déjà reçu ;
+ *   · ⚠️ LIMITE DU NAVIGATEUR : si les minuteries ou le thread principal sont retardés (onglet en
+ *     arrière-plan, tâche longue, veille), l'appel peut se dénouer APRÈS t0 + delaiMs, dès que la
+ *     première tâche utile (réponse réseau, réveil de la pause ou rappel d'abandon) s'exécute enfin.
+ *     Aucune limite murale absolue n'est garantie.
+ * @param {function(): Promise<Response>} emettre  envoie la MÊME requête à chaque appel
+ * @param {boolean} rejouable  true seulement pour une action d'une liste fermée
+ * @param {{signal: AbortSignal, echeance: number, reveiller: ?function}} [abandon]  délai global d'apiGet
+ * @return {Promise<Response>} la dernière réponse reçue
+ */
+async function envoyerAvecRejeu404(emettre, rejouable, abandon) {
+  const reponse = await emettre();
+  if (!rejouable || reponse.status !== 404) return reponse;
+  if (abandon && performance.now() + DELAI_REJEU_404_MS >= abandon.echeance) {
+    return reponse;                                        // la pause ne tiendrait pas avant l'échéance
+  }
+  let pause = null;
+  await new Promise(function (reprendre) {
+    pause = setTimeout(reprendre, DELAI_REJEU_404_MS);
+    if (abandon) abandon.reveiller = reprendre;            // le rappel d'abandon peut écourter la pause
+  });
+  clearTimeout(pause);
+  if (abandon) {
+    abandon.reveiller = null;
+    if (abandon.signal.aborted || performance.now() >= abandon.echeance) return reponse;   // décision juste avant fetch
+  }
+  return emettre();                                        // seconde et DERNIÈRE émission
+}
+
 /**
  * Va chercher une donnée auprès du backend (requête de LECTURE).
  * @param {string} action  ex : 'getConfig', 'getEquipes', 'getAll'
  * @param {Object} [params] paramètres supplémentaires éventuels (optionnel)
- * @param {Object} [options] { delaiMs } : délai maximum en millisecondes — au-delà,
- *   la requête est ABANDONNÉE et une erreur est levée. Utilisé par le rafraîchissement
+ * @param {Object} [options] { delaiMs } : délai NOMINAL en millisecondes — à son expiration,
+ *   la requête est ABANDONNÉE et une erreur est levée (⚠️ sans garantie murale absolue : voir le
+ *   contrat temporel d'`envoyerAvecRejeu404`). Utilisé par le rafraîchissement
  *   automatique de la page publique : sans ça, une connexion mobile qui « pend »
  *   indéfiniment gèlerait la boucle (elle n'enchaîne qu'après la fin de la requête).
  * @return {Promise<Object>} la réponse du backend, déjà transformée en objet
@@ -42,17 +125,31 @@ async function apiGet(action, params, options) {
   // ne rien faire (scores non mis à jour). Un paramètre unique force une vraie requête.
   url.searchParams.set('_', String(Date.now()));
 
-  // Délai maximum optionnel : un minuteur "abandonne" la requête s'il expire.
+  // ⛔ Classement sur l'action RÉELLEMENT envoyée (paramètres compris), par la liste fermée seule.
+  const rejouable = ACTIONS_GET_REJOUABLES.indexOf(url.searchParams.get('action')) !== -1;
+
+  // Délai NOMINAL optionnel : un minuteur "abandonne" la requête s'il expire.
   const delaiMs = options && options.delaiMs;
   const controleur = delaiMs ? new AbortController() : null;
-  const minuteur = controleur ? setTimeout(function () { controleur.abort(); }, delaiMs) : null;
+  // ⏱️ Échéance nominale lue AVANT d'armer l'unique minuteur d'abandon, jamais réarmé ; son rappel
+  //    réveille aussi une pause de rejeu en cours (voir `envoyerAvecRejeu404`).
+  const abandon = controleur
+    ? { signal: controleur.signal, echeance: performance.now() + delaiMs, reveiller: null }
+    : null;
+  const minuteur = controleur ? setTimeout(function () {
+    controleur.abort();
+    if (abandon.reveiller) abandon.reveiller();
+  }, delaiMs) : null;
 
   try {
     // fetch() envoie la requête et attend la réponse. `cache: 'no-store'` désactive
     // en plus le cache HTTP du navigateur pour cette lecture.
     const reglages = { cache: 'no-store' };
     if (controleur) reglages.signal = controleur.signal;
-    const reponse = await fetch(url.toString(), reglages);
+    // ⭐ Rejeu éventuel : même adresse, mêmes réglages, même signal.
+    const adresse = url.toString();
+    const reponse = await envoyerAvecRejeu404(function () { return fetch(adresse, reglages); },
+      rejouable, abandon);
     if (!reponse.ok) {
       throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ').');
     }
@@ -83,14 +180,19 @@ async function apiGet(action, params, options) {
 async function apiPost(action, data) {
   // On regroupe l'action et les données dans un seul paquet.
   const corps = Object.assign({ action: action }, data || {});
+  const texte = JSON.stringify(corps);   // figé : une réémission envoie exactement le même corps
 
-  const reponse = await fetch(API_URL, {
-    method: 'POST',
-    // On envoie en "text/plain" volontairement : ça évite une vérification
-    // préalable du navigateur (le "preflight" CORS) que Apps Script ne sait pas gérer.
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify(corps)
-  });
+  // ⛔ Classement sur l'action RÉELLEMENT envoyée (`corps.action`), par la liste fermée seule.
+  const rejouable = ACTIONS_POST_REJOUABLES.indexOf(corps.action) !== -1;
+  const reponse = await envoyerAvecRejeu404(function () {
+    return fetch(API_URL, {
+      method: 'POST',
+      // On envoie en "text/plain" volontairement : ça évite une vérification
+      // préalable du navigateur (le "preflight" CORS) que Apps Script ne sait pas gérer.
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: texte
+    });
+  }, rejouable);
 
   if (!reponse.ok) {
     throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ').');

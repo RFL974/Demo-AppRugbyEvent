@@ -115,6 +115,10 @@ const SRC_CLES = [
   bloc(F_API, 'function estRefusCle(', '{'),
   bloc(F_API, 'function estRefusCleExplicite(', '{'),
   bloc(F_API, 'function estReponseSentinelleCle(', '{'),
+  // 6F — `apiPost` passe désormais par le mécanisme commun de rejeu après un 404.
+  ligne(F_API, 'const DELAI_REJEU_404_MS'),
+  ligne(F_API, 'const ACTIONS_POST_REJOUABLES'),
+  bloc(F_API, 'async function envoyerAvecRejeu404(', '{'),
   bloc(F_API, 'async function apiPost(', '{'),
   bloc(F_API, 'function lireCleLocale(', '{'),
   bloc(F_API, 'function definirCleLocale(', '{'),
