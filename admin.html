@@ -803,10 +803,10 @@
       <section class="carte" id="bloc-autorisation">
         <h2>Demande d'autorisation de tournoi</h2>
         <p class="note-generation">
-          <strong>Feuille de report</strong> du formulaire officiel FFR : l'app remplit ce qu'elle
-          sait, tu complètes le reste. Ce n'est <strong>pas</strong> le formulaire officiel (fourni
-          par la Ligue) — c'est un pense-bête à imprimer pour n'avoir plus qu'à recopier.<br>
-          Aucun champ n'est deviné : un champ inconnu reste <strong>vide et marqué « manquant »</strong>.
+          Deux sorties distinctes. La <strong>feuille de report</strong> ci-dessous est une
+          <strong>aide de préparation interne à Maxilou</strong> (un pense-bête à imprimer) : ce n'est pas
+          un document fédéral. Chaque ligne indique son état (saisi, calculé, manquant…) : les valeurs
+          calculées sont <strong>à vérifier</strong>, les champs <strong>« manquant »</strong> sont à renseigner.
         </p>
         <div id="autorisation-saisie"></div>
         <div class="ligne-action">
@@ -814,10 +814,13 @@
           <button type="button" class="bouton" id="bouton-pdf-autorisation" data-ic="dossier">Télécharger le formulaire pré-rempli (PDF)</button>
           <button type="button" class="bouton bouton-secondaire" id="bouton-imprimer-autorisation" data-ic="imprimer">Imprimer la feuille</button>
         </div>
-        <p class="note-generation" style="margin-top:6px;">Le PDF téléchargé est le <strong>formulaire officiel FFR
-          pré-rempli</strong> avec ce que l'app connaît (organisateur, tournoi, niveau, sécurité, logistique,
-          récompenses…). Il <strong>reste modifiable</strong> : ouvre-le et complète le format sportif par
-          catégorie + les signatures.</p>
+        <p class="note-generation" style="margin-top:6px;">Le <strong>PDF téléchargé</strong> utilise le
+          <strong>formulaire officiel FFR</strong> de demande d'autorisation. Les informations connues de l'app
+          y sont <strong>préremplies et figées</strong> : elles ne sont plus modifiables dans le PDF produit.
+          Les champs laissés <strong>vides restent modifiables</strong> et doivent être complétés.
+          <strong>Vérifie toutes les informations avant transmission.</strong> L'autorisation relève toujours
+          du <strong>Comité départemental ou de la Ligue compétente</strong> : ni la feuille ni le PDF ne valent
+          autorisation.</p>
         <div id="autorisation-message" class="message-form" role="status" aria-live="polite"></div>
         <div id="autorisation-feuille"></div>
       </section>

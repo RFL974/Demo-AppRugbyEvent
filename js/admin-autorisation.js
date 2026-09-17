@@ -271,7 +271,8 @@ function rendreFeuilleAutorisation(dossier) {
 
   html += '<p class="autorisation-pied">Circuit de dépôt (à la charge du club organisateur) : ' +
     '<strong>Club demandeur → Comité Départemental → Ligue Régionale</strong>. ' +
-    'Adresse et modalités de dépôt : à confirmer (audit Q2). Avis et signatures : hors de cette feuille.</p>';
+    'Adresse et modalités de dépôt : à confirmer auprès du Comité départemental ou de la Ligue. ' +
+    'Avis et signatures : hors de cette feuille.</p>';
   return html + '</div>';
 }
 
@@ -1061,9 +1062,10 @@ function remplirFormatSportifAut(categories, matchsParCat, setT) {
  * Construit le PLAN de remplissage (résolu) : { textes:{champPDF:valeur}, cases:[champPDF] }.
  * PUR : ne lit ni DOM ni classeur. `g` = paramètres globaux (Config) ; nbClubs/nbEquipes/
  * nbParticipants = comptes (cascade calculée par l'appelant) ; `matchsParCat` = matchs groupés par
- * catégorie (pour le format sportif). Applique les MÊMES défauts et la MÊME doctrine que la
- * feuille de report backend (label, étrangères, phases, cascades). ⛔ AUCUN nom de club
- * n'est pré-rempli : non saisi ⇒ le champ reste vide et ÉDITABLE dans le PDF fédéral.
+ * catégorie (pour le format sportif). Applique la MÊME doctrine que la feuille de report backend
+ * (étrangères, phases, cascades). ⛔ AUCUN nom de club n'est pré-rempli : non saisi ⇒ le champ
+ * reste vide et ÉDITABLE dans le PDF fédéral. ⛔ Le label EDR n'est JAMAIS présumé (DR-7B) :
+ * vide ⇒ ni « oui » ni « non » coché, les deux cases restent éditables.
  */
 function planRemplissageAutorisation(g, nbClubs, nbEquipes, categories, matchsParCat, nbParticipants, nbEducateurs) {
   g = g || {};
@@ -1086,7 +1088,7 @@ function planRemplissageAutorisation(g, nbClubs, nbEquipes, categories, matchsPa
   setT('Texte10', v('org_president_nom'));
   setT('Texte9', v('org_president_tel'));
   setT('Texte7', v('org_president_mail'));
-  ouinon(v('org_label_edr') || 'oui', 'Case à cocher62', 'Case à cocher63');
+  ouinon(v('org_label_edr'), 'Case à cocher62', 'Case à cocher63');
   setT('Texte8', v('org_label_date'));
 
   // A.2 Tournoi.
@@ -1369,8 +1371,8 @@ async function onTelechargerPdfAutorisation() {
     const plan = planRemplissageAutorisation(g, nbClubs, nbEquipes, cats, matchsParCat, nbParticipants, nbEducateurs);
     const out = await appliquerPlanPdfAutorisation(PDFLib, bytes, plan);
     telechargerFichierAutorisation(out, 'demande-autorisation-' + (g.tournoi_date || 'tournoi') + '.pdf', 'application/pdf');
-    afficherMessage(message, '✅ PDF pré-rempli téléchargé. Ouvre-le et complète le format sportif ' +
-      'par catégorie + les signatures.', 'ok');
+    afficherMessage(message, '✅ PDF téléchargé. Les valeurs préremplies y sont figées : vérifie-les, ' +
+      'puis complète les champs restés vides avant transmission.', 'ok');
   });
 }
 
