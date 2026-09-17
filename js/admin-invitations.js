@@ -491,6 +491,13 @@ function emailHtmlInvitation(g, cats, imgSrc, salutationHtml, intro, lienReponse
 function emailTexteInvitation(g, cats, salutationTexte, intro, lienReponse, lienInvitation) {
   const nom = String(g.tournoi_nom || '').trim() || 'Le tournoi';
   const L = [];
+  // Identité du tournoi en tête (même en-tête que le texte du dossier, lieu en plus), hors de
+  // l'intro éditable : la retoucher ne fait plus disparaître le nom, la date ni le lieu.
+  const quand = [];
+  if (String(g.tournoi_date || '').trim()) quand.push(formaterDateFr(g.tournoi_date));
+  if (String(g.tournoi_lieu || '').trim()) quand.push(String(g.tournoi_lieu).trim());
+  L.push(nom.toUpperCase() + (quand.length ? ' — ' + quand.join(' · ') : ''));
+  L.push('');
   L.push(salutationTexte);
   L.push('');
   if (String(intro || '').trim()) { L.push(String(intro).trim()); L.push(''); }
@@ -515,6 +522,9 @@ function emailTexteInvitation(g, cats, salutationTexte, intro, lienReponse, lien
       const eff = effectifEmailTxt(c);
       if (eff) seg.push(eff);
       if (String(c.arbitrage_organisation || '').trim()) seg.push('arbitrage : ' + String(c.arbitrage_organisation).trim());
+      // Règlement : même extraction que la carte HTML — seule une URL est reprise, rien n'est inventé.
+      const regl = String(c.reglement || '').trim().match(/https?:\/\/\S+/i);
+      if (regl) seg.push('règlement : ' + regl[0]);
       if (scf.estScf) {
         seg.push(scf.phase === 'P3' ? 'samedi triangulaires · dimanche brassage par niveau'
           : 'plateau en triangulaires / quadrangulaires');
@@ -522,6 +532,11 @@ function emailTexteInvitation(g, cats, salutationTexte, intro, lienReponse, lien
         seg.push('après-midi : ' + DOSSIER_FORMATS[cleFormatApresMidi(c)]);
       }
       L.push('- ' + String(c.categorie || '') + ' : ' + seg.join(' · '));
+      // Format d'après-midi expliqué (mêmes textes que la carte HTML) — jamais pour le SCF.
+      if (!scf.estScf) {
+        const cle = cleFormatApresMidi(c);
+        L.push('  Après-midi — ' + DOSSIER_FORMATS[cle] + ' : ' + DOSSIER_FORMATS_DESC[cle]);
+      }
     });
     L.push('');
     // Repères FFR (mêmes conditions que la vitrine et que l'email HTML).
@@ -534,15 +549,17 @@ function emailTexteInvitation(g, cats, salutationTexte, intro, lienReponse, lien
       L.push('');
     }
   }
-  const jour = [];
-  if (String(g.heure_rdv || '').trim()) jour.push('Accueil : ' + String(g.heure_rdv).trim());
-  if (String(g.heure_debut || '').trim()) jour.push('Coup d\'envoi : ' + String(g.heure_debut).trim());
-  if (String(g.pause_dejeuner_debut || '').trim()) jour.push('Pause méridienne : ' + String(g.pause_dejeuner_debut).trim());
-  if (heureFinCommuniqueeAdmin(g)) jour.push('Fin envisagée : ' + heureFinCommuniqueeAdmin(g));
+  // La journée : les étapes de la frise HTML (pause avec sa durée, reprise calculée, notes), au
+  // même format que le texte du dossier, puis l'arbitrage.
+  const etapes = etapesJourneeEmail(g, cats);
   const arb = [];
   cats.forEach(function (c) { const v = String(c.arbitrage_organisation || '').trim(); if (v && arb.indexOf(v) === -1) arb.push(v); });
-  if (arb.length) jour.push('Arbitrage : ' + arb.join(' · '));
-  if (jour.length) { L.push('LA JOURNÉE : ' + jour.join(' · ')); L.push(''); }
+  if (etapes.length || arb.length) {
+    L.push('LA JOURNÉE');
+    etapes.forEach(function (e) { L.push('- ' + e.h + ' ' + e.t + (e.n ? ' (' + e.n + ')' : '')); });
+    if (arb.length) L.push('Arbitrage : ' + arb.join(' · '));
+    L.push('');
+  }
   const services = [];
   if (estOui(g.buvette_disponible)) services.push('buvette');
   if (estOui(g.espace_sandwich_disponible)) services.push('espace sandwich');
