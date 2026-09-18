@@ -1052,7 +1052,7 @@ const MUTANTS = [
   ['classement GET sur le paramètre `action` au lieu de l\'action envoyée',
     [[ANCRES.classementGet, 'const rejouable = ACTIONS_GET_REJOUABLES.indexOf(action) !== -1;']], ['A.16']],
   ['classement GET déduit du nom', [[ANCRES.classementGet, "const rejouable = /^get/.test(String(url.searchParams.get('action')));"]], ['A.13', 'A.14']],
-  ['pause NON réveillée par l\'abandon', [[ANCRES.reveil, '']], ['C.5', 'C.6']],
+  ['pause NON réveillée par l\'abandon', [[ANCRES.reveil, '', 2]], ['C.5', 'C.6']],
   ['second envoi malgré un signal abandonné', [[ANCRES.gardeApres, '    if (performance.now() >= abandon.echeance) return reponse;']], ['C.7', 'C.16']],
   ['perte du signal global', [[ANCRES.emissionGet, 'return fetch(adresse, { cache: reglages.cache });']], ['C.4', 'A.12', 'C.15']],
   ['réarmement du délai pour le rejeu', [[ANCRES.fermetureGet,
@@ -1066,19 +1066,27 @@ const MUTANTS = [
   ['corps POST journalisé', [[ANCRES.texte, ANCRES.texte + " console.log('rejeu', texte);"]], ['E.1']],
   ['clé journalisée', [[ANCRES.texte, ANCRES.texte + " console.warn('cle', corps.cle);"]], ['E.1']],
   ['adresse GET (jeton) journalisée', [[ANCRES.adresse, ANCRES.adresse + " console.info('GET', adresse);"]], ['E.1']],
-  ['adresse GET (jeton) dans le message d\'erreur', [[ANCRES.erreurGet, "      throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ') : ' + adresse);"]], ['E.1']],
+  ['adresse GET (jeton) dans le message d\'erreur', [[ANCRES.erreurGet, "      throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ') : ' + adresse);", 2]], ['E.1']],
   ['garde d\'avant la pause retirée (défaut 6F)', [[ANCRES.gardeAvant, '  if (false) {']], ['C.2']],
   ['garde d\'avant la pause en « > »', [[ANCRES.gardeAvant, ANCRES.gardeAvant.replace('>= abandon.echeance', '> abandon.echeance')]], ['C.3']],
   ['garde d\'après la pause en « > »', [[ANCRES.gardeApres, ANCRES.gardeApres.replace('>= abandon.echeance', '> abandon.echeance')]], ['C.8']],
   ['minuteur de pause non effacé', [[ANCRES.effacerPause, '']], ['C.5', 'C.14']],
-  ['minuteur d\'abandon non effacé', [[ANCRES.effacerAbandon, '    // (effacement retiré)']], ['C.14']],
-  ['corps POST non figé (resérialisé à chaque émission)', [["      body: texte", "      body: JSON.stringify(corps)"]], ['B.17']],
+  ['minuteur d\'abandon non effacé', [[ANCRES.effacerAbandon, '    // (effacement retiré)', 2]], ['C.14']],
+  /* ⭐ CORR-BLOCAGE-LECTURES-ADMIN-DR — ancre DÉPLACÉE, intention INCHANGÉE. `apiPost` construit
+     désormais ses réglages UNE fois, hors de la fermeture d'émission : y resérialiser le corps
+     n'aurait plus lieu qu'une fois, et ce mutant ne reproduirait plus rien. Pour qu'il nomme
+     toujours le même défaut — « corps resérialisé à CHAQUE émission » — il doit frapper là où les
+     émissions ont lieu. ⛔ B.17 n'est pas touché : il exige toujours deux corps identiques et un
+     `filtre` figé à sa valeur d'origine. */
+  ['corps POST non figé (resérialisé à chaque émission)',
+    [["      return fetch(API_URL, reglages);",
+      "      return fetch(API_URL, Object.assign({}, reglages, { body: JSON.stringify(corps) }));"]], ['B.17']],
   ['adresse GET (jeton) retenue en session après un 404', [[ANCRES.erreurGet,
-    "      if (reponse.status === 404) sessionStorage.setItem('r92_diag_404', adresse);\n" + ANCRES.erreurGet]], ['E.1']],
+    "      if (reponse.status === 404) sessionStorage.setItem('r92_diag_404', adresse);\n" + ANCRES.erreurGet, 2]], ['E.1']],
   ['adresse GET (jeton) exposée en variable globale', [[ANCRES.adresse, ANCRES.adresse + ' window.derniereLecture = adresse;']], ['E.1']],
   ['réveil PARTAGÉ entre appels simultanés (variable de module)', [
     [ANCRES.enregistrerReveil, '    if (abandon) globalThis.__reveilPartage = reprendre;'],
-    [ANCRES.reveil, '    if (globalThis.__reveilPartage) globalThis.__reveilPartage();\n']], ['C.17']],
+    [ANCRES.reveil, '    if (globalThis.__reveilPartage) globalThis.__reveilPartage();\n', 2]], ['C.17']],
   ['écouteur d\'abandon persistant à la place du réveil', [[ANCRES.enregistrerReveil,
     "    if (abandon) abandon.signal.addEventListener('abort', reprendre, { once: true });"]], ['F.5']]
 ];
@@ -1154,9 +1162,18 @@ async function controles() {
   for (const [nom, substitutions, vus] of MUTANTS) {
     n++;
     let src = SRC;
-    for (const [avant, apres] of substitutions) {
-      if (src.split(avant).length !== 2) {
-        throw new Error('Mutant « ' + nom + ' » impossible — ancre absente ou non unique : ' + avant +
+    for (const [avant, apres, occurrences] of substitutions) {
+      // ⭐ CORR-BLOCAGE-LECTURES-ADMIN-DR — le nombre d'occurrences attendu est désormais DÉCLARÉ
+      //   (1 par défaut) et vérifié EXACTEMENT. Depuis qu'`apiPost` accepte lui aussi un délai
+      //   d'abandon, trois ancres existent en DEUX exemplaires (armement du minuteur, réveil,
+      //   effacement) : l'ancienne règle « exactement une occurrence » les déclarait introuvables
+      //   et faisait tomber le harnais. ⛔ Rien n'est assoupli : le compte reste exact — il est
+      //   simplement dit — et la mutation porte toujours sur la PREMIÈRE occurrence, celle
+      //   d'`apiGet`, qui est le chemin qu'exercent les critères désignés de chaque mutant.
+      const attendu = (occurrences == null) ? 1 : occurrences;
+      if (src.split(avant).length - 1 !== attendu) {
+        throw new Error('Mutant « ' + nom + ' » impossible — ancre absente ou en nombre inattendu (' +
+          (src.split(avant).length - 1) + ' au lieu de ' + attendu + ') : ' + avant +
           '\n  Le mécanisme a été réécrit : mets CE mutant à jour, ne le supprime pas.');
       }
       src = src.replace(avant, apres);

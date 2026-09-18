@@ -450,6 +450,14 @@
         <!-- Message de retour (succès / erreur) -->
         <div id="message-equipe" class="message-form"></div>
 
+        <!-- Reprise CIBLÉE de la seule lecture de la liste (CORR-BLOCAGE-LECTURES-ADMIN-DR).
+             Apparaît quand un enregistrement est acquis mais que la liste n'a pas pu être relue :
+             elle évite de recharger toute la page, et ne touche NI au formulaire ci-dessus, NI à
+             ce qui est déjà enregistré. -->
+        <div id="reprise-equipes" class="reprise-lecture" hidden>
+          <button type="button" class="bouton" id="bouton-reprise-equipes">Actualiser la liste</button>
+        </div>
+
         <!-- La liste des équipes, groupée par catégorie -->
         <div id="liste-equipes"></div>
 

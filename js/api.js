@@ -172,42 +172,76 @@ async function apiGet(action, params, options) {
  * Envoie une demande d'ÉCRITURE au backend (ajouter/supprimer…).
  * @param {string} action  ex : 'ajouterEquipe', 'supprimerEquipe'
  * @param {Object} [data]  les données à envoyer (ex : { nom_equipe, categorie })
+ * @param {Object} [options] { delaiMs } : délai NOMINAL, MÊME contrat que `apiGet` (voir le contrat
+ *   temporel d'`envoyerAvecRejeu404`, limites de minuterie comprises). Il couvre l'émission ET la
+ *   lecture du corps de la réponse : le signal d'abandon interrompt les deux.
+ *
+ *   ⭐ POURQUOI SUR UN POST (CORR-BLOCAGE-LECTURES-ADMIN-DR). Les LECTURES protégées par la clé
+ *      admin passent par doPost (`getConfigAdmin` et les autres de la liste fermée ci-dessus) :
+ *      sans option, elles ne pouvaient pas être bornées, et une lecture d'ouverture qui « pend »
+ *      laissait la page sur son écran d'attente, sans bouton « Réessayer ».
+ *   ⛔ CE QUE CETTE OPTION NE FAIT PAS. Elle n'élargit RIEN : `rejouable` reste décidé par la seule
+ *      liste fermée, sur l'action réellement envoyée. Une ÉCRITURE bornée resterait une écriture —
+ *      elle ne devient pas rejouable, et un abandon ne dit pas qu'elle n'a pas eu lieu. C'est
+ *      pourquoi aucun appelant d'écriture ne passe `delaiMs` : voir `ecrireAdmin`.
+ *   ⛔ Sans `options` (tous les appels historiques), comportement strictement inchangé : aucun
+ *      contrôleur, aucun minuteur, aucun signal.
  * @return {Promise<Object>} la réponse du backend
  *
  * Exemple :
  *   await apiPost('ajouterEquipe', { nom_equipe: 'Suresnes 1', categorie: 'U8' });
  */
-async function apiPost(action, data) {
+async function apiPost(action, data, options) {
   // On regroupe l'action et les données dans un seul paquet.
   const corps = Object.assign({ action: action }, data || {});
   const texte = JSON.stringify(corps);   // figé : une réémission envoie exactement le même corps
 
   // ⛔ Classement sur l'action RÉELLEMENT envoyée (`corps.action`), par la liste fermée seule.
   const rejouable = ACTIONS_POST_REJOUABLES.indexOf(corps.action) !== -1;
-  const reponse = await envoyerAvecRejeu404(function () {
-    return fetch(API_URL, {
+
+  // Délai NOMINAL optionnel : un minuteur "abandonne" la requête s'il expire. Mêmes pièces et
+  // même ordre que dans apiGet — échéance lue AVANT d'armer l'unique minuteur, jamais réarmé.
+  const delaiMs = options && options.delaiMs;
+  const controleur = delaiMs ? new AbortController() : null;
+  const abandon = controleur
+    ? { signal: controleur.signal, echeance: performance.now() + delaiMs, reveiller: null }
+    : null;
+  const minuteur = controleur ? setTimeout(function () {
+    controleur.abort();
+    if (abandon.reveiller) abandon.reveiller();
+  }, delaiMs) : null;
+
+  try {
+    const reglages = {
       method: 'POST',
       // On envoie en "text/plain" volontairement : ça évite une vérification
       // préalable du navigateur (le "preflight" CORS) que Apps Script ne sait pas gérer.
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: texte
-    });
-  }, rejouable);
+    };
+    // ⭐ Rejeu éventuel : mêmes réglages, même corps, même signal.
+    if (controleur) reglages.signal = controleur.signal;
+    const reponse = await envoyerAvecRejeu404(function () {
+      return fetch(API_URL, reglages);
+    }, rejouable, abandon);
 
-  if (!reponse.ok) {
-    throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ').');
+    if (!reponse.ok) {
+      throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ').');
+    }
+
+    const donnees = await reponse.json();
+    if (donnees && donnees.error) {
+      // On attache la réponse complète à l'erreur : certaines actions renvoient des
+      // drapeaux utiles avec le message (ex : departage_requis, cascade_requise, match_suivant).
+      const e = new Error(donnees.error);
+      e.reponse = donnees;
+      throw e;
+    }
+
+    return donnees;
+  } finally {
+    if (minuteur) clearTimeout(minuteur); // toujours nettoyer le minuteur
   }
-
-  const donnees = await reponse.json();
-  if (donnees && donnees.error) {
-    // On attache la réponse complète à l'erreur : certaines actions renvoient des
-    // drapeaux utiles avec le message (ex : departage_requis, cascade_requise, match_suivant).
-    const e = new Error(donnees.error);
-    e.reponse = donnees;
-    throw e;
-  }
-
-  return donnees;
 }
 
 /* ============================================================================
@@ -250,14 +284,19 @@ async function demanderCle(role, message) {
  * @param {Object} data
  * @param {string} role     'admin' ou 'scores'
  * @param {string} libelle  texte affiché à l'utilisateur (ex : "admin", "de saisie des scores")
+ * @param {Object} [options] transmis TEL QUEL à `apiPost` (ex : { delaiMs }) — réservé aux LECTURES
+ *   protégées. ⚠️ Le budget vaut PAR ÉMISSION MÉTIER : la saisie de clé se fait entre les deux et
+ *   n'est pas comptée ; le rejeu après refus repart donc avec un budget neuf. C'est voulu — on ne
+ *   veut pas qu'une réflexion de l'organisateur devant la fenêtre de clé fasse expirer sa lecture.
+ *   ⛔ Sans `options`, comportement strictement inchangé.
  */
-async function apiPostProtege(action, data, role, libelle) {
+async function apiPostProtege(action, data, role, libelle, options) {
   let cle = lireCleLocale(role);
   const neuve = !cle;   // tapée maintenant : le serveur ne l'a pas encore acceptée
   if (neuve) cle = await demanderCle(role, 'Entre la clé ' + libelle + ' :');
   if (cle == null) throw new Error('Action annulée.');
   try {
-    const res = await apiPost(action, Object.assign({}, data, { cle: cle }));
+    const res = await apiPost(action, Object.assign({}, data, { cle: cle }), options);
     if (neuve) definirCleLocale(role, cle);      // ⭐ rangée APRÈS la réussite confirmée, pas avant
     return res;
   } catch (err) {
@@ -266,7 +305,7 @@ async function apiPostProtege(action, data, role, libelle) {
       definirCleLocale(role, '');                // ⛔ refusée : effacée AVANT la redemande (champ vide, rien si on annule)
       const nouvelle = await demanderCle(role, 'Clé ' + libelle + ' incorrecte. Réessaie :');
       if (nouvelle == null) throw new Error('Action annulée.');
-      const res = await apiPost(action, Object.assign({}, data, { cle: nouvelle }));
+      const res = await apiPost(action, Object.assign({}, data, { cle: nouvelle }), options);
       definirCleLocale(role, nouvelle);          // ⭐ rangée après la réussite du rejeu, pas avant
       return res;
     }

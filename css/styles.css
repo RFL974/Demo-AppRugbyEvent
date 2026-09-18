@@ -504,9 +504,16 @@ select.r-input { cursor: pointer; }
 .liste-danger li { margin-bottom: 4px; }
 
 /* Message sous le formulaire */
-.message-form { min-height: 1.3em; font-family: 'Barlow Condensed', sans-serif; }
+/* `pre-line` : les messages d'état peuvent tenir sur plusieurs lignes (ce qui est enregistré,
+   puis ce qui n'a pas pu être relu). Sans ça, `textContent` les collerait en un seul paragraphe
+   et la distinction « acquis » / « à vérifier » se perdrait à la lecture. */
+.message-form { min-height: 1.3em; font-family: 'Barlow Condensed', sans-serif; white-space: pre-line; }
 .message-form.ok { color: #9fe0a0; }
 .message-form.ko { color: #ffb4b4; }
+
+/* Reprise CIBLÉE d'une lecture (CORR-BLOCAGE-LECTURES-ADMIN-DR) : masquée tant que tout va bien,
+   elle n'apparaît que lorsqu'un enregistrement est acquis sans que l'écran ait pu suivre. */
+.reprise-lecture { margin: 0.5rem 0; }
 
 /* Liste des équipes, groupée par catégorie */
 .groupe-categorie { margin-top: 14px; }
@@ -1127,6 +1134,9 @@ button .ic { margin-right: 0.45em; }
   margin-bottom: 10px;
 }
 .live-maj { color: var(--bleu-ciel); font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem; }
+/* Rafraîchissement RATÉ : l'horodatage cède la place à un avertissement. L'écran garde ses
+   données — mais il ne prétend plus qu'elles sont à jour (CORR-BLOCAGE-LECTURES-ADMIN-DR). */
+.live-maj-echec { color: #ffb4b4; }
 
 /* Libellé de champ (ex. filtre catégorie de la page saisie). */
 .mp-label {

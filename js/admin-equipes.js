@@ -39,11 +39,15 @@ function remplirSelectCategories(categories) {
   const aucune = presentes.length === 0;
   const aide = document.getElementById('aide-categories');
   const champNom = document.getElementById('champ-nom');
-  const boutonAj = document.getElementById('bouton-ajouter');
   if (aide) aide.hidden = !aucune;
   if (select) select.disabled = aucune;
   if (champNom) champNom.disabled = aucune;
-  if (boutonAj) boutonAj.disabled = aucune;
+  // ⛔ R1 — le bouton d'ajout N'EST PLUS rouvert ici. Ce rendu ne connaît que les catégories ;
+  //    il ignorait l'état de fraîcheur de la LISTE et levait donc le verrou posé après une
+  //    actualisation ratée — l'ajout redevenait possible sur des données périmées, ce qui est
+  //    exactement la porte au doublon qu'on cherche à fermer. La décision passe par le point
+  //    unique `majDisponibiliteAjout()`, qui croise les deux conditions.
+  majDisponibiliteAjout();
   ['champ-joueurs', 'champ-educateurs'].forEach(function (id) {
     const c = document.getElementById(id);
     if (c) c.disabled = aucune;
@@ -164,6 +168,249 @@ function afficherEquipes(equipes) {
   zone.innerHTML = html;
 }
 
+/* ==========================================================================
+   ÉCRITURE CONFIRMÉE ≠ ÉCRAN À JOUR — CORR-BLOCAGE-LECTURES-ADMIN-DR
+   ==========================================================================
+   LE DÉFAUT CORRIGÉ. `onAjouterEquipe` annonçait « ✅ ajoutée », puis attendait
+   `rechargerEquipes()` — une lecture SANS budget — et ne rendait le bouton qu'au `finally`.
+   Quand cette lecture pendait, l'organisateur voyait le succès mais gardait un bouton mort et
+   une liste d'hier, sans rien pour s'en sortir qu'un rechargement complet de la page. Et si la
+   lecture ÉCHOUAIT, son message partait dans le même `catch` que l'écriture : un échec de
+   LECTURE s'affichait comme un échec d'ÉCRITURE, invitant à recréer une équipe déjà enregistrée.
+
+   LA RÈGLE POSÉE ICI — trois états, jamais confondus :
+     ① « enregistrement en cours »                    : l'écriture est partie, on ne sait rien ;
+     ② « enregistré, actualisation en cours »          : le serveur a confirmé l'écriture ;
+     ③ « enregistré, mais actualisation échouée »      : l'acquis est dit, la liste est déclarée
+        périmée, et l'ajout RESTE fermé — rouvrir sur une liste obsolète, c'est offrir le doublon.
+
+   ⛔ CE QUI N'EST PAS RÉSOLU ICI. Les HTTP 404 observés sur ce parcours gardent une cause NON
+      ÉTABLIE : rien dans ce lot ne l'identifie ni ne la corrige. Borner une lecture ne la fait pas
+      réussir — ça la fait échouer plus vite, et de façon récupérable. C'est tout ce qui est promis.
+   ⛔ Aucune écriture n'est jamais rejouée automatiquement, quelle que soit la panne.
+   ========================================================================== */
+
+/** Budget NOMINAL d'une lecture de la liste des équipes, en millisecondes.
+ *
+ *  ⭐ D'OÙ VIENT CE CHIFFRE. Les durées mesurées sur ce parcours — 2,3 s à 5,6 s — sont celles de
+ *  l'EXÉCUTION Apps Script seule. ⚠️ Elles ne bornent PAS le temps réseau total : redirection,
+ *  établissement de connexion, transfert et lecture du corps s'y ajoutent, et n'ont pas été
+ *  mesurés. Le rejeu 404 peut encore ajouter une pause de 300 ms et une seconde émission. 20 s
+ *  laissent une marge confortable sur ce qui a été observé, tout en bornant l'attente à quelque
+ *  chose qu'un humain accepte devant un écran — mais ce chiffre reste à VALIDER en conditions
+ *  réelles ; il n'est pas dérivé d'une campagne de mesure.
+ *  ⚠️ NOMINAL, pas mural : onglet en arrière-plan, tâche longue ou veille peuvent retarder le
+ *  dénouement au-delà de l'échéance (limite de minuterie navigateur déjà documentée dans
+ *  `envoyerAvecRejeu404`, api.js). Aucune borne absolue n'est promise. */
+const DELAI_LECTURE_EQUIPES_MS = 20000;
+
+/** Numéro de la lecture la PLUS RÉCENTE. Toute réponse qui ne le porte plus est TARDIVE : elle
+ *  est jetée sans toucher à l'écran — sans quoi un vieux résultat écraserait un état plus neuf.
+ *  ⭐ R1 : ce numéro est PARTAGÉ. `rechargerEtRendre` (admin.js) le prend aussi, car il écrit la
+ *  même mémoire (`equipesCourantes`) depuis un `getAll` global. Sans ce partage, un rafraîchissement
+ *  commencé avant un ajout et terminé après sa relecture ramenait la liste à son état d'avant. */
+let lectureEquipesJeton = 0;
+
+/** PROPRIÉTAIRE de la lecture ciblée en vol (`null` = aucune). Empêche des clics répétés d'en
+ *  lancer plusieurs en parallèle.
+ *
+ *  ⛔ CE QUI EST CORRIGÉ EN R2 — POSSESSION ≠ FRAÎCHEUR. Ce verrou était un simple booléen relâché
+ *  « si mon jeton est encore le plus récent ». Or un rafraîchissement GLOBAL prend un jeton dans le
+ *  même registre sans jamais posséder ce verrou : dès qu'il s'intercalait, la lecture ciblée en vol
+ *  perdait la fraîcheur, ne se reconnaissait plus le droit de relâcher, et le verrou restait pris
+ *  POUR TOUJOURS. « Actualiser la liste » restait visible et cliquable, mais sa garde sortait
+ *  aussitôt : plus aucune lecture ne partait, et seul un rechargement de page en sortait.
+ *  ⭐ Désormais chaque lecture ciblée pose une identité qui n'appartient qu'à elle, et ne relâche
+ *  que si elle est encore le propriétaire. Une lecture plus récente a déjà pris la place — c'est
+ *  ELLE qui relâchera. Le jeton, lui, ne sert plus qu'à décider quel RÉSULTAT s'affiche. */
+let lectureEquipesProprietaire = null;
+
+/** Une lecture ciblée est-elle en vol ? */
+function lectureEquipesEnCours() { return lectureEquipesProprietaire !== null; }
+
+/** Nombre de mutations d'équipe en cours, RÉCONCILIATION COMPRISE (0 = aucune).
+ *
+ *  ⛔ CE QUI EST CORRIGÉ EN R2. Rien ne marquait « opération en cours » : pendant l'écriture, puis
+ *  pendant la relecture qui suit un succès, l'écran se croyait fiable (`equipesListeIncertaine`
+ *  valant `false`, et `masquerRepriseEquipes()` le remettant à `false` au début de la relecture).
+ *  Un simple rendu des catégories rouvrait alors le bouton, et une seconde soumission du MÊME nom
+ *  partait — le contrôle de doublon s'appuyant sur la liste d'avant. Deux `ajouterEquipe` émis.
+ *  ⭐ Une opération couvre tout l'intervalle « je ne sais pas encore ce que le serveur a retenu » :
+ *  de l'envoi jusqu'à la fin de la réconciliation, sur TOUS les chemins de sortie. */
+let equipesOperationsEnCours = 0;
+
+/** Une mutation est-elle en cours, ou sa réconciliation ? */
+function operationEquipesEnCours() { return equipesOperationsEnCours > 0; }
+
+/** Ouvre une opération et referme aussitôt les gestes incompatibles. */
+function debuterOperationEquipes() {
+  equipesOperationsEnCours++;
+  majDisponibiliteAjout();
+}
+
+/** Ferme une opération et RÉÉVALUE la disponibilité — jamais un simple « rouvrir ». */
+function terminerOperationEquipes() {
+  if (equipesOperationsEnCours > 0) equipesOperationsEnCours--;
+  majDisponibiliteAjout();
+}
+
+/** Ce que l'écriture a ACQUIS alors que l'écran ne le reflète pas encore ('' si rien en suspens). */
+let equipesAcquisNonReflete = '';
+
+/** ⭐ R1 — L'ÉCRAN DES ÉQUIPES EST-IL DOUTEUX ? Vrai dès qu'une actualisation a échoué ou qu'une
+ *  issue d'écriture est restée inconnue. C'est le SEUL état qui gouverne la disponibilité des
+ *  mutations : un `disabled` de bouton ne suffit pas, n'importe quel rendu pouvant le lever. */
+let equipesListeIncertaine = false;
+
+/** Prend un numéro de lecture : tout écrivain de `equipesCourantes` DOIT passer par ici. */
+function prendreJetonEquipes() { return ++lectureEquipesJeton; }
+
+/** Ce numéro est-il encore le plus récent ? Faux ⇒ le résultat est périmé et doit être jeté. */
+function jetonEquipesValide(jeton) { return jeton === lectureEquipesJeton; }
+
+/** L'écran des équipes est-il en retard ou incertain ? */
+function listeEquipesIncertaine() { return equipesListeIncertaine === true; }
+
+/** L'ajout est-il possible du point de vue des catégories ? (même source que remplirSelectCategories) */
+function ajoutPossibleEquipes() {
+  const cats = (typeof configCourante !== 'undefined' && configCourante && configCourante.categories) || [];
+  return cats.filter(estPresente).length > 0;
+}
+
+/**
+ * Point UNIQUE de décision pour le bouton « Ajouter ».
+ * ⛔ TROIS conditions, toutes nécessaires : au moins une catégorie présente, un écran fiable, ET
+ *    aucune opération en cours. Proposer d'ajouter sur une liste périmée, c'est inviter à recréer
+ *    une équipe qu'on ne voit pas ; le proposer pendant qu'une écriture est en vol ou en cours de
+ *    réconciliation, c'est la même chose — on ne sait pas encore ce que le serveur a retenu.
+ */
+function majDisponibiliteAjout() {
+  const bouton = document.getElementById('bouton-ajouter');
+  if (!bouton) return;
+  bouton.disabled = operationEquipesEnCours() || listeEquipesIncertaine() || !ajoutPossibleEquipes();
+}
+
+/** Montre la reprise ciblée et marque l'écran DOUTEUX. `acquis` = ce qui est enregistré et doit rester dit. */
+function afficherRepriseEquipes(acquis) {
+  equipesAcquisNonReflete = acquis || '';
+  equipesListeIncertaine = true;
+  const zone = document.getElementById('reprise-equipes');
+  if (zone) zone.hidden = false;
+  majDisponibiliteAjout();
+}
+
+/** Retire la reprise ciblée : l'écran redevient fiable, plus rien n'est en suspens. */
+function masquerRepriseEquipes() {
+  equipesAcquisNonReflete = '';
+  equipesListeIncertaine = false;
+  const zone = document.getElementById('reprise-equipes');
+  if (zone) zone.hidden = true;
+}
+
+/**
+ * L'ABSENCE D'EFFET de l'écriture est-elle ÉTABLIE ? (⛔ et non « l'erreur est-elle connue »)
+ *
+ * ⛔ CE QUI EST CORRIGÉ EN R1. Cette fonction rendait `true` pour TOUTE erreur portant une réponse
+ *    JSON. Or `backend/Code.gs` renvoie aussi `{ error: "Erreur serveur pendant l'écriture." }`
+ *    depuis son `catch` d'exceptions inattendues — une réponse structurellement identique à un
+ *    refus de validation, mais qui peut SUIVRE une écriture partielle (`modifierEquipe` écrit en
+ *    plusieurs fois). La présence d'une réponse ne prouvait donc rien, et l'écran rouvrait la
+ *    mutation sur une issue en réalité incertaine.
+ *
+ * ⭐ NE SONT RETENUS QUE LES DEUX CAS où le contrat existant établit qu'AUCUNE écriture n'a eu lieu :
+ *    ① l'authentification est refusée — la clé est vérifiée AVANT le corps métier (drapeau
+ *       `acces_refuse`, ou repli textuel pour les déploiements anciens) ;
+ *    ② l'action a été annulée devant la fenêtre de clé — rien n'est parti avec cette clé-là.
+ * ⛔ TOUT LE RESTE — erreur métier, erreur serveur générique, statut HTTP, panne réseau, JSON
+ *    illisible, abandon — laisse l'issue INCERTAINE. On ne dit alors ni « échoué », ni « enregistré ».
+ */
+function ecritureSansEffetEtabli(err) {
+  if (String((err && err.message) || '') === 'Action annulée.') return true;
+  const rep = (err && err.reponse) || null;
+  if (rep && typeof rep === 'object' && 'acces_refuse' in rep) return rep.acces_refuse === true;
+  return !!(rep && typeof estRefusCle === 'function' && estRefusCle(err.message));
+}
+
+/**
+ * Refuse une mutation tant que le parcours n'est pas dans un état sûr.
+ * ⭐ R1 — GARDE À L'ENTRÉE des handlers, et non simple `disabled` de bouton : un rendu de
+ *    catégories, un raccourci clavier ou un appel programmatique contournent un attribut ;
+ *    ils ne contournent pas ce test.
+ * ⭐ R2 — DEUX CAUSES, et deux messages distincts : une opération EN COURS (l'attente est normale,
+ *    elle finira) n'est pas un écran PÉRIMÉ (il faut agir). ⛔ Une attente ne marque donc jamais la
+ *    liste comme douteuse : ce serait transformer une seconde de patience en verrou durable.
+ * @return {boolean} true si la mutation doit être ABANDONNÉE
+ */
+function refuserMutationSiIncertain(message, quoi) {
+  if (operationEquipesEnCours()) {
+    afficherMessage(message, '⏳ ' + quoi + ' : une opération est déjà en cours. Attends son ' +
+      'résultat — relancer maintenant risquerait de créer un doublon, puisque la liste affichée ' +
+      'ne reflète pas encore ce que le serveur a retenu.', 'ko');
+    return true;
+  }
+  if (!listeEquipesIncertaine()) return false;
+  const acquis = equipesAcquisNonReflete;
+  afficherMessage(message, (acquis ? acquis + '\n' : '') +
+    '⛔ ' + quoi + ' est suspendu : la liste affichée peut être en retard sur le serveur. ' +
+    'Actualise-la d\'abord — agir sur des données anciennes risquerait de créer un doublon ou de ' +
+    'supprimer la mauvaise équipe.', 'ko');
+  afficherRepriseEquipes(acquis);
+  return true;
+}
+
+/**
+ * Actualise la liste APRÈS une écriture confirmée par le serveur.
+ * @param {Object} message  la zone de message de la carte Équipes
+ * @param {string} acquis   ce qui est ENREGISTRÉ, en une phrase — répété dans tous les cas
+ * @return {Promise<boolean>} true si l'écran est à jour, false s'il est resté périmé
+ */
+async function actualiserApresEcriture(message, acquis) {
+  masquerRepriseEquipes();
+  // ② l'écriture est acquise ; l'écran, pas encore. On le dit AVANT d'attendre la lecture.
+  afficherMessage(message, acquis + ' Actualisation de la liste…', 'ok');
+  try {
+    const aJour = await rechargerEquipes();
+    // Une lecture PLUS RÉCENTE a pris la main : c'est elle qui conclut, pas cette réponse tardive.
+    if (!aJour) return true;
+    afficherMessage(message, acquis, 'ok');
+    majDisponibiliteAjout();
+    return true;
+  } catch (err) {
+    // ③ enregistré MAIS écran périmé. ⛔ Jamais présenté comme un échec d'écriture.
+    afficherMessage(message, acquis + '\n⚠️ La liste ci-dessous n\'a PAS pu être actualisée : ' +
+      err.message + '\n⛔ Ne recrée rien : ce qui est écrit ci-dessus est enregistré. ' +
+      'Ce que la liste montre peut être ancien — utilise « Actualiser la liste ».', 'ko');
+    afficherRepriseEquipes(acquis);
+    return false;
+  }
+}
+
+/**
+ * Reprise CIBLÉE : relit la seule liste des équipes, sans recharger la page, sans réémettre
+ * la moindre écriture, et SANS toucher aux champs du formulaire — la saisie suivante déjà
+ * préparée à l'écran doit survivre à la reprise.
+ */
+async function onRepriseEquipes() {
+  const bouton = document.getElementById('bouton-reprise-equipes');
+  const message = document.getElementById('message-equipe');
+  if (lectureEquipesEnCours()) return;          // ⛔ un second clic ne lance pas une seconde lecture
+  const acquis = equipesAcquisNonReflete;
+  if (bouton) { bouton.disabled = true; bouton.textContent = 'Actualisation…'; }
+  try {
+    const aJour = await rechargerEquipes();
+    if (!aJour) return;                         // réponse tardive : une lecture plus récente conclut
+    masquerRepriseEquipes();
+    afficherMessage(message, (acquis ? acquis + ' ' : '') + '✅ Liste à jour.', 'ok');
+    majDisponibiliteAjout();
+  } catch (err) {
+    afficherMessage(message, (acquis ? acquis + '\n' : '') +
+      '⚠️ La liste n\'a toujours pas pu être actualisée : ' + err.message +
+      '\n⛔ Ce qui est enregistré le reste ; ce que la liste montre peut être ancien.', 'ko');
+  } finally {
+    if (bouton) { bouton.disabled = false; bouton.textContent = 'Actualiser la liste'; }
+  }
+}
+
 /**
  * Quand on soumet le formulaire d'ajout d'équipe.
  */
@@ -176,6 +423,11 @@ async function onAjouterEquipe(evenement) {
   const champE   = document.getElementById('champ-educateurs');
   const bouton   = document.getElementById('bouton-ajouter');
   const message  = document.getElementById('message-equipe');
+
+  // ⛔ R1 — GARDE À L'ENTRÉE : tant que l'écran est douteux, aucune équipe n'est ajoutée. Le
+  //    contrôle du doublon plus bas s'appuie sur `equipesCourantes` ; s'appuyer sur une liste
+  //    périmée reviendrait à croire qu'une équipe n'existe pas parce qu'on ne la voit pas encore.
+  if (refuserMutationSiIncertain(message, 'L\'ajout d\'équipe')) return;
 
   // Nom du club toujours en MAJUSCULES (uniformité d'affichage sur toutes les pages).
   const nom = champNom.value.trim().toUpperCase();
@@ -198,27 +450,56 @@ async function onAjouterEquipe(evenement) {
     return;
   }
 
-  // On désactive le bouton le temps de l'envoi (évite les doubles clics).
-  bouton.disabled = true;
+  // ① ÉCRITURE EN COURS. On désactive le bouton le temps de l'envoi (évite les doubles clics),
+  //    et on le DIT : sans ça, les secondes qui suivent ressemblent à une page figée.
+  //    ⛔ Aucun budget sur cette écriture : une écriture abandonnée resterait d'issue INCONNUE,
+  //       et l'inconnu ne se rejoue pas (voir `ecritureSansEffetEtabli`).
+  // ⭐ R2 — L'OPÉRATION S'OUVRE ICI et ne se referme qu'à la toute fin, réconciliation comprise :
+  //    c'est l'intervalle pendant lequel on ignore ce que le serveur a retenu. Tant qu'elle dure,
+  //    `majDisponibiliteAjout()` garde le bouton fermé — y compris si un rendu des catégories
+  //    passe par là — et la garde d'entrée refuse une seconde soumission.
+  debuterOperationEquipes();
   bouton.textContent = 'Ajout…';
+  masquerRepriseEquipes();
+  afficherMessage(message, '⏳ Enregistrement de « ' + nom + ' »…', 'ok');
 
   try {
-    await ecrireAdmin('ajouterEquipe', { nom_equipe: nom, categorie: categorie,
-                                        nb_joueurs: nbJoueurs, nb_educateurs: nbEducateurs });
+    let ecrite = false;
+    try {
+      await ecrireAdmin('ajouterEquipe', { nom_equipe: nom, categorie: categorie,
+                                          nb_joueurs: nbJoueurs, nb_educateurs: nbEducateurs });
+      ecrite = true;
+    } catch (erreur) {
+      if (ecritureSansEffetEtabli(erreur)) {
+        // Absence d'effet ÉTABLIE (clé refusée, ou annulation avant émission) : on peut recommencer.
+        afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+      } else {
+        // ⛔ ISSUE INCERTAINE. Surtout ne pas dire « échec », surtout ne pas inviter à recréer.
+        //    ⚠️ Y COMPRIS pour une erreur métier ou une « erreur serveur » : le backend renvoie le
+        //    même genre de réponse pour un refus de validation et pour une exception survenue APRÈS
+        //    un début d'écriture. Seule une relecture peut trancher.
+        afficherMessage(message, '⚠️ Impossible de savoir si « ' + nom + ' » a été enregistrée : ' +
+          erreur.message + '\n⛔ Ne la recrée pas. Actualise d\'abord la liste pour voir ce que le ' +
+          'serveur a retenu.', 'ko');
+        afficherRepriseEquipes('');
+      }
+    } finally {
+      bouton.textContent = 'Ajouter';   // ⛔ l'ouverture du bouton se décide par état, pas ici
+    }
+    if (!ecrite) return;
 
-    // Succès : on vide les champs saisis, on recharge la liste.
+    // ÉCRITURE CONFIRMÉE : on libère les champs pour la saisie suivante, puis on actualise. Le
+    // succès est déjà acquis à cet instant — plus rien de ce qui suit ne peut le remettre en cause.
     champNom.value = '';
     if (champJ) champJ.value = '';
     if (champE) champE.value = '';
     champNom.focus();
-    afficherMessage(message, '✅ « ' + nom +' » ajoutée.', 'ok');
-    await rechargerEquipes();
 
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+    await actualiserApresEcriture(message, '✅ « ' + nom + ' » ajoutée.');
   } finally {
-    bouton.disabled = false;
-    bouton.textContent = 'Ajouter';
+    // ⛔ R2 — FERMETURE SUR TOUS LES CHEMINS : confirmation, refus sans effet, issue incertaine,
+    //    réconciliation réussie ou ratée. L'état repart ensuite de la disponibilité réelle.
+    terminerOperationEquipes();
   }
 }
 
@@ -246,16 +527,30 @@ async function onSupprimerEquipe(bouton) {
   const nom = bouton.getAttribute('data-nom');
   const message = document.getElementById('message-equipe');
 
+  // ⛔ R1 — garde à l'entrée : `id` vient d'une liste qui peut être périmée.
+  if (refuserMutationSiIncertain(message, 'La suppression d\'équipe')) return;
+
   if (!await dialogConfirmer('Supprimer l\'équipe « ' + nom + ' » ?', { ok: 'Supprimer', danger: true })) return;
 
+  debuterOperationEquipes();   // ⭐ R2 — couvre l'écriture ET sa réconciliation
   bouton.disabled = true;
   try {
     await ecrireAdmin('supprimerEquipe', { id_equipe: id });
-    afficherMessage(message, '🗑️ « ' + nom + ' » supprimée.', 'ok');
-    await rechargerEquipes();
+    // ⭐ Même règle que l'ajout : la suppression est acquise ; l'écran, lui, peut rester en retard.
+    await actualiserApresEcriture(message, '🗑️ « ' + nom + ' » supprimée.');
   } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-    bouton.disabled = false;
+    if (ecritureSansEffetEtabli(erreur)) {
+      afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+      bouton.disabled = false;
+    } else {
+      // ⛔ R1 — issue incertaine : la reprise est réellement OFFERTE, et le geste reste fermé.
+      afficherMessage(message, '⚠️ Impossible de savoir si « ' + nom + ' » a été supprimée : ' +
+        erreur.message + '\n⛔ Ne recommence pas. Actualise la liste pour voir ce que le serveur ' +
+        'a retenu.', 'ko');
+      afficherRepriseEquipes('');
+    }
+  } finally {
+    terminerOperationEquipes();
   }
 }
 
@@ -265,6 +560,9 @@ async function onSupprimerEquipe(bouton) {
 async function onSupprimerCategorieEquipes(bouton) {
   const cat = bouton.getAttribute('data-cat');
   const message = document.getElementById('message-equipe');
+  // ⛔ R1 — garde à l'entrée : le DÉCOMPTE annoncé ci-dessous vient de la liste affichée.
+  if (refuserMutationSiIncertain(message, 'La suppression par catégorie')) return;
+
   const combien = equipesCourantes.filter(function (eq) {
     return (eq.categorie || '(sans catégorie)') === cat;
   }).length;
@@ -272,17 +570,27 @@ async function onSupprimerCategorieEquipes(bouton) {
   if (!await dialogConfirmer('Supprimer TOUTES les ' + combien + ' équipe(s) de la catégorie « ' + cat + ' » ?\n\n' +
                'Cette action est irréversible.', { ok: 'Tout supprimer', danger: true })) return;
 
+  debuterOperationEquipes();   // ⭐ R2 — couvre l'écriture ET sa réconciliation
   bouton.disabled = true;
   bouton.textContent = 'Suppression…';
   try {
     const res = await ecrireAdmin('supprimerEquipesCategorie', { categorie: cat });
     const n = (res && res.nb_supprimees != null) ? res.nb_supprimees : combien;
-    afficherMessage(message, '🗑️ ' + n + ' équipe(s) de « ' + cat + ' » supprimée(s).', 'ok');
-    await rechargerEquipes();
+    await actualiserApresEcriture(message, '🗑️ ' + n + ' équipe(s) de « ' + cat + ' » supprimée(s).');
   } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-    bouton.disabled = false;
     bouton.textContent = 'Tout supprimer';
+    if (ecritureSansEffetEtabli(erreur)) {
+      afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+      bouton.disabled = false;
+    } else {
+      // ⛔ R1 — une suppression en lot peut avoir supprimé une PARTIE avant l'exception.
+      afficherMessage(message, '⚠️ Impossible de savoir ce qui a été supprimé dans « ' + cat +
+        ' » : ' + erreur.message + '\n⛔ Ne recommence pas : une partie a pu être supprimée. ' +
+        'Actualise la liste pour voir ce qu\'il reste.', 'ko');
+      afficherRepriseEquipes('');
+    }
+  } finally {
+    terminerOperationEquipes();
   }
 }
 
@@ -337,6 +645,9 @@ async function onEnregistrerNom(bouton) {
   const champ = item ? item.querySelector('.champ-edit-nom') : null;
   if (!champ) return;
 
+  // ⛔ R1 — garde à l'entrée : `id` et le contrôle de doublon viennent de la liste affichée.
+  if (refuserMutationSiIncertain(message, 'La modification d\'équipe')) return;
+
   // Nom du club toujours en MAJUSCULES (cohérence avec l'ajout d'équipe).
   const nouveauNom = champ.value.trim().toUpperCase();
   if (!nouveauNom) {
@@ -363,29 +674,76 @@ async function onEnregistrerNom(bouton) {
   const nbJoueurs = effectifSaisi(champJ ? champJ.value : '');
   const nbEducateurs = effectifSaisi(champE ? champE.value : '');
 
+  debuterOperationEquipes();   // ⭐ R2 — couvre l'écriture ET sa réconciliation
   bouton.disabled = true;
   bouton.textContent = 'Enregistrement…';
   try {
     await ecrireAdmin('modifierEquipe', { id_equipe: id, nom_equipe: nouveauNom,
                                           nb_joueurs: nbJoueurs, nb_educateurs: nbEducateurs });
     const resume = resumeEffectifs({ nb_joueurs: nbJoueurs, nb_educateurs: nbEducateurs });
-    afficherMessage(message, '✏️ « ' + nouveauNom + ' » enregistrée' + (resume ? ' — ' + resume : '') + '.', 'ok');
-    await rechargerEquipes();
+    await actualiserApresEcriture(message,
+      '✏️ « ' + nouveauNom + ' » enregistrée' + (resume ? ' — ' + resume : '') + '.');
   } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-    bouton.disabled = false;
     bouton.textContent = 'Enregistrer';
+    if (ecritureSansEffetEtabli(erreur)) {
+      afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+      bouton.disabled = false;
+    } else {
+      // ⛔ R1 — `modifierEquipe` écrit le nom PUIS les effectifs : une exception au milieu laisse
+      //    un enregistrement partiel, que seule une relecture peut révéler.
+      afficherMessage(message, '⚠️ Impossible de savoir ce qui a été enregistré pour « ' +
+        nouveauNom + ' » : ' + erreur.message + '\n⛔ Ne recommence pas. Actualise la liste pour ' +
+        'voir ce que le serveur a retenu.', 'ko');
+      afficherRepriseEquipes('');
+    }
+  } finally {
+    terminerOperationEquipes();
   }
 }
 
 /**
  * Recharge uniquement la liste des équipes depuis le backend.
+ *
+ * ⭐ BORNÉE (CORR-BLOCAGE-LECTURES-ADMIN-DR) : sans budget, une lecture qui « pend » gelait tout
+ *    le parcours d'ajout. Le budget couvre l'émission, l'éventuel rejeu 404 ET la lecture du corps.
+ * ⭐ DATÉE : chaque appel prend un numéro. Une réponse qui ne porte plus le dernier numéro est
+ *    TARDIVE — elle est jetée sans rien afficher, pour qu'un vieux résultat n'écrase jamais un
+ *    état plus récent. Elle rend `false` : l'appelant sait qu'il n'a rien à conclure.
+ * ⛔ Ne touche jamais aux champs du formulaire, et n'émet aucune écriture.
+ *
+ * @param {Object} [options] { delaiMs } pour déroger au budget par défaut
+ * @return {Promise<boolean>} true si CET appel a mis l'écran à jour
  */
-async function rechargerEquipes() {
-  const equipes = await apiGet('getEquipes');
+async function rechargerEquipes(options) {
+  const jeton = prendreJetonEquipes();
+  // ⭐ R2 — IDENTITÉ PROPRE À CET APPEL. Le verrou appartient à la lecture qui l'a pris, et à elle
+  //    seule ; il ne dépend PAS de la fraîcheur, qu'un lecteur global peut lui retirer sans jamais
+  //    posséder ce verrou. Une lecture ciblée plus récente écrase ce propriétaire : c'est alors
+  //    elle qui relâchera. Dans tous les cas, quelqu'un relâche — plus d'orphelin possible.
+  const proprietaire = {};
+  lectureEquipesProprietaire = proprietaire;
+  let equipes, echec = null;
+  try {
+    equipes = await apiGet('getEquipes', null,
+      { delaiMs: (options && options.delaiMs) || DELAI_LECTURE_EQUIPES_MS });
+  } catch (err) {
+    // ⭐ R1 — L'ERREUR EST RETENUE, PAS RELANCÉE TOUT DE SUITE. Le jeton ne filtrait que les
+    //    SUCCÈS : un rejet périmé sautait le test et remontait à l'appelant, dont le `catch`
+    //    remplaçait alors un succès plus récent par un vieil échec (reprise rouverte, ajout refermé).
+    echec = err;
+  } finally {
+    // ⛔ R2 — RELÂCHÉ PAR SON PROPRIÉTAIRE, jamais par la fraîcheur. Une lecture ciblée plus
+    //    récente a déjà pris la place : elle relâchera à son tour. Une tardive ne rouvre donc pas
+    //    la porte pendant que la nouvelle est en vol, et aucun verrou ne reste orphelin.
+    if (lectureEquipesProprietaire === proprietaire) lectureEquipesProprietaire = null;
+  }
+  // réponse TARDIVE — succès OU erreur : un état plus récent existe, celle-ci n'a aucun effet
+  if (!jetonEquipesValide(jeton)) return false;
+  if (echec) throw echec;
   equipesCourantes = equipes;
   afficherEquipes(equipes);
   majTableauBord(); // le nombre d'équipes a changé
+  return true;
 }
 
 /* --------------------------------------------------------------------------

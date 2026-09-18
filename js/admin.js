@@ -204,14 +204,16 @@ async function ecrireAdmin(action, data) {
  * (vues live / invitation) et ne renvoient plus les contacts. Lecture seule côté serveur : ne
  * prend pas le verrou d'écriture.
  */
-async function lireConfigAdmin(cle) {
+async function lireConfigAdmin(cle, options) {
   // ⭐ `cle` est RÉSERVÉE à l'ouverture de la page (`ouvrirSessionAdmin`), qui valide une clé pas
   //   encore mémorisée : on l'envoie TELLE QUELLE, sans ouvrir de fenêtre et sans rien mémoriser,
   //   pour que le refus revienne à l'appelant, qui seul sait quoi en faire.
   //   Sans argument (tous les autres appels), comportement historique strictement inchangé.
+  // ⭐ `options` ({ delaiMs }) BORNE cette LECTURE — c'en est une, malgré le verbe POST : seule
+  //   l'ouverture s'en sert, pour que l'écran d'attente ne puisse pas rester pendu indéfiniment.
   const r = cle
-    ? await apiPost('getConfigAdmin', { cle: cle })
-    : await apiPostProtege('getConfigAdmin', {}, 'admin', 'admin');
+    ? await apiPost('getConfigAdmin', { cle: cle }, options)
+    : await apiPostProtege('getConfigAdmin', {}, 'admin', 'admin', options);
   return (r && r.config) || { global: {}, categories: [] };
 }
 
@@ -268,6 +270,23 @@ function estRefusCleAdmin(err) {
  */
 let adminCleVolatile = '';
 
+/** Budget NOMINAL des lectures D'ENSEMBLE de l'administration (ouverture ET rafraîchissement),
+ *  en millisecondes.
+ *
+ *  ⭐ POURQUOI IL EXISTE (CORR-BLOCAGE-LECTURES-ADMIN-DR). `getAll` et `getConfigAdmin` partaient
+ *  sans borne : si l'une pendait, la page restait sur « Chargement… » pour toujours. Le bouton
+ *  « Réessayer » n'apparaît qu'APRÈS un rejet — sans rejet, il n'apparaissait jamais, et le seul
+ *  recours était de recharger la page entière.
+ *  ⭐ R1 — IL COUVRE AUSSI `rechargerEtRendre`, donc le vrai chemin du bouton « Rafraîchir ».
+ *  Celui-ci restait non borné : sa promesse ne se dénouait jamais, le bouton restait désactivé,
+ *  et l'avertissement d'échec n'avait aucune chance d'apparaître.
+ *  ⭐ PLUS LARGE QUE LA LISTE SEULE (20 s) : ces chemins lisent tout le tournoi, et l'ouverture est
+ *  souvent la première requête — donc celle qui paie le réveil du service Apps Script.
+ *  ⚠️ NOMINAL, pas mural : mêmes limites de minuterie navigateur que partout ailleurs. Et ce
+ *  chiffre reste À VALIDER en conditions réelles : les durées connues sont des temps d'EXÉCUTION
+ *  Apps Script, qui ne bornent pas le temps réseau total. */
+const DELAI_LECTURE_ADMIN_MS = 30000;
+
 async function ouvrirSessionAdmin() {
   // Une clé déjà validée cette session passe devant ; sinon, celle qu'une panne a laissée en
   // suspens ; sinon, on la demande.
@@ -288,11 +307,14 @@ async function ouvrirSessionAdmin() {
     // Le `catch` vide marque la promesse comme surveillée : sans lui, un `getAll` qui échoue
     // pendant qu'on redemande la clé remonterait en rejet NON GÉRÉ. L'erreur reste intacte et
     // ressort au `await` ci-dessous.
-    if (!getAll) { getAll = apiGet('getAll'); getAll.catch(function () { /* relu plus bas */ }); }
+    if (!getAll) {
+      getAll = apiGet('getAll', null, { delaiMs: DELAI_LECTURE_ADMIN_MS });
+      getAll.catch(function () { /* relu plus bas */ });
+    }
 
     let cfg;
     try {
-      cfg = await lireConfigAdmin(cle);
+      cfg = await lireConfigAdmin(cle, { delaiMs: DELAI_LECTURE_ADMIN_MS });
     } catch (err) {
       if (!estRefusCleAdmin(err)) {
         // ⛔ PANNE, PAS REFUS. On ne sait pas si la clé est bonne : on ne la RANGE pas, mais on
@@ -959,6 +981,9 @@ function brancherEcouteursAdmin() {
   // On branche le formulaire d'ajout et les boutons de suppression (équipes).
   ecouter('form-equipe', 'submit', onAjouterEquipe);
   ecouter('liste-equipes', 'click', onClicListe);
+  // Reprise CIBLÉE de la liste des équipes (CORR-BLOCAGE-LECTURES-ADMIN-DR) : relit la seule
+  // liste après une actualisation ratée, sans recharger la page ni réémettre d'écriture.
+  ecouter('bouton-reprise-equipes', 'click', onRepriseEquipes);
   // Réglage « Identifier mes équipes dans Perfs » (même carte : la valeur est un bout de nom d'équipe).
   ecouter('bouton-enregistrer-perfs-club', 'click', onEnregistrerPerfsMotCle);
   // ⚠️ Garde OBLIGATOIRE, comme les 10 autres formulaires de cette page. Un formulaire à champ
@@ -1157,21 +1182,36 @@ function brancherEcouteursAdmin() {
  */
 async function rechargerEtRendre(opt) {
   opt = opt || {};
-  const data = await apiGet('getAll'); // équipes / poules / matchs (config = vue live, ignorée ici)
-  equipesCourantes = data.equipes;
-  matchsCourants = data.matchs || [];
+  const budget = { delaiMs: DELAI_LECTURE_ADMIN_MS };
+
+  // ⭐ R1 — MÊME REGISTRE DE FRAÎCHEUR QUE LA LISTE. Ce chemin écrit `equipesCourantes` depuis un
+  //   `getAll` global : sans jeton partagé, un « Rafraîchir » commencé AVANT un ajout et terminé
+  //   APRÈS sa relecture ramenait mémoire et écran à l'état d'avant l'ajout — et le contrôle des
+  //   doublons repartait de données anciennes.
+  const jeton = (typeof prendreJetonEquipes === 'function') ? prendreJetonEquipes() : null;
+
+  const data = await apiGet('getAll', null, budget); // équipes / poules / matchs (config = vue live, ignorée ici)
 
   // La config COMPLÈTE vient de getConfigAdmin (clé admin), JAMAIS de la vue live de getAll (qui
   // écraserait les contacts). On ne la recharge que si un rendu qui en dépend est demandé — sinon
   // on garde la configCourante déjà chargée (ex. rafraîchissement des seuls scores).
-  if (opt.reglages || opt.selectCats || opt.terrains || opt.infos || opt.publication) {
-    configCourante = await lireConfigAdmin();
-  }
+  // ⭐ R1 — LUE AVANT TOUTE ÉCRITURE EN MÉMOIRE. Auparavant `equipesCourantes` était réassignée
+  //   puis cette seconde lecture pouvait échouer : la mémoire était à jour, l'écran ne l'était pas,
+  //   et rien ne le disait. Les deux lectures aboutissent d'abord ; on ne modifie l'état qu'ensuite.
+  const besoinConfig = !!(opt.reglages || opt.selectCats || opt.terrains || opt.infos || opt.publication);
+  const cfg = besoinConfig ? await lireConfigAdmin(undefined, budget) : null;
+
+  // ⛔ Résultat PÉRIMÉ pour les équipes : on ne touche ni la mémoire ni la liste. Le reste du
+  //   rendu (planning, matchs) ne dépend pas de ce registre et suit son cours.
+  const equipesFraiches = (jeton === null) || jetonEquipesValide(jeton);
+  if (equipesFraiches) equipesCourantes = data.equipes;
+  matchsCourants = data.matchs || [];
+  if (cfg) configCourante = cfg;
 
   if (opt.reglages)   injecterReglages(configCourante.global, configCourante.categories);
   if (opt.terrains)   injecterTerrains();
   if (opt.selectCats) remplirSelectCategories(configCourante.categories);
-  if (opt.equipes)    afficherEquipes(data.equipes);
+  if (opt.equipes && equipesFraiches) afficherEquipes(data.equipes);
 
   afficherPlanning(data.poules, data.matchs);
   majApresMidi();
@@ -1199,17 +1239,31 @@ async function rafraichirAdmin() {
   try {
     await rechargerEtRendre({ equipes: true, publication: true, heure: true });
   } catch (err) {
-    // On garde l'affichage actuel en cas d'erreur réseau.
+    // ⭐ CORR-BLOCAGE-LECTURES-ADMIN-DR — L'ÉCHEC EST DIT. Il était avalé en silence : l'écran
+    //   gardait des données anciennes en se présentant comme à jour, et l'horodatage « Mis à jour
+    //   à … » continuait d'afficher une heure qui n'avait plus cours. Un écran périmé qui s'avoue
+    //   périmé vaut mieux qu'un écran périmé qui se tait.
+    // ⛔ On garde l'affichage actuel : il n'y a rien de plus récent à mettre à la place.
+    const el = document.getElementById('maj-admin');
+    if (el) {
+      el.textContent = '⚠️ Non actualisé (' + ((err && err.message) || 'erreur inconnue') + ')';
+      el.className = 'live-maj live-maj-echec';
+    }
   } finally {
     bouton.disabled = false;
     bouton.textContent = texte;
   }
 }
 
-/** Affiche l'heure de la dernière mise à jour des données. */
+/** Affiche l'heure de la dernière mise à jour des données.
+ *  ⭐ Remet aussi la classe d'origine : un rafraîchissement RÉUSSI efface l'avertissement laissé
+ *     par un échec précédent — sinon l'écran resterait marqué « non actualisé » alors qu'il l'est. */
 function majHeureAdmin() {
   const el = document.getElementById('maj-admin');
-  if (el) el.textContent = 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
+  if (el) {
+    el.textContent = 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
+    el.className = 'live-maj';
+  }
 }
 
 /* --------------------------------------------------------------------------
