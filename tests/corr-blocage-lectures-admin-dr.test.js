@@ -167,7 +167,9 @@ const SRC_EQUIPES = [
   bloc(F_EQUIPES, 'function afficherRepriseEquipes('),
   bloc(F_EQUIPES, 'function masquerRepriseEquipes('),
   bloc(F_EQUIPES, 'function ecritureSansEffetEtabli('),
-  bloc(F_EQUIPES, 'function refuserMutationSiIncertain(')
+  bloc(F_EQUIPES, 'function refuserMutationSiIncertain('),
+  bloc(F_EQUIPES, 'function integrerEquipeAjoutee('),
+  bloc(F_EQUIPES, 'function verifierEquipesEnArrierePlan(')
 ].join('\n');
 
 const SRC_ADMIN = [
@@ -459,6 +461,15 @@ function scenarioAjout(b, planLecture, planEcriture) {
 /* ========================================================================== */
 
 let total = 0, echecs = 0;
+let rapportFinalAtteint = false;
+process.on('exit', function (code) {
+  // Un scénario qui attend une promesse sans minuterie réelle peut laisser Node sortir avec 0
+  // AVANT le résumé. Ce garde transforme ce faux vert en échec explicite.
+  if (!rapportFinalAtteint && code === 0) {
+    process.exitCode = 1;
+    console.error('ÉCHEC — le banc s\'est arrêté avant son résumé final.');
+  }
+});
 const details = [];
 
 function verifier(code, libelle, condition, preuve) {
@@ -520,6 +531,125 @@ async function principal() {
     verifier('1.6', 'UNE écriture et UNE lecture, pas davantage',
       b.postsDe('ajouterEquipe').length === 1 && b.getsDe('getEquipes').length === 1,
       json({ post: b.postsDe('ajouterEquipe').length, get: b.getsDe('getEquipes').length }));
+  }
+
+  {
+    /* Le backend actuel renvoie la ligne qu'il vient réellement d'écrire. La lecture de contrôle
+       peut donc pendre sans retarder le rendu ni rouvrir un risque de doublon. */
+    const b = bac();
+    const equipe = {
+      id_equipe: 'E7', nom_equipe: 'ISSY-LES-MOULINEAUX', categorie: 'U10', poule: '',
+      source: 'manuel', nb_joueurs: '13', nb_educateurs: '2'
+    };
+    scenarioAjout(b, 'pend', { statut: 200, corps: { ok: true, equipe: equipe }, apres: 5600 });
+    b.saisir('ISSY-LES-MOULINEAUX');
+    const p = b.lancerAjout();
+    await souffler();
+    await b.horloge.avancer(6000);
+    await p;
+
+    verifier('1.7', 'réponse d\'écriture autoritative : l\'équipe est rendue sans attendre la relecture',
+      b.ctx.equipesCourantes.length === 1 &&
+      b.ctx.equipesCourantes[0].id_equipe === 'E7' &&
+      b.message() === '✅ « ISSY-LES-MOULINEAUX » ajoutée.' && b.ajoutFerme() === false,
+      json({ equipes: b.ctx.equipesCourantes, msg: b.message(), ferme: b.ajoutFerme() }));
+
+    verifier('1.8', 'la vérification distante est lancée une fois en arrière-plan, sans seconde écriture',
+      b.postsDe('ajouterEquipe').length === 1 && b.getsDe('getEquipes').length === 1,
+      json({ post: b.postsDe('ajouterEquipe').length, get: b.getsDe('getEquipes').length }));
+
+    verifier('1.9', 'les effectifs affichés viennent de la réponse serveur confirmée',
+      b.el('liste-equipes').innerHTML.indexOf('13 joueurs · 2 éducs') !== -1,
+      b.el('liste-equipes').innerHTML);
+  }
+
+  {
+    const b = bac();
+    const equipe = { id_equipe: 'E8', nom_equipe: 'MEUDON', categorie: 'U10' };
+    scenarioAjout(b, { statut: 500 }, { statut: 200, corps: { ok: true, equipe: equipe } });
+    b.saisir('MEUDON');
+    await b.lancerAjout();
+    await souffler();
+
+    verifier('1.10', 'échec de la vérification de fond : le succès, la liste et le bouton restent acquis',
+      b.message() === '✅ « MEUDON » ajoutée.' && b.ctx.equipesCourantes[0].id_equipe === 'E8' &&
+      b.repriseVisible() === false && b.ajoutFerme() === false,
+      json({ msg: b.message(), equipes: b.ctx.equipesCourantes, reprise: b.repriseVisible(), ferme: b.ajoutFerme() }));
+  }
+
+  {
+    const b = bac();
+    scenarioAjout(b, { statut: 200, corps: [{ id_equipe: 'SERVEUR', nom_equipe: 'SERVEUR', categorie: 'U10' }] },
+      { statut: 200, corps: { ok: true, equipe: { nom_equipe: 'SANS ID', categorie: 'U10' } } });
+    b.saisir('SANS ID');
+    await b.lancerAjout();
+
+    verifier('1.11', 'réponse équipe incomplète : aucun identifiant n\'est inventé, le repli serveur conclut',
+      b.ctx.equipesCourantes.length === 1 && b.ctx.equipesCourantes[0].id_equipe === 'SERVEUR' &&
+      b.getsDe('getEquipes').length === 1,
+      json({ equipes: b.ctx.equipesCourantes, get: b.getsDe('getEquipes').length }));
+  }
+
+  {
+    const b = bac();
+    b.ctx.integrerEquipeAjoutee({ id_equipe: 'E9', nom_equipe: 'VELIZY', categorie: 'U10' });
+    b.ctx.integrerEquipeAjoutee({ id_equipe: 'E9', nom_equipe: 'VÉLIZY', categorie: 'U10' });
+    verifier('1.12', 'deux intégrations du même identifiant remplacent la ligne sans créer de doublon',
+      b.ctx.equipesCourantes.length === 1 && b.ctx.equipesCourantes[0].nom_equipe === 'VÉLIZY',
+      json(b.ctx.equipesCourantes));
+  }
+
+  {
+    const b = bac();
+    const equipe = { id_equipe: 'E10', nom_equipe: 'ANTONY', categorie: 'U10' };
+    scenarioAjout(b, { statut: 200, corps: [{ id_equipe: 'DISTANTE', nom_equipe: 'DISTANTE', categorie: 'U10' }], apres: 5000 },
+      { statut: 200, corps: { ok: true, equipe: equipe }, apres: 1000 });
+    b.saisir('ANTONY');
+    const p = b.lancerAjout();
+    await b.horloge.avancer(1500);
+    await p;
+    b.doc.querySelector = function (sel) {
+      return sel === '#liste-equipes .equipe-item.en-edition' ? { id: 'edition-ouverte' } : null;
+    };
+    await b.horloge.avancer(6000);
+
+    verifier('1.13', 'une édition ouverte pendant la vérification de fond n\'est jamais écrasée',
+      b.ctx.equipesCourantes.length === 1 && b.ctx.equipesCourantes[0].id_equipe === 'E10',
+      json(b.ctx.equipesCourantes));
+  }
+
+  {
+    const b = bac();
+    b.reseau.programmer(function () { return { statut: 500 }; });
+    let leve = false, issue;
+    try { issue = await b.ctx.verifierEquipesEnArrierePlan(); }
+    catch (e) { leve = true; }
+    verifier('1.14', 'la vérification de fond absorbe directement son erreur et rend false',
+      leve === false && issue === false,
+      json({ leve: leve, issue: issue }));
+  }
+
+  {
+    const b = bac();
+    const equipe = { id_equipe: 'E11', nom_equipe: 'SÈVRES', categorie: 'U10' };
+    scenarioAjout(b, { statut: 200, corps: [equipe] },
+      { statut: 200, corps: { ok: true, equipe: equipe } });
+    const afficherOriginal = b.ctx.afficherEquipes;
+    let rendus = 0;
+    b.ctx.afficherEquipes = function (equipes) {
+      rendus++;
+      if (rendus === 1) throw new Error('rendu simulé indisponible');
+      return afficherOriginal(equipes);
+    };
+    b.saisir('SÈVRES');
+    await b.lancerAjout();
+
+    verifier('1.15', 'si le rendu immédiat lève, le repli relit puis affiche sans renier l\'écriture',
+      rendus === 2 && b.getsDe('getEquipes').length === 1 &&
+      b.ctx.equipesCourantes.length === 1 && b.ctx.equipesCourantes[0].id_equipe === 'E11' &&
+      b.message() === '✅ « SÈVRES » ajoutée.',
+      json({ rendus: rendus, get: b.getsDe('getEquipes').length,
+             equipes: b.ctx.equipesCourantes, msg: b.message() }));
   }
 
   /* ---------------------------------------------------------------------- */
@@ -1768,6 +1898,55 @@ async function principal() {
       }
     },
     {
+      code: 'Z.19', quoi: 'PERF — la réponse serveur confirmée n\'est plus intégrée immédiatement',
+      surMesure: async function () {
+        const MUTANT = substituer(SRC_AJOUTER,
+          'try { integree = integrerEquipeAjoutee(reponseEcriture && reponseEcriture.equipe); }',
+          'try { integree = false; }', 'mutant Z.19');
+        const b = bac({ sourceAjouter: MUTANT });
+        const equipe = { id_equipe: 'E7', nom_equipe: 'ISSY-LES-MOULINEAUX', categorie: 'U10' };
+        scenarioAjout(b, 'pend', { statut: 200, corps: { ok: true, equipe: equipe }, apres: 1000 });
+        b.saisir('ISSY-LES-MOULINEAUX');
+        const p = b.lancerAjout(); p.catch(function () {});
+        await b.horloge.avancer(2000);
+        return b.ctx.equipesCourantes.length === 0 && b.ajoutFerme() === true;
+      }
+    },
+    {
+      code: 'Z.20', quoi: 'PERF — la vérification de fond redevient bloquante',
+      surMesure: async function () {
+        const MUTANT = substituer(SRC_AJOUTER,
+          'if (verifierEnArrierePlan) verifierEquipesEnArrierePlan();',
+          'if (verifierEnArrierePlan) await verifierEquipesEnArrierePlan();', 'mutant Z.20');
+        const b = bac({ sourceAjouter: MUTANT });
+        const equipe = { id_equipe: 'E7', nom_equipe: 'ISSY-LES-MOULINEAUX', categorie: 'U10' };
+        scenarioAjout(b, 'pend', { statut: 200, corps: { ok: true, equipe: equipe }, apres: 1000 });
+        b.saisir('ISSY-LES-MOULINEAUX');
+        let fini = false;
+        const p = b.lancerAjout();
+        p.then(function () { fini = true; }, function () { fini = true; });
+        await b.horloge.avancer(2000);
+        return fini === false;
+      }
+    },
+    {
+      code: 'Z.21', quoi: 'PERF — une lecture partie avant l\'écriture peut effacer l\'équipe confirmée',
+      surMesure: async function () {
+        const MUTANT = substituer(SRC_EQUIPES,
+          '  prendreJetonEquipes();', '', 'mutant Z.21');
+        const b = bac({ sourceEquipes: MUTANT });
+        b.reseau.programmer(function () {
+          return { statut: 200, corps: [{ id_equipe: 'ANCIENNE', nom_equipe: 'ANCIENNE', categorie: 'U10' }], apres: 8000 };
+        });
+        const lecture = b.ctx.rechargerEquipes(); lecture.catch(function () {});
+        await souffler();
+        b.ctx.integrerEquipeAjoutee({ id_equipe: 'E7', nom_equipe: 'NOUVELLE', categorie: 'U10' });
+        await b.horloge.avancer(12000);
+        await lecture.catch(function () {});
+        return b.ctx.equipesCourantes.length === 1 && b.ctx.equipesCourantes[0].id_equipe === 'ANCIENNE';
+      }
+    },
+    {
       code: 'Z.14', quoi: 'A — la garde à l\'entrée de l\'ajout disparaît (mutation sur liste douteuse)',
       surMesure: async function () {
         const MUTANT = substituer(SRC_AJOUTER,
@@ -1826,8 +2005,10 @@ async function principal() {
   /* ---------------------------------------------------------------------- */
   console.log('\n' + '─'.repeat(70));
   if (echecs === 0) {
+    rapportFinalAtteint = true;
     console.log('OK — ' + total + ' contrôles passés.');
   } else {
+    rapportFinalAtteint = true;
     console.log('ÉCHEC — ' + echecs + ' contrôle(s) en défaut sur ' + total + ' :');
     details.forEach(function (d) { console.log('   · ' + d); });
     process.exitCode = 1;

@@ -386,6 +386,49 @@ async function actualiserApresEcriture(message, acquis) {
 }
 
 /**
+ * Intègre immédiatement l'équipe RENVOYÉE par l'écriture confirmée.
+ *
+ * Le serveur est la source de cette ligne : identifiant, nom normalisé, catégorie, source et
+ * effectifs viennent de `ajouterEquipe`, après l'écriture dans le Sheet. On peut donc rendre la
+ * liste sans attendre un second aller-retour Apps Script. Toute lecture déjà en vol est invalidée
+ * avant le rendu afin qu'une réponse ancienne ne puisse pas effacer cette équipe.
+ *
+ * @return {boolean} true si la réponse était assez complète pour être intégrée ; false déclenche
+ *                   le parcours historique, compatible avec un ancien backend.
+ */
+function integrerEquipeAjoutee(equipe) {
+  if (!equipe || typeof equipe !== 'object') return false;
+  const id = String(equipe.id_equipe || '').trim();
+  const nom = String(equipe.nom_equipe || '').trim();
+  const categorie = String(equipe.categorie || '').trim();
+  if (!id || !nom || !categorie) return false;
+
+  // Une écriture confirmée est plus récente que toute lecture partie avant sa réponse.
+  prendreJetonEquipes();
+  equipesCourantes = (equipesCourantes || []).filter(function (existante) {
+    return String((existante && existante.id_equipe) || '') !== id;
+  });
+  equipesCourantes.push(equipe);
+  afficherEquipes(equipesCourantes);
+  majTableauBord();
+  masquerRepriseEquipes();
+  return true;
+}
+
+/**
+ * Contrôle de cohérence APRÈS le rendu immédiat. Il ne bloque ni le bouton ni le message de
+ * succès : la ligne affichée vient déjà de la réponse d'écriture du serveur. Un échec réseau ne
+ * renie donc jamais l'acquis et ne transforme pas une vérification facultative en nouveau gel.
+ */
+function verifierEquipesEnArrierePlan() {
+  return rechargerEquipes({ preserverEdition: true }).catch(function (err) {
+    try { console.warn('Vérification différée des équipes impossible :', err.message); }
+    catch (e) { /* console indisponible : aucune incidence métier */ }
+    return false;
+  });
+}
+
+/**
  * Reprise CIBLÉE : relit la seule liste des équipes, sans recharger la page, sans réémettre
  * la moindre écriture, et SANS toucher aux champs du formulaire — la saisie suivante déjà
  * préparée à l'écran doit survivre à la reprise.
@@ -463,11 +506,15 @@ async function onAjouterEquipe(evenement) {
   masquerRepriseEquipes();
   afficherMessage(message, '⏳ Enregistrement de « ' + nom + ' »…', 'ok');
 
+  let verifierEnArrierePlan = false;
   try {
     let ecrite = false;
+    let reponseEcriture = null;
     try {
-      await ecrireAdmin('ajouterEquipe', { nom_equipe: nom, categorie: categorie,
-                                          nb_joueurs: nbJoueurs, nb_educateurs: nbEducateurs });
+      reponseEcriture = await ecrireAdmin('ajouterEquipe', {
+        nom_equipe: nom, categorie: categorie,
+        nb_joueurs: nbJoueurs, nb_educateurs: nbEducateurs
+      });
       ecrite = true;
     } catch (erreur) {
       if (ecritureSansEffetEtabli(erreur)) {
@@ -495,12 +542,29 @@ async function onAjouterEquipe(evenement) {
     if (champE) champE.value = '';
     champNom.focus();
 
-    await actualiserApresEcriture(message, '✅ « ' + nom + ' » ajoutée.');
+    const acquis = '✅ « ' + nom + ' » ajoutée.';
+    let integree = false;
+    try { integree = integrerEquipeAjoutee(reponseEcriture && reponseEcriture.equipe); }
+    catch (err) {
+      // Une panne de rendu ne remet pas l'écriture en cause : le parcours historique relit la
+      // liste et sait présenter séparément un éventuel échec d'affichage.
+      try { console.warn('Affichage immédiat de l’équipe impossible :', err.message); }
+      catch (e) { /* console indisponible : aucune incidence métier */ }
+    }
+    if (integree) {
+      // Parcours rapide : la réponse de l'écriture contient la ligne réellement enregistrée.
+      afficherMessage(message, acquis, 'ok');
+      verifierEnArrierePlan = true;
+    } else {
+      // Compatibilité avec un déploiement serveur ancien ou une réponse incomplète.
+      await actualiserApresEcriture(message, acquis);
+    }
   } finally {
     // ⛔ R2 — FERMETURE SUR TOUS LES CHEMINS : confirmation, refus sans effet, issue incertaine,
     //    réconciliation réussie ou ratée. L'état repart ensuite de la disponibilité réelle.
     terminerOperationEquipes();
   }
+  if (verifierEnArrierePlan) verifierEquipesEnArrierePlan();
 }
 
 /**
@@ -740,6 +804,11 @@ async function rechargerEquipes(options) {
   // réponse TARDIVE — succès OU erreur : un état plus récent existe, celle-ci n'a aucun effet
   if (!jetonEquipesValide(jeton)) return false;
   if (echec) throw echec;
+  // Une vérification de fond ne doit jamais fermer ni écraser un formulaire d'édition que
+  // l'organisateur a ouvert pendant son trajet réseau. Une actualisation demandée explicitement
+  // conserve, elle, son comportement historique.
+  if (options && options.preserverEdition &&
+      document.querySelector('#liste-equipes .equipe-item.en-edition')) return false;
   equipesCourantes = equipes;
   afficherEquipes(equipes);
   majTableauBord(); // le nombre d'équipes a changé
