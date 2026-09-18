@@ -816,6 +816,22 @@ function texteEcheanceAcces(etat) {
     ? ' ⚠️ La date de la dernière reprise est illisible : elle ne prolonge rien.' : '';
   const motif = e.message || 'échéance non calculable.';
 
+  /* ⭐ CORR-MAINTIEN-FERMETURE-45MIN — le planning a cessé de donner une échéance APRÈS la fermeture
+     automatique : l'accès reste fermé QUOI QUE le planning redevienne. ⛔ Ce cas passe AVANT tous les autres,
+     sans quoi un planning redevenu incomplet s'afficherait comme une attente normale (« la saisie reste
+     ouverte »), et un planning restauré annoncerait une échéance à venir alors que la saisie est fermée.
+     ⭐ En pause ou préparé, la phrase le dit autrement : ce n'est pas CE maintien qui ferme la saisie. */
+  const maintien = '⛔ La fermeture automatique est MAINTENUE : le planning a changé après elle (après-midi retirée, ' +
+    'catégorie retirée, ajoutée ou devenue incomplète). Le remettre en état ne rouvre pas la saisie — seul ' +
+    '« Reprendre la saisie » la rend, pour 45 minutes, avec le lien affiché ci-dessous.';
+  if (e.maintenue === true) {
+    /* ⭐ Le motif du serveur reste DIT : sans lui, une heure ou une date illisible resterait invisible, et la
+       reprise ne durerait que 45 minutes sans que l'organisateur sache quoi corriger. */
+    const aussi = e.calculable === true ? '' : ' Par ailleurs, le planning n\'est pas lisible : ' + motif;
+    return { texte: (ouvert ? '⛔ Saisie fermée, et maintenue fermée. ' : '') + maintien + aussi + correction + repriseIllisible,
+      type: 'ko' };
+  }
+
   /* ⛔ DONNÉES INVALIDES : aucune échéance fiable — la saisie n'est ouverte que pendant une fenêtre de reprise. */
   if (nature === 'DONNEES_INVALIDES') {
     const cause = 'données du planning invalides — ' + motif;

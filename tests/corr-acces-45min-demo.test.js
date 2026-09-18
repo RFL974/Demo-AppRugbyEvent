@@ -241,6 +241,22 @@ const ETATS = {
 };
 ETATS.nonCalculableFige = Object.assign({}, ETATS.nonCalculable, { etat: 'FIGE', etat_effectif: 'FIGE', version: 3,
   actions_possibles: ['REPRENDRE', 'CLOTURER', 'ROTATION'] });
+/* ⭐ CORR-MAINTIEN-FERMETURE-45MIN — l'après-midi retirée APRÈS la fermeture automatique. Le serveur rend
+   `maintenue: true` et `source: 'maintien'`, que le planning soit redevenu incomplet… */
+ETATS.maintenue = etat({ etat: 'OUVERT', etat_effectif: 'FERME_AUTO', fermee_automatiquement: true, version: 2,
+  actions_possibles: GESTES_FERME_AUTO },
+  Object.assign({}, INCOMPLET, { echeance_reprise: '', echeance: '', source: 'maintien', atteinte: true, maintenue: true }));
+/* … ou qu'il ait été RESTAURÉ en entier : l'échéance redevient calculable, et l'accès reste fermé quand même.
+   ⚠️ `echeance` porte alors une heure À VENIR (18:25) tandis qu'`atteinte` est vrai : l'écran ne doit surtout
+   pas la présenter comme « dépassée », ni comme « prévue ». */
+ETATS.maintenueRestauree = etat({ etat: 'OUVERT', etat_effectif: 'FERME_AUTO', fermee_automatiquement: true, version: 2,
+  actions_possibles: GESTES_FERME_AUTO },
+  { echeance: '2026-10-10 18:25:00', echeance_planning: '2026-10-10 18:25:00', source: 'maintien', atteinte: true, maintenue: true });
+/* ⭐ Une PAUSE MANUELLE posée pendant une fermeture maintenue : l'état enregistré est FIGE, et le maintien vit
+   toujours. ⛔ L'écran ne doit pas parler d'échéance « dépassée » — 18:25 n'est pas encore passée. */
+ETATS.maintenueFige = etat({ etat: 'FIGE', etat_effectif: 'FIGE', fermee_automatiquement: false, version: 3,
+  actions_possibles: ['REPRENDRE', 'CLOTURER', 'ROTATION'] },
+  { echeance: '2026-10-10 18:25:00', echeance_planning: '2026-10-10 18:25:00', source: 'maintien', atteinte: true, maintenue: true });
 
 function serveur(nom, apres) {
   let lectures = 0;
@@ -289,6 +305,33 @@ async function sectionsPrincipales(sourcePub) {
     / ko$|^ko$|\bko\b/.test(ferme.classeAvert());
   r.fermeLien = ferme.el('acces-saisie-corps').hidden === false && ferme.el('acces-saisie-lien').href === LIEN_FICTIF && ferme.qrDonnees[0] === LIEN_FICTIF;
   r.fermeDetail = { etiquette: ferme.etiquette(), avert: ferme.avert(), gestes: ferme.gestes(), classe: ferme.classeAvert() };
+
+  const maintenue = await vue('maintenue', o);
+  const maintenueRestauree = await vue('maintenueRestauree', o);
+  const maintenueFige = await vue('maintenueFige', o);
+  const PHRASE_MAINTIEN = '⛔ La fermeture automatique est MAINTENUE : le planning a changé après elle (après-midi retirée, ' +
+    'catégorie retirée, ajoutée ou devenue incomplète). Le remettre en état ne rouvre pas la saisie — seul ' +
+    '« Reprendre la saisie » la rend, pour 45 minutes, avec le lien affiché ci-dessous.';
+  r.maintenue = /^Fermé automatiquement/.test(maintenue.etiquette()) && maintenue.avert().indexOf(PHRASE_MAINTIEN) !== -1 &&
+    maintenue.avert().indexOf('⛔ Saisie fermée, et maintenue fermée.') !== -1 &&
+    /corriger un score/.test(maintenue.avert()) && !/reste ouverte/.test(maintenue.avert()) && !/NON programmée/.test(maintenue.avert()) &&
+    JSON.stringify(maintenue.gestes().sort()) === '["CLOTURER","FIGER","REPRENDRE","ROTATION"]' &&
+    maintenue.el('acces-saisie-lien').href === LIEN_FICTIF;
+  /* ⭐ L'INCISE EST UN CONTRÔLE À PART (⛔ pas mêlée à `r.maintenue`, sinon aucun mutant ne distinguerait
+     « la phrase de maintien a disparu » de « le motif a disparu ») : présente quand le planning est illisible,
+     absente quand il est de nouveau lisible. */
+  r.maintienMotif = /Par ailleurs, le planning n'est pas lisible : La phase suivante \(après-midi\)/.test(maintenue.avert()) &&
+    maintenueRestauree.avert().indexOf('Par ailleurs') === -1 && maintenueFige.avert().indexOf('Par ailleurs') === -1;
+  r.maintenueRestauree = maintenueRestauree.avert().indexOf(PHRASE_MAINTIEN) !== -1 &&
+    maintenueRestauree.avert().indexOf('Fermeture automatique prévue') === -1 &&
+    maintenueRestauree.avert().indexOf('dépassée') === -1 && maintenueRestauree.avert().indexOf('18:25') === -1;
+  /* ⛔ En pause, 18:25 n'est PAS dépassée : l'écran ne doit ni l'annoncer dépassée, ni la présenter comme à venir. */
+  r.maintenueFige = /^En pause/.test(maintenueFige.etiquette()) && !/Fermé automatiquement/.test(maintenueFige.etiquette()) &&
+    maintenueFige.avert().indexOf(PHRASE_MAINTIEN) !== -1 &&
+    maintenueFige.avert().indexOf('Saisie fermée, et maintenue fermée.') === -1 &&
+    maintenueFige.avert().indexOf('dépassée') === -1 && maintenueFige.avert().indexOf('prévue') === -1;
+  r.maintienDetail = { maintenue: [maintenue.etiquette(), maintenue.avert(), maintenue.gestes()],
+    restauree: maintenueRestauree.avert(), fige: [maintenueFige.etiquette(), maintenueFige.avert()] };
 
   const reprise = await vue('reprise', o);
   r.reprise = reprise.avert().indexOf('⏱️ Fermeture automatique prévue le 10/10 à 18:35 (45 minutes après la reprise).') !== -1 && /^Ouvert/.test(reprise.etiquette());
@@ -438,6 +481,16 @@ async function principal() {
   verifier('4.7', 'données invalides sur un accès PRÉPARÉ : « une saisie ouverte maintenant serait aussitôt fermée » (⛔ jamais « ne tiendra que 45 minutes ») ; en pause : « Reprendre » ne rouvrira que 45 minutes',
     r.invalideAutresEtats, r.invalideDetail);
 
+  titre('§ 4 bis — LA FERMETURE MAINTENUE (CORR-MAINTIEN-FERMETURE-45MIN)');
+  verifier('4.8', 'après-midi retirée APRÈS la fermeture : « ⛔ Saisie fermée, et maintenue fermée. ⛔ La fermeture automatique est MAINTENUE … seul « Reprendre la saisie » la rend », correction rappelée, quatre gestes, lien affiché — ⛔ jamais « NON programmée » ni « reste ouverte »',
+    r.maintenue, r.maintienDetail);
+  verifier('4.9', 'planning RESTAURÉ mais fermeture maintenue : la MÊME phrase — ⛔ ni « Fermeture automatique prévue », ni « dépassée », ni l\'heure 18:25, qui n\'est pas passée',
+    r.maintenueRestauree, r.maintienDetail);
+  verifier('4.10', 'pause manuelle posée pendant une fermeture maintenue : reste « En pause », le maintien est dit, ⛔ sans « Saisie fermée » (c\'est la pause qui ferme) ni échéance « dépassée »',
+    r.maintenueFige, r.maintienDetail);
+  verifier('4.11', 'fermeture maintenue ET planning illisible : le motif du serveur est TOUJOURS dit (« Par ailleurs… ») — ⛔ mais pas quand le planning est de nouveau lisible',
+    r.maintienMotif, r.maintienDetail);
+
   titre('§ 5 — « REPRENDRE LA SAISIE »');
   verifier('5.1', 'un clic, AUCUNE fenêtre, UN envoi REPRENDRE (version lue 2, requete_id adm-…), puis relecture qui annonce la nouvelle échéance',
     r.reprendre, r.reprendreDetail);
@@ -452,7 +505,7 @@ async function principal() {
   try { new vm.Script(src, { filename: 'js/admin-infos-publication.js' }); } catch (e) { syntaxe = false; }
   verifier('6.3', 'js/admin-infos-publication.js : syntaxe valide', syntaxe);
 
-  titre('§ Z — AUTO-PREUVE : NEUF MUTANTS DOIVENT ÊTRE VUS');
+  titre('§ Z — AUTO-PREUVE : DOUZE MUTANTS DOIVENT ÊTRE VUS');
   const muter = (avant, apres) => {
     if (src.indexOf(avant) === -1) throw new Error('Mutant inopérant : ' + avant);
     return src.split(avant).join(apres);
@@ -478,6 +531,17 @@ async function principal() {
   const z9 = await sectionsPrincipales(muter("  if (applique && message && (action === 'OUVRIR' || action === 'REPRENDRE') &&\n      accesScoresCourant && accesScoresCourant.fermee_automatiquement === true) {",
     '  if (applique && message && accesScoresCourant && accesScoresCourant.fermee_automatiquement === true) {'));
   verifier('Z.9', 'mutant « tout geste annonce une saisie aussitôt fermée » : 3.6.1 tombe, 3.5 tient', !z9.rotationMessage && z9.ouvrirApres);
+  const z10 = await sectionsPrincipales(muter('  if (e.maintenue === true) {', '  if (false) {'));
+  verifier('Z.10', 'mutant « la fermeture maintenue n\'est plus dite » : 4.8, 4.9 et 4.10 tombent, et 4.1 (attente normale) tient',
+    !z10.maintenue && !z10.maintenueRestauree && !z10.maintenueFige && z10.nonCalculable);
+  const z11 = await sectionsPrincipales(muter("    return { texte: (ouvert ? '⛔ Saisie fermée, et maintenue fermée. ' : '') + maintien",
+    "    return { texte: '⛔ Saisie fermée, et maintenue fermée. ' + maintien"));
+  verifier('Z.11', 'mutant « une pause est annoncée comme une saisie fermée par le maintien » : 4.10 tombe, 4.8 tient',
+    !z11.maintenueFige && z11.maintenue);
+  const z12 = await sectionsPrincipales(muter("    const aussi = e.calculable === true ? '' : ' Par ailleurs, le planning n\\'est pas lisible : ' + motif;",
+    "    const aussi = '';"));
+  verifier('Z.12', 'mutant « le maintien masque le motif du planning » : 4.11 tombe, et 4.8 TIENT (les deux contrôles sont indépendants)',
+    !z12.maintienMotif && z12.maintenue);
 }
 
 (async function () {
