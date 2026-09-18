@@ -26,7 +26,7 @@
 /* Ordre des cartes = ordre logique de préparation (le même que le « cerveau »).
    Chaque carte réutilise un ou plusieurs blocs EXISTANTS (par leur id). */
 const ASSISTANT_ETAPES = [
-  { id: 'infos',     titre: 'Infos',        icone: '📝', blocs: ['bloc-cadre-tournoi', 'bloc-infos-tournoi'] },
+  { id: 'infos',     titre: 'Infos',        icone: '📝', blocs: ['bloc-choix-categories', 'bloc-cadre-tournoi', 'bloc-infos-tournoi'] },
   { id: 'reglages',  titre: 'Réglages',     icone: '⏱️', blocs: ['reglages'] },
   /* « Inviter un club » (Phase 1) puis le Dossier complet (Phase 2) viennent AVANT les Équipes :
      les clubs qui acceptent génèrent leurs équipes automatiquement à l'envoi du dossier final
@@ -495,6 +495,7 @@ function assistantZonesSurveillees() {
 
 /** Libellé humain d'une zone modifiée : dit QUOI enregistrer pour rouvrir le verrou. */
 function assistantNomZone(zone) {
+  if (zone.id === 'form-choix-categories') return 'catégories choisies → « Valider »';
   if (zone.id === 'form-cadre-tournoi')   return 'date/zone modifiées → « Enregistrer la date »';
   if (zone.id === 'form-infos-tournoi')   return 'infos modifiées → « 💾 Enregistrer les infos »';
   if (zone.id === 'form-contacts-securite') return 'contacts & sécurité modifiés → « Enregistrer contacts & sécurité »';
@@ -682,4 +683,3 @@ function assistantAllerVersBloc(blocId) {
   const i = parseInt(slide.getAttribute('data-index'), 10);
   if (!isNaN(i)) allerA(i, i < assistantIndex ? -1 : 1);
 }
-

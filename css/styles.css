@@ -514,6 +514,22 @@ select.r-input { cursor: pointer; }
 /* Reprise CIBLÉE d'une lecture (CORR-BLOCAGE-LECTURES-ADMIN-DR) : masquée tant que tout va bien,
    elle n'apparaît que lorsqu'un enregistrement est acquis sans que l'écran ait pu suivre. */
 .reprise-lecture { margin: 0.5rem 0; }
+#form-choix-categories { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px 20px; margin-top: 20px; }
+.choix-categories { display: flex; flex-wrap: wrap; gap: 10px; min-width: 0; border: 0; padding: 0; margin: 0; }
+.choix-categories legend { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.choix-categories label { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; min-width: 86px; box-sizing: border-box; padding: 10px 14px; border: 1px solid currentColor; border-radius: 12px; cursor: pointer; }
+.choix-categories input { flex: 0 0 auto; width: 18px; height: 18px; margin: 0; accent-color: var(--bleu-ciel); }
+.choix-categories label:has(input:focus-visible) { outline: 3px solid currentColor; outline-offset: 3px; }
+.choix-categories:disabled label { opacity: 0.65; cursor: wait; }
+#conservation-choix-categories, #message-choix-categories { grid-column: 1 / -1; margin: 0; }
+#conservation-choix-categories { font-size: 0.85rem; line-height: 1.5; }
+#message-choix-categories:empty { display: none; }
+@media (max-width: 600px) {
+  #form-choix-categories { grid-template-columns: minmax(0, 1fr); }
+  .choix-categories { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .choix-categories label { min-width: 0; padding: 10px 8px; }
+  #bouton-valider-categories { width: 100%; min-height: 46px; }
+}
 
 /* Liste des équipes, groupée par catégorie */
 .groupe-categorie { margin-top: 14px; }
@@ -1954,7 +1970,9 @@ body.theme-clair {
 }
 
 /* Fenêtre + piste : on masque ce qui déborde, la piste glisse horizontalement */
-.asst-viewport { overflow: hidden; transition: height 0.35s ease; }
+/* La piste se déplace par transform, jamais par défilement natif : « hidden » seul
+   permet au focus d'un champ de déplacer scrollLeft et de décaler la carte active. */
+.asst-viewport { overflow: hidden; overflow: clip; transition: height 0.35s ease; }
 .asst-track {
   display: flex; align-items: flex-start;
   transition: transform 0.35s ease;

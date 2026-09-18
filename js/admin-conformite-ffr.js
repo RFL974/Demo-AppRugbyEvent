@@ -26,6 +26,16 @@ var refFFRCache = null;
 /* Dernier verdict de conformité (regles/temps) — mémorisé pour construire l'aperçu du bouton
    « Appliquer les valeurs FFR » au clic, sans nouvel appel réseau. */
 var dernierResConformite = null;
+var conformiteFFRGeneration = 0;
+var datesCompatiblesGeneration = 0;
+
+function invaliderDatesCompatiblesFFR() {
+  datesCompatiblesGeneration++;
+  const zone = document.getElementById('finder-resultats');
+  if (zone) zone.innerHTML = '';
+  const bouton = document.getElementById('bouton-chercher-dates');
+  if (bouton) bouton.disabled = false;
+}
 
 /** Charge (et mémorise) le référentiel FFR. Migration douce : listes vides si indisponible. */
 async function chargerRefFFR() {
@@ -84,6 +94,9 @@ function categoriesPresentesNoms() {
  * la relecture du serveur a réussi. Sinon la zone reste neutre — on montre moins, jamais du faux.
  */
 function invaliderConformiteFFRAffichee() {
+  conformiteFFRGeneration++;
+  invaliderDatesCompatiblesFFR();
+  dernierResConformite = null;
   const zone = document.getElementById('bloc-conformite-ffr');
   if (zone) {
     zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Conformité FFR à recalculer — ' +
@@ -93,13 +106,22 @@ function invaliderConformiteFFRAffichee() {
 
 /** (Re)calcule et affiche le bloc « Conformité FFR », puis rafraîchit les formes des cartes. */
 async function majConformiteFFR() {
+  const generation = ++conformiteFFRGeneration;
+  invaliderDatesCompatiblesFFR();
   const zone = document.getElementById('bloc-conformite-ffr');
   if (!zone) return;
+  dernierResConformite = null;
+  const categories = categoriesPresentesNoms();
+  if ((typeof choixCategoriesAValider === 'function' && choixCategoriesAValider()) || !categories.length) {
+    zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Choisis et valide les catégories avant de vérifier la date du tournoi.</div>';
+    return;
+  }
   // Écouteur délégué posé UNE fois sur le conteneur (son innerHTML est remplacé à chaque calcul,
   // mais l'élément persiste) : gère les clics sur les boutons « Appliquer les valeurs FFR ».
   if (!zone._ffrAppliquerWired) { zone.addEventListener('click', onClicAppliquerFFR); zone._ffrAppliquerWired = true; }
 
   await chargerRefFFR(); // dispo du référentiel + formes pour les cartes
+  if (generation !== conformiteFFRGeneration) return;
 
   const refVide = !refFFRCache ||
     ((refFFRCache.formes || []).length === 0 && (refFFRCache.dates || []).length === 0);
@@ -123,13 +145,15 @@ async function majConformiteFFR() {
   try {
     res = await apiGet('getConformiteFFR', {
       date: dateISO,
-      categories: categoriesPresentesNoms().join(','),
+      categories: categories.join(','),
       zone: zoneVacancesCourante()
     });
   } catch (e) {
+    if (generation !== conformiteFFRGeneration) return;
     zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Contrôle FFR indisponible pour le moment.</div>';
     return;
   }
+  if (generation !== conformiteFFRGeneration) return;
   dernierResConformite = res; // mémorisé pour l'aperçu du bouton d'application
   zone.innerHTML = rendreConformiteFFR(res);
   majFormesCategories();
@@ -851,6 +875,13 @@ async function onChercherDatesCompatibles() {
   const champMois = document.getElementById('finder-mois');
   const zone = document.getElementById('finder-resultats');
   if (!champMois || !zone) return;
+  invaliderDatesCompatiblesFFR();
+  const generation = datesCompatiblesGeneration;
+  const categories = categoriesPresentesNoms();
+  if ((typeof choixCategoriesAValider === 'function' && choixCategoriesAValider()) || !categories.length) {
+    zone.innerHTML = '<p class="date-finder-vide">Valide les catégories avant de chercher une date compatible.</p>';
+    return;
+  }
   const mois = champMois.value;
   if (!mois) { zone.innerHTML = '<p class="date-finder-vide">Choisis d\'abord un mois.</p>'; return; }
   const bouton = document.getElementById('bouton-chercher-dates');
@@ -859,14 +890,15 @@ async function onChercherDatesCompatibles() {
   try {
     const res = await apiGet('datesCompatiblesFFR', {
       mois: mois,
-      categories: categoriesPresentesNoms().join(','),
+      categories: categories.join(','),
       zone: zoneVacancesCourante()
     });
-    zone.innerHTML = rendreDatesCompatibles(res);
+    if (generation === datesCompatiblesGeneration) zone.innerHTML = rendreDatesCompatibles(res);
   } catch (e) {
-    zone.innerHTML = '<p class="date-finder-vide">Recherche indisponible pour le moment.</p>';
+    if (generation === datesCompatiblesGeneration) zone.innerHTML = '<p class="date-finder-vide">Recherche indisponible pour le moment.</p>';
   } finally {
-    if (bouton) bouton.disabled = false;
+    // Une recherche périmée ne possède plus le bouton d'une recherche plus récente.
+    if (bouton && generation === datesCompatiblesGeneration) bouton.disabled = false;
   }
 }
 

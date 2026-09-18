@@ -83,6 +83,22 @@ body.theme-clair {
   margin-bottom: 6px;
 }
 .theme-clair .note-generation { color: var(--r92-txt-doux); }
+/* Choix initial : mêmes tons, champs arrondis et bouton que les autres cartes. */
+.theme-clair #bloc-choix-categories .note-generation { margin-bottom: 0; }
+.theme-clair .choix-categories label {
+  background: var(--r92-champ-bg); color: var(--r92-navy);
+  border-color: var(--r92-champ-bd); font-weight: 600;
+}
+.theme-clair .choix-categories label:hover { background: #f2f7fd; border-color: var(--r92-accent-ink); }
+.theme-clair .choix-categories label:has(input:checked) {
+  background: var(--r92-ciel-soft); border-color: var(--r92-accent-ink);
+  box-shadow: inset 0 0 0 1px var(--r92-accent-ink);
+}
+.theme-clair .choix-categories input { accent-color: var(--r92-navy); }
+.theme-clair #conservation-choix-categories { color: var(--r92-txt-doux); }
+.theme-clair #message-choix-categories { font-family: inherit; color: var(--r92-txt-doux); }
+.theme-clair #message-choix-categories.ok { color: #246b35; }
+.theme-clair #message-choix-categories.ko { color: #b3261e; }
 /* Verrou « planning visible par les clubs » : le fond sombre de styles.css devient illisible
    sur la carte blanche du thème clair — piège des DEUX feuilles de style du projet. */
 .theme-clair .publi-planning { background: #f2f7fd; }

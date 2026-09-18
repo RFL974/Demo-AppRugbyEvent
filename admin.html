@@ -85,6 +85,24 @@
            Chaque étape est cliquable et fait défiler jusqu'à la section correspondante. -->
       <section class="etat-avancement" id="etat-avancement" aria-label="Avancement de la préparation"></section>
 
+      <section class="carte" id="bloc-choix-categories">
+        <h2>Choix des catégories</h2>
+        <p id="aide-choix-categories" class="note-generation">Sélectionne les catégories du tournoi pour vérifier les dates du calendrier FFR.</p>
+        <form id="form-choix-categories" aria-describedby="aide-choix-categories conservation-choix-categories">
+          <fieldset id="choix-categories-champs" class="choix-categories">
+            <legend>Catégories du tournoi</legend>
+            <label><input type="checkbox" name="categories" value="U6"><span>U6</span></label>
+            <label><input type="checkbox" name="categories" value="U8"><span>U8</span></label>
+            <label><input type="checkbox" name="categories" value="U10"><span>U10</span></label>
+            <label><input type="checkbox" name="categories" value="U12"><span>U12</span></label>
+            <label><input type="checkbox" name="categories" value="U14"><span>U14</span></label>
+          </fieldset>
+          <button type="submit" class="bouton" id="bouton-valider-categories">Valider</button>
+          <p id="conservation-choix-categories">Décocher puis valider supprime la catégorie et ses réglages, après confirmation. Les équipes et les matchs sont conservés.</p>
+          <div class="message-form" id="message-choix-categories" role="status" aria-live="polite"></div>
+        </form>
+      </section>
+
       <!-- Cadre du tournoi : date prévue + zone de vacances + contrôle FFR (conflits, points de
            vigilance et prescriptions). VOLONTAIREMENT séparé des « Infos du tournoi » ci-dessous :
            ici, c'est la PLANIFICATION et la CONFORMITÉ (rien n'y est communiqué au public). Enregistré
@@ -1022,6 +1040,7 @@
   <script src="js/admin-infos-publication.js"></script>
   <script src="js/admin-invitations.js"></script>
   <script src="js/admin-reglages.js"></script>
+  <script src="js/admin-choix-categories.js"></script>
   <script src="js/admin-conformite-ffr.js"></script>
   <!-- Versionnée pour que le navigateur ne conserve pas l'ancien parcours bloquant après déploiement. -->
   <script src="js/admin-equipes.js?v=86eaba6"></script>

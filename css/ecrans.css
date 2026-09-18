@@ -43,8 +43,8 @@ body.avec-ecrans .ecran[hidden] { display: none !important; }
      styles.css (main:has(#reglages) > #barre-connexion) remettait à zéro. */
   body.avec-ecrans main:has(#reglages) > #barre-connexion { margin-bottom: 38px; }
 
-  /* Écran « Infos du tournoi » : la carte « Date & conformité FFR » occupe TOUTE la largeur
-     tout en haut, puis en dessous le formulaire des infos à GAUCHE et l'aperçu du site à DROITE
+  /* Écran « Infos du tournoi » : choix des catégories puis date/conformité à pleine largeur,
+     puis en dessous le formulaire des infos à GAUCHE et l'aperçu du site à DROITE
      (côte à côte sur grand écran uniquement). */
   body.avec-ecrans #ecran-infos:not([hidden]) {
     display: grid;
@@ -52,7 +52,8 @@ body.avec-ecrans .ecran[hidden] { display: none !important; }
     gap: 24px;
     align-items: start;
   }
-  /* Carte cadre (date + zone + conformité FFR) : pleine largeur, en première ligne. */
+  /* Le choix initial précède la date, chacun sur sa propre ligne. */
+  body.avec-ecrans #ecran-infos:not([hidden]) > #bloc-choix-categories,
   body.avec-ecrans #ecran-infos:not([hidden]) > #bloc-cadre-tournoi { grid-column: 1 / -1; }
 
   #ecr-nav {

@@ -1047,6 +1047,8 @@ function brancherEcouteursAdmin() {
   ecouter('bouton-reinitialiser', 'click', onReinitialiser);
 
   // Carte « Date & conformité FFR » (date + zone + contrôle FFR) : formulaire dédié, bouton dédié.
+  ecouter('form-choix-categories', 'submit', onValiderChoixCategories);
+  ecouter('form-choix-categories', 'change', onChangerChoixCategories);
   ecouter('form-cadre-tournoi', 'submit', function (e) { e.preventDefault(); });
   ecouter('bouton-enregistrer-cadre', 'click', onEnregistrerCadre);
   // « Trouver une date compatible » : ouvre le panneau, lance la recherche, applique un jour cliqué.
@@ -1669,6 +1671,7 @@ async function rechargerReglages() {
   injecterReglages(cfg.global, cfg.categories);
   injecterTerrains();                        // les catégories présentes ont pu changer
   remplirSelectCategories(cfg.categories); // le menu des équipes suit les catégories présentes
+  if (typeof majChoixCategoriesTournoi === 'function') majChoixCategoriesTournoi();
   majTableauBord(); // le nombre de catégories a pu changer
   // Conformité FFR : la liste des catégories a pu changer (ajout/suppression) → on RECALCULE pour
   // que dernierResConformite couvre les NOUVELLES catégories. Sans ça, une catégorie fraîchement

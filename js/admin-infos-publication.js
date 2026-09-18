@@ -27,6 +27,7 @@
 
 /** Pré-remplit le formulaire des infos du tournoi avec ce qui est déjà enregistré. */
 function majInfosTournoi() {
+  if (typeof majChoixCategoriesTournoi === 'function') majChoixCategoriesTournoi();
   const form = document.getElementById('form-infos-tournoi');
   if (!form) return;
   const g = configCourante.global || {};

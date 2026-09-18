@@ -37,7 +37,7 @@
    zone-horaires / zone-categories vivent dans la section #reglages : on les
    déplace individuellement. */
 const ECRANS_DEF = [
-  { id: 'infos',       titre: 'Infos du tournoi',  icone: 'info',     blocs: ['bloc-cadre-tournoi', 'bloc-infos-tournoi'], cles: [] },
+  { id: 'infos',       titre: 'Infos du tournoi',  icone: 'info',     blocs: ['bloc-choix-categories', 'bloc-cadre-tournoi', 'bloc-infos-tournoi'], cles: [] },
   { id: 'horaires',    titre: 'Horaires',          icone: 'horloge',  blocs: ['zone-horaires'],           cles: ['horaires'] },
   { id: 'categories',  titre: 'Catégories',        icone: 'etiquette', blocs: ['zone-categories'],        cles: ['categories'] },
   /* Phase 1 — « Inviter un club » : page unique regroupant la LISTE des clubs invités (+ ajout,
@@ -437,4 +437,3 @@ function ecransMajPastilles() {
     ecransActiver(ecransEcranCourant(etats), { sansScroll: true });
   }
 }
-
