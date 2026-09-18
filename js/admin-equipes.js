@@ -428,6 +428,11 @@ function verifierEquipesEnArrierePlan() {
   });
 }
 
+/** Budget de CHAQUE tentative d'ajout. Le backend rend cette seule écriture idempotente : si
+ * Google perd la première réponse, le second envoi retrouve la ligne existante sous verrou et la
+ * renvoie, sans doublon. Deux tentatives au plus, chacune avec son propre délai. */
+const DELAI_AJOUT_EQUIPE_MS = 9000;
+
 /**
  * Reprise CIBLÉE : relit la seule liste des équipes, sans recharger la page, sans réémettre
  * la moindre écriture, et SANS toucher aux champs du formulaire — la saisie suivante déjà
@@ -495,8 +500,10 @@ async function onAjouterEquipe(evenement) {
 
   // ① ÉCRITURE EN COURS. On désactive le bouton le temps de l'envoi (évite les doubles clics),
   //    et on le DIT : sans ça, les secondes qui suivent ressemblent à une page figée.
-  //    ⛔ Aucun budget sur cette écriture : une écriture abandonnée resterait d'issue INCONNUE,
-  //       et l'inconnu ne se rejoue pas (voir `ecritureSansEffetEtabli`).
+  //    ⭐ Exception étroite : CET ajout porte un budget, car le backend le rend idempotent sous
+  //       verrou (même nom + même catégorie ⇒ la ligne existante est renvoyée). Une réponse
+  //       perdue peut donc recevoir un unique second essai sans créer de doublon. Toutes les
+  //       autres mutations gardent le contrat historique : aucun rejeu automatique.
   // ⭐ R2 — L'OPÉRATION S'OUVRE ICI et ne se referme qu'à la toute fin, réconciliation comprise :
   //    c'est l'intervalle pendant lequel on ignore ce que le serveur a retenu. Tant qu'elle dure,
   //    `majDisponibiliteAjout()` garde le bouton fermé — y compris si un rendu des catégories
@@ -514,7 +521,7 @@ async function onAjouterEquipe(evenement) {
       reponseEcriture = await ecrireAdmin('ajouterEquipe', {
         nom_equipe: nom, categorie: categorie,
         nb_joueurs: nbJoueurs, nb_educateurs: nbEducateurs
-      });
+      }, { delaiMs: DELAI_AJOUT_EQUIPE_MS });
       ecrite = true;
     } catch (erreur) {
       if (ecritureSansEffetEtabli(erreur)) {

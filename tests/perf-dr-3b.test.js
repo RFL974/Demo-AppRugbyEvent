@@ -118,6 +118,7 @@ const SRC_CLES = [
   // 6F — `apiPost` passe désormais par le mécanisme commun de rejeu après un 404.
   ligne(F_API, 'const DELAI_REJEU_404_MS'),
   ligne(F_API, 'const ACTIONS_POST_REJOUABLES'),
+  ligne(F_API, 'const ACTIONS_POST_ECRITURES_IDEMPOTENTES'),
   bloc(F_API, 'async function envoyerAvecRejeu404(', '{'),
   bloc(F_API, 'async function executerAvecRejeuAbandon(', '{'),
   bloc(F_API, 'async function apiPost(', '{'),

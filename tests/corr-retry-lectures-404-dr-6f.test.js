@@ -91,6 +91,9 @@ const PARAMS_GET = {
 const POST_ATTENDUES = ['getConfigAdmin', 'getDossierAutorisation', 'lireMesuresSponsors',
   'listerClubsInvites', 'getAccesScoresAdmin', 'getMatchsLitige', 'getSaisieScores'];
 
+/** Exception d'écriture : sûre à rejouer grâce à l'idempotence garantie côté serveur. */
+const POST_ECRITURES_IDEMPOTENTES_ATTENDUES = ['ajouterEquipe'];
+
 /** POST exclue : listerSponsors → assurerOngletSponsors peut écrire. */
 const POST_EXCLUE = 'listerSponsors';
 
@@ -677,14 +680,23 @@ critere('B.4', 'listerSponsors : apiPost 404→200 prévu, apiPost 404→404, ap
   (o) => json([o.a.b.appels.length, o.b.b.appels.length, o.c.appels.length, o.d.appels.length]));
 
 ECRITURES_SENSIBLES.forEach(function (action, i) {
+  if (POST_ECRITURES_IDEMPOTENTES_ATTENDUES.indexOf(action) !== -1) {
+    critere('B.' + (5 + i), action + ' + 404 → DEUX émissions identiques puis succès',
+      (src, suivi) => postFlux(src, suivi, action, { cle: CLE_FACTICE, marque: MARQUE_DONNEE }, [R(404), OK({ ok: true })]),
+      (o) => o.b.appels.length === 2 && o.b.appels[0].corps === o.b.appels[1].corps &&
+        succes(o.s) && o.b.plan.length === 0 && json(o.b.parInvocation()) === '[2]',
+      (o) => o.b.appels.length + ' émission(s)');
+    return;
+  }
   critere('B.' + (5 + i), action + ' + 404 → UNE émission, erreur 404, aucune pause',
     (src, suivi) => postFlux(src, suivi, action, { cle: CLE_FACTICE, marque: MARQUE_DONNEE }, [R(404), OK()]),
     (o) => o.b.appels.length === 1 && erreurHttp(o.s, 404) && o.b.minuteries.length === 0 && o.b.plan.length === 1,
     (o) => o.b.appels.length + ' émission(s)');
 });
 
-const ACTIONS_POST_CODE = actionsPostDuCode().filter((a) => POST_ATTENDUES.indexOf(a) === -1);
-critere('B.12', 'toutes les actions POST nommées dans js/*.js hors liste (' + ACTIONS_POST_CODE.length + ', dont listerSponsors et les écritures sensibles) → UNE émission',
+const ACTIONS_POST_CODE = actionsPostDuCode().filter((a) => POST_ATTENDUES.indexOf(a) === -1 &&
+  POST_ECRITURES_IDEMPOTENTES_ATTENDUES.indexOf(a) === -1);
+critere('B.12', 'toutes les actions POST nommées dans js/*.js hors listes fermées (' + ACTIONS_POST_CODE.length + ', dont listerSponsors et les écritures non idempotentes) → UNE émission',
   async (src, suivi) => {
     const fautifs = [];
     for (const action of ACTIONS_POST_CODE) {
@@ -694,7 +706,9 @@ critere('B.12', 'toutes les actions POST nommées dans js/*.js hors liste (' + A
     return fautifs;
   },
   (fautifs) => ACTIONS_POST_CODE.length >= 40 && ACTIONS_POST_CODE.indexOf(POST_EXCLUE) !== -1 &&
-    ECRITURES_SENSIBLES.every((a) => ACTIONS_POST_CODE.indexOf(a) !== -1) && fautifs.length === 0,
+    ECRITURES_SENSIBLES.filter((a) => POST_ECRITURES_IDEMPOTENTES_ATTENDUES.indexOf(a) === -1)
+      .every((a) => ACTIONS_POST_CODE.indexOf(a) !== -1) &&
+    POST_ECRITURES_IDEMPOTENTES_ATTENDUES.every((a) => ACTIONS_POST_CODE.indexOf(a) === -1) && fautifs.length === 0,
   (fautifs) => json({ n: ACTIONS_POST_CODE.length, fautifs }));
 
 critere('B.13', 'POST pièges (' + POST_PIEGES.length + ' : ressemblants, casse, espaces, prototype, vides) → UNE émission',
@@ -894,20 +908,33 @@ critere('C.23', 'un AbortError extérieur au minuteur interne n\'est jamais rejo
   (src, suivi) => scenTemps(src, suivi, { plan: ['abort-externe', OK()] }),
   (o) => o.appels === 1 && o.nature === 'AbortError' && o.planRestant === 1 && o.enAttente === 0, resume);
 
-critere('C.24', 'actions exclues et écritures : une expiration reste à UNE émission, même avec delaiMs',
+critere('C.24', 'actions exclues et écritures non idempotentes : une expiration reste à UNE émission, même avec delaiMs',
   async (src, suivi) => {
     const fautifs = [];
     for (const action of [GET_EXCLUE].concat(GET_NON_RETENUES, GET_PIEGES)) {
       const r = await getFlux(src, suivi, action, null, ['pend', OK()], { delaiMs: DELAI });
       if (!(r.b.appels.length === 1 && r.s.erreur && r.s.erreur.name === 'AbortError' && r.b.plan.length === 1)) fautifs.push('GET:' + action);
     }
-    for (const action of [POST_EXCLUE].concat(ECRITURES_SENSIBLES, POST_PIEGES)) {
+    const ecrituresNonIdempotentes = ECRITURES_SENSIBLES.filter((a) =>
+      POST_ECRITURES_IDEMPOTENTES_ATTENDUES.indexOf(a) === -1);
+    for (const action of [POST_EXCLUE].concat(ecrituresNonIdempotentes, POST_PIEGES)) {
       const r = await postFlux(src, suivi, action, { cle: CLE_FACTICE }, ['pend', OK()], { delaiMs: DELAI });
       if (!(r.b.appels.length === 1 && r.s.erreur && r.s.erreur.name === 'AbortError' && r.b.plan.length === 1)) fautifs.push('POST:' + action);
     }
     return fautifs;
   },
   (fautifs) => fautifs.length === 0, (fautifs) => json(fautifs));
+
+critere('C.24b', 'ajouterEquipe : une expiration interne rejoue une fois avec un contrôleur neuf, puis réussit',
+  async (src, suivi) => {
+    const r = await postFlux(src, suivi, 'ajouterEquipe',
+      { cle: CLE_FACTICE, nom_equipe: 'CLUB FICTIF', categorie: 'U10' },
+      ['pend', OK({ ok: true, equipe: { id_equipe: 'E99' } })], { delaiMs: DELAI });
+    return r;
+  },
+  (r) => r.b.appels.length === 2 && r.b.appels[0].corps === r.b.appels[1].corps &&
+    r.b.appels[0].signal !== r.b.appels[1].signal && succes(r.s) &&
+    r.s.valeur.equipe.id_equipe === 'E99' && json(r.b.parInvocation()) === '[2]');
 
 critere('C.25', 'classement après écrasement de action : seule l\'action réellement envoyée décide du rejeu après expiration',
   async (src, suivi) => ({
@@ -1111,15 +1138,28 @@ critere('F.2', 'ACTIONS_POST_REJOUABLES = les 7 actions attendues, dans l\'ordre
   (o) => json(o.liste) === json(POST_ATTENDUES) && o.gele && [POST_EXCLUE].concat(ECRITURES_SENSIBLES).every((a) => o.liste.indexOf(a) === -1),
   (o) => json(o));
 
-critere('F.3', 'apiGet et apiPost décident par leur liste fermée SEULE, sur l\'action envoyée — aucun motif de nom ; listerSponsors et getHistorique absentes du code',
+critere('F.2b', 'ACTIONS_POST_ECRITURES_IDEMPOTENTES = ajouterEquipe seulement, liste figée',
+  async (src) => {
+    const b = banc({ source: src, suivi: false });
+    const liste = b.valeur('ACTIONS_POST_ECRITURES_IDEMPOTENTES');
+    let modifiable = false;
+    try { b.valeur('ACTIONS_POST_ECRITURES_IDEMPOTENTES.push("supprimerEquipe")'); modifiable = true; } catch (e) { /* attendu */ }
+    return { liste: Array.from(liste), gele: Object.isFrozen(liste) && !modifiable };
+  },
+  (o) => json(o.liste) === json(POST_ECRITURES_IDEMPOTENTES_ATTENDUES) && o.gele,
+  (o) => json(o));
+
+critere('F.3', 'apiGet et apiPost décident par leurs listes fermées SEULES, sur l\'action envoyée — aucun motif de nom ; listerSponsors et getHistorique absentes du code',
   async (src) => ({
     get: sansCommentaires(blocFonction(src, 'async function apiGet(')),
     post: sansCommentaires(blocFonction(src, 'async function apiPost(')),
     code: sansCommentaires(src)
   }),
   (o) => /const rejouable = ACTIONS_GET_REJOUABLES\.indexOf\(url\.searchParams\.get\('action'\)\) !== -1;/.test(o.get) &&
-    /const rejouable = ACTIONS_POST_REJOUABLES\.indexOf\(corps\.action\) !== -1;/.test(o.post) &&
-    (o.get.match(/ACTIONS_(GET|POST)_REJOUABLES/g) || []).length === 1 && (o.post.match(/ACTIONS_(GET|POST)_REJOUABLES/g) || []).length === 1 &&
+    /const rejouable = ACTIONS_POST_REJOUABLES\.indexOf\(corps\.action\) !== -1 \|\|\s*ACTIONS_POST_ECRITURES_IDEMPOTENTES\.indexOf\(corps\.action\) !== -1;/.test(o.post) &&
+    (o.get.match(/ACTIONS_(GET|POST)_REJOUABLES/g) || []).length === 1 &&
+    (o.post.match(/ACTIONS_POST_REJOUABLES/g) || []).length === 1 &&
+    (o.post.match(/ACTIONS_POST_ECRITURES_IDEMPOTENTES/g) || []).length === 1 &&
     [o.get, o.post].every((f) => !/startsWith|endsWith|RegExp|\.test\(|\.match\(|toLowerCase|toUpperCase|\/\^/.test(f)) &&
     o.code.indexOf(POST_EXCLUE) === -1 && o.code.indexOf(GET_EXCLUE) === -1);
 

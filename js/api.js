@@ -17,8 +17,10 @@
  *  script.googleusercontent.com), alors que l'exécution Apps Script est « Terminée ».
  *  ⚠️ Mitigation seulement : la cause, côté Google, n'est pas corrigée ici.
  *  ⭐ Une action d'une des deux LISTES FERMÉES ci-dessous qui reçoit un 404 est réémise au plus UNE fois.
- *  ⛔ Toute autre action — écriture, action inconnue, future, vide ou ressemblante — ne l'est JAMAIS :
- *     elle a pu produire un effet avant que Google livre le 404.
+ *  ⛔ Toute autre action — notamment toute écriture NON déclarée idempotente, action inconnue,
+ *     future, vide ou ressemblante — ne l'est JAMAIS : elle a pu produire un effet avant que
+ *     Google livre le 404. L'unique exception est isolée dans
+ *     `ACTIONS_POST_ECRITURES_IDEMPOTENTES` et garantie côté serveur.
  *  ⛔ La rejouabilité ne se déduit jamais du nom de l'action ni de la méthode HTTP.
  * ========================================================================== */
 
@@ -46,6 +48,14 @@ const ACTIONS_POST_REJOUABLES = Object.freeze([
   'getConfigAdmin', 'getDossierAutorisation', 'lireMesuresSponsors',
   'listerClubsInvites', 'getAccesScoresAdmin', 'getMatchsLitige', 'getSaisieScores'
 ]);
+
+/** Écritures dont le BACKEND garantit l'idempotence avant tout rejeu.
+ *
+ * `ajouterEquipe` est la seule action admise : sous le verrou serveur, un second appel portant
+ * le même nom et la même catégorie retrouve et renvoie la ligne déjà créée au lieu d'en ajouter
+ * une autre. Cette propriété rend sûr un unique nouvel essai quand Google perd la réponse de la
+ * Web App. ⛔ Ne jamais ajouter une action ici sans la preuve serveur équivalente et ses tests. */
+const ACTIONS_POST_ECRITURES_IDEMPOTENTES = Object.freeze(['ajouterEquipe']);
 
 /**
  * Détecteur commun du 404 rejouable. Le compteur partagé avec `executerAvecRejeuAbandon` garantit
@@ -222,10 +232,10 @@ async function apiGet(action, params, options) {
  *      admin passent par doPost (`getConfigAdmin` et les autres de la liste fermée ci-dessus) :
  *      sans option, elles ne pouvaient pas être bornées, et une lecture d'ouverture qui « pend »
  *      laissait la page sur son écran d'attente, sans bouton « Réessayer ».
- *   ⛔ CE QUE CETTE OPTION NE FAIT PAS. Elle n'élargit RIEN : `rejouable` reste décidé par la seule
- *      liste fermée, sur l'action réellement envoyée. Une ÉCRITURE bornée resterait une écriture —
- *      elle ne devient pas rejouable, et un abandon ne dit pas qu'elle n'a pas eu lieu. C'est
- *      pourquoi aucun appelant d'écriture ne passe `delaiMs` : voir `ecrireAdmin`.
+ *   ⛔ CE QUE CETTE OPTION NE FAIT PAS. Elle n'élargit RIEN : `rejouable` reste décidé par les
+ *      listes fermées, sur l'action réellement envoyée. Une écriture ordinaire bornée ne devient
+ *      jamais rejouable. Seul `ajouterEquipe` passe un délai, parce que le backend garantit sous
+ *      verrou qu'un rejeu du même nom et de la même catégorie renvoie la ligne déjà créée.
  *   ⛔ Sans `options` (tous les appels historiques), comportement strictement inchangé : aucun
  *      contrôleur, aucun minuteur, aucun signal.
  * @return {Promise<Object>} la réponse du backend
@@ -239,7 +249,8 @@ async function apiPost(action, data, options) {
   const texte = JSON.stringify(corps);   // figé : une réémission envoie exactement le même corps
 
   // ⛔ Classement sur l'action RÉELLEMENT envoyée (`corps.action`), par la liste fermée seule.
-  const rejouable = ACTIONS_POST_REJOUABLES.indexOf(corps.action) !== -1;
+  const rejouable = ACTIONS_POST_REJOUABLES.indexOf(corps.action) !== -1 ||
+    ACTIONS_POST_ECRITURES_IDEMPOTENTES.indexOf(corps.action) !== -1;
 
   // Délai NOMINAL optionnel, appliqué séparément à chaque tentative autorisée.
   const delaiMs = options && options.delaiMs;
@@ -315,8 +326,9 @@ async function demanderCle(role, message) {
  * @param {Object} data
  * @param {string} role     'admin' ou 'scores'
  * @param {string} libelle  texte affiché à l'utilisateur (ex : "admin", "de saisie des scores")
- * @param {Object} [options] transmis TEL QUEL à `apiPost` (ex : { delaiMs }) — réservé aux LECTURES
- *   protégées. ⚠️ Le budget vaut PAR ÉMISSION MÉTIER : la saisie de clé se fait entre les deux et
+ * @param {Object} [options] transmis TEL QUEL à `apiPost` (ex : { delaiMs }) — réservé aux lectures
+ *   protégées et à l'unique écriture idempotente explicitement autorisée. ⚠️ Le budget vaut PAR
+ *   ÉMISSION MÉTIER : la saisie de clé se fait entre les deux et
  *   n'est pas comptée ; le rejeu après refus repart donc avec un budget neuf. C'est voulu — on ne
  *   veut pas qu'une réflexion de l'organisateur devant la fenêtre de clé fasse expirer sa lecture.
  *   ⛔ Sans `options`, comportement strictement inchangé.

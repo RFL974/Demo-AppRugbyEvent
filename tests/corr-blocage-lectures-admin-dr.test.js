@@ -115,6 +115,7 @@ const SRC_API = [
   ligne(F_API, 'const DELAI_REJEU_404_MS'),
   ligne(F_API, 'const ACTIONS_GET_REJOUABLES'),
   ligne(F_API, 'const ACTIONS_POST_REJOUABLES'),
+  ligne(F_API, 'const ACTIONS_POST_ECRITURES_IDEMPOTENTES'),
   bloc(F_API, 'async function envoyerAvecRejeu404('),
   bloc(F_API, 'async function executerAvecRejeuAbandon('),
   bloc(F_API, 'async function apiGet('),
@@ -133,6 +134,7 @@ const SRC_COMMUN = [
 
 const SRC_ETAT_EQUIPES = [
   ligne(F_EQUIPES, 'const DELAI_LECTURE_EQUIPES_MS'),
+  ligne(F_EQUIPES, 'const DELAI_AJOUT_EQUIPE_MS'),
   ligne(F_EQUIPES, 'let lectureEquipesJeton'),
   ligne(F_EQUIPES, 'let lectureEquipesProprietaire'),
   ligne(F_EQUIPES, 'let equipesOperationsEnCours'),
@@ -747,7 +749,7 @@ async function principal() {
   }
 
   /* ---------------------------------------------------------------------- */
-  titre('§ 3 — BUDGETS : les lectures sont bornées, les écritures ne le sont pas');
+  titre('§ 3 — BUDGETS : lectures bornées, ajout idempotent borné, autres écritures intactes');
 
   {
     const b = bac();
@@ -756,18 +758,50 @@ async function principal() {
     await b.lancerAjout();
     const lecture = b.getsDe('getEquipes')[0];
     const ecriture = b.postsDe('ajouterEquipe')[0];
-    verifier('3.1', 'la lecture de la liste part AVEC un signal d\'abandon ; l\'écriture SANS',
-      lecture.borne === true && ecriture.borne === false,
+    verifier('3.1', 'la lecture ET le seul ajout idempotent partent avec un signal d\'abandon',
+      lecture.borne === true && ecriture.borne === true,
       json({ lecture: lecture.borne, ecriture: ecriture.borne }));
 
     const budgetListe = b.valeur('DELAI_LECTURE_EQUIPES_MS');
     const budgetOuverture = b.valeur('DELAI_LECTURE_ADMIN_MS');
+    const budgetAjout = b.valeur('DELAI_AJOUT_EQUIPE_MS');
     verifier('3.2', 'le budget de la liste est explicite et non nul (20 s), déclaré dans le code réel',
       budgetListe === 20000, json({ budget: budgetListe }));
 
     verifier('3.3', 'le budget d\'ouverture est explicite, plus large que celui de la liste',
       budgetOuverture === 30000 && budgetOuverture > budgetListe,
       json({ ouverture: budgetOuverture, liste: budgetListe }));
+
+    verifier('3.3b', 'le budget de chaque tentative d\'ajout est court (9 s) et strictement inférieur à la lecture',
+      budgetAjout === 9000 && budgetAjout < budgetListe,
+      json({ ajout: budgetAjout, liste: budgetListe }));
+  }
+
+  {
+    /* Première réponse perdue : le délai déclenche UN rejeu, qui renvoie la ligne existante. */
+    const b = bac();
+    let posts = 0;
+    b.reseau.programmer(function (info) {
+      if (info.methode !== 'POST') {
+        return { statut: 200, corps: [{ id_equipe: 'E9', nom_equipe: 'REPRISE SÛRE', categorie: 'U10' }] };
+      }
+      posts++;
+      if (posts === 1) return 'pend';
+      return { statut: 200, corps: { ok: true, deja_presente: true,
+        equipe: { id_equipe: 'E9', nom_equipe: 'REPRISE SÛRE', categorie: 'U10',
+          nb_joueurs: '13', nb_educateurs: '2' } } };
+    });
+    b.saisir('REPRISE SÛRE');
+    b.el('champ-joueurs').value = '13';
+    b.el('champ-educateurs').value = '2';
+    const p = b.lancerAjout(); p.catch(function () {});
+    await souffler();
+    await b.horloge.avancer(10000);
+    await p;
+    verifier('3.3c', 'réponse perdue : exactement DEUX envois et un succès rendu avec la ligne resservie',
+      b.postsDe('ajouterEquipe').length === 2 && b.message().indexOf('✅ « REPRISE SÛRE » ajoutée.') === 0 &&
+      b.ctx.equipesCourantes.length === 1 && b.ctx.equipesCourantes[0].id_equipe === 'E9',
+      json({ posts: b.postsDe('ajouterEquipe').length, msg: b.message(), equipes: b.ctx.equipesCourantes }));
   }
 
   {
@@ -1571,15 +1605,18 @@ async function principal() {
 
     const listeGet = b.valeur('ACTIONS_GET_REJOUABLES');
     const listePost = b.valeur('ACTIONS_POST_REJOUABLES');
-    verifier('9.1', 'les deux listes fermées de rejeu sont INCHANGÉES et toujours gelées',
+    const listeEcrituresIdempotentes = b.valeur('ACTIONS_POST_ECRITURES_IDEMPOTENTES');
+    verifier('9.1', 'les listes de lectures restent INCHANGÉES ; une liste séparée n\'autorise que l\'ajout idempotent',
       Object.isFrozen(listeGet) && Object.isFrozen(listePost) &&
+      Object.isFrozen(listeEcrituresIdempotentes) &&
       listeGet.length === 11 && listePost.length === 7 &&
+      listeEcrituresIdempotentes.length === 1 && listeEcrituresIdempotentes[0] === 'ajouterEquipe' &&
       listePost.indexOf('ajouterEquipe') === -1 && listePost.indexOf('listerSponsors') === -1 &&
       listeGet.indexOf('getEquipes') !== -1,
-      json({ get: listeGet.length, post: listePost.length }));
+      json({ get: listeGet.length, post: listePost.length, idempotentes: listeEcrituresIdempotentes }));
 
-    verifier('9.2', 'le classement reste décidé par la LISTE FERMÉE seule, sur l\'action envoyée',
-      /const rejouable = ACTIONS_POST_REJOUABLES\.indexOf\(corps\.action\) !== -1;/.test(src) &&
+    verifier('9.2', 'le classement reste décidé par les LISTES FERMÉES seules, sur l\'action envoyée',
+      /const rejouable = ACTIONS_POST_REJOUABLES\.indexOf\(corps\.action\) !== -1 \|\|\s*ACTIONS_POST_ECRITURES_IDEMPOTENTES\.indexOf\(corps\.action\) !== -1;/.test(src) &&
       /const rejouable = ACTIONS_GET_REJOUABLES\.indexOf\(url\.searchParams\.get\('action'\)\) !== -1;/.test(src),
       'motifs de classement introuvables');
 
@@ -1603,15 +1640,28 @@ async function principal() {
   }
 
   {
-    /* Une ÉCRITURE qui reçoit un 404 n'est JAMAIS réémise, bornée ou non. */
+    /* Une écriture ORDINAIRE qui reçoit un 404 n'est jamais réémise. */
     const b = bac();
     b.reseau.programmer(function () { return { statut: 404 }; });
     let leve = false;
-    try { await b.ctx.apiPost('ajouterEquipe', { nom_equipe: 'X' }, { delaiMs: 20000 }); }
+    try { await b.ctx.apiPost('supprimerEquipe', { id_equipe: 'E1' }, { delaiMs: 20000 }); }
     catch (e) { leve = true; }
-    verifier('9.5', '⛔ une écriture bornée qui reçoit un 404 reste à UNE émission et lève',
+    verifier('9.5', '⛔ une écriture ordinaire bornée qui reçoit un 404 reste à UNE émission et lève',
       leve === true && b.reseau.journal.length === 1 && b.horloge.restantes() === 0,
       json({ emissions: b.reseau.journal.length, leve: leve }));
+
+    /* L'ajout, rendu idempotent côté serveur, reçoit exactement un second essai. */
+    const bi = bac();
+    bi.reseau.programmer(function () { return { statut: 404 }; });
+    const pi = bi.ctx.apiPost('ajouterEquipe', { nom_equipe: 'X', categorie: 'U10' }, { delaiMs: 20000 });
+    pi.catch(function () {});
+    await souffler();
+    await bi.horloge.avancer(1000);
+    let leveIdempotent = false;
+    try { await pi; } catch (e) { leveIdempotent = true; }
+    verifier('9.5b', '⭐ l\'ajout idempotent reçoit DEUX émissions au plus, puis lève si les deux réponses sont perdues',
+      leveIdempotent === true && bi.reseau.journal.length === 2 && bi.horloge.restantes() === 0,
+      json({ emissions: bi.reseau.journal.length, leve: leveIdempotent }));
 
     /* Une LECTURE de la liste fermée, elle, est bien réémise une fois. */
     const c = bac();

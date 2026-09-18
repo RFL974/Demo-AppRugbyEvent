@@ -167,8 +167,8 @@ let clubsInvitesCourants = [];
  * rend l'architecture valide — mais elle l'était par chance, pas par contrat. Les exceptions
  * sont désormais inventoriées et verrouillées par le contrôle G-J
  * (tests/frontend-autorisation-sync.test.js) : toute NOUVELLE écriture doit passer par ici. */
-async function ecrireAdmin(action, data) {
-  const res = await apiPostProtege(action, data, 'admin', 'admin');
+async function ecrireAdmin(action, data, options) {
+  const res = await apiPostProtege(action, data, 'admin', 'admin', options);
   // ⭐ M1-B2 / B2-0.5 — l'écriture a RÉUSSI (apiPost LÈVE sur {error}, voir api.js:100) : si elle
   //   touche une donnée que lit la « Demande d'autorisation », la feuille affichée devient fausse
   //   à CET INSTANT. On l'efface tout de suite — local, certain, gratuit — et on la relira quand
