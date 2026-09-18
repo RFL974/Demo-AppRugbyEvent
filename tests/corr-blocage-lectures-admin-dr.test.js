@@ -116,6 +116,7 @@ const SRC_API = [
   ligne(F_API, 'const ACTIONS_GET_REJOUABLES'),
   ligne(F_API, 'const ACTIONS_POST_REJOUABLES'),
   bloc(F_API, 'async function envoyerAvecRejeu404('),
+  bloc(F_API, 'async function executerAvecRejeuAbandon('),
   bloc(F_API, 'async function apiGet('),
   bloc(F_API, 'async function apiPost('),
   bloc(F_API, 'function lireCleLocale('),
@@ -216,7 +217,9 @@ function fabriquerHorloge() {
 
 /** Laisse les micro-tâches (promesses) se dérouler. */
 async function souffler() {
-  for (let i = 0; i < 12; i++) await Promise.resolve();
+  // Le rejeu après expiration ajoute une couche asynchrone (fin de tentative puis tentative neuve).
+  // On vide largement la file sans avancer le temps virtuel.
+  for (let i = 0; i < 32; i++) await Promise.resolve();
 }
 
 function erreurAbandon() {
@@ -531,7 +534,7 @@ async function principal() {
     await souffler();
     await b.horloge.avancer(1000);
     const avantEcheance = { msg: b.message(), ferme: b.ajoutFerme(), reprise: b.repriseVisible() };
-    await b.horloge.avancer(25000);   // au-delà du budget de 20 s
+    await b.horloge.avancer(45000);   // au-delà des deux budgets de 20 s
     await p;
 
     verifier('2.1', 'avant l\'échéance : état ② — succès acquis annoncé, actualisation en cours',
@@ -539,9 +542,9 @@ async function principal() {
       avantEcheance.msg.indexOf('Actualisation de la liste…') !== -1 && avantEcheance.reprise === false,
       json(avantEcheance));
 
-    verifier('2.2', 'après l\'échéance : état ③ — la lecture rend la main, elle ne pend plus',
-      b.message().indexOf('Actualisation de la liste…') === -1,
-      json({ msg: b.message() }));
+    verifier('2.2', 'après deux échéances : état ③ — la lecture rend la main, avec deux émissions au plus',
+      b.message().indexOf('Actualisation de la liste…') === -1 && b.getsDe('getEquipes').length === 2,
+      json({ msg: b.message(), lectures: b.getsDe('getEquipes').length }));
 
     verifier('2.3', 'l\'acquis reste DIT dans le message d\'échec (l\'écriture n\'est pas reniée)',
       b.message().indexOf('✅ « RACING 92-2 » ajoutée.') === 0,
@@ -573,12 +576,13 @@ async function principal() {
     b.saisir('CORPS PENDANT');
     const p = b.lancerAjout();
     await souffler();
-    await b.horloge.avancer(25000);
+    await b.horloge.avancer(45000);
     await p;
-    verifier('2.9', 'le budget couvre aussi l\'attente du CORPS de la réponse (en-têtes reçus, corps absent)',
+    verifier('2.9', 'le budget couvre aussi l\'attente du CORPS de la réponse, puis tente une seconde lecture bornée',
       b.message().indexOf('n\'a PAS pu être actualisée') !== -1 && b.repriseVisible() === true &&
-      b.horloge.restantes() === 0,
-      json({ msg: b.message(), reprise: b.repriseVisible(), minuteurs: b.horloge.restantes() }));
+      b.getsDe('getEquipes').length === 2 && b.horloge.restantes() === 0,
+      json({ msg: b.message(), reprise: b.repriseVisible(), lectures: b.getsDe('getEquipes').length,
+             minuteurs: b.horloge.restantes() }));
   }
 
   {
@@ -649,7 +653,7 @@ async function principal() {
     await souffler();
     await b.horloge.avancer(10000);
     const a10s = issue;
-    await b.horloge.avancer(25000);
+    await b.horloge.avancer(55000);
     await souffler();
 
     verifier('3.4', 'démarrage avec une lecture pendante : à 10 s, l\'ouverture attend encore (pas de faux échec)',
@@ -659,9 +663,9 @@ async function principal() {
       issue !== null && !!issue.err, json({ issue: issue }));
 
     verifier('3.6', 'les DEUX lectures d\'ouverture partent bornées (getAll et getConfigAdmin)',
-      b.getsDe('getAll').length === 1 && b.getsDe('getAll')[0].borne === true &&
+      b.getsDe('getAll').length === 2 && b.getsDe('getAll').every(function (x) { return x.borne === true; }) &&
       b.postsDe('getConfigAdmin').length === 1 && b.postsDe('getConfigAdmin')[0].borne === true,
-      json({ getAll: b.getsDe('getAll')[0], post: b.postsDe('getConfigAdmin')[0] }));
+      json({ getAll: b.getsDe('getAll'), post: b.postsDe('getConfigAdmin')[0] }));
 
     verifier('3.7', 'aucun minuteur résiduel après l\'abandon de l\'ouverture',
       b.horloge.restantes() === 0, json({ minuteurs: b.horloge.restantes() }));
@@ -1138,8 +1142,10 @@ async function principal() {
       json({ maj: b.el('maj-admin').textContent }));
 
     verifier('R1.18', '⭐ C — la lecture de ce chemin part BORNÉE, et aucun minuteur ne survit',
-      b.getsDe('getAll').length === 1 && b.getsDe('getAll')[0].borne === true && b.horloge.restantes() === 0,
-      json({ borne: b.getsDe('getAll')[0].borne, minuteurs: b.horloge.restantes() }));
+      b.getsDe('getAll').length === 2 && b.getsDe('getAll').every(function (x) { return x.borne === true; }) &&
+      b.horloge.restantes() === 0,
+      json({ lectures: b.getsDe('getAll').length, borne: b.getsDe('getAll')[0].borne,
+             minuteurs: b.horloge.restantes() }));
   }
 
   {

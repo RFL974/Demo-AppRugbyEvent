@@ -1,7 +1,7 @@
 /**
  * ============================================================================
  *  GARDE-FOU FRONTEND — rejeu UNIQUE après un 404, pour des LISTES FERMÉES de
- *  lectures seulement, sous un abandon global qui réveille la pause
+ *  lectures seulement, avec un délai complet et un signal neufs au second essai
  *  Chantiers CORR-RETRY-LECTURES-404-DR-6F, 6F-R1 et 6F-R3
  * ============================================================================
  *
@@ -19,9 +19,9 @@
  *   · POST : liste FERMÉE de sept actions ; `listerSponsors` et toute écriture restent à UNE émission ;
  *   · deux émissions au plus PAR INVOCATION ; un parcours `apiPostProtege` avec renouvellement de clé
  *     peut en compter quatre (deux cycles) ;
- *   · TEMPS : pas de limite murale absolue. Un seul abandon global, jamais réarmé ; même signal ;
- *     l'abandon RÉVEILLE la pause ; aucun second fetch si l'échéance est atteinte ou le signal
- *     abandonné ; aucun résidu à la fin de l'appel.
+ *   · TEMPS : pas de limite murale absolue. Chaque émission a son propre abandon ; le second essai
+ *     reçoit un délai complet et un signal neufs ; l'abandon réveille une pause 404 en cours ;
+ *     aucun résidu à la fin de l'appel.
  *
  *  LE BANC DISTINGUE QUATRE INSTANTS : l'ÉCHÉANCE NOMINALE (t0 + delaiMs) ; l'EXÉCUTION RÉELLE du
  *  rappel d'abandon (minuterie éventuellement retardée) ; le BLOCAGE du thread principal (aucune
@@ -131,6 +131,7 @@ function banc(o) {
   const minuteries = [];    // minuteries du CODE : { id, ms, echeance, execution, etat, executeeA }
   const appels = [];        // chaque appel à fetch
   const invocations = [];   // chaque invocation d'envoyerAvecRejeu404 : { emissions }
+  const invocationParSuivi = new WeakMap(); // un même appel API peut invoquer le mécanisme après un délai neuf
   const plan = (o.plan || []).slice();
   const journaux = [];
   const stockage = [];
@@ -181,6 +182,7 @@ function banc(o) {
       function livrer() {
         if (!etape) return rejeter(new Error('ÉMISSION IMPRÉVUE : le plan du banc est épuisé'));
         if (etape === 'rejet') return rejeter(new TypeError('Failed to fetch'));
+        if (etape === 'abort-externe') return rejeter(abandon());
         if (etape === 'pend') return;
         if (etape === 'json-illisible') {
           return resoudre({ ok: true, status: 200,
@@ -250,8 +252,13 @@ function banc(o) {
     throw new Error('envoyerAvecRejeu404 introuvable dans js/api.js : mets ce garde-fou à jour, ne le supprime pas.');
   }
   ctx.envoyerAvecRejeu404 = function (emettre) {
-    const inv = { emissions: 0 };
-    invocations.push(inv);
+    const suivi = arguments[3];
+    let inv = suivi && invocationParSuivi.get(suivi);
+    if (!inv) {
+      inv = { emissions: 0 };
+      invocations.push(inv);
+      if (suivi) invocationParSuivi.set(suivi, inv);
+    }
     const args = Array.prototype.slice.call(arguments);
     args[0] = function () {
       const avant = invocationCourante;
@@ -389,15 +396,25 @@ function actionsPostDuCode() {
   return Array.from(noms).sort();
 }
 
-/** Deux émissions GET STRICTEMENT identiques : adresse (action, paramètres, anti-cache), réglages, signal. */
+/** Deux émissions GET identiques hors identité de l'objet de réglages (recréé pour chaque tentative). */
 function getIdentiques(b, action, params) {
   const [x, y] = b.appels;
   if (!x || !y) return false;
   const u = new URL(x.url);
   const parametres = Object.keys(params || {}).every((k) => u.searchParams.get(k) === String(params[k]));
   return x.url === y.url && u.searchParams.get('action') === action && parametres && u.searchParams.get('_') !== null &&
-    x.methode === 'GET' && y.methode === 'GET' && x.init === y.init && x.cache === 'no-store' && y.cache === 'no-store' &&
+    x.methode === 'GET' && y.methode === 'GET' && x.cache === 'no-store' && y.cache === 'no-store' &&
     x.signal === y.signal && x.corps === undefined && y.corps === undefined;
+}
+
+/** Deux émissions GET identiques hors signal : un rejeu après expiration DOIT avoir un signal neuf. */
+function getIdentiquesSignalNeuf(b, action, params) {
+  const [x, y] = b.appels;
+  if (!x || !y) return false;
+  const u = new URL(x.url);
+  return x.url === y.url && u.searchParams.get('action') === action &&
+    Object.keys(params || {}).every((k) => u.searchParams.get(k) === String(params[k])) &&
+    x.cache === 'no-store' && y.cache === 'no-store' && !!x.signal && !!y.signal && x.signal !== y.signal;
 }
 
 /* ========================================================================== */
@@ -412,9 +429,9 @@ async function getFlux(source, suivi, action, params, plan, options) {
   return { b, s };
 }
 
-async function postFlux(source, suivi, action, data, plan) {
+async function postFlux(source, suivi, action, data, plan, options) {
   const b = banc({ source, suivi, plan });
-  const s = await b.jouer((c) => c.apiPost(action, data));
+  const s = await b.jouer((c) => c.apiPost(action, data, options));
   return { b, s };
 }
 
@@ -443,6 +460,8 @@ async function scenTemps(source, suivi, o) {
     b, s, sondes, fin: s.t, nature: nature(s), appels: b.appels.length, tAppels: b.appels.map((a) => a.t),
     fetchSurSignalAbandonne: b.appels.filter((a) => a.signalAbandonne).length,
     memeSignal: b.appels.length > 0 && !!b.appels[0].signal && b.appels.every((a) => a.signal === b.appels[0].signal),
+    signauxDistincts: b.appels.length === 2 && !!b.appels[0].signal && !!b.appels[1].signal &&
+      b.appels[0].signal !== b.appels[1].signal,
     durees: b.minuteries.map((m) => m.ms), abandon: vue(ab), pause: vue(pa),
     enAttente: s.enAttente, parInvocation: b.parInvocation(), planRestant: b.plan.length
   };
@@ -464,7 +483,7 @@ const TEMPS = {
   toutRetarde: { plan: [R(404, null, 400), OK()], retards: () => 500 },
   blocage: { plan: [R(404, null, 400), OK()], blocage: [600, 1300] },
   livraisonPendantBlocage: { plan: [R(404, null, 650), OK()], blocage: [600, 1300] },
-  premiereEmissionPendante: { plan: ['pend'] },
+  premiereEmissionPendante: { plan: ['pend', 'pend'] },
   deux404: { plan: [R(404, null, 400), R(404)] },
   corpsLentApresRejeu: { plan: [R(404, null, 400), { status: 200, corps: { ok: true }, apresMs: 100, lectureMs: 300 }] },
   delaiNonEntier: { plan: [R(404, null, 700.5), OK()], delaiMs: 1000.9 }
@@ -521,10 +540,11 @@ GET_ATTENDUES.forEach(function (action, i) {
     (o) => json({ oui: o.oui.b.appels.length, inv: o.oui.b.parInvocation(), non: o.non.b.appels.length, invNon: o.non.b.parInvocation() }));
 });
 
-critere('A.12', 'getAll avec délai (usage de tournoi.js, 12 000 ms) : 404→200 → mêmes adresse et réglages, MÊME signal global, abandon effacé, aucun résidu',
+critere('A.12', 'getAll avec délai (usage de tournoi.js, 12 000 ms) : 404→200 → contrôleur et délai neufs, aucun résidu',
   (src, suivi) => getFlux(src, suivi, 'getAll', null, [R(404), OK({ ok: true })], { delaiMs: 12000 }),
-  (o) => o.b.appels.length === 2 && getIdentiques(o.b, 'getAll', null) && !!o.b.appels[0].signal &&
-    json(o.b.minuteries.map((m) => m.ms)) === json([12000, D]) && o.b.minuteries[0].etat === 'effacee' && succes(o.s) && o.s.enAttente === 0,
+  (o) => o.b.appels.length === 2 && getIdentiquesSignalNeuf(o.b, 'getAll', null) &&
+    json(o.b.minuteries.map((m) => m.ms)) === json([12000, D, 12000]) &&
+    o.b.minuteries.filter((m) => m.ms === 12000).every((m) => m.etat === 'effacee') && succes(o.s) && o.s.enAttente === 0,
   (o) => json({ appels: o.b.appels.length, signal: !!(o.b.appels[0] && o.b.appels[0].signal), minuteries: o.b.minuteries.map((m) => [m.ms, m.etat]) }));
 
 critere('A.13', 'getHistorique (exclue : peut créer l\'onglet) : 404 puis 200 prévu → UNE émission, erreur 404, réponse suivante non consommée ; 404 puis 404 → UNE émission',
@@ -731,102 +751,201 @@ critere('B.16', 'sonde de clé (écriture sentinelle enregistrerScore) + 404 →
 /* ---- C — temps et abandon ---------------------------------------------- */
 section('C — Temps et abandon (délai nominal ' + DELAI + ' ms) : échéance nominale, exécution réelle de l\'abandon, blocage, décision avant le second fetch');
 
-critere('C.1', 'pause normale : 1er fetch à 0 ms, 404 reçu à 400 ms → second fetch à 700 ms, même signal, succès à 700 ms (≤ échéance), minuteries [1000, 300], abandon effacé, aucun résidu',
+critere('C.1', 'pause normale : 404 à 400 ms → second fetch à 700 ms, contrôleur et délai neufs, succès, aucun résidu',
   (src, suivi) => scenTemps(src, suivi, temps('pauseNormale')),
-  (o) => o.fin === 400 + D && o.nature === 'succès' && json(o.tAppels) === json([0, 400 + D]) && o.memeSignal &&
-    json(o.durees) === json([DELAI, D]) && o.abandon.etat === 'effacee' && o.pause.etat === 'executee' && o.enAttente === 0 &&
-    o.fin <= o.abandon.echeance && json(o.parInvocation) === '[2]', resume);
+  (o) => o.fin === 400 + D && o.nature === 'succès' && json(o.tAppels) === json([0, 400 + D]) && o.signauxDistincts &&
+    json(o.durees) === json([DELAI, D, DELAI]) && o.pause.etat === 'executee' && o.enAttente === 0 &&
+    json(o.parInvocation) === '[2]', resume);
 
-critere('C.2', '404 trop proche de l\'échéance (900 ms) : AUCUNE pause, aucun rejeu, 404 rendu aussitôt (900 ms), abandon effacé, aucun résidu',
+critere('C.2', '404 trop proche de l\'échéance (900 ms) : pause omise, second essai immédiat avec délai neuf',
   (src, suivi) => scenTemps(src, suivi, temps('tropProche')),
-  (o) => o.fin === 900 && o.nature === 'HTTP 404' && o.appels === 1 && json(o.durees) === json([DELAI]) &&
-    o.abandon.etat === 'effacee' && o.enAttente === 0 && o.planRestant === 1, resume);
+  (o) => o.fin === 900 && o.nature === 'succès' && o.appels === 2 && o.signauxDistincts &&
+    json(o.durees) === json([DELAI, DELAI]) && o.enAttente === 0 && o.planRestant === 0, resume);
 
-critere('C.3', 'seuil : 404 à 700 ms (pause finissant PILE à l\'échéance) → aucune pause, aucun rejeu, 404 à 700 ms',
+critere('C.3', 'seuil : 404 à 700 ms (pause finissant pile à l\'échéance) → second essai immédiat et neuf',
   (src, suivi) => scenTemps(src, suivi, temps('seuilPile')),
-  (o) => o.fin === DELAI - D && o.nature === 'HTTP 404' && o.appels === 1 && json(o.durees) === json([DELAI]) && o.enAttente === 0, resume);
+  (o) => o.fin === DELAI - D && o.nature === 'succès' && o.appels === 2 && o.signauxDistincts &&
+    json(o.durees) === json([DELAI, DELAI]) && o.enAttente === 0, resume);
 
-critere('C.4', 'seuil : 404 reçu à 699 ms → second fetch à 999 ms avec le MÊME signal ; en cours à 999 ms ; AbortError à 1000 ms, instant d\'exécution de l\'abandon ; minuteries [1000, 300]',
+critere('C.4', '404 reçu à 699 ms → second fetch à 999 ms avec signal neuf ; son délai complet expire à 1999 ms',
   (src, suivi) => scenTemps(src, suivi, temps('seuilJuste')),
-  (o) => json(o.tAppels) === json([0, DELAI - 1]) && o.memeSignal && o.sondes[DELAI - 1].fini === false &&
-    o.fin === DELAI && o.abandon.executeeA === DELAI && o.nature === 'AbortError' && json(o.durees) === json([DELAI, D]) &&
+  (o) => json(o.tAppels) === json([0, DELAI - 1]) && o.signauxDistincts && o.sondes[DELAI - 1].fini === false &&
+    o.fin === 2 * DELAI - 1 && o.nature === 'AbortError' && json(o.durees) === json([DELAI, D, DELAI]) &&
     o.enAttente === 0 && o.fetchSurSignalAbandonne === 0, resume);
 
-critere('C.5', 'abandon exécuté PENDANT une pause retardée (réveil prévu à 1500 ms) : la pause est RÉVEILLÉE par l\'abandon → 404 rendu à 1000 ms, aucun second fetch, minuteur de pause effacé',
+critere('C.5', 'expiration pendant une pause retardée : la pause est réveillée et le second essai démarre avec un signal neuf',
   (src, suivi) => scenTemps(src, suivi, temps('pauseRetardee')),
-  (o) => o.sondes[DELAI - 1].fini === false && o.fin === DELAI && o.abandon.executeeA === DELAI && o.nature === 'HTTP 404' &&
-    o.appels === 1 && o.pause.etat === 'effacee' && o.enAttente === 0 && o.planRestant === 1, resume);
+  (o) => o.sondes[DELAI - 1].fini === false && o.fin === DELAI && o.nature === 'succès' &&
+    o.appels === 2 && o.signauxDistincts && o.pause.etat === 'effacee' && o.enAttente === 0, resume);
 
-critere('C.6', 'abandon lui-même retardé (exécuté à 1200 ms) pendant une pause retardée (1500 ms) : fin À L\'EXÉCUTION RÉELLE de l\'abandon (1200 ms), pas au réveil de la pause — ⚠ au-delà de l\'échéance nominale, voir LIMITES',
+critere('C.6', 'abandon retardé à 1200 ms pendant une pause retardée : second essai neuf et succès à 1200 ms',
   (src, suivi) => scenTemps(src, suivi, temps('abandonEtPauseRetardes')),
-  (o) => o.fin === 1200 && o.abandon.executeeA === 1200 && o.nature === 'HTTP 404' && o.appels === 1 &&
-    o.pause.etat === 'effacee' && o.enAttente === 0, resume);
+  (o) => o.fin === 1200 && o.abandon.executeeA === 1200 && o.nature === 'succès' && o.appels === 2 &&
+    o.signauxDistincts && o.pause.etat === 'effacee' && o.enAttente === 0, resume);
 
-critere('C.7', 'signal DÉJÀ abandonné avant le second envoi (abandon exécuté à 999 ms, échéance lue 1000 ms) : aucun fetch, 404 rendu à 999 ms',
+critere('C.7', 'signal abandonné à 999 ms pendant la pause : le second envoi utilise un signal neuf et réussit',
   (src, suivi) => scenTemps(src, suivi, temps('abandonAvantEcheanceLue')),
-  (o) => o.fin === DELAI - 1 && o.abandon.executeeA === DELAI - 1 && o.abandon.echeance === DELAI && o.appels === 1 &&
-    o.fetchSurSignalAbandonne === 0 && o.nature === 'HTTP 404' && o.pause.etat === 'effacee' && o.enAttente === 0, resume);
+  (o) => o.fin === DELAI - 1 && o.abandon.executeeA === DELAI - 1 && o.appels === 2 && o.signauxDistincts &&
+    o.fetchSurSignalAbandonne === 0 && o.nature === 'succès' && o.pause.etat === 'effacee' && o.enAttente === 0, resume);
 
-critere('C.8', 'décision avant le second fetch : pause réveillée PILE à l\'échéance, signal encore intact → aucun fetch, 404 à 1000 ms, abandon effacé',
+critere('C.8', 'pause réveillée pile à l\'échéance : second fetch avec contrôleur neuf, succès à 1000 ms',
   (src, suivi) => scenTemps(src, suivi, temps('pausePileEcheance')),
-  (o) => o.fin === DELAI && o.pause.executeeA === DELAI && o.appels === 1 && o.nature === 'HTTP 404' &&
-    o.abandon.etat === 'effacee' && o.enAttente === 0, resume);
+  (o) => o.fin === DELAI && o.pause.executeeA === DELAI && o.appels === 2 && o.signauxDistincts &&
+    o.nature === 'succès' && o.enAttente === 0, resume);
 
-critere('C.9', 'toutes les minuteries retardées de 500 ms : aucun fetch à l\'échéance ou après ; fin au réveil tardif de la pause (1200 ms), avant l\'exécution prévue de l\'abandon (1500 ms) — ⚠ au-delà de l\'échéance nominale, voir LIMITES',
+critere('C.9', 'toutes les minuteries retardées de 500 ms : second essai neuf au réveil tardif de la pause (1200 ms)',
   (src, suivi) => scenTemps(src, suivi, temps('toutRetarde')),
-  (o) => o.fin === 1200 && o.pause.executeeA === 1200 && o.appels === 1 && o.tAppels.every((t) => t < o.abandon.echeance) &&
-    o.fin <= o.abandon.execution && o.abandon.etat === 'effacee' && o.nature === 'HTTP 404' && o.enAttente === 0, resume);
+  (o) => o.fin === 1200 && o.pause.executeeA === 1200 && o.appels === 2 && o.signauxDistincts &&
+    o.nature === 'succès' && o.enAttente === 0, resume);
 
-critere('C.10', 'thread principal BLOQUÉ de 600 à 1300 ms pendant la pause : aucun fetch ; fin au déblocage (1300 ms) — ⚠ au-delà de l\'échéance nominale, voir LIMITES',
+critere('C.10', 'thread principal bloqué de 600 à 1300 ms : second essai neuf au déblocage, succès à 1300 ms',
   (src, suivi) => scenTemps(src, suivi, temps('blocage')),
-  (o) => o.fin === 1300 && o.appels === 1 && o.nature === 'HTTP 404' && o.pause.executeeA === 1300 &&
-    o.abandon.etat === 'effacee' && o.enAttente === 0, resume);
+  (o) => o.fin === 1300 && o.appels === 2 && o.signauxDistincts && o.nature === 'succès' &&
+    o.pause.executeeA === 1300 && o.enAttente === 0, resume);
 
-critere('C.11', '404 livré PENDANT un blocage (650 ms, blocage 600-1300 ms) : aucune pause, aucun rejeu ; fin au déblocage (1300 ms), 404 ou AbortError selon l\'ordre des sources de tâches (non garanti par le navigateur) — ⚠ au-delà de l\'échéance nominale, voir LIMITES',
+critere('C.11', '404 livré pendant un blocage (650-1300 ms) : reprise avec contrôleur neuf au déblocage',
   (src, suivi) => scenTemps(src, suivi, temps('livraisonPendantBlocage')),
-  (o) => o.fin === 1300 && o.appels === 1 && json(o.durees) === json([DELAI]) && ['HTTP 404', 'AbortError'].indexOf(o.nature) !== -1 &&
-    o.enAttente === 0, resume);
+  (o) => o.fin === 1300 && o.appels === 2 && o.signauxDistincts && json(o.durees) === json([DELAI, DELAI]) &&
+    o.nature === 'succès' && o.enAttente === 0, resume);
 
-critere('C.12', 'abandon pendant la PREMIÈRE émission : AbortError à 1000 ms, une émission, aucune pause, aucun résidu',
+critere('C.12', 'deux expirations successives : contrôleur et délai neufs, AbortError final à 2000 ms, deux émissions au total, aucun résidu',
   (src, suivi) => scenTemps(src, suivi, temps('premiereEmissionPendante')),
-  (o) => o.fin === DELAI && o.nature === 'AbortError' && o.appels === 1 && json(o.durees) === json([DELAI]) &&
-    o.abandon.etat === 'executee' && o.enAttente === 0, resume);
+  (o) => o.fin === 2 * DELAI && o.nature === 'AbortError' && o.appels === 2 && o.signauxDistincts &&
+    json(o.durees) === json([DELAI, DELAI]) && o.enAttente === 0 && json(o.parInvocation) === '[2]', resume);
 
-critere('C.13', 'un seul minuteur d\'abandon, jamais réarmé : 404 puis 404 avec délai → minuteries [1000, 300], même signal, abandon effacé, deux émissions',
+critere('C.13', '404 puis 404 avec délai : deux émissions, deux contrôleurs/délais, jamais de troisième',
   (src, suivi) => scenTemps(src, suivi, temps('deux404')),
-  (o) => json(o.durees) === json([DELAI, D]) && o.memeSignal && o.appels === 2 && o.abandon.etat === 'effacee' &&
+  (o) => json(o.durees) === json([DELAI, D, DELAI]) && o.signauxDistincts && o.appels === 2 &&
     o.nature === 'HTTP 404' && o.fin === 400 + D && o.enAttente === 0 && json(o.parInvocation) === '[2]', resume);
 
-critere('C.15', 'abandon pendant la LECTURE DU CORPS de la seconde émission (200 reçu à 800 ms, corps lu jusqu\'à 1100 ms) : AbortError à 1000 ms, même signal, aucun résidu',
+critere('C.15', 'lecture lente du corps de la seconde émission : son délai neuf laisse le succès arriver à 1100 ms',
   (src, suivi) => scenTemps(src, suivi, temps('corpsLentApresRejeu')),
-  (o) => o.fin === DELAI && o.nature === 'AbortError' && o.appels === 2 && o.memeSignal && o.abandon.executeeA === DELAI &&
-    json(o.durees) === json([DELAI, D]) && o.enAttente === 0, resume);
+  (o) => o.fin === 1100 && o.nature === 'succès' && o.appels === 2 && o.signauxDistincts &&
+    json(o.durees) === json([DELAI, D, DELAI]) && o.enAttente === 0, resume);
 
-critere('C.16', 'délai NON entier (1000.9 ms) sans aucun retard : l\'abandon s\'exécute à 1000 ms, AVANT l\'échéance lue (1000.9) → le test du signal empêche le second fetch, 404 à 1000 ms',
+critere('C.16', 'délai non entier : l\'ancien signal expire à 1000 ms, le second essai part avec un signal neuf',
   (src, suivi) => scenTemps(src, suivi, temps('delaiNonEntier')),
-  (o) => o.fin === 1000 && o.abandon.executeeA === 1000 && o.abandon.echeance === 1000 && o.appels === 1 &&
-    o.fetchSurSignalAbandonne === 0 && o.nature === 'HTTP 404' && o.pause.etat === 'effacee' && o.enAttente === 0, resume);
+  (o) => o.fin === 1000 && o.abandon.executeeA === 1000 && o.appels === 2 && o.signauxDistincts &&
+    o.fetchSurSignalAbandonne === 0 && o.nature === 'succès' && o.pause.etat === 'effacee' && o.enAttente === 0, resume);
 
-critere('C.17', 'deux GET SIMULTANÉS en pause retardée : l\'abandon du premier (1000 ms) ne réveille QUE sa pause → 404 à 1000 ms ; le second garde la sienne (réveil 1600 ms), rejoue à 1600 ms et réussit',
+critere('C.17', 'deux GET simultanés : chaque expiration ne réveille que sa pause et chaque second essai a son contrôleur neuf',
   async (src, suivi) => {
     const b = banc({ source: src, suivi, retards: (ms) => (ms === D ? 800 : 0),
-      plan: [R(404, null, 400), R(404, null, 500), OK({ ok: true, lu: 'second' })] });
+      plan: [R(404, null, 400), R(404, null, 500), OK({ ok: true, lu: 'premier' }), OK({ ok: true, lu: 'second' })] });
     const premier = b.suivre(b.ctx.apiGet('getAll', null, { delaiMs: DELAI }));
     const second = b.suivre(b.ctx.apiGet('getRefFFR', null, { delaiMs: 3 * DELAI }));
     await b.avancer(60000);
     return { b, premier, second };
   },
-  (o) => o.premier.t === DELAI && erreurHttp(o.premier, 404) &&
+  (o) => succes(o.premier) && o.premier.valeur.lu === 'premier' && o.premier.t === DELAI &&
     succes(o.second) && o.second.valeur.lu === 'second' && o.second.t === 500 + D + 800 &&
-    json(o.b.appels.map((a) => a.t)) === json([0, 0, 500 + D + 800]) && json(o.b.parInvocation()) === json([1, 2]) &&
+    json(o.b.appels.map((a) => a.t)) === json([0, 0, DELAI, 500 + D + 800]) && json(o.b.parInvocation()) === json([2, 2]) &&
     o.b.file.filter((m) => !m.interne).length === 0,
   (o) => json({ premier: [o.premier.t, nature(o.premier)], second: [o.second.t, nature(o.second)], appels: o.b.appels.map((a) => a.t), inv: o.b.parInvocation() }));
+
+critere('C.18', 'expiration interne puis succès : les 11 GET autorisés ont exactement deux émissions, un contrôleur neuf et un délai complet neuf',
+  async (src, suivi) => {
+    const fautifs = [];
+    for (const action of GET_ATTENDUES) {
+      const r = await getFlux(src, suivi, action, PARAMS_GET[action] || null, ['pend', OK({ ok: true, lu: action })],
+        { delaiMs: DELAI });
+      if (!(r.b.appels.length === 2 && getIdentiquesSignalNeuf(r.b, action, PARAMS_GET[action] || null) &&
+          json(r.b.minuteries.map((m) => m.ms)) === json([DELAI, DELAI]) && succes(r.s) &&
+          r.s.valeur.lu === action && r.s.enAttente === 0 && json(r.b.parInvocation()) === '[2]')) fautifs.push(action);
+    }
+    return fautifs;
+  },
+  (fautifs) => fautifs.length === 0, (fautifs) => json(fautifs));
+
+critere('C.19', 'expiration interne puis succès : les 7 POST de lecture autorisés rejouent le même corps avec un contrôleur neuf',
+  async (src, suivi) => {
+    const fautifs = [];
+    for (const action of POST_ATTENDUES) {
+      const data = DONNEES_LECTURE();
+      const r = await postFlux(src, suivi, action, data, ['pend', OK({ ok: true, lu: action })], { delaiMs: DELAI });
+      const [a, b] = r.b.appels;
+      if (!(r.b.appels.length === 2 && a.corps === b.corps && a.signal && b.signal && a.signal !== b.signal &&
+          json(r.b.minuteries.map((m) => m.ms)) === json([DELAI, DELAI]) && succes(r.s) &&
+          r.s.valeur.lu === action && r.s.enAttente === 0 && json(r.b.parInvocation()) === '[2]')) fautifs.push(action);
+    }
+    return fautifs;
+  },
+  (fautifs) => fautifs.length === 0, (fautifs) => json(fautifs));
+
+critere('C.20', 'expiration pendant response.json() puis succès : le corps est couvert, deux émissions et aucun résidu',
+  (src, suivi) => scenTemps(src, suivi, {
+    plan: [{ status: 200, corps: { ok: true }, lectureMs: DELAI + 500 }, OK({ ok: true, lu: 'rejeu-corps' })]
+  }),
+  (o) => o.fin === DELAI && o.nature === 'succès' && o.appels === 2 && o.signauxDistincts &&
+    o.s.valeur.lu === 'rejeu-corps' && json(o.durees) === json([DELAI, DELAI]) && o.enAttente === 0 &&
+    json(o.parInvocation) === '[2]', resume);
+
+critere('C.21', 'plafond partagé : 404 puis expiration du second envoi → deux émissions, AbortError, jamais de troisième',
+  (src, suivi) => scenTemps(src, suivi, { plan: [R(404), 'pend'] }),
+  (o) => o.appels === 2 && o.nature === 'AbortError' && o.planRestant === 0 &&
+    json(o.parInvocation) === '[2]' && o.enAttente === 0, resume);
+
+critere('C.22', 'plafond partagé : expiration puis 404 → deux émissions, erreur 404, jamais de troisième',
+  (src, suivi) => scenTemps(src, suivi, { plan: ['pend', R(404), OK()] }),
+  (o) => o.appels === 2 && o.nature === 'HTTP 404' && o.planRestant === 1 && o.signauxDistincts &&
+    json(o.parInvocation) === '[2]' && o.enAttente === 0, resume);
+
+critere('C.23', 'un AbortError extérieur au minuteur interne n\'est jamais rejoué',
+  (src, suivi) => scenTemps(src, suivi, { plan: ['abort-externe', OK()] }),
+  (o) => o.appels === 1 && o.nature === 'AbortError' && o.planRestant === 1 && o.enAttente === 0, resume);
+
+critere('C.24', 'actions exclues et écritures : une expiration reste à UNE émission, même avec delaiMs',
+  async (src, suivi) => {
+    const fautifs = [];
+    for (const action of [GET_EXCLUE].concat(GET_NON_RETENUES, GET_PIEGES)) {
+      const r = await getFlux(src, suivi, action, null, ['pend', OK()], { delaiMs: DELAI });
+      if (!(r.b.appels.length === 1 && r.s.erreur && r.s.erreur.name === 'AbortError' && r.b.plan.length === 1)) fautifs.push('GET:' + action);
+    }
+    for (const action of [POST_EXCLUE].concat(ECRITURES_SENSIBLES, POST_PIEGES)) {
+      const r = await postFlux(src, suivi, action, { cle: CLE_FACTICE }, ['pend', OK()], { delaiMs: DELAI });
+      if (!(r.b.appels.length === 1 && r.s.erreur && r.s.erreur.name === 'AbortError' && r.b.plan.length === 1)) fautifs.push('POST:' + action);
+    }
+    return fautifs;
+  },
+  (fautifs) => fautifs.length === 0, (fautifs) => json(fautifs));
+
+critere('C.25', 'classement après écrasement de action : seule l\'action réellement envoyée décide du rejeu après expiration',
+  async (src, suivi) => ({
+    getExclu: await getFlux(src, suivi, 'getAll', { action: GET_EXCLUE }, ['pend', OK()], { delaiMs: DELAI }),
+    getAutorise: await getFlux(src, suivi, GET_EXCLUE, { action: 'getAll' }, ['pend', OK({ ok: true })], { delaiMs: DELAI }),
+    postEcriture: await postFlux(src, suivi, 'getConfigAdmin', { action: 'supprimerEquipe' }, ['pend', OK()], { delaiMs: DELAI }),
+    postLecture: await postFlux(src, suivi, 'supprimerEquipe', { action: 'getMatchsLitige' }, ['pend', OK({ ok: true })], { delaiMs: DELAI })
+  }),
+  (o) => o.getExclu.b.appels.length === 1 && o.getAutorise.b.appels.length === 2 && succes(o.getAutorise.s) &&
+    o.postEcriture.b.appels.length === 1 && o.postLecture.b.appels.length === 2 && succes(o.postLecture.s));
+
+critere('C.26', 'succès au premier essai borné : une émission, un seul délai effacé, aucun second contrôleur',
+  (src, suivi) => scenTemps(src, suivi, { plan: [OK({ ok: true, lu: 'premier' }), OK()] }),
+  (o) => o.appels === 1 && succes(o.s) && o.s.valeur.lu === 'premier' && json(o.durees) === json([DELAI]) &&
+    o.abandon.etat === 'effacee' && o.planRestant === 1 && o.enAttente === 0, resume);
+
+critere('C.27', 'rejet réseau TypeError avec délai : aucune réémission',
+  (src, suivi) => scenTemps(src, suivi, { plan: ['rejet', OK()] }),
+  (o) => o.appels === 1 && o.s.erreur && o.s.erreur.name === 'TypeError' && o.planRestant === 1 && o.enAttente === 0, resume);
+
+critere('C.28', 'JSON illisible avec délai : aucune réémission',
+  (src, suivi) => scenTemps(src, suivi, { plan: ['json-illisible', OK()] }),
+  (o) => o.appels === 1 && o.s.erreur && o.s.erreur.name === 'SyntaxError' && o.planRestant === 1 && o.enAttente === 0, resume);
+
+critere('C.29', 'erreur applicative avec délai : aucune réémission',
+  (src, suivi) => scenTemps(src, suivi, { plan: [OK({ error: 'Erreur métier fictive.' }), OK()] }),
+  (o) => o.appels === 1 && o.s.erreur && o.s.erreur.message === 'Erreur métier fictive.' &&
+    o.planRestant === 1 && o.enAttente === 0, resume);
+
+critere('C.30', 'HTTP 500 avec délai : aucune réémission',
+  (src, suivi) => scenTemps(src, suivi, { plan: [R(500), OK()] }),
+  (o) => o.appels === 1 && erreurHttp(o.s, 500) && o.planRestant === 1 && o.enAttente === 0, resume);
 
 const ISSUES_RESIDUS = [
   ['200', { plan: [OK()] }], ['404→200', { plan: [R(404), OK()] }], ['404→404', { plan: [R(404), R(404)] }],
   ['rejet', { plan: ['rejet'] }], ['404→rejet', { plan: [R(404), 'rejet'] }], ['JSON illisible', { plan: ['json-illisible'] }],
-  ['{ error }', { plan: [OK({ error: 'x' })] }], ['404 à 900 ms', { plan: [R(404, null, 900)] }],
-  ['abandon (requête pendante)', { plan: ['pend'] }], ['404→abandon', { plan: [R(404), 'pend'] }],
+  ['{ error }', { plan: [OK({ error: 'x' })] }], ['404 à 900 ms puis 404', { plan: [R(404, null, 900), R(404)] }],
+  ['deux abandons (requêtes pendantes)', { plan: ['pend', 'pend'] }], ['404→abandon', { plan: [R(404), 'pend'] }],
   ['abandon pendant pause retardée', null], ['getHistorique 404', { plan: [R(404), OK()], action: GET_EXCLUE }]
 ];
 critere('C.14', 'aucun minuteur ni attente résiduels À L\'INSTANT du dénouement (' + ISSUES_RESIDUS.length + ' issues avec délai)',
@@ -905,6 +1024,28 @@ critere('D.12', 'parcours à quatre émissions : la seconde clé n\'est rangée 
   (o) => o.b.appels[2].cleRangee === '' && o.b.appels[3].cleRangee === '' && o.b.donnees.get('r92_cle_admin') === CLE_SECONDE &&
     json(o.b.ecritures()) === json([['set', 'r92_cle_admin', ''], ['set', 'r92_cle_admin', CLE_SECONDE]]));
 
+critere('D.13', 'clé déjà rangée + expiration puis succès : deux émissions avec la même clé, aucune invite ni écriture de stockage',
+  async (src, suivi) => {
+    const b = banc({ source: src, suivi, memo: CLE_MEMO, plan: ['pend', OK({ ok: true })] });
+    const s = await b.jouer((c) => c.apiPostProtege('getConfigAdmin', {}, 'admin', 'admin', { delaiMs: DELAI }));
+    return { b, s };
+  },
+  (o) => o.b.appels.length === 2 && o.b.appels.every((a) => JSON.parse(a.corps).cle === CLE_MEMO) &&
+    o.b.appels[0].signal !== o.b.appels[1].signal && o.b.dialogues.length === 0 && o.b.ecritures().length === 0 &&
+    o.b.donnees.get('r92_cle_admin') === CLE_MEMO && succes(o.s) && json(o.b.parInvocation()) === '[2]');
+
+critere('D.14', 'clé neuve + expiration puis succès : une seule invite, même clé sur les deux émissions, rangement seulement après succès',
+  async (src, suivi) => {
+    const b = banc({ source: src, suivi, saisies: [CLE_FACTICE], plan: ['pend', OK({ ok: true })] });
+    const s = await b.jouer((c) => c.apiPostProtege('getConfigAdmin', {}, 'admin', 'admin', { delaiMs: DELAI }));
+    return { b, s };
+  },
+  (o) => o.b.dialogues.length === 1 && o.b.appels.length === 2 &&
+    o.b.appels.every((a) => JSON.parse(a.corps).cle === CLE_FACTICE && a.cleRangee === '') &&
+    o.b.appels[0].signal !== o.b.appels[1].signal && succes(o.s) &&
+    json(o.b.ecritures()) === json([['set', 'r92_cle_admin', CLE_FACTICE]]) &&
+    o.b.donnees.get('r92_cle_admin') === CLE_FACTICE && json(o.b.parInvocation()) === '[2]');
+
 /* ---- E — journalisation ------------------------------------------------- */
 section('E — Journalisation : aucun corps, aucune clé, aucun jeton');
 
@@ -982,18 +1123,23 @@ critere('F.3', 'apiGet et apiPost décident par leur liste fermée SEULE, sur l\
     [o.get, o.post].every((f) => !/startsWith|endsWith|RegExp|\.test\(|\.match\(|toLowerCase|toUpperCase|\/\^/.test(f)) &&
     o.code.indexOf(POST_EXCLUE) === -1 && o.code.indexOf(GET_EXCLUE) === -1);
 
-critere('F.4', 'UNE seule implémentation : une définition, deux appelants, deux fetch ; un minuteur d\'abandon dans apiGet, un minuteur de pause dans le mécanisme',
+critere('F.4', 'UNE seule implémentation de chaque mécanisme : deux fetch, délai/rejeu d\'abandon centralisé, rejeu 404 centralisé',
   async (src) => ({
     code: sansCommentaires(src),
     get: sansCommentaires(blocFonction(src, 'async function apiGet(')),
     post: sansCommentaires(blocFonction(src, 'async function apiPost(')),
-    rejeu: sansCommentaires(blocFonction(src, 'async function envoyerAvecRejeu404('))
+    rejeu: sansCommentaires(blocFonction(src, 'async function envoyerAvecRejeu404(')),
+    abandon: sansCommentaires(blocFonction(src, 'async function executerAvecRejeuAbandon('))
   }),
   (o) => (o.code.match(/async function envoyerAvecRejeu404\(/g) || []).length === 1 &&
     (o.code.match(/envoyerAvecRejeu404\(/g) || []).length === 3 &&
     (o.get.match(/envoyerAvecRejeu404\(/g) || []).length === 1 && (o.post.match(/envoyerAvecRejeu404\(/g) || []).length === 1 &&
+    (o.code.match(/async function executerAvecRejeuAbandon\(/g) || []).length === 1 &&
+    (o.code.match(/executerAvecRejeuAbandon\(/g) || []).length === 3 &&
+    (o.get.match(/executerAvecRejeuAbandon\(/g) || []).length === 1 &&
+    (o.post.match(/executerAvecRejeuAbandon\(/g) || []).length === 1 &&
     (o.code.match(/\bfetch\(/g) || []).length === 2 &&
-    (o.get.match(/setTimeout\(/g) || []).length === 1 && (o.get.match(/new AbortController\(/g) || []).length === 1 &&
+    (o.abandon.match(/setTimeout\(/g) || []).length === 1 && (o.abandon.match(/new AbortController\(/g) || []).length === 1 &&
     (o.rejeu.match(/setTimeout\(/g) || []).length === 1 && (o.rejeu.match(/clearTimeout\(/g) || []).length === 1);
 
 critere('F.5', 'js/api.js ne pose AUCUN écouteur (ni addEventListener, ni onabort/on…=), ne journalise rien ; performance.now pour l\'échéance, Date.now pour l\'anti-cache seulement',
@@ -1023,70 +1169,76 @@ critere('F.6', 'recensement : les actions GET appelées par la page sont exactem
 /* ========================================================================== */
 
 const ANCRES = {
-  test404: '  if (!rejouable || reponse.status !== 404) return reponse;',
+  test404: '  if (!rejouable || reponse.status !== 404 || suivi.emissions >= 2) return reponse;',
+  expiration: '      const expirationRejouable = rejouable && abandon && abandon.expirationInterne &&',
+  plafondExpiration: "        err && err.name === 'AbortError' && suivi.emissions < 2;",
+  expirationInterne: 'abandon.expirationInterne &&',
+  increment: '    suivi.emissions++;',
   classementGet: "const rejouable = ACTIONS_GET_REJOUABLES.indexOf(url.searchParams.get('action')) !== -1;",
   listeGet: "'getConfigClub', 'getClubDossier', 'getReponseInvitation'",
   classementPost: 'ACTIONS_POST_REJOUABLES.indexOf(corps.action) !== -1',
   listePost: "  'getConfigAdmin', 'getDossierAutorisation', 'lireMesuresSponsors',",
   reveil: '    if (abandon.reveiller) abandon.reveiller();\n',
   gardeAvant: '  if (abandon && performance.now() + DELAI_REJEU_404_MS >= abandon.echeance) {',
-  gardeApres: '    if (abandon.signal.aborted || performance.now() >= abandon.echeance) return reponse;',
   effacerPause: '  clearTimeout(pause);\n',
-  effacerAbandon: '    if (minuteur) clearTimeout(minuteur);',
   enregistrerReveil: '    if (abandon) abandon.reveiller = reprendre;',
   emissionGet: 'return fetch(adresse, reglages);',
-  fermetureGet: 'function () { return fetch(adresse, reglages); }',
-  derniere: '  return emettre();',
   texte: '  const texte = JSON.stringify(corps);',
-  adresse: '    const adresse = url.toString();',
+  adresse: '  const adresse = url.toString();',
   erreurGet: "      throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ').');"
 };
 
+/* R4 — mutants du contrat actuel, y compris les protections de confidentialité et de concurrence
+ * héritées de 6F. Trois anciens mutants sont volontairement caducs :
+ *   · « second envoi malgré signal abandonné » et « garde après pause » : le second essai DOIT
+ *     désormais jeter l'ancien signal et en créer un neuf ;
+ *   · « réarmement du délai » : ce réarmement est précisément le nouveau contrat.
+ * Le plafond partagé remplace l'ancien mutant « troisième émission » et est prouvé par C.12/C.21/C.22. */
 const MUTANTS = [
-  ['aucun rejeu', [[ANCRES.test404, '  return reponse;']], ['A.1', 'B.1']],
-  ['tout statut d\'erreur rejoué', [[ANCRES.test404, '  if (!rejouable || reponse.ok) return reponse;']], ['A.17', 'B.3']],
-  ['rejeu de TOUS les GET', [[ANCRES.classementGet, 'const rejouable = true;']], ['A.13', 'A.14', 'A.15']],
-  ['réintroduction de getHistorique', [[ANCRES.listeGet, ANCRES.listeGet + ", 'getHistorique'"]], ['A.13', 'F.1']],
-  ['action GET inconnue rendue rejouable (liste noire au lieu de liste fermée)',
-    [[ANCRES.classementGet, "const rejouable = ['getHistorique', 'getPoules', 'getClassement'].indexOf(url.searchParams.get('action')) === -1;"]], ['A.15']],
-  ['classement GET sur le paramètre `action` au lieu de l\'action envoyée',
-    [[ANCRES.classementGet, 'const rejouable = ACTIONS_GET_REJOUABLES.indexOf(action) !== -1;']], ['A.16']],
-  ['classement GET déduit du nom', [[ANCRES.classementGet, "const rejouable = /^get/.test(String(url.searchParams.get('action')));"]], ['A.13', 'A.14']],
-  ['pause NON réveillée par l\'abandon', [[ANCRES.reveil, '', 2]], ['C.5', 'C.6']],
-  ['second envoi malgré un signal abandonné', [[ANCRES.gardeApres, '    if (performance.now() >= abandon.echeance) return reponse;']], ['C.7', 'C.16']],
-  ['perte du signal global', [[ANCRES.emissionGet, 'return fetch(adresse, { cache: reglages.cache });']], ['C.4', 'A.12', 'C.15']],
-  ['réarmement du délai pour le rejeu', [[ANCRES.fermetureGet,
-    '(function () { let n = 0; return function () { if (n++ === 0) return fetch(adresse, reglages); ' +
-    'const c2 = new AbortController(); setTimeout(function () { c2.abort(); }, delaiMs); ' +
-    'return fetch(adresse, { cache: reglages.cache, signal: c2.signal }); }; })()']], ['C.4', 'C.13', 'C.15']],
-  ['troisième émission dans un même cycle', [[ANCRES.derniere, '  const r2 = await emettre(); return r2.status === 404 ? emettre() : r2;']], ['A.1', 'B.2', 'C.13']],
-  ['réintroduction de listerSponsors', [[ANCRES.listePost, "  'getConfigAdmin', 'getDossierAutorisation', 'listerSponsors', 'lireMesuresSponsors',"]], ['B.4', 'F.2']],
-  ['rejeu de toute écriture', [[ANCRES.classementPost, 'true']], ['B.5', 'B.10', 'B.12']],
-  ['classement POST déduit du nom', [[ANCRES.classementPost, '/^(get|lire|lister)/.test(String(corps.action))']], ['B.4', 'B.13']],
-  ['corps POST journalisé', [[ANCRES.texte, ANCRES.texte + " console.log('rejeu', texte);"]], ['E.1']],
-  ['clé journalisée', [[ANCRES.texte, ANCRES.texte + " console.warn('cle', corps.cle);"]], ['E.1']],
-  ['adresse GET (jeton) journalisée', [[ANCRES.adresse, ANCRES.adresse + " console.info('GET', adresse);"]], ['E.1']],
-  ['adresse GET (jeton) dans le message d\'erreur', [[ANCRES.erreurGet, "      throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ') : ' + adresse);", 2]], ['E.1']],
-  ['garde d\'avant la pause retirée (défaut 6F)', [[ANCRES.gardeAvant, '  if (false) {']], ['C.2']],
-  ['garde d\'avant la pause en « > »', [[ANCRES.gardeAvant, ANCRES.gardeAvant.replace('>= abandon.echeance', '> abandon.echeance')]], ['C.3']],
-  ['garde d\'après la pause en « > »', [[ANCRES.gardeApres, ANCRES.gardeApres.replace('>= abandon.echeance', '> abandon.echeance')]], ['C.8']],
+  ['aucun rejeu 404', [[ANCRES.test404, '  return reponse;']], ['A.1', 'B.1']],
+  ['tout statut d\'erreur rejoué', [[ANCRES.test404,
+    '  if (!rejouable || reponse.ok || suivi.emissions >= 2) return reponse;']], ['A.17', 'B.3', 'C.30']],
+  ['rejeu de tous les GET', [[ANCRES.classementGet, 'const rejouable = true;']], ['A.13', 'A.14', 'C.24']],
+  ['réintroduction de getHistorique', [[ANCRES.listeGet, ANCRES.listeGet + ", 'getHistorique'"]], ['A.13', 'F.1', 'C.24']],
+  ['action GET inconnue rendue rejouable par liste noire', [[ANCRES.classementGet,
+    "const rejouable = ['getHistorique', 'getPoules', 'getClassement'].indexOf(url.searchParams.get('action')) === -1;"]], ['A.15', 'C.24']],
+  ['classement GET sur l\'argument au lieu de l\'action envoyée',
+    [[ANCRES.classementGet, 'const rejouable = ACTIONS_GET_REJOUABLES.indexOf(action) !== -1;']], ['A.16', 'C.25']],
+  ['classement GET déduit du nom', [[ANCRES.classementGet,
+    "const rejouable = /^get/.test(String(url.searchParams.get('action')));"]], ['A.13', 'A.14', 'C.24']],
+  ['réintroduction de listerSponsors', [[ANCRES.listePost,
+    "  'getConfigAdmin', 'getDossierAutorisation', 'listerSponsors', 'lireMesuresSponsors',"]], ['B.4', 'F.2', 'C.24']],
+  ['rejeu de toute écriture', [[ANCRES.classementPost, 'true']], ['B.5', 'B.12', 'C.24']],
+  ['classement POST déduit du nom', [[ANCRES.classementPost,
+    '/^(get|lire|lister)/.test(String(corps.action))']], ['B.4', 'B.13', 'C.24']],
+  ['aucun rejeu après expiration', [[ANCRES.expiration, '      const expirationRejouable = false &&']], ['C.18', 'C.19', 'C.20']],
+  ['AbortError extérieur accepté', [[ANCRES.expirationInterne, 'true &&']], ['C.23']],
+  ['plafond d\'expiration porté à trois', [[ANCRES.plafondExpiration,
+    "        err && err.name === 'AbortError' && suivi.emissions < 3;"]], ['C.12']],
+  ['compteur d\'émissions supprimé', [[ANCRES.increment, '    // compteur supprimé']], ['C.21', 'C.22']],
+  ['minuteur d\'abandon non effacé', [["      if (minuteur) clearTimeout(minuteur);",
+    '      // effacement retiré']], ['C.18', 'C.19', 'C.20']],
+  ['pause 404 non réveillée par l\'abandon', [[ANCRES.reveil, '']], ['C.5', 'C.6']],
+  ['signal de la tentative perdu', [[ANCRES.emissionGet,
+    'return fetch(adresse, { cache: reglages.cache });']], ['A.12', 'C.4', 'C.18']],
+  ['garde avant pause retirée', [[ANCRES.gardeAvant, '  if (false) {']], ['C.2']],
+  ['garde avant pause en « > »', [[ANCRES.gardeAvant,
+    ANCRES.gardeAvant.replace('>= abandon.echeance', '> abandon.echeance')]], ['C.3']],
   ['minuteur de pause non effacé', [[ANCRES.effacerPause, '']], ['C.5', 'C.14']],
-  ['minuteur d\'abandon non effacé', [[ANCRES.effacerAbandon, '    // (effacement retiré)', 2]], ['C.14']],
-  /* ⭐ CORR-BLOCAGE-LECTURES-ADMIN-DR — ancre DÉPLACÉE, intention INCHANGÉE. `apiPost` construit
-     désormais ses réglages UNE fois, hors de la fermeture d'émission : y resérialiser le corps
-     n'aurait plus lieu qu'une fois, et ce mutant ne reproduirait plus rien. Pour qu'il nomme
-     toujours le même défaut — « corps resérialisé à CHAQUE émission » — il doit frapper là où les
-     émissions ont lieu. ⛔ B.17 n'est pas touché : il exige toujours deux corps identiques et un
-     `filtre` figé à sa valeur d'origine. */
-  ['corps POST non figé (resérialisé à chaque émission)',
-    [["      return fetch(API_URL, reglages);",
-      "      return fetch(API_URL, Object.assign({}, reglages, { body: JSON.stringify(corps) }));"]], ['B.17']],
-  ['adresse GET (jeton) retenue en session après un 404', [[ANCRES.erreurGet,
+  ['corps POST non figé', [["      return fetch(API_URL, reglages);",
+    "      return fetch(API_URL, Object.assign({}, reglages, { body: JSON.stringify(corps) }));"]], ['B.17']],
+  ['corps POST journalisé', [[ANCRES.texte, ANCRES.texte + " console.log('rejeu', texte);"]], ['E.1']],
+  ['clé POST journalisée', [[ANCRES.texte, ANCRES.texte + " console.warn('cle', corps.cle);"]], ['E.1']],
+  ['adresse GET journalisée', [[ANCRES.adresse, ANCRES.adresse + " console.info('GET', adresse);"]], ['E.1']],
+  ['adresse GET avec jeton ajoutée au message d\'erreur', [[ANCRES.erreurGet,
+    "      throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ') : ' + adresse);", 2]], ['E.1']],
+  ['adresse GET avec jeton retenue en session', [[ANCRES.erreurGet,
     "      if (reponse.status === 404) sessionStorage.setItem('r92_diag_404', adresse);\n" + ANCRES.erreurGet, 2]], ['E.1']],
-  ['adresse GET (jeton) exposée en variable globale', [[ANCRES.adresse, ANCRES.adresse + ' window.derniereLecture = adresse;']], ['E.1']],
-  ['réveil PARTAGÉ entre appels simultanés (variable de module)', [
+  ['adresse GET avec jeton exposée en globale', [[ANCRES.adresse,
+    ANCRES.adresse + ' window.derniereLecture = adresse;']], ['E.1']],
+  ['réveil partagé entre appels simultanés', [
     [ANCRES.enregistrerReveil, '    if (abandon) globalThis.__reveilPartage = reprendre;'],
-    [ANCRES.reveil, '    if (globalThis.__reveilPartage) globalThis.__reveilPartage();\n', 2]], ['C.17']],
+    [ANCRES.reveil, '    if (globalThis.__reveilPartage) globalThis.__reveilPartage();\n']], ['C.17']],
   ['écouteur d\'abandon persistant à la place du réveil', [[ANCRES.enregistrerReveil,
     "    if (abandon) abandon.signal.addEventListener('abort', reprendre, { once: true });"]], ['F.5']]
 ];

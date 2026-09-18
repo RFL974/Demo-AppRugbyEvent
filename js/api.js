@@ -48,37 +48,43 @@ const ACTIONS_POST_REJOUABLES = Object.freeze([
 ]);
 
 /**
- * SEUL mécanisme de tentative, commun à apiGet et apiPost : DEUX émissions au plus par invocation.
- * Réémet uniquement si `rejouable` ET si la réponse HTTP finale est exactement 404.
- * ⛔ Rejet de fetch, abandon, autre statut, JSON illisible, `{ error }` : aucune réémission.
+ * Détecteur commun du 404 rejouable. Le compteur partagé avec `executerAvecRejeuAbandon` garantit
+ * DEUX émissions au plus par invocation, tous motifs confondus. Cette fonction demande le second
+ * essai à l'orchestrateur : il recevra ainsi, lui aussi, un AbortController et un délai neufs.
+ * ⛔ Rejet de fetch, autre statut, JSON illisible, `{ error }` : aucune demande de rejeu ici.
  *
- * ⏱️ CONTRAT TEMPOREL, quand apiGet fournit `abandon` (option `delaiMs`) :
- *   · un seul minuteur d'abandon, posé par apiGet et jamais réarmé ; même signal pour les deux émissions ;
- *   · si la pause ne tient pas avant l'échéance nominale, pas de pause ni de rejeu : le premier 404
- *     est rendu aussitôt ;
+ * ⏱️ CONTRAT TEMPOREL, pour UNE tentative bornée :
+ *   · un seul minuteur et un seul signal ; le second essai éventuel en créera de nouveaux ;
+ *   · si la pause ne tient pas avant l'échéance nominale, elle est omise et le second essai démarre
+ *     immédiatement avec son délai neuf ;
  *   · si le rappel d'abandon s'exécute pendant la pause, il la RÉVEILLE : l'appel n'attend pas le
  *     minuteur de pause ;
- *   · immédiatement avant le second fetch, l'échéance (horloge monotone) et le signal sont relus :
- *     échéance atteinte ou signal abandonné → 404 rendu, aucun second fetch. Le signal compte à part :
- *     l'abandon peut s'exécuter un peu AVANT l'échéance lue (durée tronquée, arrondi d'horloge).
- *     ⚠️ Ce contrôle n'est pas atomique avec l'émission : aucun code ne s'intercale avant l'appel à
- *     fetch, mais l'horloge continue d'avancer et l'envoi réseau reste asynchrone ;
- *   · si l'abandon survient pendant une émission ou la lecture de son corps : AbortError ; pendant la
- *     pause : le 404 déjà reçu ;
+ *   · après la pause (normale ou réveillée par l'abandon), la décision de rejeu est transmise à
+ *     l'orchestrateur, qui jette l'ancien signal et crée la nouvelle tentative ;
+ *   · si l'abandon survient pendant une émission ou la lecture de son corps : AbortError ; pendant
+ *     la pause : le 404 déjà reçu déclenche directement le second essai ;
  *   · ⚠️ LIMITE DU NAVIGATEUR : si les minuteries ou le thread principal sont retardés (onglet en
  *     arrière-plan, tâche longue, veille), l'appel peut se dénouer APRÈS t0 + delaiMs, dès que la
  *     première tâche utile (réponse réseau, réveil de la pause ou rappel d'abandon) s'exécute enfin.
  *     Aucune limite murale absolue n'est garantie.
  * @param {function(): Promise<Response>} emettre  envoie la MÊME requête à chaque appel
  * @param {boolean} rejouable  true seulement pour une action d'une liste fermée
- * @param {{signal: AbortSignal, echeance: number, reveiller: ?function}} [abandon]  délai global d'apiGet
- * @return {Promise<Response>} la dernière réponse reçue
+ * @param {{signal: AbortSignal, echeance: number, reveiller: ?function}} [abandon] délai de la tentative
+ * @param {{emissions: number}} suivi  compteur partagé entre rejeu 404 et rejeu après abandon
+ * @return {Promise<Response>} la réponse reçue, sauf demande interne de second essai après 404
  */
-async function envoyerAvecRejeu404(emettre, rejouable, abandon) {
-  const reponse = await emettre();
-  if (!rejouable || reponse.status !== 404) return reponse;
+async function envoyerAvecRejeu404(emettre, rejouable, abandon, suivi) {
+  async function emettreUneFois() {
+    suivi.emissions++;
+    return emettre();
+  }
+
+  const reponse = await emettreUneFois();
+  if (!rejouable || reponse.status !== 404 || suivi.emissions >= 2) return reponse;
   if (abandon && performance.now() + DELAI_REJEU_404_MS >= abandon.echeance) {
-    return reponse;                                        // la pause ne tiendrait pas avant l'échéance
+    const erreur = new Error('Rejeu interne après 404.');
+    erreur.rejeuLecture404 = true;
+    throw erreur;                                          // délai neuf, sans pause devenue inutile
   }
   let pause = null;
   await new Promise(function (reprendre) {
@@ -88,18 +94,66 @@ async function envoyerAvecRejeu404(emettre, rejouable, abandon) {
   clearTimeout(pause);
   if (abandon) {
     abandon.reveiller = null;
-    if (abandon.signal.aborted || performance.now() >= abandon.echeance) return reponse;   // décision juste avant fetch
   }
-  return emettre();                                        // seconde et DERNIÈRE émission
+  const erreur = new Error('Rejeu interne après 404.');
+  erreur.rejeuLecture404 = true;
+  throw erreur;                                            // l'orchestrateur crée la seconde tentative
+}
+
+/**
+ * Exécute une lecture éventuellement bornée, avec au plus un second essai après l'expiration du
+ * délai INTERNE. Le second essai reçoit son propre AbortController et un délai complet neuf.
+ *
+ * Le rejeu est refusé si l'action n'appartient pas à une liste fermée, si l'erreur n'est pas
+ * l'AbortError produit par NOTRE minuteur, ou si deux émissions ont déjà eu lieu (par exemple
+ * après un 404 rejoué). La fermeture `executer` doit inclure la lecture du corps JSON : le délai
+ * couvre ainsi fetch ET `response.json()`.
+ *
+ * @param {function(?AbortController, ?Object, Object): Promise<*>} executer
+ * @param {boolean} rejouable  vrai seulement pour une action explicitement autorisée
+ * @param {number} [delaiMs] délai nominal de CHAQUE tentative
+ * @return {Promise<*>}
+ */
+async function executerAvecRejeuAbandon(executer, rejouable, delaiMs) {
+  const suivi = { emissions: 0 };
+
+  async function tenter() {
+    const controleur = delaiMs ? new AbortController() : null;
+    const abandon = controleur
+      ? { signal: controleur.signal, echeance: performance.now() + delaiMs, reveiller: null,
+          expirationInterne: false }
+      : null;
+    const minuteur = controleur ? setTimeout(function () {
+      abandon.expirationInterne = true;
+      controleur.abort();
+      if (abandon.reveiller) abandon.reveiller();
+    }, delaiMs) : null;
+
+    try {
+      return await executer(controleur, abandon, suivi);
+    } catch (err) {
+      const rejeu404 = rejouable && err && err.rejeuLecture404 === true && suivi.emissions < 2;
+      const expirationRejouable = rejouable && abandon && abandon.expirationInterne &&
+        err && err.name === 'AbortError' && suivi.emissions < 2;
+      if (!rejeu404 && !expirationRejouable) throw err;
+    } finally {
+      if (minuteur) clearTimeout(minuteur);
+    }
+
+    return tenter();                                        // contrôleur et délai neufs
+  }
+
+  return tenter();
 }
 
 /**
  * Va chercher une donnée auprès du backend (requête de LECTURE).
  * @param {string} action  ex : 'getConfig', 'getEquipes', 'getAll'
  * @param {Object} [params] paramètres supplémentaires éventuels (optionnel)
- * @param {Object} [options] { delaiMs } : délai NOMINAL en millisecondes — à son expiration,
- *   la requête est ABANDONNÉE et une erreur est levée (⚠️ sans garantie murale absolue : voir le
- *   contrat temporel d'`envoyerAvecRejeu404`). Utilisé par le rafraîchissement
+ * @param {Object} [options] { delaiMs } : délai NOMINAL en millisecondes PAR TENTATIVE — à son
+ *   expiration, l'émission est abandonnée ; une lecture de la liste fermée reçoit au plus un
+ *   second essai avec un délai neuf, puis l'AbortError remonte si celui-ci expire aussi
+ *   (⚠️ sans garantie murale absolue : voir le contrat temporel d'`envoyerAvecRejeu404`). Utilisé par le rafraîchissement
  *   automatique de la page publique : sans ça, une connexion mobile qui « pend »
  *   indéfiniment gèlerait la boucle (elle n'enchaîne qu'après la fin de la requête).
  * @return {Promise<Object>} la réponse du backend, déjà transformée en objet
@@ -128,28 +182,18 @@ async function apiGet(action, params, options) {
   // ⛔ Classement sur l'action RÉELLEMENT envoyée (paramètres compris), par la liste fermée seule.
   const rejouable = ACTIONS_GET_REJOUABLES.indexOf(url.searchParams.get('action')) !== -1;
 
-  // Délai NOMINAL optionnel : un minuteur "abandonne" la requête s'il expire.
+  // Délai NOMINAL optionnel, appliqué séparément à chaque tentative autorisée.
   const delaiMs = options && options.delaiMs;
-  const controleur = delaiMs ? new AbortController() : null;
-  // ⏱️ Échéance nominale lue AVANT d'armer l'unique minuteur d'abandon, jamais réarmé ; son rappel
-  //    réveille aussi une pause de rejeu en cours (voir `envoyerAvecRejeu404`).
-  const abandon = controleur
-    ? { signal: controleur.signal, echeance: performance.now() + delaiMs, reveiller: null }
-    : null;
-  const minuteur = controleur ? setTimeout(function () {
-    controleur.abort();
-    if (abandon.reveiller) abandon.reveiller();
-  }, delaiMs) : null;
+  const adresse = url.toString();
 
-  try {
+  return executerAvecRejeuAbandon(async function (controleur, abandon, suivi) {
     // fetch() envoie la requête et attend la réponse. `cache: 'no-store'` désactive
     // en plus le cache HTTP du navigateur pour cette lecture.
     const reglages = { cache: 'no-store' };
     if (controleur) reglages.signal = controleur.signal;
-    // ⭐ Rejeu éventuel : même adresse, mêmes réglages, même signal.
-    const adresse = url.toString();
+    // ⭐ Rejeu 404 éventuel : même adresse, mêmes réglages et même signal au sein de cette tentative.
     const reponse = await envoyerAvecRejeu404(function () { return fetch(adresse, reglages); },
-      rejouable, abandon);
+      rejouable, abandon, suivi);
     if (!reponse.ok) {
       throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ').');
     }
@@ -163,18 +207,16 @@ async function apiGet(action, params, options) {
     }
 
     return donnees;
-  } finally {
-    if (minuteur) clearTimeout(minuteur); // toujours nettoyer le minuteur
-  }
+  }, rejouable, delaiMs);
 }
 
 /**
  * Envoie une demande d'ÉCRITURE au backend (ajouter/supprimer…).
  * @param {string} action  ex : 'ajouterEquipe', 'supprimerEquipe'
  * @param {Object} [data]  les données à envoyer (ex : { nom_equipe, categorie })
- * @param {Object} [options] { delaiMs } : délai NOMINAL, MÊME contrat que `apiGet` (voir le contrat
- *   temporel d'`envoyerAvecRejeu404`, limites de minuterie comprises). Il couvre l'émission ET la
- *   lecture du corps de la réponse : le signal d'abandon interrompt les deux.
+ * @param {Object} [options] { delaiMs } : délai NOMINAL PAR TENTATIVE, MÊME contrat que `apiGet`
+ *   (voir le contrat temporel d'`envoyerAvecRejeu404`, limites de minuterie comprises). Il couvre
+ *   l'émission ET la lecture du corps de la réponse : le signal d'abandon interrompt les deux.
  *
  *   ⭐ POURQUOI SUR UN POST (CORR-BLOCAGE-LECTURES-ADMIN-DR). Les LECTURES protégées par la clé
  *      admin passent par doPost (`getConfigAdmin` et les autres de la liste fermée ci-dessus) :
@@ -199,19 +241,10 @@ async function apiPost(action, data, options) {
   // ⛔ Classement sur l'action RÉELLEMENT envoyée (`corps.action`), par la liste fermée seule.
   const rejouable = ACTIONS_POST_REJOUABLES.indexOf(corps.action) !== -1;
 
-  // Délai NOMINAL optionnel : un minuteur "abandonne" la requête s'il expire. Mêmes pièces et
-  // même ordre que dans apiGet — échéance lue AVANT d'armer l'unique minuteur, jamais réarmé.
+  // Délai NOMINAL optionnel, appliqué séparément à chaque tentative autorisée.
   const delaiMs = options && options.delaiMs;
-  const controleur = delaiMs ? new AbortController() : null;
-  const abandon = controleur
-    ? { signal: controleur.signal, echeance: performance.now() + delaiMs, reveiller: null }
-    : null;
-  const minuteur = controleur ? setTimeout(function () {
-    controleur.abort();
-    if (abandon.reveiller) abandon.reveiller();
-  }, delaiMs) : null;
 
-  try {
+  return executerAvecRejeuAbandon(async function (controleur, abandon, suivi) {
     const reglages = {
       method: 'POST',
       // On envoie en "text/plain" volontairement : ça évite une vérification
@@ -219,11 +252,11 @@ async function apiPost(action, data, options) {
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: texte
     };
-    // ⭐ Rejeu éventuel : mêmes réglages, même corps, même signal.
+    // ⭐ Détection 404 : mêmes réglages, même corps et même signal au sein de cette tentative.
     if (controleur) reglages.signal = controleur.signal;
     const reponse = await envoyerAvecRejeu404(function () {
       return fetch(API_URL, reglages);
-    }, rejouable, abandon);
+    }, rejouable, abandon, suivi);
 
     if (!reponse.ok) {
       throw new Error('Le serveur a répondu avec une erreur (' + reponse.status + ').');
@@ -239,9 +272,7 @@ async function apiPost(action, data, options) {
     }
 
     return donnees;
-  } finally {
-    if (minuteur) clearTimeout(minuteur); // toujours nettoyer le minuteur
-  }
+  }, rejouable, delaiMs);
 }
 
 /* ============================================================================

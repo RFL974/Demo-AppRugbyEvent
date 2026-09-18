@@ -119,6 +119,7 @@ const SRC_CLES = [
   ligne(F_API, 'const DELAI_REJEU_404_MS'),
   ligne(F_API, 'const ACTIONS_POST_REJOUABLES'),
   bloc(F_API, 'async function envoyerAvecRejeu404(', '{'),
+  bloc(F_API, 'async function executerAvecRejeuAbandon(', '{'),
   bloc(F_API, 'async function apiPost(', '{'),
   bloc(F_API, 'function lireCleLocale(', '{'),
   bloc(F_API, 'function definirCleLocale(', '{'),
