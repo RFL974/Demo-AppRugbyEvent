@@ -546,7 +546,6 @@ const ADMIN_RESSOURCES = {
    départ ne réclame rien. */
 const ADMIN_ETAPES = {
   invitation:   { ressources: ['clubsInvites'] },
-  dossier:      { ressources: ['clubsInvites'] },
   autorisation: { ressources: ['clubsInvites', 'dossierAutorisation'] },
   /* Partenaires : DEUX lectures indépendantes, mémorisées séparément — un échec partiel ne doit
      faire relire que celle qui a échoué. Le rendu, lui, n'est PAS parallélisable : le bilan lit

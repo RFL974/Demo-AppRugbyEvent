@@ -40,15 +40,10 @@ const ECRANS_DEF = [
   { id: 'infos',       titre: 'Infos du tournoi',  icone: 'info',     blocs: ['bloc-choix-categories', 'bloc-cadre-tournoi', 'bloc-infos-tournoi'], cles: [] },
   { id: 'horaires',    titre: 'Horaires',          icone: 'horloge',  blocs: ['zone-horaires'],           cles: ['horaires'] },
   { id: 'categories',  titre: 'Catégories',        icone: 'etiquette', blocs: ['zone-categories'],        cles: ['categories'] },
-  /* Phase 1 — « Inviter un club » : les clubs invités restent visibles en tête ; les réglages et
-     l'aperçu de la première invitation sont regroupés dans un dépliant. Libre : préparable très
-     tôt. Placé AVANT les Équipes : les clubs qui acceptent génèrent leurs équipes automatiquement
-     à l'envoi du dossier final. */
-  { id: 'invitation',  titre: 'Inviter un club',   icone: 'courrier', blocs: ['bloc-clubs-invites', 'bloc-invitation-initiale'], cles: [], libre: true },
-  /* Le dossier COMPLET (Phase 2), envoyé aux clubs qui ont accepté : se génère à tout moment
-     (sections vides masquées), jamais verrouillé. L'écran regroupe aussi les cartes du dossier
-     (modalités, parking, encadrement) : on complète, puis on génère. */
-  { id: 'dossier',     titre: 'Dossier complet (accepté)', icone: 'dossier', blocs: ['bloc-parking', 'bloc-encadrement', 'bloc-contacts-securite', 'bloc-dossier'], cles: [], libre: true },
+  /* « Inviter un club » regroupe désormais tout le parcours : les clubs invités restent visibles
+     en tête, puis deux dépliants portent l'invitation initiale et le dossier final. Libre : cette
+     préparation reste accessible très tôt, avant les Équipes. */
+  { id: 'invitation',  titre: 'Inviter un club',   icone: 'courrier', blocs: ['bloc-clubs-invites', 'bloc-invitation-initiale', 'bloc-dossier-final'], cles: [], libre: true },
   { id: 'equipes',     titre: 'Équipes',           icone: 'equipe',   blocs: ['bloc-equipes'],            cles: ['equipes'] },
   { id: 'terrains',    titre: 'Terrains',          icone: 'terrain',  blocs: ['bloc-terrains'],           cles: ['terrains'] },
   { id: 'poules',      titre: 'Poules & planning', icone: 'poules',   blocs: ['bloc-generation'],         cles: ['poules'] },
@@ -96,8 +91,15 @@ const ECRANS_DEF = [
 const INVITATION_INITIALE_BLOCS = [
   'bloc-modalites',
   'bloc-reponse',
+  'bloc-contacts-securite',
   'bloc-surplace',
   'bloc-apercu-invitation'
+];
+
+const DOSSIER_FINAL_BLOCS = [
+  'bloc-parking',
+  'bloc-encadrement',
+  'bloc-dossier'
 ];
 
 /** Regroupe les cartes de la première invitation dans un dépliant natif, fermé par défaut. */
@@ -117,6 +119,29 @@ function preparerInvitationInitiale() {
   }
 
   INVITATION_INITIALE_BLOCS.forEach(function (id) {
+    const bloc = document.getElementById(id);
+    if (bloc) groupe.appendChild(bloc);
+  });
+  return groupe;
+}
+
+/** Place les cartes de la phase 2 dans un second dépliant, sous l'invitation initiale. */
+function preparerDossierFinal() {
+  const invitationInitiale = preparerInvitationInitiale();
+  let groupe = document.getElementById('bloc-dossier-final');
+
+  if (!groupe) {
+    if (!invitationInitiale || !invitationInitiale.parentNode) return null;
+    groupe = document.createElement('details');
+    groupe.id = 'bloc-dossier-final';
+    groupe.className = 'carte dossier-final';
+    const titre = document.createElement('summary');
+    titre.textContent = 'Dossier final';
+    groupe.appendChild(titre);
+    invitationInitiale.parentNode.insertBefore(groupe, invitationInitiale.nextSibling);
+  }
+
+  DOSSIER_FINAL_BLOCS.forEach(function (id) {
     const bloc = document.getElementById(id);
     if (bloc) groupe.appendChild(bloc);
   });
@@ -165,6 +190,7 @@ function construireEcrans() {
   if (!main || !conteneur || ecransEstActif()) return;
 
   preparerInvitationInitiale();
+  preparerDossierFinal();
 
   document.body.classList.add('avec-ecrans');
 
@@ -275,7 +301,7 @@ function ecransCalculerVerrous(etats) {
   ECRANS_DEF.forEach(function (def) {
     verrous.push(def.libre ? null : blocage);
     if (blocage) return; // déjà bloqué en amont : inutile de chercher plus loin
-    // Un écran LIBRE est une voie PARALLÈLE et facultative (inviter un club, dossier, demande
+    // Un écran LIBRE est une voie PARALLÈLE et facultative (inviter un club, demande
     // d'autorisation, feuille de journée, réinitialisation) : il n'est jamais verrouillé, et il ne
     // doit pas davantage verrouiller la SUITE. Sans ce retour, une simple retouche non enregistrée
     // dans « Inviter un club » gelait Équipes, Terrains, Poules, Publication et Après-midi — le

@@ -404,7 +404,7 @@ async function controles() {
   const b3 = bancRegistre({ sorts: { clubsInvites: 'enVol' } });
   const v1 = b3.ouvrirEtapeAdmin('invitation');
   const v2 = b3.ouvrirEtapeAdmin('invitation');
-  const v3 = b3.ouvrirEtapeAdmin('dossier');
+  const v3 = b3.ouvrirEtapeAdmin('invitation');
   await tick();
   b3.enAttente.clubsInvites(true);
   await Promise.all([v1, v2, v3]);
@@ -421,7 +421,6 @@ async function controles() {
   const avantVerrou = b4.journal.length;
   await b4.ouvrirEtapeAdmin('sponsors');
   await b4.ouvrirEtapeAdmin('autorisation');
-  await b4.ouvrirEtapeAdmin('dossier');
   verifier('5.1', 'déconnecté : aucune lecture protégée ne part',
     b4.journal.length === avantVerrou, 'journal : ' + b4.journal.join(', '));
 
@@ -615,8 +614,8 @@ async function controles() {
     for (const id of ids) await b.ouvrirEtapeAdmin(id);
     return b.journal.slice();
   };
-  const jOrdi = await parcours(['infos', 'invitation', 'dossier', 'autorisation', 'sponsors']);
-  const jMobile = await parcours(['infos', 'invitation', 'dossier', 'autorisation', 'sponsors']);
+  const jOrdi = await parcours(['infos', 'invitation', 'autorisation', 'sponsors']);
+  const jMobile = await parcours(['infos', 'invitation', 'autorisation', 'sponsors']);
   verifier('12.5', 'le même parcours coûte exactement 4 lectures, ordinateur comme mobile',
     jOrdi.length === 4 && memesElements(jOrdi, jMobile) &&
     memesElements(jOrdi, ['clubsInvites', 'dossierAutorisation', 'fichesSponsors', 'relevesSponsors']),

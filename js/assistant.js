@@ -28,11 +28,9 @@
 const ASSISTANT_ETAPES = [
   { id: 'infos',     titre: 'Infos',        icone: '📝', blocs: ['bloc-choix-categories', 'bloc-cadre-tournoi', 'bloc-infos-tournoi'] },
   { id: 'reglages',  titre: 'Réglages',     icone: '⏱️', blocs: ['reglages'] },
-  /* « Inviter un club » (Phase 1) puis le Dossier complet (Phase 2) viennent AVANT les Équipes :
-     les clubs qui acceptent génèrent leurs équipes automatiquement à l'envoi du dossier final
-     (même ordre que la barre latérale desktop). Cartes libres : jamais verrouillées. */
-  { id: 'invitation', titre: 'Inviter',     icone: '✉️', blocs: ['bloc-clubs-invites', 'bloc-invitation-initiale'] },
-  { id: 'dossier',   titre: 'Dossier',      icone: '📄', blocs: ['bloc-parking', 'bloc-encadrement', 'bloc-contacts-securite', 'bloc-dossier'] },
+  /* « Inviter » regroupe les clubs, l'invitation initiale et le dossier final dans le même écran,
+     comme la barre latérale sur ordinateur. */
+  { id: 'invitation', titre: 'Inviter',     icone: '✉️', blocs: ['bloc-clubs-invites', 'bloc-invitation-initiale', 'bloc-dossier-final'] },
   { id: 'equipes',   titre: 'Équipes',      icone: '👥', blocs: ['bloc-equipes'] },
   { id: 'terrains',  titre: 'Terrains',     icone: '🗺️', blocs: ['bloc-terrains'] },
   { id: 'poules',    titre: 'Poules',       icone: '🎲', blocs: ['bloc-generation'] },
@@ -132,6 +130,7 @@ function construireAssistant() {
   if (!main || document.getElementById('assistant')) return;
 
   if (typeof preparerInvitationInitiale === 'function') preparerInvitationInitiale();
+  if (typeof preparerDossierFinal === 'function') preparerDossierFinal();
 
   const asst = document.createElement('div');
   asst.id = 'assistant';
@@ -535,7 +534,7 @@ function raisonsModifsDans(etapeId, conteneur, zones) {
   if (etapeId === 'infos' && typeof afficheDataURI !== 'undefined' && afficheDataURI) {
     raisons.push('affiche choisie → « 💾 Enregistrer les infos » (ou « Retirer l\'affiche »)');
   }
-  if (etapeId === 'dossier' && typeof parkingDataURI !== 'undefined' && parkingDataURI) {
+  if (etapeId === 'invitation' && typeof parkingDataURI !== 'undefined' && parkingDataURI) {
     raisons.push('photo du parking choisie → « Enregistrer parking & accès » (ou « Retirer la photo »)');
   }
   if (etapeId === 'equipes') {
