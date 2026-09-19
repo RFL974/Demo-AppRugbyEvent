@@ -1121,8 +1121,12 @@ function brancherEcouteursAdmin() {
   ecouter('bouton-enregistrer-reponse', 'click', onEnregistrerReponse);
   ecouter('form-reponse', 'blur', onReponseBlur, true);
 
-  // Phase 1 — aperçu de l'email d'invitation : mise à jour EN DIRECT quand on modifie les
-  // cartes « Sur place » / « Réponse » (comme l'aperçu des Infos), + bouton d'envoi groupé.
+  // Phase 1 — aperçu de l'email : mise à jour EN DIRECT depuis toutes les cartes du menu
+  // « Invitation initiale », puis bouton d'envoi groupé.
+  ecouter('form-modalites', 'input', majApercuInvitation);
+  ecouter('form-modalites', 'change', majApercuInvitation);
+  ecouter('form-contacts-securite', 'input', majApercuInvitation);
+  ecouter('form-contacts-securite', 'change', majApercuInvitation);
   ecouter('form-surplace', 'change', majApercuInvitation);
   ecouter('form-reponse', 'input', majApercuInvitation);
   ecouter('form-reponse', 'change', majApercuInvitation);

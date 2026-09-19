@@ -159,7 +159,7 @@ vrai(construireAssistant.indexOf("typeof preparerInvitationInitiale === 'functio
 vrai(construireAssistant.indexOf("typeof preparerDossierFinal === 'function'") <
   construireAssistant.indexOf('ASSISTANT_ETAPES.forEach(function (et, i)'),
   'mobile : le dossier final est préparé avant le déplacement des blocs');
-vrai(html.includes("« Réponse à l'invitation »</strong>\n          de ce menu"),
-  'le texte de l’aperçu décrit correctement la nouvelle position des cartes');
+vrai(html.includes('toutes les cartes du menu « Invitation initiale »'),
+  'le texte de l’aperçu décrit sa nouvelle source complète');
 
 console.log('OK — ' + controles + ' contrôles passés.');
