@@ -168,6 +168,74 @@ async function onRecalculerHoraires() {
 }
 
 /**
+ * Les boutons de simulation ne s'activent que pour le scénario exact de la démo :
+ * 24 équipes (12 U10 + 12 U12), 36 matchs le matin, puis 18 en CROISE l'après-midi.
+ * Le serveur répète tous ces contrôles avant d'écrire.
+ */
+function majBoutonsScoresDemo() {
+  const cleCat = function (v) { return String(v == null ? '' : v).trim().toUpperCase().replace(/^[MU](?=\d)/, ''); };
+  const matin = (matchsCourants || []).filter(function (m) { return String(m.phase) !== 'classement'; });
+  const aprem = (matchsCourants || []).filter(function (m) { return String(m.phase) === 'classement'; });
+  const equipesU10 = (equipesCourantes || []).filter(function (e) { return cleCat(e.categorie) === '10'; });
+  const equipesU12 = (equipesCourantes || []).filter(function (e) { return cleCat(e.categorie) === '12'; });
+  const structureEquipes = equipesU10.length === 12 && equipesU12.length === 12 && equipesCourantes.length === 24;
+  const boutonMatin = document.getElementById('bouton-simuler-scores-matin');
+  const boutonAprem = document.getElementById('bouton-simuler-scores-apresmidi');
+  if (boutonMatin) {
+    boutonMatin.disabled = !(structureEquipes && matin.length === 36);
+    boutonMatin.title = boutonMatin.disabled
+      ? 'Disponible avec 12 équipes U10, 12 équipes U12 et les 36 matchs du matin.' : '';
+  }
+  if (boutonAprem) {
+    boutonAprem.disabled = !(structureEquipes && aprem.length === 18);
+    boutonAprem.title = boutonAprem.disabled
+      ? 'Disponible après la génération des 18 matchs de classement croisé.' : '';
+  }
+}
+
+function libelleMatchManuelDemo(m) {
+  function nom(id) {
+    const e = (equipesCourantes || []).find(function (x) { return String(x.id_equipe) === String(id); });
+    return e ? e.nom_equipe : id;
+  }
+  return m.categorie + ' — ' + nom(m.equipe_A) + ' ' + m.score_A + '–' + m.score_B + ' ' + nom(m.equipe_B);
+}
+
+async function onSimulerScoresDemo(phase) {
+  const matin = phase === 'MATIN';
+  const bouton = document.getElementById(matin ? 'bouton-simuler-scores-matin' : 'bouton-simuler-scores-apresmidi');
+  const message = document.getElementById(matin ? 'message-simulation-matin' : 'message-simulation-apresmidi');
+  const libelle = matin ? 'du matin' : 'de l’après-midi';
+  if (!bouton || !await dialogConfirmer('Appliquer les scores de démonstration ' + libelle + ' ?\n\n' +
+      'Les matchs prévus pour la saisie en direct resteront vides. Tous les scores simulés resteront corrigeables.',
+      { ok: 'Appliquer' })) return;
+
+  const texteBouton = bouton.textContent;
+  bouton.disabled = true;
+  bouton.textContent = 'Application…';
+  afficherMessage(message, 'Application du scénario de démonstration…', 'ok');
+  try {
+    const res = await ecrireAdmin('simulerScoresDemo', { phase: phase });
+    const manuels = (res.matchs_manuels || []).map(libelleMatchManuelDemo);
+    let texte = res.deja_applique
+      ? '✅ Les scores automatiques étaient déjà en place.'
+      : '✅ ' + res.nb_scores_appliques + ' score(s) appliqué(s).';
+    if (manuels.length) texte += '\n🎯 À saisir pendant la démo :\n• ' + manuels.join('\n• ');
+    texte += '\n✏️ Les scores enregistrés restent corrigeables depuis la table de marque.';
+    afficherMessage(message, texte, 'ok');
+    await rechargerEtRendre({ reglages: true });
+  } catch (erreur) {
+    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+  } finally {
+    bouton.textContent = texteBouton;
+    majBoutonsScoresDemo();
+  }
+}
+
+function onSimulerScoresMatin() { return onSimulerScoresDemo('MATIN'); }
+function onSimulerScoresApresMidi() { return onSimulerScoresDemo('APRES_MIDI'); }
+
+/**
  * Met à jour l'état de préparation de la phase après-midi et l'activation du bouton.
  * Le bouton n'est actif que si TOUS les scores du matin sont saisis (sinon la
  * génération échouerait côté serveur : on l'indique à l'avance plutôt qu'en erreur).
@@ -193,6 +261,7 @@ function majApresMidi() {
       ' saisis — complète tous les scores du matin (page Saisie) avant de générer.';
     bouton.disabled = true;
   }
+  majBoutonsScoresDemo();
   majDimancheScf(); // le bouton « dimanche » (Super Challenge Phase 3) suit le même cycle de vie
 }
 

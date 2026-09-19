@@ -242,10 +242,13 @@ function contexteMatch(m) {
   return 'Poule ' + String(m.poule);
 }
 
-/** Rend les cartes d'une liste de matchs, triées par heure. */
+/** Rend les cartes : matchs manuels de la démo en tête, puis ordre chronologique. */
 function cartesMatchs(liste) {
   return liste.slice()
-    .sort(function (a, b) { return String(a.heure_debut).localeCompare(String(b.heure_debut)); })
+    .sort(function (a, b) {
+      const priorite = Number(b.demo_a_saisir === true) - Number(a.demo_a_saisir === true);
+      return priorite || String(a.heure_debut).localeCompare(String(b.heure_debut));
+    })
     .map(carteMatch).join('');
 }
 
@@ -397,6 +400,11 @@ function carteMatch(m) {
   let bandeau = '';
   if (libre) bandeau = '<div class="bandeau-amical">🎈 Match amical — sans classement (juste du temps de jeu)</div>';
   else if (coupe) bandeau = '<div class="bandeau-coupe">⚔️ Élimination directe : un vainqueur est obligatoire.</div>';
+  if (m.demo_a_saisir === true) {
+    bandeau = '<div class="bandeau-demo">🎬 <strong>À saisir pendant la démo</strong> — score prévu : ' +
+      echapper(nomEquipe(m.equipe_A)) + ' ' + echapper(String(m.demo_score_A)) + '–' +
+      echapper(String(m.demo_score_B)) + ' ' + echapper(nomEquipe(m.equipe_B)) + '</div>' + bandeau;
+  }
 
   // Départage (COUPE) : radios pour désigner le vainqueur en cas d'égalité au score.
   let departage = '';
@@ -419,6 +427,7 @@ function carteMatch(m) {
 
   return '' +
     '<div class="match' + (termine ? ' match-termine' : '') + (coupe ? ' match-coupe' : '') +
+        (m.demo_a_saisir === true ? ' match-demo' : '') +
         (detail ? ' match-detail' : '') + '" data-id="' + echapper(m.id_match) + '">' +
       '<div class="match-meta">' + echapper(m.heure_debut) + ' · Terrain ' + echapper(String(m.terrain)) +
         ' · ' + echapper(contexte) +

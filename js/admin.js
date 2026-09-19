@@ -1029,6 +1029,7 @@ function brancherEcouteursAdmin() {
 
   // Bouton de génération des poules et du planning.
   ecouter('bouton-generer', 'click', onGenerer);
+  ecouter('bouton-simuler-scores-matin', 'click', onSimulerScoresMatin);
 
   // Bouton « Recalculer les horaires » (régénération non destructive, garde les scores).
   ecouter('bouton-recalculer-horaires', 'click', onRecalculerHoraires);
@@ -1042,6 +1043,7 @@ function brancherEcouteursAdmin() {
 
   // Bouton de génération de la phase après-midi (classement croisé).
   ecouter('bouton-apresmidi', 'click', onGenererApresMidi);
+  ecouter('bouton-simuler-scores-apresmidi', 'click', onSimulerScoresApresMidi);
   // Bouton du brassage du dimanche (Super Challenge Phase 3) — bloc révélé par majDimancheScf().
   ecouter('bouton-dimanche-scf', 'click', onGenererDimancheScf);
 

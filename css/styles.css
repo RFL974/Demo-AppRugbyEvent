@@ -1087,6 +1087,10 @@ button .ic { margin-right: 0.45em; }
   margin-bottom: 12px;
 }
 .match-termine { border-color: rgba(159, 224, 160, 0.4); }
+.match-demo {
+  border-color: rgba(242, 193, 78, 0.72);
+  box-shadow: 0 0 0 1px rgba(242, 193, 78, 0.18);
+}
 
 .match-meta {
   color: var(--bleu-ciel);
@@ -1160,6 +1164,16 @@ button .ic { margin-right: 0.45em; }
   font-size: 0.9rem;
   line-height: 1.3;
   margin-bottom: 8px;
+}
+.bandeau-demo {
+  background: rgba(242, 193, 78, 0.14);
+  border: 1px solid rgba(242, 193, 78, 0.45);
+  color: #ffe39a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  font-size: 0.92rem;
+  line-height: 1.35;
 }
 .bandeau-amical {
   background: rgba(159, 224, 160, 0.12);

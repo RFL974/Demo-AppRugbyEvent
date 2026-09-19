@@ -534,6 +534,9 @@
         <!-- Régénération NON destructive : recalcule seulement les heures, garde les poules
              ET les scores. Activé/masqué par admin.js (majBoutonRecalculer) selon l'état. -->
         <button id="bouton-recalculer-horaires" class="bouton bouton-doux" hidden data-ic="horloge">Recalculer les horaires (garde les scores)</button>
+        <button id="bouton-simuler-scores-matin" class="bouton bouton-doux" disabled>🎬 Appliquer les scores de démo du matin</button>
+        <p class="note-generation">Remplit tous les scores du matin sauf deux matchs Racing 92-1 laissés à saisir sur la table de marque. Les scores restent ensuite corrigeables.</p>
+        <div id="message-simulation-matin" class="message-form"></div>
         <p class="note-generation aide-recalculer" id="aide-recalculer" hidden></p>
         <div id="message-generation" class="message-form"></div>
         <div id="arbitrages"></div>
@@ -558,6 +561,9 @@
              Le bouton reste désactivé tant que ce n'est pas le cas. -->
         <p class="apresmidi-etat">Scores du matin : <strong id="etat-scores-matin">…</strong></p>
         <button id="bouton-apresmidi" class="bouton" data-ic="ballon">Générer l'après-midi</button>
+        <button id="bouton-simuler-scores-apresmidi" class="bouton bouton-doux" disabled>🎬 Appliquer les scores de démo de l’après-midi</button>
+        <p class="note-generation">Remplit tous les scores de l’après-midi sauf un match U12 laissé à saisir. Tous les résultats restent corrigeables.</p>
+        <div id="message-simulation-apresmidi" class="message-form"></div>
         <div id="message-apresmidi" class="message-form"></div>
 
         <!-- Super Challenge — Phase 3, 2ᵉ journée (dimanche). Bloc masqué : révélé par majDimancheScf()
