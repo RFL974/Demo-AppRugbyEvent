@@ -41,6 +41,14 @@
 .suivi-indicateur:hover,
 .suivi-indicateur.est-actif { border-color: #72b9e8; background: #eef8ff; box-shadow: 0 0 0 2px rgba(59, 155, 217, .12); }
 .suivi-clubs-filtres { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 16px; }
+.suivi-pdf-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  margin: 0 0 16px;
+}
+.suivi-pdf-actions small { color: #748198; }
 .suivi-filtre {
   border: 1px solid #d7e0eb;
   border-radius: 999px;
@@ -118,6 +126,7 @@
   .suivi-club-actions { grid-column: auto; }
   .suivi-club-actions { flex-direction: column; }
   .suivi-club-actions .bouton { width: 100%; }
+  .suivi-pdf-actions .bouton { width: 100%; }
 }
 
 /* --- Remise à zéro simple + réglages de base --- */

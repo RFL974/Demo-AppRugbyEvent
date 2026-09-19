@@ -20,7 +20,7 @@ async function principal() {
   };
   const posts = [], confirmations = [];
   const contexte = vm.createContext({
-    console,
+    console, setTimeout,
     document: { getElementById: id => dom[id] || null, addEventListener() {} },
     configCourante: { global: {
       repas_sur_place_oui: 'oui', repas_sur_place_mode: 'prix_personne',
@@ -47,6 +47,7 @@ async function principal() {
     },
     envoyerInvitationClubUI: async () => {}
   });
+  vm.runInContext(lire('js/vendor/pdf-lib.min.js'), contexte, { filename: 'js/vendor/pdf-lib.min.js' });
   vm.runInContext(lire('js/admin-suivi-clubs.js'), contexte, { filename: 'js/admin-suivi-clubs.js' });
 
   const commande = { inscription: { sous_total: '40' },
@@ -55,9 +56,11 @@ async function principal() {
   const clubs = [
     { club_nom: 'Sans réponse', club_contact_email: 'attente@test.fr', statut: 'Invité', invitation_envoyee: '2026-09-10' },
     { club_nom: 'Accepté impayé', club_contact_email: 'du@test.fr', statut: 'Accepté', date_reponse: '2026-09-12',
+      nb_joueurs_total: '12', nb_educateurs_total: '3',
       confirmation_reponse_erreur: 'panne transport',
       detail_effectifs: JSON.stringify({ U8: [{ j: 12, e: 3 }], _restauration: commande }) },
     { club_nom: 'Accepté payé', club_contact_email: 'paye@test.fr', statut: 'Accepté', date_reponse: '2026-09-13',
+      nb_joueurs_total: '10', nb_educateurs_total: '2',
       confirmation_reponse_envoyee: '2026-09-19 18:22:00', paiement_statut: 'Payé', date_paiement: '2026-09-18',
       detail_effectifs: JSON.stringify({ _restauration: commande }) },
     { club_nom: 'Décliné', club_contact_email: 'non@test.fr', statut: 'Décliné', date_reponse: '2026-09-11',
@@ -76,6 +79,32 @@ async function principal() {
   vrai(contexte.suiviClubEtat(clubs[3]).decline, 'une réponse non est distinguée');
   vrai(contexte.suiviClubEtat(clubs[1]).confirmationAttendue && !contexte.suiviClubEtat(clubs[2]).confirmationAttendue,
     'une confirmation manquante est distinguée d’un envoi tracé');
+
+  let donnees = contexte.suiviDonneesRestauration(clubs, contexte.configCourante.global);
+  egal(donnees.lignes.length, 2, 'le PDF ne compte que les clubs qui participent');
+  egal(donnees.totaux.repas.total, 30, 'les repas payants reprennent les quantités explicitement commandées');
+  egal(donnees.totaux.gouter.total, 20, 'les goûters payants reprennent les quantités explicitement commandées');
+  contexte.configCourante.global.repas_sur_place_mode = 'compris_inscription';
+  contexte.configCourante.global.gouter_fin_tournoi_mode = 'offert_organisateur';
+  donnees = contexte.suiviDonneesRestauration(clubs, contexte.configCourante.global);
+  egal(donnees.totaux.repas.total, 27, 'les repas compris sont calculés sur les effectifs joueurs et éducateurs présents');
+  egal(donnees.totaux.gouter.total, 27, 'les goûters offerts sont calculés sur les effectifs joueurs et éducateurs présents');
+  egal(donnees.totaux.repas.joueurs, 22, 'le total joueurs reste distinct dans le PDF');
+  egal(donnees.totaux.repas.educateurs, 5, 'le total éducateurs reste distinct dans le PDF');
+  const pdf = await contexte.creerPdfSuiviRestauration(donnees, Object.assign({
+    tournoi_nom: 'Démo Racing', tournoi_date: '2026-10-03'
+  }, contexte.configCourante.global));
+  vrai(pdf.length > 1000 && String.fromCharCode.apply(null, Array.from(pdf.slice(0, 4))) === '%PDF',
+    'le document généré est un vrai PDF non vide');
+  egal(posts.length, 0, 'générer le PDF ne déclenche aucune écriture réseau');
+  const ancienClub = { club_nom: 'Ancien', statut: 'Accepté',
+    detail_effectifs: JSON.stringify({ U8: [{ j: 8, e: 2 }, { j: 9, e: 1 }] }) };
+  const ancien = contexte.suiviDonneesRestauration([ancienClub], contexte.configCourante.global);
+  egal(ancien.totaux.repas.total, 20, 'le détail par équipe sert de repli aux anciennes réponses');
+  const aucun = contexte.suiviDonneesRestauration([clubs[0], clubs[3]], contexte.configCourante.global);
+  egal(aucun.lignes.length, 0, 'un club en attente ou absent ne gonfle jamais les quantités à préparer');
+  contexte.configCourante.global.repas_sur_place_mode = 'prix_personne';
+  contexte.configCourante.global.gouter_fin_tournoi_mode = 'prix_personne';
 
   contexte.afficherSuiviClubs();
   vrai(dom['suivi-clubs-resume'].innerHTML.includes('Réponses attendues') &&
@@ -110,6 +139,8 @@ async function principal() {
   const html = lire('admin.html');
   vrai(html.includes('id="bloc-suivi-clubs"') && html.includes('js/admin-suivi-clubs.js'),
     'le nouvel onglet et son module sont chargés par la page admin');
+  vrai(html.includes('id="bouton-pdf-suivi-restauration"'),
+    'le suivi propose le téléchargement du récapitulatif restauration');
   const ecrans = lire('js/ecrans.js');
   vrai(ecrans.includes("id: 'suivi-clubs'") && ecrans.indexOf("id: 'invitation'") < ecrans.indexOf("id: 'suivi-clubs'"),
     'Suivi des clubs est placé juste après Inviter un club');

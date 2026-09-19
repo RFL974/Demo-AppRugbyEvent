@@ -5,9 +5,15 @@
 
 let suiviClubsFiltre = 'tous';
 
+function suiviClubDetail(club) {
+  try {
+    const detail = JSON.parse(String((club && club.detail_effectifs) || '{}')) || {};
+    return detail && typeof detail === 'object' && !Array.isArray(detail) ? detail : {};
+  } catch (e) { return {}; }
+}
+
 function suiviClubCommande(club) {
-  let detail = {};
-  try { detail = JSON.parse(String((club && club.detail_effectifs) || '{}')) || {}; } catch (e) { detail = {}; }
+  const detail = suiviClubDetail(club);
   const commande = detail._restauration && typeof detail._restauration === 'object'
     ? detail._restauration : {};
   function prestation(nom) {
@@ -20,6 +26,205 @@ function suiviClubCommande(club) {
   const total = Number(String(commande.total == null ? '' : commande.total).replace(',', '.'));
   return { repas: prestation('repas'), gouter: prestation('gouter'),
     total: Number.isFinite(total) ? Math.max(0, total) : 0 };
+}
+
+function suiviEntierPositif(valeur) {
+  const n = parseInt(valeur, 10);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** Effectifs annoncés, avec repli sur le détail des équipes pour les anciennes réponses. */
+function suiviClubEffectifs(club) {
+  const detail = suiviClubDetail(club);
+  let joueursDetail = 0, educateursDetail = 0;
+  Object.keys(detail).forEach(function (categorie) {
+    if (categorie === '_restauration' || !Array.isArray(detail[categorie])) return;
+    detail[categorie].forEach(function (equipe) {
+      joueursDetail += Math.max(0, Number(equipe && equipe.j) || 0);
+      educateursDetail += Math.max(0, Number(equipe && equipe.e) || 0);
+    });
+  });
+  const joueurs = suiviEntierPositif(club && club.nb_joueurs_total);
+  const educateurs = suiviEntierPositif(club && club.nb_educateurs_total);
+  return {
+    joueurs: joueurs == null ? joueursDetail : joueurs,
+    educateurs: educateurs == null ? educateursDetail : educateurs
+  };
+}
+
+function suiviPrestationReglage(type, global) {
+  const actif = type === 'repas' ? estOui(global.repas_sur_place_oui) : estOui(global.gouter_fin_tournoi_oui);
+  const mode = String(type === 'repas' ? global.repas_sur_place_mode : global.gouter_fin_tournoi_mode).trim();
+  const libelles = {
+    prix_personne: 'Commandes payantes',
+    compris_inscription: 'Compris dans l\'inscription',
+    offert_organisateur: 'Offert par l\'organisateur'
+  };
+  return { actif: actif, mode: mode, libelle: actif ? (libelles[mode] || 'Commandes déclarées') : 'Non proposé' };
+}
+
+/** Données figées du PDF : aucun appel réseau et aucune écriture métier. */
+function suiviDonneesRestauration(clubs, global) {
+  const g = global || {};
+  const reglages = {
+    repas: suiviPrestationReglage('repas', g),
+    gouter: suiviPrestationReglage('gouter', g)
+  };
+  const lignes = (clubs || []).filter(function (club) { return estAccepte(club.statut); })
+    .map(function (club) {
+      const effectifs = suiviClubEffectifs(club);
+      const commande = suiviClubCommande(club);
+      function quantites(type) {
+        const reglage = reglages[type];
+        if (!reglage.actif) return { joueurs: 0, educateurs: 0, total: 0 };
+        const q = (reglage.mode === 'compris_inscription' || reglage.mode === 'offert_organisateur')
+          ? effectifs : commande[type];
+        return { joueurs: q.joueurs, educateurs: q.educateurs, total: q.joueurs + q.educateurs };
+      }
+      return {
+        club: String(club.club_nom || 'Club sans nom').trim() || 'Club sans nom',
+        effectifs: effectifs, repas: quantites('repas'), gouter: quantites('gouter')
+      };
+    }).sort(function (a, b) { return a.club.localeCompare(b.club, 'fr'); });
+  const totaux = lignes.reduce(function (acc, ligne) {
+    ['repas', 'gouter'].forEach(function (type) {
+      acc[type].joueurs += ligne[type].joueurs;
+      acc[type].educateurs += ligne[type].educateurs;
+      acc[type].total += ligne[type].total;
+    });
+    return acc;
+  }, { repas: { joueurs: 0, educateurs: 0, total: 0 }, gouter: { joueurs: 0, educateurs: 0, total: 0 } });
+  return { lignes: lignes, totaux: totaux, reglages: reglages };
+}
+
+function suiviPdfTexte(texte) {
+  return String(texte == null ? '' : texte)
+    .replace(/[\u00a0\u202f]/g, ' ').replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u2013\u2014]/g, '-').replace(/\u0153/g, 'oe').replace(/\u0152/g, 'OE')
+    .replace(/[^\x20-\x7E\u00A1-\u00FF]/g, '');
+}
+
+function suiviPdfTronquer(texte, police, taille, largeur) {
+  let s = suiviPdfTexte(texte);
+  if (police.widthOfTextAtSize(s, taille) <= largeur) return s;
+  while (s.length > 1 && police.widthOfTextAtSize(s + '...', taille) > largeur) s = s.slice(0, -1);
+  return s + '...';
+}
+
+/** Crée le document PDF et renvoie ses octets, afin de pouvoir tester le rendu sans téléchargement. */
+async function creerPdfSuiviRestauration(donnees, global) {
+  const doc = await PDFLib.PDFDocument.create();
+  const normal = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+  const gras = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+  const bleu = PDFLib.rgb(0.08, 0.22, 0.38);
+  const accent = PDFLib.rgb(0.18, 0.56, 0.88);
+  const pale = PDFLib.rgb(0.94, 0.97, 0.99);
+  const gris = PDFLib.rgb(0.38, 0.44, 0.52);
+  const trait = PDFLib.rgb(0.82, 0.86, 0.91);
+  const noir = PDFLib.rgb(0.08, 0.11, 0.16);
+  const LARGEUR = 842, HAUTEUR = 595, MARGE = 36;
+  const colonnes = [
+    { titre: 'Club', w: 190, cle: 'club' }, { titre: 'Joueurs', w: 54, cle: 'joueurs' },
+    { titre: 'Éduc.', w: 54, cle: 'educateurs' }, { titre: 'Repas J.', w: 62, cle: 'repasJ' },
+    { titre: 'Repas E.', w: 62, cle: 'repasE' }, { titre: 'Repas', w: 62, cle: 'repas' },
+    { titre: 'Goûters J.', w: 66, cle: 'gouterJ' }, { titre: 'Goûters E.', w: 66, cle: 'gouterE' },
+    { titre: 'Goûters', w: 64, cle: 'gouter' }
+  ];
+  const g = global || {};
+  const nomTournoi = String(g.tournoi_nom || 'Tournoi').trim() || 'Tournoi';
+  const dateTournoi = suiviDate(g.tournoi_date || '');
+  let page, y;
+
+  function ajouterEntete(premiere) {
+    page = doc.addPage([LARGEUR, HAUTEUR]);
+    y = HAUTEUR - MARGE;
+    if (premiere) {
+      page.drawText('Préparation des repas et goûters', { x: MARGE, y: y, size: 20, font: gras, color: bleu });
+      y -= 25;
+      page.drawText(suiviPdfTronquer(nomTournoi + (dateTournoi ? ' - ' + dateTournoi : ''), normal, 11, 500),
+        { x: MARGE, y: y, size: 11, font: normal, color: noir });
+      y -= 19;
+      page.drawText('Repas : ' + suiviPdfTexte(donnees.reglages.repas.libelle) + '   |   Goûters : ' +
+        suiviPdfTexte(donnees.reglages.gouter.libelle), { x: MARGE, y: y, size: 9.5, font: normal, color: gris });
+      y -= 27;
+    } else {
+      page.drawText('Préparation des repas et goûters - suite', { x: MARGE, y: y, size: 13, font: gras, color: bleu });
+      y -= 24;
+    }
+    page.drawRectangle({ x: MARGE, y: y - 7, width: LARGEUR - 2 * MARGE, height: 24, color: pale });
+    let x = MARGE + 5;
+    colonnes.forEach(function (colonne) {
+      page.drawText(colonne.titre, { x: x, y: y, size: 8.5, font: gras, color: bleu });
+      x += colonne.w;
+    });
+    y -= 17;
+  }
+
+  ajouterEntete(true);
+  donnees.lignes.forEach(function (ligne) {
+    if (y < 94) ajouterEntete(false);
+    const valeurs = {
+      club: ligne.club, joueurs: ligne.effectifs.joueurs, educateurs: ligne.effectifs.educateurs,
+      repasJ: ligne.repas.joueurs, repasE: ligne.repas.educateurs, repas: ligne.repas.total,
+      gouterJ: ligne.gouter.joueurs, gouterE: ligne.gouter.educateurs, gouter: ligne.gouter.total
+    };
+    let x = MARGE + 5;
+    colonnes.forEach(function (colonne) {
+      const total = colonne.cle === 'repas' || colonne.cle === 'gouter';
+      page.drawText(suiviPdfTronquer(valeurs[colonne.cle], total ? gras : normal, 9, colonne.w - 8), {
+        x: x, y: y, size: 9, font: total ? gras : normal, color: noir
+      });
+      x += colonne.w;
+    });
+    y -= 9;
+    page.drawLine({ start: { x: MARGE, y: y }, end: { x: LARGEUR - MARGE, y: y }, thickness: 0.5, color: trait });
+    y -= 13;
+  });
+
+  if (y < 92) ajouterEntete(false);
+  y -= 4;
+  const largeurCarte = 238;
+  [
+    { x: MARGE, titre: 'TOTAL REPAS À PRÉPARER', q: donnees.totaux.repas },
+    { x: MARGE + largeurCarte + 16, titre: 'TOTAL GOÛTERS À PRÉPARER', q: donnees.totaux.gouter }
+  ].forEach(function (carte) {
+    page.drawRectangle({ x: carte.x, y: y - 49, width: largeurCarte, height: 58, color: pale,
+      borderColor: accent, borderWidth: 1 });
+    page.drawText(carte.titre, { x: carte.x + 12, y: y - 9, size: 8.5, font: gras, color: bleu });
+    page.drawText(String(carte.q.total), { x: carte.x + 12, y: y - 36, size: 21, font: gras, color: accent });
+    page.drawText(carte.q.joueurs + ' joueurs + ' + carte.q.educateurs + ' éducateurs',
+      { x: carte.x + 52, y: y - 33, size: 8.5, font: normal, color: gris });
+  });
+  page.drawText('Document généré depuis le suivi des clubs - seuls les clubs participants sont comptés.',
+    { x: MARGE, y: 24, size: 8, font: normal, color: gris });
+  return doc.save();
+}
+
+async function onTelechargerPdfSuiviRestauration() {
+  const message = document.getElementById('message-suivi-clubs');
+  const bouton = document.getElementById('bouton-pdf-suivi-restauration');
+  const g = (configCourante && configCourante.global) || {};
+  const donnees = suiviDonneesRestauration(clubsInvitesCourants || [], g);
+  if (!donnees.lignes.length) {
+    afficherMessage(message, 'Aucun club participant à inclure dans le PDF.', 'ko');
+    return;
+  }
+  if (typeof PDFLib === 'undefined') {
+    afficherMessage(message, '⚠️ Bibliothèque PDF indisponible.', 'ko');
+    return;
+  }
+  await avecBoutonOccupe(bouton, message, async function () {
+    const octets = await creerPdfSuiviRestauration(donnees, g);
+    const date = String(g.tournoi_date || '').trim() || 'tournoi';
+    const lien = document.createElement('a');
+    lien.href = URL.createObjectURL(new Blob([octets], { type: 'application/pdf' }));
+    lien.download = 'suivi-repas-gouters-' + date.replace(/[^0-9A-Za-z_-]+/g, '-') + '.pdf';
+    document.body.appendChild(lien);
+    lien.click();
+    setTimeout(function () { URL.revokeObjectURL(lien.href); lien.remove(); }, 2000);
+    afficherMessage(message, '✅ PDF téléchargé : ' + donnees.totaux.repas.total + ' repas et ' +
+      donnees.totaux.gouter.total + ' goûters à préparer.', 'ok');
+  }, 'Génération du PDF…');
 }
 
 function suiviClubEtat(club) {
@@ -227,6 +432,11 @@ async function suiviRenvoyerConfirmation(nom) {
 }
 
 document.addEventListener('click', function (event) {
+  if (event.target.closest('#bouton-pdf-suivi-restauration')) {
+    event.preventDefault();
+    onTelechargerPdfSuiviRestauration();
+    return;
+  }
   const filtre = event.target.closest('[data-filtre]');
   if (filtre && (filtre.closest('#suivi-clubs-resume') || filtre.closest('#suivi-clubs-filtres'))) {
     suiviClubsFiltre = filtre.getAttribute('data-filtre') || 'tous';
