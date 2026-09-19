@@ -275,10 +275,12 @@ function banc(opt) {
   const adresse = o.adresse || 'http://127.0.0.1:8080/admin.html';
 
   const doc = { injections: [], elements: {} };
-  const ids = o.sansBloc ? [] : ['acces-saisie', 'acces-saisie-lien', 'acces-saisie-url', 'acces-saisie-qr',
-    'acces-saisie-corps', 'acces-saisie-etat', 'acces-saisie-actions', 'acces-saisie-avertissement',
+  const ids = o.sansBloc ? [] : ['acces-saisie', 'acces-saisie-lien', 'acces-saisie-qr',
+    'acces-saisie-corps', 'acces-saisie-etat', 'acces-saisie-actions', 'acces-saisie-actions-suite',
+    'acces-saisie-cloture', 'bouton-copier-qr-saisie', 'acces-saisie-avertissement',
     'message-acces-saisie', 'bouton-litige-charger', 'bouton-litige-corriger', 'litige-match', 'litige-formulaire'];
   ids.forEach(function (id) { doc.elements[id] = fabriquerElement(id, doc); });
+  if (doc.elements['acces-saisie-cloture']) doc.elements['acces-saisie-cloture'].hidden = true;
 
   const document = {
     getElementById: function (id) { return doc.elements[id] || null; }
@@ -452,10 +454,11 @@ function controlesPresence(html, prefixe, compter) {
     section !== '' && section.indexOf('id="acces-saisie"') !== -1,
     'le bloc existe mais hors de l\'étape prévue : il serait inatteignable le jour J');
 
-  dire(prefixe + '.3', 'il porte un lien `<a>` avec un `href` (focusable au clavier), sans adresse écrite en dur (5R : le serveur la rend)',
-    /<a\b[^>]*id="acces-saisie-lien"[^>]*href="#"/.test(acces) ||
-    /<a\b[^>]*href="#"[^>]*id="acces-saisie-lien"/.test(acces),
-    'sans `href`, un `<a>` n\'est ni atteignable par Tab ; une adresse en dur serait l\'ancien lien générique');
+  dire(prefixe + '.3', 'il porte un bouton-lien focusable, sans afficher l\'adresse temporaire en clair',
+    (/<a\b[^>]*id="acces-saisie-lien"[^>]*href="#"/.test(acces) ||
+      /<a\b[^>]*href="#"[^>]*id="acces-saisie-lien"/.test(acces)) &&
+    !/id="acces-saisie-url"/.test(acces),
+    'le bouton doit rester atteignable par Tab et l\'URL brute ne doit pas être rendue');
 
   dire(prefixe + '.4', 'il porte un conteneur de QR code dédié `#acces-saisie-qr`',
     /id="acces-saisie-qr"/.test(acces), 'pas de QR : le lot n\'est pas rendu');
@@ -570,9 +573,10 @@ function sectionO() {
     /Connecte-toi/.test(b.el('acces-saisie-etat').textContent), b.el('acces-saisie-etat').textContent);
 
   b.ctx.afficherLienAccesScores(LIEN_FICTIF);
-  verifier('O.4', 'un lien rendu par le serveur est affiché tel quel, et le QR encode EXACTEMENT ce lien',
-    b.el('acces-saisie-corps').hidden === false && b.el('acces-saisie-lien').href === LIEN_FICTIF &&
-    b.el('acces-saisie-url').textContent === LIEN_FICTIF && b.qrDonnees.length === 1 && b.qrDonnees[0] === LIEN_FICTIF,
+  verifier('O.4', 'un lien rendu par le serveur alimente le bouton, et le QR encode EXACTEMENT ce lien',
+    b.el('acces-saisie-corps').hidden === false && b.el('acces-saisie-lien').hidden === false &&
+    b.el('acces-saisie-lien').href === LIEN_FICTIF &&
+    b.qrDonnees.length === 1 && b.qrDonnees[0] === LIEN_FICTIF,
     'encodé : ' + b.qrDonnees.join(' | '));
   b.ctx.afficherLienAccesScores(LIEN_FICTIF);
   verifier('O.5', 'réafficher le même lien ne redessine ni ne réencode rien (idempotent)',
@@ -581,15 +585,16 @@ function sectionO() {
   verifier('O.6', 'le SVG injecté ne contient ni script ni ressource distante',
     !/<script|https?:\/\/|url\s*\(|@import|\ssrc=|\shref=/i.test(svg));
   const INTERDITS = ['cle', 'clé', 'key', 'password', CLE_FACTICE_SCORES, CLE_FACTICE_ADMIN, 'r92_cle_scores', 'r92_cle_admin'];
-  const matiere = [b.el('acces-saisie-lien').href, b.el('acces-saisie-url').textContent, b.qrDonnees[0] || '',
+  const matiere = [b.el('acces-saisie-lien').href, b.qrDonnees[0] || '',
     JSON.stringify(b.el('acces-saisie-qr').attributs)].join(' ').toLowerCase();
-  verifier('O.7', 'ni le lien, ni l\'adresse écrite, ni le QR ne contiennent de clé ou de valeur de stockage',
+  verifier('O.7', 'ni le bouton-lien, ni le QR ne contiennent de clé ou de valeur de stockage',
     INTERDITS.every(function (mot) { return matiere.indexOf(mot.toLowerCase()) === -1; }));
 
   b.ctx.afficherLienAccesScores('');
-  verifier('O.8', 'lien retiré (accès clôturé, session verrouillée) : lien, adresse écrite et QR disparaissent',
-    b.el('acces-saisie-corps').hidden === true && b.el('acces-saisie-lien').href === '#' &&
-    b.el('acces-saisie-url').textContent === '' && b.el('acces-saisie-qr').enfants.length === 0);
+  verifier('O.8', 'lien retiré (accès clôturé, session verrouillée) : bouton et QR disparaissent',
+    b.el('acces-saisie-corps').hidden === true && b.el('acces-saisie-lien').hidden === true &&
+    b.el('acces-saisie-lien').href === '#' &&
+    b.el('acces-saisie-qr').enfants.length === 0);
   b.ctx.afficherLienAccesScores('http://exemple.invalid/non-chiffre');
   b.ctx.afficherLienAccesScores('javascript:alert(1)');
   verifier('O.9', 'une adresse qui n\'est pas https n\'est JAMAIS affichée ni encodée',
@@ -625,8 +630,9 @@ function section7(acces) {
   const balise = /<a\b[^>]*id="acces-saisie-lien"[^>]*>/.exec(acces);
   const a = balise ? balise[0] : '';
 
-  verifier('7.1', 'le lien n\'est ni `hidden` ni `aria-hidden` ni retiré du parcours de tabulation',
-    a !== '' && !/\bhidden\b/.test(a) && !/aria-hidden/.test(a) && !/tabindex\s*=\s*"-1"/.test(a),
+  verifier('7.1', 'le bouton-lien démarre masqué, puis le code le rend focalisable uniquement avec une adresse valide',
+    a !== '' && /\bhidden\b/.test(a) && !/aria-hidden/.test(a) && !/tabindex\s*=\s*"-1"/.test(a) &&
+    /lien\.hidden = !valide/.test(SRC_AFFICHER),
     'balise lue : ' + a);
   verifier('7.2', 'le bloc qui le contient n\'est ni `hidden` ni `aria-hidden`',
     !/<div class="publication-acces acces-saisie" id="acces-saisie"[^>]*(hidden|aria-hidden)/.test(acces),
@@ -634,10 +640,9 @@ function section7(acces) {
   /* ⚠️ Compté sur le MARQUAGE seul : les commentaires du HTML expliquent justement pourquoi
      `aria-hidden` est là, et les compter reviendrait à se faire piéger par sa propre note. */
   const marquage = acces.replace(/<!--[\s\S]*?-->/g, '');
-  verifier('7.3', '`aria-hidden` n\'est posé QUE sur l\'image du QR (redite décorative de l\'adresse)',
-    (marquage.match(/aria-hidden/g) || []).length === 1 &&
-    /id="acces-saisie-qr"[^>]*aria-hidden="true"|aria-hidden="true"[^>]*id="acces-saisie-qr"/.test(marquage),
-    'compté ' + (marquage.match(/aria-hidden/g) || []).length + ' occurrences dans le marquage');
+  verifier('7.3', 'le conteneur du QR n\'est pas masqué à l\'accessibilité : son bouton Copier reste utilisable',
+    !/id="acces-saisie-qr"[^>]*aria-hidden/.test(marquage) && /id="bouton-copier-qr-saisie"/.test(marquage),
+    'le bouton de copie ne doit jamais être placé sous aria-hidden');
   verifier('7.4', 'le lien s\'ouvre dans un nouvel onglet SANS lien de contexte (rel="noopener…")',
     /target="_blank"/.test(a) && /rel="noopener[^"]*"/.test(a), 'balise lue : ' + a);
 
@@ -651,13 +656,13 @@ function section7(acces) {
     /flex-wrap:\s*wrap/.test(regle('.acces-saisie-corps')), 'sans repli, l\'adresse serait écrasée');
   verifier('7.6', 'la colonne de texte peut rétrécir sans déborder (`min-width: 0`)',
     /min-width:\s*0/.test(regle('.acces-saisie-texte')), 'une colonne flex déborde sans cette règle');
-  verifier('7.7', 'l\'adresse se coupe plutôt que de déborder (règle `.publication-acces-url` réutilisée)',
-    /overflow-wrap:\s*anywhere/.test(regle('.publication-acces-url')) &&
-    /class="publication-acces-url"/.test(acces), 'l\'adresse est longue : elle doit se couper');
+  verifier('7.7', 'aucune adresse temporaire en clair ne peut déborder sur téléphone',
+    !/class="publication-acces-url"/.test(acces) && !/id="acces-saisie-url"/.test(acces),
+    'la carte de saisie doit montrer uniquement le bouton et le QR');
   verifier('7.8', 'le QR est dessiné sur fond clair (sinon il ne se scanne pas)',
-    /background:\s*#fff/.test(regle('.acces-saisie-qr svg')), 'un QR sombre sur sombre est illisible');
+    /background:\s*#fff/.test(regle('.acces-qr svg')), 'un QR sombre sur sombre est illisible');
   verifier('7.9', 'le QR ne dépasse jamais la largeur de la carte (`max-width: 100%`)',
-    /max-width:\s*100%/.test(regle('.acces-saisie-qr')), 'débordement horizontal sur téléphone');
+    /max-width:\s*100%/.test(regle('.acces-qr')), 'débordement horizontal sur téléphone');
 }
 
 /* ========================================================================== */
@@ -1159,11 +1164,11 @@ function sectionZ() {
     'échecs simulés : ' + controlesPresence.echecsSimules + ' — § 1 ne prouverait rien');
 
   /* Z2 — 5R : mutant « une clé glissée dans le lien affiché ». O.7 doit le voir. */
-  const MUT_AFF = substituer(SRC_AFFICHER.slice(0, -1), "if (lien) lien.href = valide ? url : '#';",
-    "if (lien) lien.href = valide ? url + '&cle=' + 'CLE-FACTICE-5E-scores-jamais-reelle' : '#';", 'mutant clé dans le lien');
+  const MUT_AFF = substituer(SRC_AFFICHER.slice(0, -1), "lien.href = valide ? url : '#';",
+    "lien.href = valide ? url + '&cle=' + 'CLE-FACTICE-5E-scores-jamais-reelle' : '#';", 'mutant clé dans le lien');
   const b2 = banc({ sourceAfficher: MUT_AFF });
   b2.ctx.afficherLienAccesScores(LIEN_FICTIF);
-  const vu2 = (b2.el('acces-saisie-lien').href + ' ' + b2.el('acces-saisie-url').textContent).toLowerCase();
+  const vu2 = b2.el('acces-saisie-lien').href.toLowerCase();
   verifier('Z.2', 'mutant « clé dans le lien » : le contrôle O.7 (aucune clé) le détecte',
     MUT_AFF !== SRC_AFFICHER.slice(0, -1) && vu2.indexOf('cle') !== -1 && b2.el('acces-saisie-lien').href !== LIEN_FICTIF,
     'le mutant n\'a pas été vu : O.7 ne prouve rien');

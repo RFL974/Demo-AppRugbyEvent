@@ -167,14 +167,21 @@ function bancAdmin(options) {
   vm.runInContext(lire('js/commun.js'), ctx, { filename: 'js/commun.js' });
   vm.runInContext(lire('js/api.js'), ctx, { filename: 'js/api.js' });
   const zone = dom.ajouter('acces-saisie');
-  ['acces-saisie-etat', 'acces-saisie-avertissement', 'acces-saisie-actions', 'message-acces-saisie',
+  ['acces-saisie-etat', 'acces-saisie-avertissement', 'acces-saisie-actions', 'acces-saisie-actions-suite',
+   'message-acces-saisie',
    'bouton-litige-charger', 'bouton-litige-corriger', 'litige-match', 'litige-formulaire', 'message-litige']
     .forEach((id) => dom.ajouter(id, id === 'litige-match' ? 'select' : 'div', zone));
+  const lien = dom.ajouter('acces-saisie-lien', 'a', zone);
+  lien.href = '#';
+  lien.hidden = true;
   const corps = dom.ajouter('acces-saisie-corps', 'div', zone);
   corps.hidden = true;
-  dom.ajouter('acces-saisie-lien', 'a', corps).href = '#';
-  dom.ajouter('acces-saisie-url', 'span', corps);
+  const cloture = dom.ajouter('acces-saisie-cloture', 'button', corps);
+  cloture.hidden = true;
+  cloture.textContent = 'Clôturer définitivement';
+  cloture.setAttribute('data-geste-acces', 'CLOTURER');
   dom.ajouter('acces-saisie-qr', 'div', corps);
+  dom.ajouter('bouton-copier-qr-saisie', 'button', corps);
   vm.runInContext(lire('js/vendor/qrcode.js'), ctx, { filename: 'js/vendor/qrcode.js' });
   ctx.__espionQr = (v) => qrDonnees.push(String(v));
   vm.runInContext('var __qrReel = qrcode; qrcode = function (t, n) { var q = __qrReel(t, n); var a = q.addData; ' +
@@ -188,7 +195,8 @@ function bancAdmin(options) {
     etiquette: () => el('acces-saisie-etat').textContent,
     avert: () => el('acces-saisie-avertissement').textContent,
     classeAvert: () => el('acces-saisie-avertissement').className,
-    gestes: () => el('acces-saisie-actions').querySelectorAll('button').map((b) => b.getAttribute('data-geste-acces'))
+    gestes: () => zone.querySelectorAll('[data-geste-acces]').filter((b) => !b.hidden)
+      .map((b) => b.getAttribute('data-geste-acces'))
   };
 }
 
@@ -271,7 +279,8 @@ function serveur(nom, apres) {
 async function clicGeste(nom, apres, action, dialogues, o) {
   const b = bancAdmin(Object.assign({ serveur: serveur(nom, apres), dialogues: dialogues || [] }, o));
   await b.ctx.chargerAccesScores();
-  const bouton = b.el('acces-saisie-actions').querySelectorAll('button').find((x) => x.getAttribute('data-geste-acces') === action);
+  const bouton = b.el('acces-saisie').querySelectorAll('[data-geste-acces]')
+    .find((x) => !x.hidden && x.getAttribute('data-geste-acces') === action);
   if (bouton) await b.ctx.onClicGesteAccesScores({ target: bouton });
   b.bouton = bouton;
   return b;
@@ -297,7 +306,8 @@ async function sectionsPrincipales(sourcePub) {
   const ferme = await vue('fermeAuto', o);
   r.fermeLibelle = /^Fermé automatiquement/.test(ferme.etiquette()) && /« Reprendre la saisie » rouvre 45 minutes avec le même lien/.test(ferme.etiquette()) &&
     /« Mettre en pause » la garde fermée/.test(ferme.etiquette());
-  const boutonDe = (b, a) => b.el('acces-saisie-actions').querySelectorAll('button').find((x) => x.getAttribute('data-geste-acces') === a);
+  const boutonDe = (b, a) => b.el('acces-saisie').querySelectorAll('[data-geste-acces]')
+    .find((x) => !x.hidden && x.getAttribute('data-geste-acces') === a);
   r.fermeGestes = JSON.stringify(ferme.gestes().sort()) === '["CLOTURER","FIGER","REPRENDRE","ROTATION"]' &&
     boutonDe(ferme, 'REPRENDRE').textContent === 'Reprendre la saisie' && boutonDe(ferme, 'FIGER').textContent === 'Mettre en pause';
   r.fermeTexte = ferme.avert().indexOf('⏱️ Saisie fermée automatiquement le 10/10 à 17:35 (45 minutes après la fin prévue du dernier match, le 10/10 à 16:50).') !== -1 &&
@@ -355,7 +365,8 @@ async function sectionsPrincipales(sourcePub) {
 
   const clic = bancAdmin(Object.assign({ serveur: serveur('fermeAuto', 'reprise') }, o));
   await clic.ctx.chargerAccesScores();
-  const bouton = clic.el('acces-saisie-actions').querySelectorAll('button').find((b) => b.getAttribute('data-geste-acces') === 'REPRENDRE');
+  const bouton = clic.el('acces-saisie').querySelectorAll('[data-geste-acces]')
+    .find((b) => !b.hidden && b.getAttribute('data-geste-acces') === 'REPRENDRE');
   if (bouton) await clic.ctx.onClicGesteAccesScores({ target: bouton });
   const envoi = clic.requetes.find((q) => q.corps.action === 'changerAccesScores');
   r.reprendre = !!bouton && clic.dialogues.length === 0 && !!envoi && envoi.corps.transition === 'REPRENDRE' && envoi.corps.version_lue === '2' &&

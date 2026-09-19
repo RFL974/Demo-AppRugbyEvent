@@ -256,20 +256,28 @@ function bancAdmin(options) {
   const b = contexte({ serveur: o.serveur, dialogues: o.dialogues, session: o.sansCle ? {} : { r92_cle_admin: CLE_ADMIN_FICTIVE } });
   const d = b.dom;
   const bloc5r = d.ajouter('acces-saisie');
-  ['acces-saisie-etat', 'acces-saisie-avertissement', 'acces-saisie-actions', 'message-acces-saisie',
+  ['acces-saisie-etat', 'acces-saisie-avertissement', 'acces-saisie-actions', 'acces-saisie-actions-suite',
+   'message-acces-saisie',
    'bouton-litige-charger', 'bouton-litige-corriger', 'litige-match', 'litige-formulaire', 'litige-lib-a', 'litige-lib-b',
    'litige-score-a', 'litige-score-b', 'litige-motif', 'message-litige'].forEach((id) => d.ajouter(id, id === 'litige-match' ? 'select' : 'div', bloc5r));
+  const lien = d.ajouter('acces-saisie-lien', 'a', bloc5r);
+  lien.href = '#';
+  lien.hidden = true;
   const corps = d.ajouter('acces-saisie-corps', 'div', bloc5r);
   corps.hidden = true;
-  d.ajouter('acces-saisie-lien', 'a', corps).href = '#';
-  d.ajouter('acces-saisie-url', 'span', corps);
+  const cloture = d.ajouter('acces-saisie-cloture', 'button', corps);
+  cloture.hidden = true;
+  cloture.textContent = 'Clôturer définitivement';
+  cloture.setAttribute('data-geste-acces', 'CLOTURER');
   d.ajouter('acces-saisie-qr', 'div', corps);
+  d.ajouter('bouton-copier-qr-saisie', 'button', corps);
   vm.runInContext(lire('js/vendor/qrcode.js'), b.ctx, { filename: 'js/vendor/qrcode.js' });
   b.ctx.__espionQr = (v) => b.qrDonnees.push(String(v));
   vm.runInContext('var __qrReel = qrcode; qrcode = function (t, n) { var q = __qrReel(t, n); var a = q.addData; ' +
     'q.addData = function (v) { __espionQr(v); return a.apply(q, arguments); }; return q; };', b.ctx);
   vm.runInContext(bloc(lire('js/admin.js'), 'async function ecrireAdmin('), b.ctx, { filename: 'js/admin.js (ecrireAdmin)' });
   vm.runInContext(o.sourcePub || lire('js/admin-infos-publication.js'), b.ctx, { filename: 'js/admin-infos-publication.js' });
+  b.gestes = () => bloc5r.querySelectorAll('[data-geste-acces]');
   return b;
 }
 
@@ -306,7 +314,7 @@ async function section2() {
     const b = bancAdmin({ serveur: serveurAdmin(etat) });
     b.ctx.majAccesSaisie();
     await b.ctx.chargerAccesScores();
-    const boutons = b.el('acces-saisie-actions').querySelectorAll('button');
+    const boutons = b.gestes().filter((x) => !x.hidden);
     const gestes = boutons.map((x) => x.getAttribute('data-geste-acces')).sort();
     const attendus = ETATS[etat].actions_possibles.slice().sort();
     const avecLien = !!ETATS[etat].lien;
@@ -322,22 +330,23 @@ async function section2() {
   await bO.ctx.chargerAccesScores();
   verifier('2.4', 'l\'avertissement du calcul de fin est affiché, et la pause reste proposée',
     /matchs ne sont pas terminés/.test(bO.el('acces-saisie-avertissement').textContent) &&
-    bO.el('acces-saisie-actions').querySelectorAll('button').some((x) => x.getAttribute('data-geste-acces') === 'FIGER'));
+    bO.gestes().some((x) => !x.hidden && x.getAttribute('data-geste-acces') === 'FIGER'));
   verifier('2.5', 'ni le lien, ni le QR, ni l\'écran ne portent la clé admin ou scores',
-    [bO.el('acces-saisie-lien').href, bO.el('acces-saisie-url').textContent, bO.qrDonnees.join(' ')].join(' ')
+    [bO.el('acces-saisie-lien').href, bO.qrDonnees.join(' ')].join(' ')
       .indexOf('CLE-') === -1);
   const indispo = bancAdmin({ serveur: (c) => (c.action === 'getAccesScoresAdmin'
     ? Object.assign({}, ETATS.OUVERT, { lien: undefined, lien_indisponible: true, lien_motif: 'RECUPERATION_IMPOSSIBLE' }) : {}) });
   await indispo.ctx.chargerAccesScores();
-  verifier('2.6', 'lien non récupérable : pas de lien, pas de QR, et l\'écran propose de le renouveler',
-    indispo.el('acces-saisie-corps').hidden === true && indispo.qrDonnees.length === 0 &&
+  verifier('2.6', 'lien non récupérable : pas de bouton d\'accès ni QR, la clôture reste disponible et l\'écran propose de renouveler',
+    indispo.el('acces-saisie-corps').hidden === false && indispo.el('acces-saisie-lien').hidden === true &&
+    indispo.el('acces-saisie-qr').hidden === true && !indispo.el('acces-saisie-cloture').hidden && indispo.qrDonnees.length === 0 &&
     /Renouvelle-le/.test(indispo.el('acces-saisie-avertissement').textContent));
 
   /* Les gestes et leurs confirmations. */
   async function geste(etat, action, dialogues, extra) {
     const b = bancAdmin({ serveur: serveurAdmin(etat, extra), dialogues: dialogues });
     await b.ctx.chargerAccesScores();
-    const bouton = b.el('acces-saisie-actions').querySelectorAll('button').find((x) => x.getAttribute('data-geste-acces') === action);
+    const bouton = b.gestes().find((x) => !x.hidden && x.getAttribute('data-geste-acces') === action);
     await b.ctx.onClicGesteAccesScores({ target: bouton });
     return b;
   }
@@ -363,8 +372,8 @@ async function section2() {
     return { error: 'Action inattendue : ' + c.action };
   } });
   await rot404.ctx.chargerAccesScores();
-  await rot404.ctx.onClicGesteAccesScores({ target: rot404.el('acces-saisie-actions').querySelectorAll('button')
-    .find((x) => x.getAttribute('data-geste-acces') === 'ROTATION') });
+  await rot404.ctx.onClicGesteAccesScores({ target: rot404.gestes()
+    .find((x) => !x.hidden && x.getAttribute('data-geste-acces') === 'ROTATION') });
   verifier('2.8.1', 'ROTATION appliquée mais réponse 404 perdue : aucune seconde écriture ; la relecture exacte confirme le nouveau lien et le QR',
     JSON.stringify(rot404.actions()) === '["getAccesScoresAdmin","changerAccesScores","getAccesScoresAdmin"]' &&
     /Lien et QR code renouvelés/.test(rot404.el('message-acces-saisie').textContent) &&
@@ -384,7 +393,7 @@ async function section2() {
     ? Object.assign({}, ETATS.OUVERT, { fin: { suggestion: 'GEL_POSSIBLE' }, gel: { decision: 'GEL_DIRECT' } })
     : serveurAdmin('OUVERT')(c)) });
   await direct.ctx.chargerAccesScores();
-  await direct.ctx.onClicGesteAccesScores({ target: direct.el('acces-saisie-actions').querySelectorAll('button').find((x) => x.getAttribute('data-geste-acces') === 'FIGER') });
+  await direct.ctx.onClicGesteAccesScores({ target: direct.gestes().find((x) => !x.hidden && x.getAttribute('data-geste-acces') === 'FIGER') });
   verifier('2.11', 'fin confirmée : la pause demande quand même un « oui », sans confirmation renforcée',
     direct.dialogues.length === 1 && direct.actions().indexOf('creerConfirmationAccesScores') === -1 &&
     !direct.requetes.find((r) => r.corps.action === 'changerAccesScores').corps.confirmation_id);
@@ -613,10 +622,11 @@ async function section4() {
   const nc = bancAdmin({ serveur: serveurPasserelleNonConfiguree });
   await nc.ctx.chargerAccesScores();
   const avert = nc.el('acces-saisie-avertissement').textContent;
-  verifier('4.1', 'passerelle non configurée : ni lien, ni QR, ni adresse écrite ; l\'état et les gestes permis restent affichés',
-    nc.el('acces-saisie-corps').hidden === true && nc.qrDonnees.length === 0 && nc.el('acces-saisie-lien').href === '#' &&
-    nc.el('acces-saisie-url').textContent === '' && /Ouvert/.test(nc.el('acces-saisie-etat').textContent) &&
-    nc.el('acces-saisie-actions').querySelectorAll('button').length === ETATS.OUVERT.actions_possibles.length &&
+  verifier('4.1', 'passerelle non configurée : ni bouton d\'accès ni QR ; la clôture et les autres gestes restent disponibles',
+    nc.el('acces-saisie-corps').hidden === false && nc.el('acces-saisie-qr').hidden === true &&
+    nc.qrDonnees.length === 0 && nc.el('acces-saisie-lien').href === '#' && nc.el('acces-saisie-lien').hidden === true &&
+    /Ouvert/.test(nc.el('acces-saisie-etat').textContent) &&
+    nc.gestes().filter((x) => !x.hidden).length === ETATS.OUVERT.actions_possibles.length &&
     JSON.stringify(nc.actions()) === '["getAccesScoresAdmin"]' && nc.dialogues.length === 0);
   verifier('4.2', '… avec un message compréhensible : la page de saisie n\'est pas configurée, et renouveler n\'y changerait rien',
     /pas encore configurée/.test(avert) && /Renouveler le lien n'y changera rien/.test(avert) && !/Renouvelle-le/.test(avert), avert);
@@ -630,7 +640,7 @@ async function section4() {
   const b = bancAdmin({ serveur: serveurAdmin('OUVERT') });
   await b.ctx.chargerAccesScores();
   verifier('4.5', 'un lien de passerelle rendu par le serveur est affiché tel quel et encodé tel quel dans le QR',
-    b.el('acces-saisie-lien').href === LIEN_FICTIF && b.el('acces-saisie-url').textContent === LIEN_FICTIF && b.qrDonnees[0] === LIEN_FICTIF &&
+    b.el('acces-saisie-lien').href === LIEN_FICTIF && b.qrDonnees[0] === LIEN_FICTIF &&
     /^https:\/\/exemple\.invalid\/macros\/s\/PASSERELLE-FICTIVE\/exec\?jeton=[0-9a-f]{64}$/.test(LIEN_FICTIF));
 }
 

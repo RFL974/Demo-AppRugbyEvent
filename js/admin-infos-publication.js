@@ -675,6 +675,7 @@ function majAccesPublic() {
   const url = urlPagePublique(configCourante.global || {});
   lien.href = url;
   lien.textContent = url;
+  dessinerQrPublic(url);
   if (note) {
     // ⚠️ La note dit ce que PUB-2 GARANTIT — « publier ou masquer ne touche pas à cette
     // adresse » — et RIEN de plus. ⛔ Ne pas écrire qu'elle « ne change jamais » : le
@@ -718,6 +719,89 @@ async function onCopierAdressePublique() {
  *  ⛔ AUCUNE écriture serveur, AUCUN effet sur l'état de publication. */
 function onOuvrirPagePublique() {
   window.open(urlPagePublique(configCourante.global || {}), '_blank', 'noopener');
+}
+
+/** Dessine localement le QR de la page publique, sans service ni requête distante. */
+function dessinerQrPublic(url) {
+  const conteneur = document.getElementById('acces-public-qr');
+  if (!conteneur || typeof qrcode !== 'function' || !/^https?:\/\//.test(String(url || ''))) return;
+  conteneur.hidden = false;
+  conteneur.setAttribute('data-url', url);
+  const ancien = conteneur.querySelector('svg');
+  if (ancien && conteneur.getAttribute('data-qr') === url) return;
+  if (ancien) ancien.remove();
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    const svg = qr.createSvgTag({ cellSize: 4, margin: 8 })
+      .replace('<svg ', '<svg aria-hidden="true" focusable="false" ');
+    conteneur.insertAdjacentHTML('afterbegin', svg);
+    conteneur.setAttribute('data-qr', url);
+  } catch (e) {
+    conteneur.hidden = true;
+  }
+}
+
+/** Fabrique un PNG net du QR directement dans un canvas local. */
+function creerBlobQrPng(url) {
+  return new Promise(function (resoudre, rejeter) {
+    try {
+      if (typeof qrcode !== 'function') throw new Error('générateur QR indisponible');
+      const qr = qrcode(0, 'M');
+      qr.addData(url);
+      qr.make();
+      const modules = qr.getModuleCount();
+      const marge = 4;
+      const echelle = Math.max(8, Math.floor(640 / (modules + marge * 2)));
+      const taille = (modules + marge * 2) * echelle;
+      const canvas = document.createElement('canvas');
+      canvas.width = taille;
+      canvas.height = taille;
+      const dessin = canvas.getContext('2d');
+      if (!dessin || typeof canvas.toBlob !== 'function') throw new Error('conversion PNG indisponible');
+      dessin.fillStyle = '#ffffff';
+      dessin.fillRect(0, 0, taille, taille);
+      dessin.fillStyle = '#000000';
+      for (let ligne = 0; ligne < modules; ligne++) {
+        for (let colonne = 0; colonne < modules; colonne++) {
+          if (qr.isDark(ligne, colonne)) {
+            dessin.fillRect((colonne + marge) * echelle, (ligne + marge) * echelle, echelle, echelle);
+          }
+        }
+      }
+      canvas.toBlob(function (blob) {
+        if (blob) resoudre(blob);
+        else rejeter(new Error('création PNG impossible'));
+      }, 'image/png');
+    } catch (erreur) {
+      rejeter(erreur);
+    }
+  });
+}
+
+/** Copie un QR comme véritable image PNG pour le coller dans un document. */
+async function copierQrImage(url, message) {
+  try {
+    if (!url) throw new Error('QR code indisponible');
+    if (!navigator.clipboard || typeof navigator.clipboard.write !== 'function' ||
+        typeof ClipboardItem === 'undefined') throw new Error('copie d’image indisponible');
+    const png = await creerBlobQrPng(url);
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    afficherMessage(message, '✅ QR code copié comme image PNG — tu peux le coller dans un document.', 'ok');
+  } catch (erreur) {
+    afficherMessage(message, '⚠️ Impossible de copier le QR code comme image sur ce navigateur.', 'ko');
+  }
+}
+
+function onCopierQrPublic() {
+  const qr = document.getElementById('acces-public-qr');
+  return copierQrImage(qr ? qr.getAttribute('data-url') : '', document.getElementById('message-acces-public'));
+}
+
+function onCopierQrSaisie() {
+  const qr = document.getElementById('acces-saisie-qr');
+  return copierQrImage(qr ? qr.getAttribute('data-url') : '', document.getElementById('message-acces-saisie'));
 }
 
 /* --------------------------------------------------------------------------
@@ -788,6 +872,9 @@ function majAccesSaisie() {
       if (el) el.addEventListener(type, fn);
     };
     brancher('acces-saisie-actions', 'click', onClicGesteAccesScores);
+    brancher('acces-saisie-actions-suite', 'click', onClicGesteAccesScores);
+    brancher('acces-saisie-cloture', 'click', onClicGesteAccesScores);
+    brancher('bouton-copier-qr-saisie', 'click', onCopierQrSaisie);
     brancher('bouton-litige-charger', 'click', function () { chargerMatchsLitige(false); });
     brancher('bouton-litige-corriger', 'click', onCorrigerScoreLitige);
     brancher('litige-match', 'change', majFormulaireLitige);
@@ -939,9 +1026,16 @@ function texteEcheanceAcces(etat) {
 function rendreAccesScores(etat) {
   const libelle = document.getElementById('acces-saisie-etat');
   const gestes = document.getElementById('acces-saisie-actions');
+  const gestesSuite = document.getElementById('acces-saisie-actions-suite');
+  const cloture = document.getElementById('acces-saisie-cloture');
   const avert = document.getElementById('acces-saisie-avertissement');
   if (!libelle) return;
   if (gestes) gestes.innerHTML = '';
+  if (gestesSuite) gestesSuite.innerHTML = '';
+  if (cloture) {
+    cloture.hidden = true;
+    cloture.disabled = false;
+  }
   if (avert) afficherMessage(avert, '', 'ok');
   afficherLienAccesScores('');
   if (!etat) { libelle.textContent = 'Connecte-toi à l\'administration pour voir l\'accès.'; return; }
@@ -952,15 +1046,21 @@ function rendreAccesScores(etat) {
   libelle.textContent = fermeAuto ? ACCES_SCORES_LIBELLE_FERME_AUTO
     : (ACCES_SCORES_LIBELLES_ETAT[etat.etat] || ('État inconnu : ' + etat.etat));
   const possibles = etat.actions_possibles || [];
-  if (gestes) {
+  if (gestes || gestesSuite) {
     ACCES_SCORES_GESTES.forEach(function (g) {
       if (possibles.indexOf(g.action) === -1) return;
+      if (g.action === 'CLOTURER') {
+        if (cloture) cloture.hidden = false;
+        return;
+      }
+      const conteneur = g.action === 'ROTATION' ? gestesSuite : gestes;
+      if (!conteneur) return;
       const bouton = document.createElement('button');
       bouton.type = 'button';
       bouton.className = 'bouton' + (g.danger ? ' bouton-danger' : '');
       bouton.textContent = g.libelle;
       bouton.setAttribute('data-geste-acces', g.action);
-      gestes.appendChild(bouton);
+      conteneur.appendChild(bouton);
     });
   }
   const aviso = (etat.etat === 'OUVERT' || etat.etat === 'FIGE') ? avertissementFinAcces(etat) : null;
@@ -980,16 +1080,18 @@ function rendreAccesScores(etat) {
   afficherLienAccesScores(etat.lien || '');
 }
 
-/** Le lien et le QR : ⛔ affichés seulement pour une adresse https rendue par le serveur. */
+/** Le bouton et le QR : ⛔ affichés seulement pour une adresse https rendue par le serveur. */
 function afficherLienAccesScores(url) {
   const valide = /^https:\/\//.test(String(url || ''));
   const corps = document.getElementById('acces-saisie-corps');
   const lien = document.getElementById('acces-saisie-lien');
-  const texte = document.getElementById('acces-saisie-url');
+  const cloture = document.getElementById('acces-saisie-cloture');
   const qr = document.getElementById('acces-saisie-qr');
-  if (corps) corps.hidden = !valide;
-  if (lien) lien.href = valide ? url : '#';
-  if (texte) texte.textContent = valide ? url : '';   // ⛔ textContent, jamais innerHTML
+  if (corps) corps.hidden = !valide && (!cloture || cloture.hidden);
+  if (lien) {
+    lien.href = valide ? url : '#';
+    lien.hidden = !valide;
+  }
   if (!qr) return;
   if (valide) {
     qr.hidden = false;
@@ -998,6 +1100,7 @@ function afficherLienAccesScores(url) {
   } else {
     qr.removeAttribute('data-url');
     qr.removeAttribute('data-qr');
+    qr.hidden = true;
     const ancien = qr.querySelector('svg');
     if (ancien) ancien.remove();
   }
@@ -1065,8 +1168,8 @@ async function executerGesteAccesScores(action) {
     donnees.confirme = true;
   }
 
-  const gestes = document.getElementById('acces-saisie-actions');
-  if (gestes) gestes.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+  const zone = document.getElementById('acces-saisie');
+  if (zone) zone.querySelectorAll('[data-geste-acces]').forEach(function (b) { b.disabled = true; });
   let applique = false;
   try {
     const res = await ecrireAdmin('changerAccesScores', donnees);
@@ -1225,7 +1328,9 @@ function dessinerQrSaisie() {
     const qr = qrcode(0, 'M');
     qr.addData(url);
     qr.make();
-    conteneur.insertAdjacentHTML('afterbegin', qr.createSvgTag({ cellSize: 4, margin: 8 }));
+    const svg = qr.createSvgTag({ cellSize: 4, margin: 8 })
+      .replace('<svg ', '<svg aria-hidden="true" focusable="false" ');
+    conteneur.insertAdjacentHTML('afterbegin', svg);
     conteneur.setAttribute('data-qr', url);
   } catch (e) {
     conteneur.hidden = true;

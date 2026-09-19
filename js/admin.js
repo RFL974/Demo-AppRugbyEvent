@@ -1058,6 +1058,7 @@ function brancherEcouteursAdmin() {
   // comme le bouton ci-dessus. ⛔ Ni l'un ni l'autre ne publie, ne masque, ni n'écrit sur le serveur.
   ecouter('bouton-copier-adresse-publique', 'click', onCopierAdressePublique);
   ecouter('bouton-ouvrir-page-publique', 'click', onOuvrirPagePublique);
+  ecouter('bouton-copier-qr-public', 'click', onCopierQrPublic);
 
   // Bouton de réinitialisation complète du tournoi (zone de danger).
   ecouter('bouton-reinitialiser', 'click', onReinitialiser);

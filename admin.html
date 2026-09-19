@@ -1055,6 +1055,12 @@
             <button type="button" class="bouton" id="bouton-copier-adresse-publique">Copier l'adresse</button>
             <button type="button" class="bouton" id="bouton-ouvrir-page-publique">Ouvrir la page</button>
           </div>
+          <div class="acces-qr acces-public-qr" id="acces-public-qr">
+            <span class="acces-qr-legende">QR code de la page publique</span>
+            <button type="button" class="bouton bouton-doux acces-qr-copier" id="bouton-copier-qr-public">
+              Copier le QR code
+            </button>
+          </div>
           <p class="publication-acces-note" id="acces-public-note">…</p>
           <div id="message-acces-public" class="message-form" role="status" aria-live="polite"></div>
         </div>
@@ -1084,19 +1090,26 @@
           </p>
           <p class="acces-saisie-etat">État : <strong id="acces-saisie-etat">Connecte-toi à l'administration pour voir l'accès.</strong></p>
           <div id="acces-saisie-avertissement" class="message-form" role="status" aria-live="polite"></div>
-          <div class="acces-saisie-actions" id="acces-saisie-actions"></div>
+          <div class="acces-saisie-actions-ligne">
+            <div class="acces-saisie-actions" id="acces-saisie-actions"></div>
+            <a class="bouton" id="acces-saisie-lien" href="#" hidden
+               target="_blank" rel="noopener noreferrer">Ouvrir la table de marque</a>
+            <div class="acces-saisie-actions" id="acces-saisie-actions-suite"></div>
+          </div>
           <div class="acces-saisie-corps" id="acces-saisie-corps" hidden>
             <div class="acces-saisie-texte">
               <p class="acces-saisie-action">
-                <a class="bouton" id="acces-saisie-lien" href="#"
-                   target="_blank" rel="noopener noreferrer">Ouvrir la table de marque</a>
+                <button type="button" class="bouton bouton-danger" id="acces-saisie-cloture"
+                        data-geste-acces="CLOTURER" hidden>Clôturer définitivement</button>
               </p>
-              <p class="publication-acces-url"><span id="acces-saisie-url"></span></p>
             </div>
             <!-- QR code DÉDIÉ, dessiné en local par js/vendor/qrcode.js à partir du SEUL lien rendu
-                 par le serveur. `aria-hidden` : l'image redit le lien écrit juste à côté. -->
-            <div class="acces-saisie-qr" id="acces-saisie-qr" aria-hidden="true">
-              <span class="acces-saisie-qr-legende">Scanner pour ouvrir la table de marque</span>
+                 par le serveur. `aria-hidden` : il propose le même accès que le bouton. -->
+            <div class="acces-qr acces-saisie-qr" id="acces-saisie-qr">
+              <span class="acces-qr-legende">Scanner pour ouvrir la table de marque</span>
+              <button type="button" class="bouton bouton-doux acces-qr-copier" id="bouton-copier-qr-saisie">
+                Copier le QR code
+              </button>
             </div>
           </div>
           <p class="publication-acces-note">

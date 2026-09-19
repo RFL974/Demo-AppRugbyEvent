@@ -1452,9 +1452,9 @@ button .ic { margin-right: 0.45em; }
 .apresmidi-etat { color: var(--bleu-ciel); margin: 4px 0 10px; }
 
 /* --------------------------------------------------------------------------
-   Accès à la table de marque (UX-ACCES-SCORES-DR-5E) — lien + QR vers saisie.html.
+   Accès à la table de marque (UX-ACCES-SCORES-DR-5E) — bouton-lien + QR.
    Réutilise le cadre `.publication-acces` ci-dessus : même bordure, même respiration,
-   donc les deux adresses de la journée se lisent comme une seule famille.
+   donc les deux accès de la journée se lisent comme une seule famille.
    -------------------------------------------------------------------------- */
 .acces-saisie-quoi {
   color: var(--bleu-ciel);
@@ -1462,9 +1462,8 @@ button .ic { margin-right: 0.45em; }
   font-size: 0.88rem;
   line-height: 1.4;
 }
-/* Le texte et le QR côte à côte sur ordinateur ; le QR passe SOUS le texte dès que la carte
-   se resserre (téléphone) plutôt que de comprimer l'adresse — elle doit rester lisible et
-   recopiable à la main sur le terrain. */
+/* Le bouton et le QR côte à côte sur ordinateur ; le QR passe SOUS le bouton dès que la carte
+   se resserre (téléphone), sans afficher l'adresse temporaire en clair. */
 .acces-saisie-corps {
   display: flex;
   flex-wrap: wrap;
@@ -1479,8 +1478,8 @@ button .ic { margin-right: 0.45em; }
   display: inline-block;
   text-decoration: none;
 }
-.acces-saisie-qr { flex: none; text-align: center; max-width: 100%; }
-.acces-saisie-qr svg {
+.acces-qr { flex: none; text-align: center; max-width: 100%; }
+.acces-qr svg {
   width: 124px;
   height: 124px;
   display: block;
@@ -1488,23 +1487,40 @@ button .ic { margin-right: 0.45em; }
   background: #fff;          /* fond clair obligatoire : un QR sur fond sombre ne se scanne pas */
   border-radius: 6px;
 }
-.acces-saisie-qr-legende {
+.acces-qr-legende {
   display: block;
   font-size: 0.72rem;
   color: var(--bleu-ciel);
   margin-top: 4px;
   max-width: 140px;
 }
+.acces-qr-copier {
+  display: block;
+  margin: 8px auto 0;
+  font-size: 0.78rem;
+}
+.acces-public-qr { margin-top: 12px; width: max-content; }
 /* IMPL-RACCORDEMENT-ACCES-SCORES-DR-5R — état de l'accès, gestes explicites, correction de litige.
    Les boutons se replient sur plusieurs lignes plutôt que de déborder sur téléphone. */
 .acces-saisie-etat { margin: 0 0 8px; }
-.acces-saisie-actions {
+.acces-saisie-actions-ligne {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
   margin: 8px 0;
 }
+.acces-saisie-actions { display: contents; }
+.acces-saisie-actions-ligne > .bouton,
 .acces-saisie-actions .bouton { margin: 0; }
+@supports not (display: contents) {
+  .acces-saisie-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+  }
+}
 .acces-saisie-litige { margin-top: 12px; }
 .acces-saisie-litige summary { cursor: pointer; font-weight: 600; }
 .litige-formulaire {
