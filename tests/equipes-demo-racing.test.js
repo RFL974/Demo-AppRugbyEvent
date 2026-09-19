@@ -121,11 +121,11 @@ vrai(admin.includes("ecouter('bouton-charger-equipes-demo', 'click', onAjouterEq
     'chaque ajout conserve le budget et l’idempotence du parcours existant');
   egal(appels[21].action, 'chargerClubsDemoRacing',
     'le registre commun aux invitations et au suivi est chargé après les équipes');
-  egal(appels[21].options.delaiMs, 20000, 'le chargement groupé des clubs dispose du délai adapté');
+  egal(appels[21].options.delaiMs, 45000, 'le chargement groupé des clubs dispose du délai adapté');
   egal(rafraichissementsClubs, 1, 'les deux écrans relisent immédiatement leur source commune');
   egal(contexte.equipesCourantes.length, 21, 'les 21 réponses serveur sont intégrées à la liste locale');
   vrai(elements['message-equipe'].textContent.includes('21 équipes') &&
-    elements['message-equipe'].textContent.includes('8 clubs fictifs'),
+    elements['message-equipe'].textContent.includes('le refus et les réponses en attente'),
     'un succès complet est annoncé seulement après les équipes et le suivi');
 
   appels = [];
@@ -134,6 +134,14 @@ vrai(admin.includes("ecouter('bouton-charger-equipes-demo', 'click', onAjouterEq
   egal(appels.length, 1, 'une relance sur des équipes conformes ne rejoue que le lot idempotent de clubs');
   egal(appels[0].action, 'chargerClubsDemoRacing', 'la relance ne réécrit aucune équipe');
   egal(confirmations.length, 1, 'la mise à jour du jeu de suivi reste explicitement confirmée');
+
+  const rafraichirNormal = contexte.rafraichirRessourceAdmin;
+  contexte.rafraichirRessourceAdmin = async () => false;
+  await contexte.onAjouterEquipesDemo();
+  vrai(elements['message-equipe'].type === 'ko' &&
+    elements['message-equipe'].textContent.includes('leur liste n’a pas pu être actualisée'),
+    'une relecture échouée ne prétend pas que les écrans sont à jour');
+  contexte.rafraichirRessourceAdmin = rafraichirNormal;
 
   contexte.configCourante.categories = [{ categorie: 'U10', presente: 'oui' }];
   contexte.equipesCourantes = [];

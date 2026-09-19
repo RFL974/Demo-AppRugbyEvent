@@ -675,7 +675,8 @@ async function onAjouterEquipesDemo() {
     (plan.manquantes.length
       ? 'Ajouter ' + plan.manquantes.length + ' équipe(s) préparée(s) avec leurs effectifs'
       : 'Les 21 équipes sont déjà conformes. Actualiser') +
-    ' et préparer 8 clubs fictifs dans « Clubs invités » et « Suivi des clubs » ?' +
+    ' et compléter les clubs correspondants dans « Clubs invités » et « Suivi des clubs » ?' +
+    '\nLe refus et les deux réponses en attente sont conservés, ainsi que les données déjà enregistrées.' +
     resumeExistantes +
     '\n\nLes deux équipes U10 du Stade Français et l\'U12 de Châtenay-Malabry ne seront pas ajoutées : ' +
     'elles restent réservées au parcours d\'invitation.',
@@ -729,16 +730,20 @@ async function onAjouterEquipesDemo() {
     if (bouton) bouton.textContent = 'Préparation du suivi des clubs…';
     afficherMessage(message, '⏳ Préparation des réponses et du suivi des clubs…', 'ok');
     try {
-      await ecrireAdmin('chargerClubsDemoRacing', {}, { delaiMs: 20000 });
+      await ecrireAdmin('chargerClubsDemoRacing', {}, { delaiMs: 45000 });
       if (typeof rafraichirRessourceAdmin === 'function') {
-        await rafraichirRessourceAdmin('clubsInvites');
+        const relu = await rafraichirRessourceAdmin('clubsInvites');
+        if (relu === false) {
+          afficherMessage(message, '⚠️ Les clubs ont été préparés, mais leur liste n’a pas pu être actualisée. Recharge la page pour voir le suivi à jour.', 'ko');
+          return;
+        }
       }
     } catch (erreur) {
       afficherMessage(message, '⚠️ Les équipes sont présentes, mais le jeu de clubs n\'a pas pu être confirmé : ' +
         erreur.message + '\nTu peux relancer ce bouton sans créer de doublon.', 'ko');
       return;
     }
-    afficherMessage(message, '✅ Démonstration prête : 21 équipes et 8 clubs fictifs cohérents dans les invitations et le suivi.', 'ok');
+    afficherMessage(message, '✅ Démonstration prête : 21 équipes ; les clubs correspondants, le refus et les réponses en attente sont disponibles dans les invitations et le suivi. Les données existantes ont été conservées.', 'ok');
     verifierEnArrierePlan = true;
   } finally {
     if (bouton) bouton.textContent = 'Démo — Ajouter les 21 équipes préparées';
