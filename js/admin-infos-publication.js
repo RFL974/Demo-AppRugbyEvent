@@ -298,7 +298,7 @@ async function onEnregistrerContacts() {
 }
 
 /* --------------------------------------------------------------------------
-   PHASE 1 — carte « Sur place » (buvette / sandwich / boutique / goûter)
+   PHASE 1 — carte « Sur place » (buvette / sandwich / boutique / repas / goûter)
    et carte « Réponse à l'invitation » (date limite + contact référent).
    -------------------------------------------------------------------------- */
 
@@ -310,52 +310,73 @@ function majSurPlace() {
   form.buvette_disponible.checked = estOui(g.buvette_disponible);
   form.espace_sandwich_disponible.checked = estOui(g.espace_sandwich_disponible);
   form.boutique_disponible.checked = estOui(g.boutique_disponible);
+  form.repas_sur_place_oui.checked = estOui(g.repas_sur_place_oui);
+  Array.from(form.querySelectorAll('[name="repas_sur_place_mode"]')).forEach(function (radio) {
+    radio.checked = radio.value === String(g.repas_sur_place_mode || '');
+  });
+  form.repas_sur_place_montant.value = g.repas_sur_place_montant || '';
   form.gouter_fin_tournoi_oui.checked = estOui(g.gouter_fin_tournoi_oui);
   Array.from(form.querySelectorAll('[name="gouter_fin_tournoi_mode"]')).forEach(function (radio) {
     radio.checked = radio.value === String(g.gouter_fin_tournoi_mode || '');
   });
   form.gouter_fin_tournoi_montant.value = g.gouter_fin_tournoi_montant || '';
-  majAffichageGouterSurPlace();
+  majAffichageOptionsSurPlace();
   if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
 }
 
-/** Affiche les options du goûter, puis le montant uniquement pour le tarif par personne. */
-function majAffichageGouterSurPlace() {
+/** Affiche les options des repas/goûters, puis le montant uniquement pour le tarif par personne. */
+function majAffichageOptionsSurPlace() {
   const form = document.getElementById('form-surplace');
   if (!form) return;
-  const actif = form.gouter_fin_tournoi_oui.checked;
-  const options = document.getElementById('options-gouter-fin-tournoi');
-  const montant = document.getElementById('champ-gouter-fin-tournoi-montant');
-  const mode = String(form.gouter_fin_tournoi_mode.value || '');
-  if (options) options.hidden = !actif;
-  if (montant) montant.hidden = !actif || mode !== 'prix_personne';
+  [
+    ['repas_sur_place', 'options-repas-sur-place', 'champ-repas-sur-place-montant'],
+    ['gouter_fin_tournoi', 'options-gouter-fin-tournoi', 'champ-gouter-fin-tournoi-montant']
+  ].forEach(function (definition) {
+    const prefixe = definition[0];
+    const actif = form[prefixe + '_oui'].checked;
+    const options = document.getElementById(definition[1]);
+    const montant = document.getElementById(definition[2]);
+    const mode = String(form[prefixe + '_mode'].value || '');
+    if (options) options.hidden = !actif;
+    if (montant) montant.hidden = !actif || mode !== 'prix_personne';
+  });
 }
 
-/** Enregistre la carte « Sur place ». Le goûter actif exige une modalité complète et cohérente. */
+/** Lit et valide une prestation tarifée de la carte « Sur place ». */
+function lirePrestationSurPlace(form, prefixe, libelle) {
+  const actif = form[prefixe + '_oui'].checked;
+  const mode = actif ? String(form[prefixe + '_mode'].value || '') : '';
+  const modes = ['prix_personne', 'compris_inscription', 'offert_organisateur'];
+  if (actif && modes.indexOf(mode) === -1) {
+    return { erreur: '⚠️ Choisis la modalité ' + libelle + '.' };
+  }
+  const montantBrut = String(form[prefixe + '_montant'].value || '').trim().replace(',', '.');
+  const montant = mode === 'prix_personne' ? montantBrut : '';
+  if (mode === 'prix_personne' && (!/^\d+(?:\.\d{1,2})?$/.test(montant) || Number(montant) <= 0)) {
+    return { erreur: '⚠️ Indique un montant par personne supérieur à 0 pour ' + libelle + '.' };
+  }
+  return { actif: actif, mode: mode, montant: montant };
+}
+
+/** Enregistre la carte « Sur place ». Un repas ou goûter actif exige une modalité complète et cohérente. */
 async function onEnregistrerSurPlace() {
   const message = document.getElementById('message-surplace');
   const bouton = document.getElementById('bouton-enregistrer-surplace');
   const form = document.getElementById('form-surplace');
-  const gouterOui = form.gouter_fin_tournoi_oui.checked;
-  const gouterMode = gouterOui ? String(form.gouter_fin_tournoi_mode.value || '') : '';
-  const modesGouter = ['prix_personne', 'compris_inscription', 'offert_organisateur'];
-  if (gouterOui && modesGouter.indexOf(gouterMode) === -1) {
-    afficherMessage(message, '⚠️ Choisis la modalité du goûter de fin de tournoi.', 'ko');
-    return;
-  }
-  const montantBrut = String(form.gouter_fin_tournoi_montant.value || '').trim().replace(',', '.');
-  const montantGouter = gouterMode === 'prix_personne' ? montantBrut : '';
-  if (gouterMode === 'prix_personne' && (!/^\d+(?:\.\d{1,2})?$/.test(montantGouter) || Number(montantGouter) <= 0)) {
-    afficherMessage(message, '⚠️ Indique un montant par personne supérieur à 0.', 'ko');
-    return;
-  }
+  const repas = lirePrestationSurPlace(form, 'repas_sur_place', 'du repas');
+  if (repas.erreur) { afficherMessage(message, repas.erreur, 'ko'); return; }
+  const gouter = lirePrestationSurPlace(form, 'gouter_fin_tournoi', 'du goûter de fin de tournoi');
+  if (gouter.erreur) { afficherMessage(message, gouter.erreur, 'ko'); return; }
   const data = {
     buvette_disponible:         form.buvette_disponible.checked ? 'oui' : 'non',
     espace_sandwich_disponible: form.espace_sandwich_disponible.checked ? 'oui' : 'non',
     boutique_disponible:        form.boutique_disponible.checked ? 'oui' : 'non',
-    gouter_fin_tournoi_oui:     gouterOui ? 'oui' : 'non',
-    gouter_fin_tournoi_mode:    gouterMode,
-    gouter_fin_tournoi_montant: montantGouter
+    repas_sur_place_oui:        repas.actif ? 'oui' : 'non',
+    repas_sur_place_mode:       repas.mode,
+    repas_sur_place_montant:    repas.montant,
+    gouter_fin_tournoi_oui:     gouter.actif ? 'oui' : 'non',
+    gouter_fin_tournoi_mode:    gouter.mode,
+    gouter_fin_tournoi_montant: gouter.montant
   };
   await avecBoutonOccupe(bouton, message, async function () {
     await ecrireAdmin('enregistrerSurPlace', data);

@@ -101,6 +101,9 @@ dom['form-surplace'] = {
   buvette_disponible: { checked: true },
   espace_sandwich_disponible: { checked: true },
   boutique_disponible: { checked: false },
+  repas_sur_place_oui: { checked: false },
+  repas_sur_place_mode: { value: '' },
+  repas_sur_place_montant: { value: '' },
   gouter_fin_tournoi_oui: { checked: true },
   gouter_fin_tournoi_mode: { value: 'offert_organisateur' },
   gouter_fin_tournoi_montant: { value: '' }

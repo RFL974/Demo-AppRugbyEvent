@@ -67,9 +67,9 @@ var AUTORISATION_SAISIE = [
     { p: 'org_droits_montant', l: 'Montant / équipe', t: 'number', dep: 'org_droits_oui', prefill: true },
     { p: 'org_hebergement_oui', l: 'Hébergement', t: 'select', o: ['non', 'oui'] },
     { p: 'org_hebergement_structure', l: 'Hébergement — structure', t: 'text', dep: 'org_hebergement_oui' },
-    { p: 'org_repas_oui', l: 'Repas', t: 'select', o: ['non', 'oui'] },
+    { p: 'org_repas_oui', l: 'Repas', t: 'select', o: ['non', 'oui'], prefill: true },
     { p: 'org_repas_fournisseur', l: 'Repas — fournisseur', t: 'text', dep: 'org_repas_oui' },
-    { p: 'org_repas_prix', l: 'Repas — prix / pers.', t: 'number', dep: 'org_repas_oui' },
+    { p: 'org_repas_prix', l: 'Repas — prix / pers.', t: 'number', dep: 'org_repas_oui', prefill: true },
     { p: 'org_gouters_oui', l: 'Goûters', t: 'select', o: ['non', 'oui'], prefill: true },
     { p: 'org_gouters_fournisseur', l: 'Goûters — fournisseur', t: 'text', dep: 'org_gouters_oui' },
     { p: 'org_gouters_prix', l: 'Goûters — prix / pers.', t: 'number', dep: 'org_gouters_oui', prefill: true }
@@ -99,6 +99,14 @@ function prefillAutorisation(param) {
     const m = String(g.tarif_engagement_montant == null ? '' : g.tarif_engagement_montant).match(/\d+(?:[.,]\d+)?/);
     return m ? m[0].replace(',', '.') : '';
   }
+  const repasPrix = String(g.repas_sur_place_oui || '').toLowerCase() === 'oui' &&
+    g.repas_sur_place_mode === 'prix_personne';
+  if (param === 'org_repas_oui') return repasPrix ? 'oui' : '';
+  if (param === 'org_repas_prix' && repasPrix) {
+    const m = String(g.repas_sur_place_montant == null ? '' : g.repas_sur_place_montant)
+      .match(/\d+(?:[.,]\d+)?/);
+    return m ? m[0].replace(',', '.') : '';
+  }
   const gouterPrix = String(g.gouter_fin_tournoi_oui || '').toLowerCase() === 'oui' &&
     g.gouter_fin_tournoi_mode === 'prix_personne';
   if (param === 'org_gouters_oui') return gouterPrix ? 'oui' : '';
@@ -115,7 +123,7 @@ function prefillAutorisation(param) {
 function valControleurEffectiveAutorisation(param) {
   const stored = valAutorisation(param);
   const prefill = prefillAutorisation(param);
-  if ((param === 'org_droits_oui' || param === 'org_gouters_oui') && prefill !== '') return prefill;
+  if ((param === 'org_droits_oui' || param === 'org_repas_oui' || param === 'org_gouters_oui') && prefill !== '') return prefill;
   return stored !== '' ? stored : prefill;
 }
 
@@ -154,7 +162,7 @@ function champSaisieAutorisation(c) {
   }
   // data-dep porte la question CONTRÔLEUR : onChangeAutorisation retrouve les champs à (dé)griser.
   const attrDep = c.dep ? ' data-dep="' + echapper(c.dep) + '"' : '';
-  const sourcePrefill = c.p.indexOf('org_gouters_') === 0
+  const sourcePrefill = (c.p.indexOf('org_repas_') === 0 || c.p.indexOf('org_gouters_') === 0)
     ? 'de la carte « Sur place »' : 'des modalités d\'inscription';
   const note = estPrefill
     ? '<span class="autorisation-prefill-note">↩ repris automatiquement ' + sourcePrefill + '</span>'
@@ -1168,9 +1176,13 @@ function planRemplissageAutorisation(g, nbClubs, nbEquipes, categories, matchsPa
   setT('Texte56', montantDroitsEff);
   ouinon(v('org_hebergement_oui'), 'Case à cocher107', 'Case à cocher108');
   setT('Texte57', v('org_hebergement_structure'));
-  ouinon(v('org_repas_oui'), 'Case à cocher109', 'Case à cocher110');
+  var repasPrixP = String(g.repas_sur_place_oui || '').toLowerCase() === 'oui' &&
+    g.repas_sur_place_mode === 'prix_personne';
+  var mRepasP = String(g.repas_sur_place_montant == null ? '' : g.repas_sur_place_montant).match(/\d+(?:[.,]\d+)?/);
+  var repasOuiEff = repasPrixP ? 'oui' : v('org_repas_oui');
+  ouinon(repasOuiEff, 'Case à cocher109', 'Case à cocher110');
   setT('Texte58', v('org_repas_fournisseur'));
-  setT('Texte59', v('org_repas_prix'));
+  setT('Texte59', repasPrixP && mRepasP ? mRepasP[0].replace(',', '.') : v('org_repas_prix'));
   var gouterPrixP = String(g.gouter_fin_tournoi_oui || '').toLowerCase() === 'oui' &&
     g.gouter_fin_tournoi_mode === 'prix_personne';
   var mGouterP = String(g.gouter_fin_tournoi_montant == null ? '' : g.gouter_fin_tournoi_montant).match(/\d+(?:[.,]\d+)?/);

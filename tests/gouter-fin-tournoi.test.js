@@ -13,25 +13,35 @@ function egal(reel, attendu, message) { assert.deepEqual(reel, attendu, message)
 function vrai(condition, message) { assert.ok(condition, message); controles++; }
 
 function formulaireSurPlace() {
-  const radios = [
-    { value: 'prix_personne', checked: false },
-    { value: 'compris_inscription', checked: false },
-    { value: 'offert_organisateur', checked: false }
-  ];
-  const mode = {};
-  Object.defineProperty(mode, 'value', {
-    get() { return (radios.find(r => r.checked) || {}).value || ''; },
-    set(v) { radios.forEach(r => { r.checked = r.value === v; }); }
-  });
+  function groupeModes() {
+    const radios = [
+      { value: 'prix_personne', checked: false },
+      { value: 'compris_inscription', checked: false },
+      { value: 'offert_organisateur', checked: false }
+    ];
+    const mode = {};
+    Object.defineProperty(mode, 'value', {
+      get() { return (radios.find(r => r.checked) || {}).value || ''; },
+      set(v) { radios.forEach(r => { r.checked = r.value === v; }); }
+    });
+    return { radios, mode };
+  }
+  const repas = groupeModes();
+  const gouter = groupeModes();
   return {
     buvette_disponible: { checked: false },
     espace_sandwich_disponible: { checked: false },
     boutique_disponible: { checked: false },
+    repas_sur_place_oui: { checked: false },
+    repas_sur_place_mode: repas.mode,
+    repas_sur_place_montant: { value: '' },
     gouter_fin_tournoi_oui: { checked: false },
-    gouter_fin_tournoi_mode: mode,
+    gouter_fin_tournoi_mode: gouter.mode,
     gouter_fin_tournoi_montant: { value: '' },
-    querySelectorAll(sel) { return sel === '[name="gouter_fin_tournoi_mode"]' ? radios : []; },
-    __radios: radios
+    querySelectorAll(sel) {
+      if (sel === '[name="repas_sur_place_mode"]') return repas.radios;
+      return sel === '[name="gouter_fin_tournoi_mode"]' ? gouter.radios : [];
+    }
   };
 }
 
@@ -39,6 +49,8 @@ async function principal() {
   const form = formulaireSurPlace();
   const dom = {
     'form-surplace': form,
+    'options-repas-sur-place': { hidden: true },
+    'champ-repas-sur-place-montant': { hidden: true },
     'options-gouter-fin-tournoi': { hidden: true },
     'champ-gouter-fin-tournoi-montant': { hidden: true },
     'message-surplace': {},
@@ -55,6 +67,7 @@ async function principal() {
   ['js/commun.js', 'js/admin.js', 'js/admin-infos-publication.js', 'js/admin-invitations.js',
    'js/admin-autorisation.js'].forEach(rel => vm.runInContext(lire(rel), bac, { filename: rel }));
   bac.__config = { global: {
+    repas_sur_place_oui: 'non', repas_sur_place_mode: '', repas_sur_place_montant: '',
     gouter_fin_tournoi_oui: 'oui', gouter_fin_tournoi_mode: 'prix_personne',
     gouter_fin_tournoi_montant: '3.50'
   }, categories: [] };
@@ -109,6 +122,7 @@ async function principal() {
   egal(ecritures.length, 1, 'une seule écriture groupée pour une configuration valide');
   egal(JSON.parse(JSON.stringify(ecritures[0])), { action: 'enregistrerSurPlace', data: {
     buvette_disponible: 'oui', espace_sandwich_disponible: 'non', boutique_disponible: 'non',
+    repas_sur_place_oui: 'non', repas_sur_place_mode: '', repas_sur_place_montant: '',
     gouter_fin_tournoi_oui: 'oui', gouter_fin_tournoi_mode: 'prix_personne',
     gouter_fin_tournoi_montant: '4.25'
   } }, 'l’écriture contient un état cohérent et un montant normalisé');

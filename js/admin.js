@@ -1138,7 +1138,7 @@ function brancherEcouteursAdmin() {
   ecouter('form-contacts-securite', 'change', majApercuInvitation);
   ecouter('form-surplace', 'input', majApercuInvitation);
   ecouter('form-surplace', 'change', function () {
-    majAffichageGouterSurPlace();
+    majAffichageOptionsSurPlace();
     majApercuInvitation();
   });
   ecouter('form-reponse', 'input', majApercuInvitation);
