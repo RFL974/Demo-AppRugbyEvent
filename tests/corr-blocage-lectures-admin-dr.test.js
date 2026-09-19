@@ -1887,8 +1887,8 @@ async function principal() {
       code: 'Z.15', quoi: 'R2 — l\'opération en cours ne compte plus dans la disponibilité',
       surMesure: async function () {
         const MUTANT = substituer(SRC_EQUIPES,
-          '  bouton.disabled = operationEquipesEnCours() || listeEquipesIncertaine()',
-          '  bouton.disabled = listeEquipesIncertaine()', 'mutant Z.15');
+          '  const indisponible = operationEquipesEnCours() || listeEquipesIncertaine() || !ajoutPossibleEquipes();',
+          '  const indisponible = listeEquipesIncertaine() || !ajoutPossibleEquipes();', 'mutant Z.15');
         const b = bac({ sourceEquipes: MUTANT });
         b.reseau.programmer(function (i) { return i.methode === 'POST' ? 'pend' : { statut: 200, corps: [] }; });
         b.saisir('M');

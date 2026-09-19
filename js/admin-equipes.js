@@ -18,6 +18,71 @@
    ÉQUIPES
    -------------------------------------------------------------------------- */
 
+/** Jeu de données strictement réservé à la préparation de la démonstration Racing.
+ * Les trois équipes jouées par le circuit d'invitation n'y figurent volontairement pas :
+ * STADE FRANÇAIS-1 et STADE FRANÇAIS-2 en U10, CHATENAY-MALABRY en U12. */
+const EQUIPES_DEMO_RACING = Object.freeze([
+  { nom_equipe: 'RACING 92-1', categorie: 'U10', nb_joueurs: '13', nb_educateurs: '1' },
+  { nom_equipe: 'RACING 92-2', categorie: 'U10', nb_joueurs: '13', nb_educateurs: '1' },
+  { nom_equipe: 'CLAMART-1', categorie: 'U10', nb_joueurs: '10', nb_educateurs: '1' },
+  { nom_equipe: 'CLAMART-2', categorie: 'U10', nb_joueurs: '11', nb_educateurs: '1' },
+  { nom_equipe: 'ISSY-LES-MOULINEAUX', categorie: 'U10', nb_joueurs: '13', nb_educateurs: '2' },
+  { nom_equipe: 'MEUDON', categorie: 'U10', nb_joueurs: '9', nb_educateurs: '2' },
+  { nom_equipe: 'VÉLIZY', categorie: 'U10', nb_joueurs: '13', nb_educateurs: '2' },
+  { nom_equipe: 'ANTONY', categorie: 'U10', nb_joueurs: '10', nb_educateurs: '2' },
+  { nom_equipe: 'SÈVRES', categorie: 'U10', nb_joueurs: '13', nb_educateurs: '1' },
+  { nom_equipe: 'RUEIL', categorie: 'U10', nb_joueurs: '13', nb_educateurs: '1' },
+  { nom_equipe: 'RACING 92-1', categorie: 'U12', nb_joueurs: '20', nb_educateurs: '2' },
+  { nom_equipe: 'RACING 92-2', categorie: 'U12', nb_joueurs: '19', nb_educateurs: '2' },
+  { nom_equipe: 'STADE FRANÇAIS', categorie: 'U12', nb_joueurs: '20', nb_educateurs: '2' },
+  { nom_equipe: 'CLAMART', categorie: 'U12', nb_joueurs: '19', nb_educateurs: '1' },
+  { nom_equipe: 'ISSY-LES-MOULINEAUX', categorie: 'U12', nb_joueurs: '18', nb_educateurs: '2' },
+  { nom_equipe: 'MEUDON', categorie: 'U12', nb_joueurs: '20', nb_educateurs: '2' },
+  { nom_equipe: 'VÉLIZY', categorie: 'U12', nb_joueurs: '19', nb_educateurs: '2' },
+  { nom_equipe: 'ANTONY', categorie: 'U12', nb_joueurs: '17', nb_educateurs: '1' },
+  { nom_equipe: 'SÈVRES', categorie: 'U12', nb_joueurs: '19', nb_educateurs: '2' },
+  { nom_equipe: 'RUEIL', categorie: 'U12', nb_joueurs: '20', nb_educateurs: '2' },
+  { nom_equipe: 'VERSAILLES', categorie: 'U12', nb_joueurs: '18', nb_educateurs: '2' }
+]);
+
+function cleEquipe(nom, categorie) {
+  return String(categorie || '').trim().toUpperCase() + '\n' +
+    String(nom || '').trim().toUpperCase();
+}
+
+/** Prépare le lot entier AVANT toute écriture. Une équipe déjà présente avec les bons
+ * effectifs est ignorée ; un effectif différent est un conflit explicite, jamais écrasé. */
+function preparerAjoutEquipesDemo() {
+  const actives = ((typeof configCourante !== 'undefined' && configCourante && configCourante.categories) || [])
+    .filter(estPresente)
+    .map(function (cat) { return String(cat.categorie || '').trim().toUpperCase(); });
+  const categoriesManquantes = ['U10', 'U12'].filter(function (cat) { return actives.indexOf(cat) === -1; });
+  const index = {};
+  (typeof equipesCourantes !== 'undefined' && equipesCourantes || []).forEach(function (eq) {
+    index[cleEquipe(eq.nom_equipe, eq.categorie)] = eq;
+  });
+
+  const manquantes = [];
+  const dejaPresentes = [];
+  const conflits = [];
+  EQUIPES_DEMO_RACING.forEach(function (attendue) {
+    const existante = index[cleEquipe(attendue.nom_equipe, attendue.categorie)];
+    if (!existante) {
+      manquantes.push(attendue);
+      return;
+    }
+    const memesEffectifs = effectifSaisi(existante.nb_joueurs) === attendue.nb_joueurs &&
+      effectifSaisi(existante.nb_educateurs) === attendue.nb_educateurs;
+    (memesEffectifs ? dejaPresentes : conflits).push({ attendue: attendue, existante: existante });
+  });
+  return {
+    categoriesManquantes: categoriesManquantes,
+    manquantes: manquantes,
+    dejaPresentes: dejaPresentes,
+    conflits: conflits
+  };
+}
+
 /**
  * Remplit la liste déroulante avec les catégories PRÉSENTES.
  * Guidage : s'il n'y a AUCUNE catégorie, on ne peut pas saisir d'équipe → on affiche une aide
@@ -285,9 +350,11 @@ function ajoutPossibleEquipes() {
  *    réconciliation, c'est la même chose — on ne sait pas encore ce que le serveur a retenu.
  */
 function majDisponibiliteAjout() {
-  const bouton = document.getElementById('bouton-ajouter');
-  if (!bouton) return;
-  bouton.disabled = operationEquipesEnCours() || listeEquipesIncertaine() || !ajoutPossibleEquipes();
+  const indisponible = operationEquipesEnCours() || listeEquipesIncertaine() || !ajoutPossibleEquipes();
+  ['bouton-ajouter', 'bouton-charger-equipes-demo'].forEach(function (id) {
+    const bouton = document.getElementById(id);
+    if (bouton) bouton.disabled = indisponible;
+  });
 }
 
 /** Montre la reprise ciblée et marque l'écran DOUTEUX. `acquis` = ce qui est enregistré et doit rester dit. */
@@ -569,6 +636,101 @@ async function onAjouterEquipe(evenement) {
   } finally {
     // ⛔ R2 — FERMETURE SUR TOUS LES CHEMINS : confirmation, refus sans effet, issue incertaine,
     //    réconciliation réussie ou ratée. L'état repart ensuite de la disponibilité réelle.
+    terminerOperationEquipes();
+  }
+  if (verifierEnArrierePlan) verifierEquipesEnArrierePlan();
+}
+
+/**
+ * Ajoute le jeu d'équipes préparé pour la démonstration Racing.
+ *
+ * Le lot est calculé et contrôlé en entier avant le premier POST. Les écritures restent
+ * séquentielles : à chaque réponse confirmée, la ligne serveur est intégrée à la liste. En cas
+ * d'incertitude réseau, on s'arrête au nom concerné et on impose une relecture avant toute reprise.
+ */
+async function onAjouterEquipesDemo() {
+  const bouton = document.getElementById('bouton-charger-equipes-demo');
+  const message = document.getElementById('message-equipe');
+  if (refuserMutationSiIncertain(message, 'Le chargement des équipes de démonstration')) return;
+
+  const plan = preparerAjoutEquipesDemo();
+  if (plan.categoriesManquantes.length) {
+    afficherMessage(message, '⚠️ Active d\'abord les catégories ' +
+      plan.categoriesManquantes.join(' et ') + '. Aucune équipe n\'a été ajoutée.', 'ko');
+    return;
+  }
+  if (plan.conflits.length) {
+    const noms = plan.conflits.map(function (conflit) {
+      return conflit.attendue.categorie + ' — ' + conflit.attendue.nom_equipe;
+    });
+    afficherMessage(message, '⚠️ Chargement annulé : les effectifs déjà saisis diffèrent pour ' +
+      noms.join(', ') + '. Corrige ou supprime ces lignes avant de relancer. Aucune équipe n\'a été ajoutée.', 'ko');
+    return;
+  }
+  if (!plan.manquantes.length) {
+    afficherMessage(message, '✅ Les 21 équipes préparées sont déjà présentes avec les bons effectifs.', 'ok');
+    return;
+  }
+
+  const resumeExistantes = plan.dejaPresentes.length
+    ? '\n' + plan.dejaPresentes.length + ' équipe(s) déjà conforme(s) seront ignorée(s).'
+    : '';
+  const confirme = await dialogConfirmer(
+    'Ajouter ' + plan.manquantes.length + ' équipe(s) préparée(s) avec leurs effectifs ?' +
+    resumeExistantes +
+    '\n\nLes deux équipes U10 du Stade Français et l\'U12 de Châtenay-Malabry ne seront pas ajoutées : ' +
+    'elles restent réservées au parcours d\'invitation.',
+    { ok: 'Ajouter les équipes' }
+  );
+  if (!confirme) return;
+
+  debuterOperationEquipes();
+  masquerRepriseEquipes();
+  let ajoutees = 0;
+  let verifierEnArrierePlan = false;
+  try {
+    for (let i = 0; i < plan.manquantes.length; i++) {
+      const equipe = plan.manquantes[i];
+      if (bouton) bouton.textContent = 'Ajout ' + (i + 1) + '/' + plan.manquantes.length + '…';
+      afficherMessage(message, '⏳ Ajout de ' + equipe.categorie + ' — ' + equipe.nom_equipe +
+        ' (' + (i + 1) + '/' + plan.manquantes.length + ')…', 'ok');
+      try {
+        const reponse = await ecrireAdmin('ajouterEquipe', {
+          nom_equipe: equipe.nom_equipe,
+          categorie: equipe.categorie,
+          nb_joueurs: equipe.nb_joueurs,
+          nb_educateurs: equipe.nb_educateurs
+        }, { delaiMs: DELAI_AJOUT_EQUIPE_MS });
+        ajoutees++;
+        let integree = false;
+        try { integree = integrerEquipeAjoutee(reponse && reponse.equipe); }
+        catch (err) {
+          try { console.warn('Affichage immédiat de l’équipe de démonstration impossible :', err.message); }
+          catch (e) { /* console indisponible : aucune incidence métier */ }
+        }
+        if (!integree) {
+          const aJour = await actualiserApresEcriture(message,
+            '✅ ' + ajoutees + '/' + plan.manquantes.length + ' équipe(s) ajoutée(s).');
+          if (!aJour) return;
+        }
+      } catch (erreur) {
+        const progression = ajoutees + '/' + plan.manquantes.length + ' équipe(s) ajoutée(s) et affichée(s). ';
+        if (ecritureSansEffetEtabli(erreur)) {
+          afficherMessage(message, '⚠️ ' + progression + 'Le chargement s\'est arrêté avant « ' +
+            equipe.nom_equipe + ' » : ' + erreur.message + '\nTu peux relancer : les lignes déjà conformes seront ignorées.', 'ko');
+        } else {
+          afficherMessage(message, '⚠️ ' + progression + 'Impossible de savoir si « ' + equipe.nom_equipe +
+            ' » a été enregistrée : ' + erreur.message +
+            '\n⛔ Actualise la liste avant de relancer afin d\'éviter un doublon.', 'ko');
+          afficherRepriseEquipes('');
+        }
+        return;
+      }
+    }
+    afficherMessage(message, '✅ Chargement terminé : les 21 équipes préparées sont présentes avec leurs effectifs.', 'ok');
+    verifierEnArrierePlan = true;
+  } finally {
+    if (bouton) bouton.textContent = 'Démo — Ajouter les 21 équipes préparées';
     terminerOperationEquipes();
   }
   if (verifierEnArrierePlan) verifierEquipesEnArrierePlan();

@@ -996,6 +996,7 @@ function brancherEcouteursAdmin() {
 
   // On branche le formulaire d'ajout et les boutons de suppression (équipes).
   ecouter('form-equipe', 'submit', onAjouterEquipe);
+  ecouter('bouton-charger-equipes-demo', 'click', onAjouterEquipesDemo);
   ecouter('liste-equipes', 'click', onClicListe);
   // Reprise CIBLÉE de la liste des équipes (CORR-BLOCAGE-LECTURES-ADMIN-DR) : relit la seule
   // liste après une actualisation ratée, sans recharger la page ni réémettre d'écriture.
