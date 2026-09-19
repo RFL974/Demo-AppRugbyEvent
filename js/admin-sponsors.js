@@ -3,10 +3,10 @@
  *  ADMIN — écran « Partenaires »
  * ============================================================================
  *
- *  Trois cartes, dans l'ordre où on s'en sert :
- *   1. Réglages d'affichage  — interrupteur général, durées, fréquence de l'interstitiel ;
- *   2. Fiches partenaires    — création / modification / suppression, logo sur Drive ;
- *   3. Fiche de visibilité   — ce qu'on renvoie au partenaire après l'événement.
+ *  Trois tâches, présentées une par une :
+ *   1. Fiches partenaires    — création / modification / suppression, logo sur Drive ;
+ *   2. Aperçu & publication  — interrupteur général et options d'affichage ;
+ *   3. Bilan après tournoi   — ce qu'on renvoie au partenaire après l'événement.
  *
  *  MESURE CONSOLIDÉE ENTRE TOUS LES APPAREILS. Chaque navigateur qui affiche des
  *  partenaires remonte ses compteurs (voir sponsors.js) ; la carte « fiche de visibilité »
@@ -42,6 +42,13 @@ let sponsorLogoRetirer = false;  // l'utilisateur a demandé à retirer le logo 
 function initAdminSponsors() {
   if (!document.getElementById('bloc-sponsors-liste')) return;
 
+  document.querySelectorAll('[data-vue-sponsors]').forEach(function (bouton) {
+    bouton.addEventListener('click', function () {
+      choisirVueSponsors(bouton.getAttribute('data-vue-sponsors'));
+    });
+  });
+  document.getElementById('bouton-ajouter-sponsor').addEventListener('click', onAjouterSponsor);
+
   document.getElementById('form-sponsors-reglages')
     .addEventListener('submit', function (e) { e.preventDefault(); });
   document.getElementById('form-sponsor')
@@ -55,6 +62,11 @@ function initAdminSponsors() {
     .addEventListener('change', majLignesInterstitiel);
 
   construireEmplacements();
+  document.querySelectorAll('[name="visibilite_preset"]').forEach(function (radio) {
+    radio.addEventListener('change', function () {
+      if (radio.checked) appliquerPresetVisibilite(radio.value);
+    });
+  });
   // Le nom, l'accroche, la couleur et la taille générale vivent HORS du panneau des
   // emplacements mais alimentent chaque aperçu : on écoute donc tout le formulaire.
   document.getElementById('form-sponsor').addEventListener('input', rafraichirApercusEmplacements);
@@ -67,6 +79,11 @@ function initAdminSponsors() {
     zoneDepot: 'zone-depot-sponsor-logo',
     traiter: traiterFichierLogoSponsor
   });
+  document.getElementById('zone-depot-sponsor-logo').addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    document.querySelector('#form-sponsor [name="sponsor_logo"]').click();
+  });
   document.getElementById('bouton-retirer-sponsor-logo').addEventListener('click', onRetirerLogoSponsor);
 
   document.getElementById('bouton-rafraichir-bilan').addEventListener('click', chargerMesuresSponsors);
@@ -76,6 +93,46 @@ function initAdminSponsors() {
   document.getElementById('bouton-tester-remontee').addEventListener('click', onTesterRemontee);
   document.getElementById('bouton-verifier-public').addEventListener('click', onVerifierPublic);
   document.getElementById('projection-appareils').addEventListener('input', afficherBilanSponsors);
+
+  choisirVueSponsors('gestion');
+}
+
+/** Une seule tâche est affichée à la fois : gérer, publier ou produire le bilan. */
+function choisirVueSponsors(vue) {
+  const blocs = {
+    gestion: 'bloc-sponsors-liste',
+    publication: 'bloc-sponsors-reglages',
+    bilan: 'bloc-sponsors-bilan'
+  };
+  if (!blocs[vue]) vue = 'gestion';
+
+  Object.keys(blocs).forEach(function (cle) {
+    const bloc = document.getElementById(blocs[cle]);
+    if (bloc) bloc.hidden = cle !== vue;
+  });
+  document.querySelectorAll('[data-vue-sponsors]').forEach(function (bouton) {
+    const actif = bouton.getAttribute('data-vue-sponsors') === vue;
+    bouton.classList.toggle('est-actif', actif);
+    bouton.setAttribute('aria-pressed', actif ? 'true' : 'false');
+  });
+}
+
+/** Résume l'état utile sans exposer les multiples interrupteurs techniques. */
+function mettreAJourResumeSponsors() {
+  const statut = document.getElementById('sponsors-statut-publication');
+  if (!statut) return;
+  const global = (typeof configCourante !== 'undefined' && configCourante.global) || {};
+  const publie = String(global.sponsors_actifs || '').toLowerCase() === 'oui';
+  const actifs = sponsorsAdmin.filter(function (s) {
+    return String(s.actif || '').toLowerCase() === 'oui';
+  }).length;
+
+  statut.classList.toggle('est-en-ligne', publie && actifs > 0);
+  statut.classList.toggle('est-attention', publie && actifs === 0);
+  if (publie && actifs) statut.textContent = 'En ligne — ' + actifs + ' partenaire' + (actifs > 1 ? 's' : '');
+  else if (publie) statut.textContent = 'Publication active — aucun partenaire';
+  else if (actifs) statut.textContent = 'Prêts à publier — ' + actifs + ' partenaire' + (actifs > 1 ? 's' : '');
+  else statut.textContent = 'Partenaires masqués';
 }
 
 /* ⛔ `majSponsors()` A ÉTÉ RETIRÉ (R1). Il orchestrait « lire les deux, puis rendre » et portait
@@ -167,6 +224,7 @@ function injecterReglagesSponsors(global) {
     form[cle].value = isFinite(n) ? n : SPONSORS_NOMBRES[cle];
   });
   majLignesInterstitiel();
+  mettreAJourResumeSponsors();
 }
 
 /** Les réglages de durée n'ont de sens que si le plein écran est activé. */
@@ -193,8 +251,12 @@ async function onEnregistrerReglagesSponsors() {
     const r = await apiPostProtege('enregistrerReglagesSponsors', data, 'admin', 'admin');
     if (r.error) { afficherMessage(message, '⚠️ ' + r.error, 'ko'); return; }
     Object.keys(data).forEach(function (cle) { configCourante.global[cle] = data[cle]; });
+    mettreAJourResumeSponsors();
+    const actifs = sponsorsAdmin.filter(function (s) { return String(s.actif || '').toLowerCase() === 'oui'; }).length;
     afficherMessage(message, data.sponsors_actifs === 'oui'
-      ? '✅ Réglages enregistrés — les partenaires sont visibles sur la page publique.'
+      ? (actifs
+        ? '✅ Publication enregistrée — les partenaires sont visibles sur la page publique.'
+        : '⚠️ Publication activée, mais aucun partenaire actif n’est encore visible.')
       : '✅ Réglages enregistrés — les partenaires restent masqués (interrupteur général sur « non »).', 'ok');
   });
 }
@@ -502,8 +564,9 @@ async function chargerSponsors() {
 
 function afficherListeSponsors() {
   const zone = document.getElementById('liste-sponsors');
+  mettreAJourResumeSponsors();
   if (!sponsorsAdmin.length) {
-    zone.innerHTML = '<p class="vide">Aucun partenaire pour l\'instant. Ajoute le premier ci-dessous.</p>';
+    zone.innerHTML = '<p class="vide">Aucun partenaire pour l\'instant. Utilise « Ajouter un partenaire » pour commencer.</p>';
     return;
   }
   let html = '<div class="sponsor-cartes">';
@@ -557,6 +620,57 @@ function onClicListeSponsors(e) {
   else onSupprimerSponsor(id);
 }
 
+function onAjouterSponsor() {
+  choisirVueSponsors('gestion');
+  reinitialiserFormSponsor();
+  afficherMessage(document.getElementById('message-sponsors-liste'), '', 'ok');
+  const form = document.getElementById('form-sponsor');
+  form.hidden = false;
+  form.nom.focus();
+  form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+const SPONSORS_PRESETS_VISIBILITE = {
+  essentiel: ['mur', 'dossier'],
+  renforce: ['rail', 'mur', 'dossier']
+};
+
+/** Applique un niveau lisible aux cases techniques existantes, sans changer le format stocké. */
+function appliquerPresetVisibilite(preset) {
+  const form = document.getElementById('form-sponsor');
+  const personnalises = document.getElementById('sponsor-emplacements-personnalises');
+  if (!form || !personnalises) return;
+
+  personnalises.hidden = preset !== 'personnalise';
+  const emplacements = SPONSORS_PRESETS_VISIBILITE[preset];
+  if (emplacements) {
+    SPONSORS_EMPLACEMENTS.forEach(function (e) {
+      form['emp_' + e].checked = emplacements.indexOf(e) >= 0;
+    });
+  }
+  majTousReglagesEmplacements();
+}
+
+/** Reconnaît les deux niveaux simples ; toute autre combinaison reste personnalisée. */
+function synchroniserPresetVisibilite() {
+  const form = document.getElementById('form-sponsor');
+  const actifs = SPONSORS_EMPLACEMENTS.filter(function (e) {
+    return form['emp_' + e].checked;
+  });
+  let preset = 'personnalise';
+  Object.keys(SPONSORS_PRESETS_VISIBILITE).some(function (cle) {
+    const attendu = SPONSORS_PRESETS_VISIBILITE[cle];
+    const identique = actifs.length === attendu.length && attendu.every(function (e) {
+      return actifs.indexOf(e) >= 0;
+    });
+    if (identique) preset = cle;
+    return identique;
+  });
+  const radio = form.querySelector('[name="visibilite_preset"][value="' + preset + '"]');
+  if (radio) radio.checked = true;
+  document.getElementById('sponsor-emplacements-personnalises').hidden = preset !== 'personnalise';
+}
+
 function remplirFormSponsor(id) {
   const s = sponsorsAdmin.filter(function (x) { return String(x.id_sponsor) === String(id); })[0];
   if (!s) return;
@@ -577,6 +691,7 @@ function remplirFormSponsor(id) {
     form['emp_' + e].checked = emplacements.indexOf(e) >= 0;
   });
   injecterReglagesEmplacements(s);
+  synchroniserPresetVisibilite();
   majTousReglagesEmplacements();
 
   sponsorLogoDataURI = null;
@@ -585,6 +700,8 @@ function remplirFormSponsor(id) {
 
   document.getElementById('titre-form-sponsor').textContent = 'Modifier « ' + s.nom + ' »';
   document.getElementById('bouton-annuler-sponsor').hidden = false;
+  choisirVueSponsors('gestion');
+  form.hidden = false;
   form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -598,11 +715,12 @@ function reinitialiserFormSponsor() {
   form.logo_zoom.value = 100;
   form.actif.checked = true;
   SPONSORS_EMPLACEMENTS.forEach(function (e) {
-    form['emp_' + e].checked = (e === 'mur');
+    form['emp_' + e].checked = (e === 'mur' || e === 'dossier');
     form['txt_' + e].value = '';
     form['zoom_' + e].value = '';
     form['dispo_' + e].value = '';
   });
+  synchroniserPresetVisibilite();
   majTousReglagesEmplacements();
 
   sponsorLogoDataURI = null;
@@ -611,7 +729,9 @@ function reinitialiserFormSponsor() {
 
   document.getElementById('titre-form-sponsor').textContent = 'Ajouter un partenaire';
   document.getElementById('bouton-annuler-sponsor').hidden = true;
+  document.querySelectorAll('.sponsors-options-partenaire').forEach(function (details) { details.open = false; });
   afficherMessage(document.getElementById('message-sponsor'), '', 'ok');
+  form.hidden = true;
 }
 
 /** Aperçu du logo (choisi ou déjà enregistré). Vide = zone masquée. */
@@ -693,14 +813,14 @@ async function onEnregistrerSponsor() {
     if (r.error) { afficherMessage(message, '⚠️ ' + r.error, 'ko'); return; }
     await chargerSponsors();
     reinitialiserFormSponsor();
-    afficherMessage(message, '✅ Partenaire enregistré.', 'ok');
+    afficherMessage(document.getElementById('message-sponsors-liste'), '✅ Partenaire enregistré.', 'ok');
   });
 }
 
 async function onSupprimerSponsor(id) {
   const s = sponsorsAdmin.filter(function (x) { return String(x.id_sponsor) === String(id); })[0];
   if (!s) return;
-  const message = document.getElementById('message-sponsor');
+  const message = document.getElementById('message-sponsors-liste');
   const ok = await dialogConfirmer('Supprimer « ' + s.nom + ' » ?\n\n' +
     'Sa fiche et son logo seront supprimés. Pour le retirer de la page SANS perdre sa fiche, ' +
     'décoche plutôt « Partenaire actif ».', { ok: 'Supprimer', danger: true });
@@ -709,7 +829,7 @@ async function onSupprimerSponsor(id) {
     const r = await apiPostProtege('supprimerSponsor', { id_sponsor: id }, 'admin', 'admin');
     if (r.error) { afficherMessage(message, '⚠️ ' + r.error, 'ko'); return; }
     await chargerSponsors();
-    afficherMessage(message, '✅ Partenaire supprimé.', 'ok');
+    afficherMessage(document.getElementById('message-sponsors-liste'), '✅ Partenaire supprimé.', 'ok');
   } catch (err) {
     afficherMessage(message, '⚠️ ' + err.message, 'ko');
   }

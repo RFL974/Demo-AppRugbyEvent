@@ -49,6 +49,11 @@ const ECRANS_DEF = [
      elle exploite le planning généré (phases, terrains, prédictions de phase 2) — et AVANT la
      Publication (on dépose la demande avant d'annoncer). Libre : jamais verrouillée. */
   { id: 'autorisation', titre: 'Demande d\'autorisation', icone: 'dossier', blocs: ['bloc-autorisation'], cles: [], libre: true },
+  /* Partenaires (sponsors de la page publique) : réglages d'affichage, fiches, puis fiche de
+     visibilité à renvoyer. Placé AVANT la Publication — on prépare l'habillage de la page
+     avant de la mettre en ligne. Libre : jamais verrouillé, on prépare les partenaires quand
+     on veut, et l'interrupteur général reste sur « non » tant qu'on ne les publie pas. */
+  { id: 'sponsors',    titre: 'Partenaires',       icone: 'sponsor',  blocs: ['bloc-sponsors-accueil', 'bloc-sponsors-reglages', 'bloc-sponsors-liste', 'bloc-sponsors-bilan'], cles: [], libre: true },
   /* La Publication vient AVANT l'après-midi : elle n'en dépend pas (on publie
      le matin ; l'après-midi se génère plus tard, une fois les scores saisis).
 
@@ -70,11 +75,6 @@ const ECRANS_DEF = [
      🔬 `cles: []` : cet écran n'a jamais rien exigé par lui-même — il HÉRITAIT du blocage
      accumulé en amont. `libre` ne change donc la séquence d'AUCUN autre écran. */
   { id: 'publication', titre: 'Publication',       icone: 'monde',    blocs: ['bloc-publication'],        cles: [], libre: true },
-  /* Partenaires (sponsors de la page publique) : réglages d'affichage, fiches, puis fiche de
-     visibilité à renvoyer. Placé APRÈS la Publication — on habille la page une fois qu'elle
-     est en ligne. Libre : jamais verrouillé, on prépare les partenaires quand on veut, et
-     l'interrupteur général reste sur « non » tant qu'on n'a pas décidé de les montrer. */
-  { id: 'sponsors',    titre: 'Partenaires',       icone: 'sponsor',  blocs: ['bloc-sponsors-reglages', 'bloc-sponsors-liste', 'bloc-sponsors-bilan'], cles: [], libre: true },
   { id: 'apresmidi',   titre: 'Après-midi',        icone: 'ballon',   blocs: ['bloc-apresmidi'],          cles: ['apresmidi'] },
   /* Feuille de fin de journée : bilan des matchs joués. Jamais verrouillée (`libre`) — on peut la
      consulter à tout moment de la journée, même si tout n'est pas encore terminé. */

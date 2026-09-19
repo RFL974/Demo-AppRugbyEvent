@@ -15,7 +15,7 @@
   <!-- Notre feuille de style commune -->
   <link rel="stylesheet" href="css/styles.css">
   <!-- Surcouche moderne navy/blanc/ciel (re-skin admin — retirer cette ligne pour revenir en arrière) -->
-  <link rel="stylesheet" href="css/theme-r92.css">
+  <link rel="stylesheet" href="css/theme-r92.css?v=partenaires-simple-1">
   <!-- Mode « écrans » : barre latérale + onglets sur grand écran (structure construite par js/ecrans.js) -->
   <link rel="stylesheet" href="css/ecrans.css?v=navigation-libre-demo-1">
   <!-- Encarts partenaires : les MÊMES règles que la page publique, pour que l'aperçu de
@@ -249,89 +249,100 @@
       </section>
 
       <!-- ============ PARTENAIRES (sponsors de la page publique) ============
-           Trois cartes : les réglages d'affichage, la liste des partenaires, puis la fiche
-           de visibilité à renvoyer à chaque partenaire. Tout est piloté par admin-sponsors.js. -->
+           Un accueil simple oriente vers les trois tâches : gérer les partenaires, publier
+           leur visibilité, puis produire le bilan. Tout est piloté par admin-sponsors.js. -->
 
-      <section class="carte" id="bloc-sponsors-reglages">
-        <h2>Partenaires — réglages d'affichage</h2>
+      <section class="carte sponsors-accueil" id="bloc-sponsors-accueil">
+        <div class="sponsors-accueil-tete">
+          <div>
+            <p class="sponsors-sur-titre">Partenaires</p>
+            <h2>Une action à la fois</h2>
+            <p class="note-generation">Ajoute tes partenaires, vérifie leur visibilité, puis publie quand tout est prêt.</p>
+          </div>
+          <span class="sponsors-statut" id="sponsors-statut-publication" aria-live="polite">Partenaires masqués</span>
+        </div>
+        <nav class="sponsors-navigation" aria-label="Sections partenaires">
+          <button type="button" class="sponsors-navigation-bouton est-actif" data-vue-sponsors="gestion" aria-controls="bloc-sponsors-liste" aria-pressed="true">
+            <strong>1. Partenaires</strong><span>Ajouter et modifier les fiches</span>
+          </button>
+          <button type="button" class="sponsors-navigation-bouton" data-vue-sponsors="publication" aria-controls="bloc-sponsors-reglages" aria-pressed="false">
+            <strong>2. Aperçu &amp; publication</strong><span>Choisir quand les afficher</span>
+          </button>
+          <button type="button" class="sponsors-navigation-bouton" data-vue-sponsors="bilan" aria-controls="bloc-sponsors-bilan" aria-pressed="false">
+            <strong>3. Bilan après tournoi</strong><span>Présenter les résultats mesurés</span>
+          </button>
+        </nav>
+      </section>
+
+      <section class="carte" id="bloc-sponsors-reglages" hidden>
+        <h2>Aperçu &amp; publication</h2>
         <p class="note-generation">
-          Ces réglages pilotent l'affichage des partenaires sur la
-          <strong>page publique des scores</strong>. Tant que
-          <strong>« Afficher les partenaires »</strong> est décoché, la page reste
-          <strong>exactement celle d'aujourd'hui</strong> — tu peux tout préparer sans que
-          personne ne voie quoi que ce soit.
+          Prépare tout sans risque : tant que l'interrupteur reste désactivé, aucun partenaire
+          n'apparaît sur la page publique des scores.
         </p>
         <form id="form-sponsors-reglages">
-          <label class="reglage">
+          <label class="reglage sponsors-interrupteur-publication">
             <span class="r-libelle">Afficher les partenaires</span>
-            <span class="mini-toggle"><input type="checkbox" name="sponsors_actifs"> Interrupteur général</span>
+            <span class="mini-toggle"><input type="checkbox" name="sponsors_actifs"> Visible sur la page publique</span>
           </label>
-          <label class="reglage">
-            <span class="r-libelle">Mur des partenaires</span>
-            <span class="mini-toggle"><input type="checkbox" name="sponsors_mur_actif" checked> Grille des logos en bas de page</span>
-          </label>
-          <label class="reglage">
-            <span class="r-libelle">Barre basse sur téléphone</span>
-            <span class="mini-toggle"><input type="checkbox" name="sponsor_barre_mobile" checked> Bandeau rotatif en bas de l'écran</span>
-          </label>
-          <label class="reglage"><span class="r-libelle">Rotation des partenaires (secondes)</span>
-            <input class="r-input" type="number" name="sponsor_rotation_s" min="0" max="60" step="1" value="8">
-          </label>
-
-          <h3 class="apercu-sous-titre">Message plein écran à l'arrivée</h3>
-          <label class="reglage">
-            <span class="r-libelle">Activer le message</span>
-            <span class="mini-toggle"><input type="checkbox" name="sponsor_interstitiel_actif"> Plein écran quelques secondes à l'ouverture</span>
-          </label>
-          <div id="lignes-interstitiel" hidden>
-            <label class="reglage"><span class="r-libelle">Durée d'affichage (secondes)</span>
-              <input class="r-input" type="number" name="sponsor_interstitiel_duree_s" min="3" max="10" step="1" value="5">
-            </label>
-            <label class="reglage"><span class="r-libelle">Bouton « Passer » actif après (secondes)</span>
-              <input class="r-input" type="number" name="sponsor_interstitiel_skip_s" min="0" max="10" step="1" value="2">
-            </label>
-            <label class="reglage"><span class="r-libelle">Ne pas revoir avant (minutes)</span>
-              <input class="r-input" type="number" name="sponsor_interstitiel_repos_min" min="1" max="240" step="1" value="30">
+          <details class="sponsors-options-avancees">
+            <summary>Options avancées d'affichage</summary>
+            <label class="reglage"><span class="r-libelle">Rotation des partenaires (secondes)</span>
+              <input class="r-input" type="number" name="sponsor_rotation_s" min="0" max="60" step="1" value="8">
             </label>
             <label class="reglage">
-              <span class="r-libelle">Dès la première visite</span>
-              <span class="mini-toggle"><input type="checkbox" name="sponsor_interstitiel_premiere_visite">
-                Montrer aussi à la toute première arrivée de la journée</span>
+              <span class="r-libelle">Mur des partenaires</span>
+              <span class="mini-toggle"><input type="checkbox" name="sponsors_mur_actif" checked> Grille des logos en bas de page</span>
             </label>
-            <p class="note-generation">
-              Décoché (recommandé), le message n'apparaît qu'à partir du <strong>deuxième
-              chargement</strong> : on ne fait pas attendre un parent qui ouvre la page pour
-              la première fois pour voir un score.
-            </p>
-          </div>
+            <label class="reglage">
+              <span class="r-libelle">Barre basse sur téléphone</span>
+              <span class="mini-toggle"><input type="checkbox" name="sponsor_barre_mobile" checked> Bandeau rotatif en bas de l'écran</span>
+            </label>
+            <label class="reglage">
+              <span class="r-libelle">Message plein écran à l'arrivée</span>
+              <span class="mini-toggle"><input type="checkbox" name="sponsor_interstitiel_actif"> Activer le plein écran</span>
+            </label>
+            <div id="lignes-interstitiel" hidden>
+              <label class="reglage"><span class="r-libelle">Durée du plein écran (secondes)</span>
+                <input class="r-input" type="number" name="sponsor_interstitiel_duree_s" min="3" max="10" step="1" value="5">
+              </label>
+              <label class="reglage"><span class="r-libelle">Bouton « Passer » actif après (secondes)</span>
+                <input class="r-input" type="number" name="sponsor_interstitiel_skip_s" min="0" max="10" step="1" value="2">
+              </label>
+              <label class="reglage"><span class="r-libelle">Ne pas revoir avant (minutes)</span>
+                <input class="r-input" type="number" name="sponsor_interstitiel_repos_min" min="1" max="240" step="1" value="30">
+              </label>
+              <label class="reglage">
+                <span class="r-libelle">Dès la première visite</span>
+                <span class="mini-toggle"><input type="checkbox" name="sponsor_interstitiel_premiere_visite"> Montrer dès la première arrivée de la journée</span>
+              </label>
+              <p class="note-generation">Décoché (recommandé), le plein écran n'apparaît qu'à partir du deuxième chargement.</p>
+              <button type="button" class="bouton-lien" id="bouton-tester-interstitiel">Prévisualiser le plein écran</button>
+            </div>
+          </details>
 
           <div class="ligne-action">
-            <button type="button" class="bouton" id="bouton-enregistrer-sponsors-reglages">Enregistrer les réglages</button>
-            <button type="button" class="bouton-lien" id="bouton-tester-interstitiel">Tester le plein écran</button>
+            <button type="button" class="bouton" id="bouton-enregistrer-sponsors-reglages">Enregistrer la publication</button>
             <span class="message-form" id="message-sponsors-reglages"></span>
           </div>
         </form>
+        <details class="sponsors-depannage">
+          <summary>Dépannage</summary>
+          <p class="note-generation">Compare les réglages enregistrés avec ce que reçoit réellement la page publique.</p>
+          <button type="button" class="bouton-lien" id="bouton-verifier-public">Vérifier ce que reçoit le public</button>
+          <div id="verif-public" class="diagnostic-remontee" hidden></div>
+        </details>
       </section>
 
       <section class="carte" id="bloc-sponsors-liste">
-        <h2>Partenaires — les fiches</h2>
-        <p class="note-generation">
-          Un partenaire = une fiche. Coche les <strong>emplacements</strong> où il apparaît et
-          règle son <strong>poids</strong> : un poids 3 passe trois fois plus souvent qu'un
-          poids 1 dans la rotation. C'est le seul levier commercial, et il est explicable
-          tel quel au partenaire.
-        </p>
+        <div class="sponsors-liste-tete">
+          <div><h2>Vos partenaires</h2><p class="note-generation">Une fiche simple par partenaire. Les réglages fins restent disponibles si nécessaire.</p></div>
+          <button type="button" class="bouton" id="bouton-ajouter-sponsor">Ajouter un partenaire</button>
+        </div>
+        <span class="message-form" id="message-sponsors-liste"></span>
         <div id="liste-sponsors"><div class="message">Chargement des partenaires…</div></div>
 
-        <!-- Contrôle de vérité : relit l'instantané PUBLIC (le même que reçoivent la page des
-             scores et le dossier club) et affiche, réglage par réglage, ce qui est réellement
-             servi. Répond à « j'ai réglé et rien ne change » sans avoir à deviner. -->
-        <div class="ligne-action">
-          <button type="button" class="bouton-lien" id="bouton-verifier-public">Vérifier ce que reçoit le public</button>
-        </div>
-        <div id="verif-public" class="diagnostic-remontee" hidden></div>
-
-        <form id="form-sponsor">
+        <form id="form-sponsor" class="sponsors-formulaire" hidden>
           <h3 class="apercu-sous-titre" id="titre-form-sponsor">Ajouter un partenaire</h3>
           <input type="hidden" name="id_sponsor" value="">
           <label class="reglage"><span class="r-libelle">Nom du partenaire</span>
@@ -345,7 +356,7 @@
           </label>
 
           <label class="reglage"><span class="r-libelle">Logo (image)</span>
-            <span class="zone-depot" id="zone-depot-sponsor-logo">
+            <span class="zone-depot" id="zone-depot-sponsor-logo" role="button" tabindex="0" aria-label="Choisir le logo du partenaire">
               <input type="file" name="sponsor_logo" accept="image/*" hidden>
               <span class="zd-texte"><strong>Glisse le logo ici</strong><br>ou clique pour choisir une image</span>
             </span>
@@ -359,39 +370,37 @@
             de marque. Utile pour un commerçant qui n'a pas de fichier exploitable.
           </p>
 
-          <label class="reglage"><span class="r-libelle">Taille du logo (%)</span>
-            <input class="r-input" type="number" name="logo_zoom" min="50" max="200" step="10" value="100">
-          </label>
-          <p class="note-generation">
-            <strong>100 % = taille normale.</strong> Beaucoup de fichiers de logo contiennent
-            leurs propres <strong>marges blanches</strong> : le logo paraît alors petit alors que
-            l'image, elle, est à la bonne taille. Monte à <strong>130 ou 150 %</strong> dans ce
-            cas — ou recadre le fichier, ce qui reste la meilleure solution.
-          </p>
+          <fieldset class="sponsors-visibilite">
+            <legend>Visibilité</legend>
+            <label><input type="radio" name="visibilite_preset" value="essentiel" checked><span><strong>Essentiel</strong><small>Mur des partenaires + dossier club</small></span></label>
+            <label><input type="radio" name="visibilite_preset" value="renforce"><span><strong>Renforcé</strong><small>Essentiel + barre rotative sur mobile</small></span></label>
+            <label><input type="radio" name="visibilite_preset" value="personnalise"><span><strong>Personnalisé</strong><small>Choisir précisément chaque emplacement</small></span></label>
+          </fieldset>
 
-          <label class="reglage"><span class="r-libelle">Couleur de marque</span>
-            <input class="r-input" type="color" name="couleur" value="#0c1c2e">
-          </label>
+          <div id="sponsor-emplacements-personnalises" hidden>
+            <p class="note-generation">Choisis les emplacements puis, si besoin, adapte leur texte, leur logo et leur disposition.</p>
+            <div class="sponsor-emplacements" id="sponsor-emplacements"></div>
+          </div>
 
-          <span class="r-libelle">Emplacements et réglages</span>
-          <p class="note-generation">
-            Coche un emplacement pour y faire apparaître ce partenaire. Chaque emplacement
-            ouvre alors <strong>ses propres réglages</strong> — texte, taille du logo et
-            disposition — pour l'adapter exactement à la forme de l'encart. Laisser un réglage
-            vide reprend celui du partenaire, puis le défaut de l'emplacement.
-          </p>
-          <div class="sponsor-emplacements" id="sponsor-emplacements"></div>
-
-          <label class="reglage"><span class="r-libelle">Poids dans la rotation (1 à 5)</span>
-            <input class="r-input" type="number" name="poids" min="1" max="5" step="1" value="1">
-          </label>
-          <label class="reglage"><span class="r-libelle">Ordre dans le mur</span>
-            <input class="r-input" type="number" name="ordre" min="1" max="999" step="1" value="100">
-          </label>
-          <label class="reglage">
-            <span class="r-libelle">Partenaire actif</span>
-            <span class="mini-toggle"><input type="checkbox" name="actif" checked> Visible sur la page publique</span>
-          </label>
+          <details class="sponsors-options-avancees sponsors-options-partenaire">
+            <summary>Options avancées du partenaire</summary>
+            <label class="reglage"><span class="r-libelle">Taille du logo (%)</span>
+              <input class="r-input" type="number" name="logo_zoom" min="50" max="200" step="10" value="100">
+            </label>
+            <label class="reglage"><span class="r-libelle">Couleur de marque</span>
+              <input class="r-input" type="color" name="couleur" value="#0c1c2e">
+            </label>
+            <label class="reglage"><span class="r-libelle">Poids dans la rotation (1 à 5)</span>
+              <input class="r-input" type="number" name="poids" min="1" max="5" step="1" value="1">
+            </label>
+            <label class="reglage"><span class="r-libelle">Ordre dans le mur</span>
+              <input class="r-input" type="number" name="ordre" min="1" max="999" step="1" value="100">
+            </label>
+            <label class="reglage">
+              <span class="r-libelle">Partenaire actif</span>
+              <span class="mini-toggle"><input type="checkbox" name="actif" checked> Visible lorsque la publication est activée</span>
+            </label>
+          </details>
 
           <div class="ligne-action">
             <button type="button" class="bouton" id="bouton-enregistrer-sponsor">Enregistrer le partenaire</button>
@@ -401,29 +410,33 @@
         </form>
       </section>
 
-      <section class="carte" id="bloc-sponsors-bilan">
-        <h2>Partenaires — fiche de visibilité</h2>
+      <section class="carte" id="bloc-sponsors-bilan" hidden>
+        <h2>Bilan après tournoi</h2>
         <p class="note-generation">
-          Ce que tu renvoies au partenaire après l'événement. Les chiffres sont
-          <strong>consolidés entre tous les appareils</strong> : chaque navigateur qui affiche
-          les partenaires remonte ses compteurs, et la fiche annonce la portée réelle.
-          Les relevés arrivent <strong>20 secondes après l'ouverture d'une page, puis toutes les
-          10 minutes</strong> — laisse donc passer un moment avant de t'inquiéter d'un zéro.
+          Consulte les chiffres réellement mesurés, puis exporte une fiche claire à transmettre aux partenaires.
         </p>
         <div class="ligne-action">
           <button type="button" class="bouton" id="bouton-rafraichir-bilan">Rafraîchir les chiffres</button>
-          <button type="button" class="bouton-lien" id="bouton-tester-remontee">Tester la remontée</button>
           <button type="button" class="bouton-lien" id="bouton-imprimer-bilan">Imprimer / PDF</button>
           <button type="button" class="bouton-lien" id="bouton-exporter-bilan">Exporter en CSV</button>
-          <button type="button" class="bouton-lien" id="bouton-vider-bilan">Repartir de zéro</button>
         </div>
-        <div id="diagnostic-remontee" class="diagnostic-remontee" hidden></div>
-        <label class="reglage" id="ligne-projection">
-          <span class="r-libelle">Projection — « et si tant de personnes avaient consulté la page ? »</span>
-          <input class="r-input" type="number" id="projection-appareils" min="1" max="20000" step="10"
-                 placeholder="Laisser vide pour les chiffres mesurés">
-        </label>
         <div id="bilan-sponsors"><div class="message">Chargement du bilan…</div></div>
+        <details class="sponsors-options-avancees" id="ligne-projection">
+          <summary>Simulation commerciale — données fictives</summary>
+          <p class="note-generation">Cette projection est séparée des mesures réelles et ne modifie aucun relevé.</p>
+          <label class="reglage"><span class="r-libelle">Nombre d'appareils à simuler</span>
+            <input class="r-input" type="number" id="projection-appareils" min="1" max="20000" step="10" placeholder="Ex : 500">
+          </label>
+        </details>
+        <details class="sponsors-depannage">
+          <summary>Dépannage et remise à zéro</summary>
+          <p class="note-generation">Le test crée un relevé technique temporaire. La remise à zéro efface tous les relevés mesurés.</p>
+          <div class="ligne-action">
+            <button type="button" class="bouton-lien" id="bouton-tester-remontee">Tester la remontée des mesures</button>
+            <button type="button" class="bouton-lien danger" id="bouton-vider-bilan">Effacer tous les relevés</button>
+          </div>
+          <div id="diagnostic-remontee" class="diagnostic-remontee" hidden></div>
+        </details>
       </section>
 
       <!-- 1) Les réglages (horaires + catégories), injectés par admin.js dans deux zones
@@ -1226,7 +1239,7 @@
   <script src="js/admin-terrains.js"></script>
   <!-- Partenaires : le moteur partagé avec la page publique, puis l'écran d'administration. -->
   <script src="js/sponsors.js"></script>
-  <script src="js/admin-sponsors.js"></script>
+  <script src="js/admin-sponsors.js?v=partenaires-simple-1"></script>
   <!-- pdf-lib : remplissage du formulaire officiel FFR (AcroForm) côté navigateur, sans build. -->
   <script src="js/vendor/pdf-lib.min.js"></script>
   <script src="js/admin-autorisation.js"></script>
@@ -1248,8 +1261,8 @@
        6) ecrans.js    → barre latérale + onglets sur GRAND écran
        7) assistant.js → assistant à cartes sur mobile (verrou « Suivant »),
                          et aiguillage entre les deux modes au chargement. -->
-  <script src="js/ecrans.js?v=navigation-libre-demo-1"></script>
-  <script src="js/assistant.js"></script>
+  <script src="js/ecrans.js?v=navigation-libre-demo-1&amp;partenaires-simple=2"></script>
+  <script src="js/assistant.js?v=partenaires-simple-2"></script>
 
 </body>
 </html>

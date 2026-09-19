@@ -36,6 +36,9 @@ const ASSISTANT_ETAPES = [
   { id: 'terrains',  titre: 'Terrains',     icone: '🗺️', blocs: ['bloc-terrains'] },
   { id: 'poules',    titre: 'Poules',       icone: '🎲', blocs: ['bloc-generation'] },
   { id: 'autorisation', titre: 'Autorisation', icone: '🏛️', blocs: ['bloc-autorisation'] },
+  /* Partenaires vient juste avant Publication : on prépare les fiches et leur visibilité,
+     puis on décide de mettre la page en ligne. */
+  { id: 'sponsors',  titre: 'Partenaires',  icone: '🤝', blocs: ['bloc-sponsors-accueil', 'bloc-sponsors-reglages', 'bloc-sponsors-liste', 'bloc-sponsors-bilan'] },
   /* 🌐 PUBLICATION — carte DÉDIÉE et `libre` depuis PUB-2 (R-098).
      ⚠️ Elle vivait DANS la carte « Résumé », et ce n'était pas une erreur d'origine : en août
      2026 `bloc-publication` ne portait qu'un état et un bouton, sa place était donc bien dans
@@ -47,7 +50,7 @@ const ASSISTANT_ETAPES = [
      ⛔ On ne libère PAS « Résumé » pour autant : il garde le tableau de bord, le fil
      d'avancement et surtout `bloc-reinitialisation`, qui ne doit PAS devenir accessible plus
      tôt par effet collatéral. Seul `bloc-publication` en sort.
-     ⭐ Placée ici, APRÈS « Autorisation », comme sur grand écran (ecrans.js) : les deux
+     ⭐ Placée ici, APRÈS « Partenaires », comme sur grand écran (ecrans.js) : les deux
      parcours racontent la même histoire. Son rang ne change RIEN pour les autres étapes —
      c'est `libre` qui la rend joignable, pas sa position.
      ⛔ Le garde-fou métier n'est pas perdu : il vit sur le BOUTON « Publier »
@@ -55,9 +58,6 @@ const ASSISTANT_ETAPES = [
   { id: 'publication', titre: 'Publication', icone: '🌐', blocs: ['bloc-publication'], libre: true },
   { id: 'apresmidi', titre: 'Après-midi',   icone: '🏉', blocs: ['bloc-apresmidi'] },
   { id: 'feuillejour', titre: 'Feuille de journée', icone: '📋', blocs: ['bloc-feuille-jour'] },
-  /* Partenaires (sponsors de la page publique) : réglages, fiches, fiche de visibilité.
-     Juste avant le résumé — on habille la page une fois le tournoi prêt. */
-  { id: 'sponsors',  titre: 'Partenaires',  icone: '🤝', blocs: ['bloc-sponsors-reglages', 'bloc-sponsors-liste', 'bloc-sponsors-bilan'] },
   /* ⛔ « Résumé » N'EST PAS `libre`, et ne doit pas le devenir : il porte
      `bloc-reinitialisation` (l'effacement du tournoi). ⚠️ `bloc-publication` en a été retiré
      par PUB-2 — voir la carte « Publication » ci-dessus. */
