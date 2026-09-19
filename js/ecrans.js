@@ -44,6 +44,7 @@ const ECRANS_DEF = [
      en tête, puis deux dépliants portent l'invitation initiale et le dossier final. Libre : cette
      préparation reste accessible très tôt, avant les Équipes. */
   { id: 'invitation',  titre: 'Inviter un club',   icone: 'courrier', blocs: ['bloc-clubs-invites', 'bloc-invitation-initiale', 'bloc-dossier-final'], cles: [], libre: true },
+  { id: 'suivi-clubs', titre: 'Suivi des clubs',   icone: 'suivi',    blocs: ['bloc-suivi-clubs'], cles: [], libre: true },
   { id: 'equipes',     titre: 'Équipes',           icone: 'equipe',   blocs: ['bloc-equipes'],            cles: ['equipes'] },
   { id: 'terrains',    titre: 'Terrains',          icone: 'terrain',  blocs: ['bloc-terrains'],           cles: ['terrains'] },
   { id: 'poules',      titre: 'Poules & planning', icone: 'poules',   blocs: ['bloc-generation'],         cles: ['poules'] },
@@ -166,6 +167,7 @@ const ECRANS_ICONES = {
   /* Partenaires : une poignée de main stylisée (deux mains qui se rejoignent). */
   sponsor:   '<path d="M3 10.5l3-3 3.5 3.5 2.5-1 2.5 1L18 7.5l3 3"></path><path d="M3 10.5v4l4.5 4 2-2 2 2 2-2 2 2 4.5-4v-4"></path>',
   courrier:  '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3.5 7l8.5 6 8.5-6"></path>',
+  suivi:     '<path d="M5 4h14v16H5zM8 8l1.5 1.5L12 7M8 14l1.5 1.5L12 13M14 9h3M14 15h3"></path>',
   balai:     '<path d="M14 4l6 6M13 5l-7 7 5 5 7-7M6 12l-2 6 6-2"></path>'
 };
 

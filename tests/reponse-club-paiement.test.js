@@ -70,6 +70,15 @@ vrai(String(bac.envoyerPresenceConfirmee).includes("apiPost('repondreInvitation'
   'seul le second clic envoie la confirmation et la commande');
 vrai(source.includes('Vérifiez votre confirmation') && source.includes('Valider la confirmation'),
   'le message final permet de relire puis valider explicitement');
+vrai(bac.texteSuiviConfirmation({ confirmation_email_envoye: true }, true).includes('récapitulatif vient'),
+  'une participation confirmée annonce clairement l’e-mail envoyé');
+vrai(bac.texteSuiviConfirmation({ confirmation_email_envoye: true }, false).includes('confirmation vient'),
+  'un refus confirmé annonce clairement l’e-mail envoyé');
+vrai(bac.texteSuiviConfirmation({ confirmation_email_envoye: false }, true).includes('réponse est bien enregistrée'),
+  'une panne d’e-mail ne fait jamais passer la réponse enregistrée pour un échec');
+vrai(String(bac.envoyerDecline).includes('texteSuiviConfirmation') &&
+  String(bac.envoyerPresenceConfirmee).includes('texteSuiviConfirmation'),
+  'les deux réponses affichent le résultat réel de l’envoi automatique');
 vrai(css.includes('.rep-total-du') && css.includes('.rep-recap') && css.includes('.rep-prestation-public'),
   'les nouveaux blocs ont une présentation claire et responsive');
 

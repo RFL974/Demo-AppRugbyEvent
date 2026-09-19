@@ -31,6 +31,7 @@ const ASSISTANT_ETAPES = [
   /* « Inviter » regroupe les clubs, l'invitation initiale et le dossier final dans le même écran,
      comme la barre latérale sur ordinateur. */
   { id: 'invitation', titre: 'Inviter',     icone: '✉️', blocs: ['bloc-clubs-invites', 'bloc-invitation-initiale', 'bloc-dossier-final'] },
+  { id: 'suivi-clubs', titre: 'Suivi',      icone: '✅', blocs: ['bloc-suivi-clubs'], libre: true },
   { id: 'equipes',   titre: 'Équipes',      icone: '👥', blocs: ['bloc-equipes'] },
   { id: 'terrains',  titre: 'Terrains',     icone: '🗺️', blocs: ['bloc-terrains'] },
   { id: 'poules',    titre: 'Poules',       icone: '🎲', blocs: ['bloc-generation'] },

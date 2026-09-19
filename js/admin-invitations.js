@@ -797,10 +797,13 @@ function estInvitable(statut) {
 }
 
 /** Envoi INDIVIDUEL de l'invitation à un club (même contenu que l'aperçu). */
-async function envoyerInvitationClubUI(nom) {
+async function envoyerInvitationClubUI(nom, options) {
+  const opt = options || {};
+  const estRelance = opt.relance === true;
   const club = clubsInvitesCourants.find(function (c) { return memeTexteSouple(c.club_nom, nom); });
   if (!club) return;
-  const message = document.getElementById('message-club-invite');
+  const message = (estRelance && document.getElementById('message-suivi-clubs')) ||
+    document.getElementById('message-club-invite');
   const email = String(club.club_contact_email || '').trim();
   if (!email) { await dialogAlerter('« ' + nom + ' » n\'a pas d\'email de contact : à inviter manuellement.'); return; }
   const sujet = sujetInvitationCourant();
@@ -809,17 +812,21 @@ async function envoyerInvitationClubUI(nom) {
   const mentionPieces = piecesAEnvoyer.length
     ? '\n\n📎 ' + piecesAEnvoyer.length + ' pièce(s) jointe(s) : ' + piecesAEnvoyer.map(function (p) { return p.nom; }).join(', ')
     : '\n\nAucune pièce jointe.';
-  if (!await dialogConfirmer('Envoyer l\'invitation à « ' + nom + ' » (' + email + ') ?' + mentionPieces,
-    { ok: 'Envoyer' })) return;
+  const question = estRelance ? 'Relancer « ' + nom + ' » sur sa réponse (' + email + ') ?'
+    : 'Envoyer l\'invitation à « ' + nom + ' » (' + email + ') ?';
+  if (!await dialogConfirmer(question + mentionPieces,
+    { ok: estRelance ? 'Relancer' : 'Envoyer' })) return;
   try {
     const res = await ecrireAdmin('envoyerInvitationClub', {
       club_nom: nom, sujet: sujet, html_modele: htmlModeleInvitation(), texte_modele: texteModeleInvitation(),
       base_reponse: baseReponseInvitation(), base_invitation: lienInvitationPublique(),
-      pieces_jointes: piecesAEnvoyer
+      pieces_jointes: piecesAEnvoyer, relance: estRelance ? 'oui' : 'non'
     });
     if (res && res.invitation_envoyee) club.invitation_envoyee = res.invitation_envoyee;
+    if (res && res.derniere_relance_reponse) club.derniere_relance_reponse = res.derniere_relance_reponse;
     afficherClubsInvites();
-    afficherMessage(message, '✅ Invitation envoyée à ' + email +
+    if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
+    afficherMessage(message, estRelance ? '✅ Relance envoyée à ' + email + '.' : '✅ Invitation envoyée à ' + email +
       (piecesAEnvoyer.length ? ' avec ' + piecesAEnvoyer.length + ' pièce(s) jointe(s).' : '.'), 'ok');
   } catch (erreur) {
     afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
@@ -1303,6 +1310,7 @@ async function chargerClubsInvites() {
     const res = await ecrireAdmin('listerClubsInvites', {});
     clubsInvitesCourants = (res && res.clubs) || [];
     afficherClubsInvites();
+    if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
     // L'aperçu du dossier ouvre le dossier D'UN CLUB : sa liste de choix suit les clubs chargés
     // (elle est vide au premier rendu de la carte, avant cet appel).
     if (typeof majApercuDossier === 'function') majApercuDossier();

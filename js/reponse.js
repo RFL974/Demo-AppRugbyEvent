@@ -665,6 +665,17 @@ function afficherRecapitulatifConfirmation(etat) {
   recap.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+/** Message final : une panne d'e-mail n'efface jamais la réponse déjà enregistrée. */
+function texteSuiviConfirmation(resultat, participation) {
+  if (resultat && resultat.confirmation_email_envoye) {
+    return participation ? ' Un e-mail récapitulatif vient de vous être envoyé.'
+      : ' Un e-mail de confirmation vient de vous être envoyé.';
+  }
+  return ' Votre réponse est bien enregistrée, mais l’e-mail ' +
+    (participation ? 'récapitulatif' : 'de confirmation') +
+    ' n’a pas pu être envoyé. L’organisation en est informée.';
+}
+
 /** Seul ce second clic écrit la réponse. Le premier clic ne fait qu'afficher le récapitulatif. */
 async function envoyerPresenceConfirmee(bouton) {
   if (!confirmationEnAttente) return;
@@ -673,7 +684,7 @@ async function envoyerPresenceConfirmee(bouton) {
   bouton.textContent = 'Envoi…';
   try {
     const etat = confirmationEnAttente;
-    await apiPost('repondreInvitation', {
+    const resultat = await apiPost('repondreInvitation', {
       tournoi: repParams.tournoi, club: repParams.club, token: repParams.token,
       reponse: 'accepte',
       nb_equipes_par_categorie: JSON.stringify(etat.parCat),
@@ -681,8 +692,9 @@ async function envoyerPresenceConfirmee(bouton) {
       nb_joueurs_total: etat.totalJoueurs,
       commande_restauration: JSON.stringify(etat.commande)
     });
+    const suiviEmail = texteSuiviConfirmation(resultat, true);
     afficherConfirmation('🎉 Merci, votre participation est enregistrée !',
-      'Montant total prévu : ' + eurosDepuisCentimes(etat.calcul.total) + '. Votre dossier complet vous sera envoyé prochainement par l\'organisation.');
+      'Montant total prévu : ' + eurosDepuisCentimes(etat.calcul.total) + '. Votre dossier complet vous sera envoyé prochainement par l\'organisation.' + suiviEmail);
   } catch (erreur) {
     const msg = document.getElementById('rep-form-msg');
     msg.textContent = '⚠️ ' + erreur.message;
@@ -698,10 +710,11 @@ async function envoyerDecline(bouton) {
   const texte = bouton.textContent;
   bouton.textContent = 'Envoi…';
   try {
-    await apiPost('repondreInvitation', {
+    const resultat = await apiPost('repondreInvitation', {
       tournoi: repParams.tournoi, club: repParams.club, token: repParams.token, reponse: 'decline'
     });
-    afficherConfirmation('Merci pour votre retour', 'Nous avons bien noté que votre club ne pourra pas participer cette fois. Au plaisir de vous compter parmi nous à une prochaine édition !');
+    const suiviEmail = texteSuiviConfirmation(resultat, false);
+    afficherConfirmation('Merci pour votre retour', 'Nous avons bien noté que votre club ne pourra pas participer cette fois. Au plaisir de vous compter parmi nous à une prochaine édition !' + suiviEmail);
   } catch (erreur) {
     bouton.disabled = false;
     bouton.textContent = texte;

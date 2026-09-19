@@ -483,11 +483,11 @@ function section1() {
     !!ligneEcr && /libre:\s*true/.test(ligneEcr[0]),
     'l\'accès serait verrouillé sur ordinateur');
 
-  /* La carte Dossier a été fusionnée dans Inviter : le parcours compte donc une étape de moins. */
+  /* La carte Dossier est fusionnée dans Inviter ; Suivi des clubs ajoute ensuite une étape dédiée. */
   const nbAsst = (asst.match(/\{\s*id:\s*'[^']+',\s*titre:/g) || []).length;
   const nbEcr = (ecr.match(/\{\s*id:\s*'[^']+',\s*titre:/g) || []).length;
-  verifier('1.7', 'la fusion de Dossier laisse exactement 12 cartes et 13 écrans',
-    nbAsst === 12 && nbEcr === 13,
+  verifier('1.7', 'le suivi des clubs porte le parcours à 13 cartes et 14 écrans',
+    nbAsst === 13 && nbEcr === 14,
     'compté ' + nbAsst + ' cartes et ' + nbEcr + ' écrans — la structure guidée a bougé');
 
   /* Le bloc est rempli à l'ouverture, avant que le mode guidé ne déplace les blocs. */
