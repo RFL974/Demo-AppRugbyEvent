@@ -323,7 +323,7 @@
 
           <div class="ligne-action">
             <button type="button" class="bouton" id="bouton-enregistrer-sponsors-reglages">Enregistrer la publication</button>
-            <span class="message-form" id="message-sponsors-reglages"></span>
+            <span class="message-form" id="message-sponsors-reglages" role="status" aria-live="polite" tabindex="-1"></span>
           </div>
         </form>
         <details class="sponsors-depannage">
@@ -339,14 +339,15 @@
           <div><h2>Vos partenaires</h2><p class="note-generation">Une fiche simple par partenaire. Les réglages fins restent disponibles si nécessaire.</p></div>
           <button type="button" class="bouton" id="bouton-ajouter-sponsor">Ajouter un partenaire</button>
         </div>
-        <span class="message-form" id="message-sponsors-liste"></span>
-        <div id="liste-sponsors"><div class="message">Chargement des partenaires…</div></div>
+        <span class="message-form" id="message-sponsors-liste" role="status" aria-live="polite" tabindex="-1"></span>
+        <button type="button" class="bouton-lien" id="bouton-actualiser-sponsors">Actualiser la liste</button>
+        <div id="liste-sponsors" aria-live="polite"><div class="message">Chargement des partenaires…</div></div>
 
         <form id="form-sponsor" class="sponsors-formulaire" hidden>
           <h3 class="apercu-sous-titre" id="titre-form-sponsor">Ajouter un partenaire</h3>
           <input type="hidden" name="id_sponsor" value="">
-          <label class="reglage"><span class="r-libelle">Nom du partenaire</span>
-            <input class="r-input" type="text" name="nom" placeholder="Ex : Décathlon Le Plessis-Robinson" autocomplete="off">
+          <label class="reglage"><span class="r-libelle">Nom du partenaire (obligatoire)</span>
+            <input class="r-input" type="text" name="nom" required placeholder="Ex : Décathlon Le Plessis-Robinson" autocomplete="off">
           </label>
           <label class="reglage"><span class="r-libelle">Accroche (une ligne, facultatif)</span>
             <input class="r-input" type="text" name="accroche" maxlength="60" placeholder="Ex : Tout l'équipement rugby des U6 aux U14">
@@ -404,14 +405,15 @@
 
           <div class="ligne-action">
             <button type="button" class="bouton" id="bouton-enregistrer-sponsor">Enregistrer le partenaire</button>
-            <button type="button" class="bouton-lien" id="bouton-annuler-sponsor" hidden>Annuler la modification</button>
-            <span class="message-form" id="message-sponsor"></span>
+            <button type="button" class="bouton-lien" id="bouton-annuler-sponsor" hidden>Retour à la liste</button>
+            <span class="message-form" id="message-sponsor" role="status" aria-live="polite" tabindex="-1"></span>
           </div>
         </form>
       </section>
 
       <section class="carte" id="bloc-sponsors-bilan" hidden>
         <h2>Bilan après tournoi</h2>
+        <span class="message-form" id="message-sponsors-bilan" role="status" aria-live="polite"></span>
         <p class="note-generation">
           Consulte les chiffres réellement mesurés, puis exporte une fiche claire à transmettre aux partenaires.
         </p>
@@ -1239,7 +1241,7 @@
   <script src="js/admin-terrains.js"></script>
   <!-- Partenaires : le moteur partagé avec la page publique, puis l'écran d'administration. -->
   <script src="js/sponsors.js"></script>
-  <script src="js/admin-sponsors.js?v=partenaires-simple-1"></script>
+  <script src="js/admin-sponsors.js?v=retours-partenaires-20260919"></script>
   <!-- pdf-lib : remplissage du formulaire officiel FFR (AcroForm) côté navigateur, sans build. -->
   <script src="js/vendor/pdf-lib.min.js"></script>
   <script src="js/admin-autorisation.js"></script>

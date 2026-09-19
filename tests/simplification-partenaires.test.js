@@ -38,8 +38,8 @@ verifier(/Simulation commerciale — données fictives/.test(html) && /Dépannag
   'la simulation et les outils techniques sont isolés du bilan réel');
 verifier(/class="bouton-lien danger" id="bouton-vider-bilan">Effacer tous les relevés/.test(html),
   'la remise à zéro annonce clairement son effet destructif');
-verifier(/apiPostProtege\('enregistrerSponsor', data, 'admin', 'admin'\)/.test(admin) &&
-  /apiPostProtege\('enregistrerReglagesSponsors', data, 'admin', 'admin'\)/.test(admin),
+verifier(/apiPostProtege\('enregistrerSponsor', data, 'admin', 'admin', \{ delaiMs: DELAI_SPONSORS_MS \}\)/.test(admin) &&
+  /apiPostProtege\('enregistrerReglagesSponsors', data, 'admin', 'admin', \{ delaiMs: DELAI_SPONSORS_MS \}\)/.test(admin),
   'les contrats backend d’enregistrement restent inchangés');
 verifier(/'bloc-sponsors-accueil', 'bloc-sponsors-reglages', 'bloc-sponsors-liste', 'bloc-sponsors-bilan'/.test(ecrans) &&
   /'bloc-sponsors-accueil', 'bloc-sponsors-reglages', 'bloc-sponsors-liste', 'bloc-sponsors-bilan'/.test(assistant),

@@ -35,6 +35,66 @@ let sponsorsConsolide = null;    // relevés de TOUS les appareils, consolidés 
 let sponsorLogoDataURI = null;   // logo choisi mais pas encore enregistré
 let sponsorLogoRetirer = false;  // l'utilisateur a demandé à retirer le logo existant
 
+// Un seul geste métier à la fois. Les écritures ne sont jamais rejouées après une panne.
+let sponsorsOperationEnCours = false;
+const DELAI_SPONSORS_MS = 20000;
+
+function messageErreurSponsors(err, ecriture) {
+  const texte = String(err && err.message || '');
+  if (/annulée|incorrecte|non configur|authentification/i.test(texte)) {
+    return 'Connexion administrateur requise. Tes saisies sont conservées.';
+  }
+  if (/nom du partenaire est obligatoire/i.test(texte)) return 'Le nom du partenaire est obligatoire.';
+  if (/introuvable|déjà|doublon|conflit/i.test(texte)) {
+    return 'Cette fiche a changé ou existe déjà. Actualise la liste avant de continuer.';
+  }
+  let message = 'Le serveur ne peut pas répondre pour le moment.';
+  if (err && err.name === 'AbortError') message = 'Le délai de réponse est dépassé.';
+  else if (typeof navigator !== 'undefined' && navigator.onLine === false) message = 'La connexion Internet est interrompue.';
+  else if (err && err.name === 'TypeError') message = 'La connexion au serveur a été interrompue.';
+  else if (err && err.name === 'SyntaxError') message = 'La réponse du serveur est illisible.';
+  return message + (ecriture
+    ? ' Résultat non confirmé : actualise la liste avant toute nouvelle tentative. Tes saisies sont conservées.'
+    : ' Réessaie dans un instant.');
+}
+
+function verifierReponseSponsors(r) {
+  if (r && r.error) throw new Error(r.error);
+  if (!r || r.ok !== true) throw new SyntaxError('Réponse invalide');
+  return r;
+}
+
+async function avecActionSponsors(bouton, message, action, libelle) {
+  if (sponsorsOperationEnCours) return;
+  sponsorsOperationEnCours = true;
+  const controles = Array.from(document.querySelectorAll(
+    '#form-sponsor input, #form-sponsor select, #form-sponsor button, ' +
+    '#form-sponsors-reglages input, #form-sponsors-reglages button, ' +
+    '#liste-sponsors button, #bouton-ajouter-sponsor, #bouton-actualiser-sponsors, #bouton-vider-bilan'
+  )).map(function (element) { return { element: element, disabled: element.disabled }; });
+  const texte = bouton.textContent;
+  controles.forEach(function (c) { c.element.disabled = true; });
+  bouton.disabled = true;
+  bouton.textContent = libelle || 'Enregistrement…';
+  afficherMessage(message, bouton.textContent, 'ok');
+  try { await action(); }
+  catch (err) { afficherMessage(message, '⚠️ ' + messageErreurSponsors(err, true), 'ko'); }
+  finally {
+    controles.forEach(function (c) { c.element.disabled = c.disabled; });
+    bouton.disabled = false;
+    bouton.textContent = texte;
+    sponsorsOperationEnCours = false;
+  }
+}
+
+// La confirmation d'écriture suffit pour rendre la main ; la liste se relit ensuite.
+function actualiserSponsorsApresEcriture() {
+  chargerSponsors().catch(function () {
+    afficherMessage(document.getElementById('message-sponsors-liste'),
+      'La modification est enregistrée. Actualise la liste pour revoir les partenaires.', 'ko');
+  });
+}
+
 /* ==========================================================================
    DÉMARRAGE
    ========================================================================== */
@@ -48,6 +108,7 @@ function initAdminSponsors() {
     });
   });
   document.getElementById('bouton-ajouter-sponsor').addEventListener('click', onAjouterSponsor);
+  document.getElementById('bouton-actualiser-sponsors').addEventListener('click', chargerSponsors);
 
   document.getElementById('form-sponsors-reglages')
     .addEventListener('submit', function (e) { e.preventDefault(); });
@@ -162,14 +223,14 @@ async function lireRelevesSponsors() {
   const zone = document.getElementById('bilan-sponsors');
   if (zone) zone.innerHTML = '<div class="message">Lecture des relevés…</div>';
   try {
-    const r = await apiPostProtege('lireMesuresSponsors', {}, 'admin', 'admin');
-    if (r && r.releves) {
+    const r = verifierReponseSponsors(await apiPostProtege('lireMesuresSponsors', {}, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+    if (Array.isArray(r.releves)) {
       sponsorsConsolide = sponsorsConsolider(r.releves);
       sponsorsConsolide.jour = r.jour;
       sponsorsConsolide.totalToutesJournees = r.total || 0;
       sponsorsConsolide.jours = r.jours || {};
     } else {
-      sponsorsConsolide = null;
+      throw new SyntaxError('Réponse invalide');
     }
     return true;
   } catch (err) {
@@ -234,6 +295,7 @@ function majLignesInterstitiel() {
 }
 
 async function onEnregistrerReglagesSponsors() {
+  if (sponsorsOperationEnCours) return;
   const form = document.getElementById('form-sponsors-reglages');
   const message = document.getElementById('message-sponsors-reglages');
   const data = {};
@@ -247,9 +309,8 @@ async function onEnregistrerReglagesSponsors() {
     form.sponsor_interstitiel_skip_s.value = data.sponsor_interstitiel_duree_s;
   }
 
-  await avecBoutonOccupe(document.getElementById('bouton-enregistrer-sponsors-reglages'), message, async function () {
-    const r = await apiPostProtege('enregistrerReglagesSponsors', data, 'admin', 'admin');
-    if (r.error) { afficherMessage(message, '⚠️ ' + r.error, 'ko'); return; }
+  await avecActionSponsors(document.getElementById('bouton-enregistrer-sponsors-reglages'), message, async function () {
+    verifierReponseSponsors(await apiPostProtege('enregistrerReglagesSponsors', data, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
     Object.keys(data).forEach(function (cle) { configCourante.global[cle] = data[cle]; });
     mettreAJourResumeSponsors();
     const actifs = sponsorsAdmin.filter(function (s) { return String(s.actif || '').toLowerCase() === 'oui'; }).length;
@@ -538,12 +599,14 @@ function sponsorsActifsAdmin() {
  */
 async function lireFichesSponsors() {
   const zone = document.getElementById('liste-sponsors');
+  zone.innerHTML = '<p class="vide">Chargement des partenaires…</p>';
   try {
-    const r = await apiPostProtege('listerSponsors', {}, 'admin', 'admin');
-    sponsorsAdmin = (r && r.sponsors) || [];
+    const r = verifierReponseSponsors(await apiPostProtege('listerSponsors', {}, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+    if (!Array.isArray(r.sponsors)) throw new SyntaxError('Réponse invalide');
+    sponsorsAdmin = r.sponsors;
     return true;
   } catch (err) {
-    zone.innerHTML = '<p class="vide">Erreur de chargement des partenaires : ' + echapper(err.message) + '</p>';
+    zone.innerHTML = '<p class="vide">Erreur de chargement des partenaires : ' + echapper(messageErreurSponsors(err, false)) + '</p>';
     return false;
   }
 }
@@ -553,13 +616,20 @@ async function lireFichesSponsors() {
  * enregistrement ou suppression d'un partenaire. Comportement inchangé.
  */
 async function chargerSponsors() {
-  // ⭐ R2 — rafraîchissement FORCÉ : cette fonction suit un enregistrement ou une suppression,
-  //   la relecture doit donc être postérieure à cette écriture. Le registre l'garantit et
-  //   empêche qu'une lecture de navigation commencée avant ne soit resservie.
-  const ok = (typeof rafraichirRessourceAdmin === 'function')
-    ? await rafraichirRessourceAdmin('fichesSponsors')
-    : await lireFichesSponsors();
-  if (ok) afficherListeSponsors();
+  const bouton = document.getElementById('bouton-actualiser-sponsors');
+  if (bouton) { bouton.disabled = true; bouton.textContent = 'Actualisation…'; }
+  try {
+    // ⭐ R2 — rafraîchissement FORCÉ : cette fonction suit un enregistrement ou une suppression,
+    //   la relecture doit donc être postérieure à cette écriture. Le registre l'garantit et
+    //   empêche qu'une lecture de navigation commencée avant ne soit resservie.
+    const ok = (typeof rafraichirRessourceAdmin === 'function')
+      ? await rafraichirRessourceAdmin('fichesSponsors')
+      : await lireFichesSponsors();
+    if (ok) afficherListeSponsors();
+    return ok;
+  } finally {
+    if (bouton) { bouton.disabled = false; bouton.textContent = 'Actualiser la liste'; }
+  }
 }
 
 function afficherListeSponsors() {
@@ -614,18 +684,20 @@ function couleurSponsor(s) {
 
 function onClicListeSponsors(e) {
   const btn = e.target.closest('button[data-action]');
-  if (!btn) return;
+  if (!btn || sponsorsOperationEnCours) return;
   const id = btn.getAttribute('data-id');
   if (btn.getAttribute('data-action') === 'modifier') remplirFormSponsor(id);
-  else onSupprimerSponsor(id);
+  else onSupprimerSponsor(id, btn);
 }
 
 function onAjouterSponsor() {
+  if (sponsorsOperationEnCours) return;
   choisirVueSponsors('gestion');
   reinitialiserFormSponsor();
   afficherMessage(document.getElementById('message-sponsors-liste'), '', 'ok');
   const form = document.getElementById('form-sponsor');
   form.hidden = false;
+  document.getElementById('bouton-annuler-sponsor').hidden = false;
   form.nom.focus();
   form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
@@ -672,6 +744,7 @@ function synchroniserPresetVisibilite() {
 }
 
 function remplirFormSponsor(id) {
+  if (sponsorsOperationEnCours) return;
   const s = sponsorsAdmin.filter(function (x) { return String(x.id_sponsor) === String(id); })[0];
   if (!s) return;
   const form = document.getElementById('form-sponsor');
@@ -702,6 +775,7 @@ function remplirFormSponsor(id) {
   document.getElementById('bouton-annuler-sponsor').hidden = false;
   choisirVueSponsors('gestion');
   form.hidden = false;
+  form.nom.focus();
   form.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -780,12 +854,18 @@ function onRetirerLogoSponsor() {
 }
 
 async function onEnregistrerSponsor() {
+  if (sponsorsOperationEnCours) return;
   const form = document.getElementById('form-sponsor');
   const message = document.getElementById('message-sponsor');
 
   const nom = form.nom.value.trim();
   if (!nom) { afficherMessage(message, '⚠️ Le nom du partenaire est obligatoire.', 'ko'); return; }
 
+  if (form.url.value.trim() && !/^https?:\/\/[^\s]+$/i.test(form.url.value.trim())) {
+    afficherMessage(message, '⚠️ Indique une adresse de site commençant par https:// ou http://.', 'ko');
+    form.url.focus();
+    return;
+  }
   const emplacements = SPONSORS_EMPLACEMENTS.filter(function (e) { return form['emp_' + e].checked; });
   if (!emplacements.length) {
     afficherMessage(message, '⚠️ Coche au moins un emplacement.', 'ko');
@@ -808,31 +888,30 @@ async function onEnregistrerSponsor() {
   if (sponsorLogoDataURI) data.logo = sponsorLogoDataURI;
   if (sponsorLogoRetirer) data.logo_retirer = 'oui';
 
-  await avecBoutonOccupe(document.getElementById('bouton-enregistrer-sponsor'), message, async function () {
-    const r = await apiPostProtege('enregistrerSponsor', data, 'admin', 'admin');
-    if (r.error) { afficherMessage(message, '⚠️ ' + r.error, 'ko'); return; }
-    await chargerSponsors();
+  await avecActionSponsors(document.getElementById('bouton-enregistrer-sponsor'), message, async function () {
+    const r = verifierReponseSponsors(await apiPostProtege('enregistrerSponsor', data, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+    if (!r.id_sponsor) throw new SyntaxError('Réponse invalide');
     reinitialiserFormSponsor();
     afficherMessage(document.getElementById('message-sponsors-liste'), '✅ Partenaire enregistré.', 'ok');
+    document.getElementById('message-sponsors-liste').focus();
+    actualiserSponsorsApresEcriture();
   });
 }
 
-async function onSupprimerSponsor(id) {
+async function onSupprimerSponsor(id, bouton) {
+  if (sponsorsOperationEnCours) return;
   const s = sponsorsAdmin.filter(function (x) { return String(x.id_sponsor) === String(id); })[0];
-  if (!s) return;
+  if (!s || !bouton) return;
   const message = document.getElementById('message-sponsors-liste');
-  const ok = await dialogConfirmer('Supprimer « ' + s.nom + ' » ?\n\n' +
-    'Sa fiche et son logo seront supprimés. Pour le retirer de la page SANS perdre sa fiche, ' +
-    'décoche plutôt « Partenaire actif ».', { ok: 'Supprimer', danger: true });
-  if (!ok) return;
-  try {
-    const r = await apiPostProtege('supprimerSponsor', { id_sponsor: id }, 'admin', 'admin');
-    if (r.error) { afficherMessage(message, '⚠️ ' + r.error, 'ko'); return; }
-    await chargerSponsors();
-    afficherMessage(document.getElementById('message-sponsors-liste'), '✅ Partenaire supprimé.', 'ok');
-  } catch (err) {
-    afficherMessage(message, '⚠️ ' + err.message, 'ko');
-  }
+  await avecActionSponsors(bouton, message, async function () {
+    const ok = await dialogConfirmer('Supprimer « ' + s.nom + ' » ?\n\n' +
+      'Sa fiche et son logo seront supprimés. Pour conserver sa fiche, décoche plutôt « Partenaire actif ».',
+      { ok: 'Supprimer', danger: true });
+    if (!ok) { afficherMessage(message, 'Suppression annulée.', 'ok'); return; }
+    verifierReponseSponsors(await apiPostProtege('supprimerSponsor', { id_sponsor: id }, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+    afficherMessage(message, '✅ Partenaire supprimé.', 'ok');
+    actualiserSponsorsApresEcriture();
+  }, 'Suppression…');
 }
 
 /* ==========================================================================
@@ -882,7 +961,7 @@ async function onTesterRemontee() {
 
     let ecritureOk = false;
     try {
-      const r = await apiPost('mesureSponsors', releve);
+      const r = await apiPost('mesureSponsors', releve, { delaiMs: DELAI_SPONSORS_MS });
       // `ignore` = le backend a répondu OK mais n'a VOLONTAIREMENT rien écrit (un plafond de
       // l'écriture publique est atteint). Sans ce cas, le diagnostic annoncerait une écriture
       // réussie puis une relecture introuvable, et enverrait chercher une panne inexistante.
@@ -920,7 +999,7 @@ async function onTesterRemontee() {
           '(l\'ancien remplacé, pas ajouté à la suite).';
         classe = 'diag-ko';
       } else {
-        lignes.push('❌ <strong>Écriture</strong> — ' + echapper(msg));
+        lignes.push('❌ <strong>Écriture</strong> — ' + echapper(messageErreurSponsors(err, true)));
         verdict = 'Le relevé n\'a pas pu être enregistré. Message du serveur ci-dessus.';
         classe = 'diag-ko';
       }
@@ -929,7 +1008,7 @@ async function onTesterRemontee() {
     // ÉTAPE 2 — la relecture. Elle n'a de sens que si l'écriture est passée.
     if (ecritureOk) {
       try {
-        const lu = await apiPostProtege('lireMesuresSponsors', {}, 'admin', 'admin');
+        const lu = await apiPostProtege('lireMesuresSponsors', {}, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS });
         const trouve = (lu.releves || []).some(function (x) { return x.session === marque; });
         if (trouve) {
           lignes.push('✅ <strong>Relecture</strong> — le relevé de test a bien été retrouvé.');
@@ -960,7 +1039,7 @@ async function onTesterRemontee() {
           classe = 'diag-ko';
         }
       } catch (err) {
-        lignes.push('❌ <strong>Relecture</strong> — ' + echapper(String(err.message || '')));
+        lignes.push('❌ <strong>Relecture</strong> — ' + echapper(messageErreurSponsors(err, false)));
         verdict = 'L\'écriture fonctionne mais la relecture échoue.';
         classe = 'diag-ko';
       }
@@ -1008,9 +1087,9 @@ async function onVerifierPublic() {
   let data = null;
   let erreur = '';
   try {
-    data = await apiGet('getAll');
+    data = await apiGet('getAll', null, { delaiMs: DELAI_SPONSORS_MS });
   } catch (err) {
-    erreur = String(err.message || err);
+    erreur = messageErreurSponsors(err, false);
   } finally {
     bouton.disabled = false;
   }
@@ -1202,7 +1281,7 @@ function ficheSponsor(s, facteur, projection, totalExpo) {
 
   h += '<p class="fs-methode"><strong>Méthode.</strong> Exposition mesurée côté navigateur : ' +
     'logo présent à plus de 50 % dans l\'écran, onglet actif. Les compteurs restent sur ' +
-    'l\'appareil — aucun envoi, aucun cookie, aucun traceur tiers, aucune donnée personnelle. ' +
+    'l\'appareil puis sont consolidés par le serveur, sans cookie ni traceur tiers. ' +
     (projection
       ? '<strong>Ces chiffres sont une PROJECTION</strong> (mesure multipliée par ' + facteur +
         '), pas un relevé d\'audience.'
@@ -1290,16 +1369,18 @@ function onExporterBilanCsv() {
 }
 
 async function onViderBilan() {
-  const ok = await dialogConfirmer('Effacer TOUS les relevés de visibilité ?\n\n' +
-    'Les compteurs repartent de zéro, sur cet appareil comme sur le serveur — les relevés ' +
-    'déjà remontés par les spectateurs sont supprimés. Les fiches partenaires, elles, ne ' +
-    'bougent pas.', { ok: 'Effacer', danger: true });
-  if (!ok) return;
-  sponsorsRemettreAZero();
-  try {
-    await apiPostProtege('viderMesuresSponsors', {}, 'admin', 'admin');
-  } catch (err) { /* le local est déjà effacé : on n'échoue pas là-dessus */ }
-  await chargerMesuresSponsors();
+  const message = document.getElementById('message-sponsors-bilan');
+  await avecActionSponsors(document.getElementById('bouton-vider-bilan'), message, async function () {
+    const ok = await dialogConfirmer('Effacer TOUS les relevés de visibilité ?\n\n' +
+      'Cette action est définitive. Les fiches partenaires sont conservées.', { ok: 'Effacer', danger: true });
+    if (!ok) { afficherMessage(message, 'Effacement annulé.', 'ok'); return; }
+    verifierReponseSponsors(await apiPostProtege('viderMesuresSponsors', {}, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+    sponsorsRemettreAZero();
+    afficherMessage(message, '✅ Relevés effacés.', 'ok');
+    chargerMesuresSponsors().catch(function () {
+      afficherMessage(message, 'Relevés effacés. Actualise les chiffres pour vérifier le bilan.', 'ko');
+    });
+  }, 'Effacement…');
 }
 
 document.addEventListener('DOMContentLoaded', initAdminSponsors);
