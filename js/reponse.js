@@ -14,6 +14,8 @@
 
 let repDonnees = null;   // { club, tournoi, categories } renvoyé par le backend
 let repParams = null;    // { tournoi, club, token } de l'URL
+let commandeInitiale = {};
+let confirmationEnAttente = null;
 
 document.addEventListener('DOMContentLoaded', initReponse);
 
@@ -44,6 +46,41 @@ async function initReponse() {
 /** Bloc d'erreur générique (ne révèle aucune information). */
 function messageErreur(texte) {
   return '<div class="message-chargement erreur">' + echapper(texte) + '</div>';
+}
+
+/** Convertit un prix normalisé en centimes. Une valeur inconnue ne devient jamais un prix. */
+function prixEnCentimes(valeur) {
+  const s = txt(valeur).trim().replace(',', '.');
+  if (!/^\d+(?:\.\d{1,2})?$/.test(s)) return 0;
+  const n = Number(s);
+  return isFinite(n) && n > 0 ? Math.round(n * 100) : 0;
+}
+
+function eurosDepuisCentimes(centimes) {
+  const n = Math.max(0, Math.round(Number(centimes) || 0));
+  const euros = (n / 100).toFixed(2).replace('.', ',').replace(/,00$/, '');
+  return euros + ' €';
+}
+
+/** Calcule le détail financier à partir de valeurs déjà validées. Pur et testé. */
+function calculerPaiementReponse(nbEquipes, totaux, commande, paiement) {
+  const p = paiement || {};
+  const c = commande || {};
+  const prixInscription = prixEnCentimes(p.frais_inscription_prix);
+  const prixRepas = prixEnCentimes(p.repas_prix_personne);
+  const prixGouter = prixEnCentimes(p.gouter_prix_personne);
+  const inscription = Math.max(0, Number(nbEquipes) || 0) * prixInscription;
+  const repasQuantite = Math.max(0, Number(c.repas_joueurs) || 0) + Math.max(0, Number(c.repas_educateurs) || 0);
+  const gouterQuantite = Math.max(0, Number(c.gouter_joueurs) || 0) + Math.max(0, Number(c.gouter_educateurs) || 0);
+  const repas = repasQuantite * prixRepas;
+  const gouter = gouterQuantite * prixGouter;
+  return {
+    inscription: inscription, repas: repas, gouter: gouter,
+    repasQuantite: repasQuantite, gouterQuantite: gouterQuantite,
+    joueurs: Math.max(0, Number(totaux && totaux.joueurs) || 0),
+    educateurs: Math.max(0, Number(totaux && totaux.educateurs) || 0),
+    total: inscription + repas + gouter
+  };
 }
 
 /* --------------------------------------------------------------------------
@@ -131,12 +168,62 @@ function construirePage(data) {
   return html;
 }
 
-/** Formulaire « Nous serons présents » : catégories + nb d'équipes + nb joueurs total. */
+/** Rappel financier visible avant la saisie : aucune valeur absente n'est inventée. */
+function blocModalitesPaiement(data) {
+  const p = data.paiement || {};
+  const prix = prixEnCentimes(p.frais_inscription_prix);
+  const lignes = [];
+  lignes.push('<span><strong>Frais d\'inscription :</strong> ' +
+    (p.frais_inscription_oui === 'oui' && prix
+      ? echapper(eurosDepuisCentimes(prix) + ' par équipe')
+      : 'aucun frais demandé') + '</span>');
+  if (txt(p.date_limite_paiement)) {
+    lignes.push('<span><strong>Date limite de paiement :</strong> ' +
+      echapper(dateLongueFr(p.date_limite_paiement)) + '</span>');
+  }
+  return '<section class="rep-finances"><h2 class="rep-titre">Inscription et paiement</h2>' +
+    '<div class="rep-rappel-paiement">' + lignes.join('') + '</div></section>';
+}
+
+/** Commande d'une prestation facturée en supplément. Absente si aucun prix n'est dû. */
+function blocCommandePrestation(type, libelle, prixBrut) {
+  const prix = prixEnCentimes(prixBrut);
+  if (!prix) return '';
+  const articlePluriel = type === 'repas' ? 'repas' : 'goûters';
+  return '<section class="rep-prestation" data-prestation="' + type + '" data-prix-centimes="' + prix + '">' +
+    '<h3>' + echapper(libelle) + ' — ' + echapper(eurosDepuisCentimes(prix)) + ' par personne</h3>' +
+    '<p class="rep-aide">Choisissez le nombre de ' + articlePluriel + ' à réserver. « Pour tous » suit automatiquement vos effectifs.</p>' +
+    '<div class="rep-prestation-public">' +
+      '<label><input type="checkbox" class="rep-prestation-tous" data-public="joueurs"> ' +
+        echapper(libelle) + ' pour tous les joueurs</label>' +
+      '<label>Ou nombre pour les joueurs ' +
+        '<input type="number" class="rep-prestation-quantite" data-public="joueurs" min="0" step="1" value="0" inputmode="numeric"></label>' +
+    '</div>' +
+    '<div class="rep-prestation-public">' +
+      '<label><input type="checkbox" class="rep-prestation-tous" data-public="educateurs"> ' +
+        echapper(libelle) + ' pour tous les éducateurs</label>' +
+      '<label>Ou nombre pour les éducateurs ' +
+        '<input type="number" class="rep-prestation-quantite" data-public="educateurs" min="0" step="1" value="0" inputmode="numeric"></label>' +
+    '</div>' +
+    '<span class="rep-prestation-erreur" role="alert"></span>' +
+  '</section>';
+}
+
+/** Convertit une saisie de quantité sans accepter silencieusement les décimales. */
+function quantiteCommande(brut) {
+  const valeur = txt(brut);
+  if (!valeur) return { valide: true, valeur: 0 };
+  if (!/^\d+$/.test(valeur)) return { valide: false, valeur: 0 };
+  return { valide: true, valeur: Number(valeur) };
+}
+
+/** Formulaire « Nous serons présents » : catégories, effectifs, commandes et total. */
 function formulairePresence(data) {
   const cats = (data.categories || []);
   const engagees = parseCategoriesEngagees(data.club.categories_engagees);
   const nbParCat = jsonSur(data.club.nb_equipes_par_categorie, {});
   detailInitial = jsonSur(data.club.detail_effectifs, {});
+  commandeInitiale = (detailInitial && detailInitial._restauration) || {};
 
   let lignes = '';
   cats.forEach(function (c) {
@@ -168,7 +255,12 @@ function formulairePresence(data) {
       '</div>';
   });
 
+  const p = data.paiement || {};
+  const commandes = blocCommandePrestation('repas', 'Repas', p.repas_prix_personne) +
+    blocCommandePrestation('gouter', 'Goûter', p.gouter_prix_personne);
+
   return '<form id="form-presence" class="rep-form">' +
+    blocModalitesPaiement(data) +
     '<h2 class="rep-titre">Vos équipes engagées</h2>' +
     '<p class="rep-aide">Cochez les catégories concernées et indiquez le nombre d\'équipes pour chacune.</p>' +
     '<div class="rep-cats">' + (lignes || '<p class="rep-aide">Aucune catégorie ouverte pour le moment.</p>') + '</div>' +
@@ -177,10 +269,16 @@ function formulairePresence(data) {
       '<span>Total joueurs engagés : <strong id="rep-total-joueurs">0</strong></span>' +
       '<span>Total éducateurs : <strong id="rep-total-educateurs">0</strong></span>' +
     '</div>' +
+    (commandes ? '<section class="rep-commandes"><h2 class="rep-titre">Repas et goûter</h2>' + commandes + '</section>' : '') +
+    '<section class="rep-total-du"><h2>Total à payer</h2>' +
+      '<div id="rep-detail-paiement"></div>' +
+      '<p><strong id="rep-montant-total">0 €</strong></p>' +
+    '</section>' +
     '<div class="rep-actions">' +
-      '<button type="submit" class="rep-btn rep-btn-oui" id="btn-confirmer">Confirmer notre participation</button>' +
+      '<button type="submit" class="rep-btn rep-btn-oui" id="btn-confirmer">Vérifier et confirmer</button>' +
       '<span class="rep-form-msg" id="rep-form-msg"></span>' +
     '</div>' +
+    '<div id="rep-recap-confirmation" hidden></div>' +
   '</form>';
 }
 
@@ -263,6 +361,107 @@ function majTotaux() {
   zone.hidden = !unChiffre;
   document.getElementById('rep-total-joueurs').textContent = String(tj);
   document.getElementById('rep-total-educateurs').textContent = String(te);
+  synchroniserQuantitesTous({ joueurs: tj, educateurs: te });
+  majMontantTotal();
+}
+
+function totauxEffectifsReponse() {
+  return {
+    joueurs: parseInt((document.getElementById('rep-total-joueurs') || {}).textContent, 10) || 0,
+    educateurs: parseInt((document.getElementById('rep-total-educateurs') || {}).textContent, 10) || 0
+  };
+}
+
+function nombreEquipesReponse() {
+  let total = 0;
+  document.querySelectorAll('.rep-cat').forEach(function (ligne) {
+    if (!ligne.querySelector('.rep-cat-case').checked) return;
+    const n = parseInt(ligne.querySelector('.rep-cat-equipes').value, 10);
+    if (isFinite(n) && n > 0) total += n;
+  });
+  return total;
+}
+
+/** Quand « pour tous » est coché, la quantité suit chaque changement d'effectif. */
+function synchroniserQuantitesTous(totaux) {
+  document.querySelectorAll('.rep-prestation').forEach(function (bloc) {
+    bloc.querySelectorAll('.rep-prestation-tous').forEach(function (caseTous) {
+      const publicVise = caseTous.getAttribute('data-public');
+      const champ = bloc.querySelector('.rep-prestation-quantite[data-public="' + publicVise + '"]');
+      if (!champ) return;
+      champ.max = String(totaux[publicVise] || 0);
+      champ.disabled = caseTous.checked;
+      if (caseTous.checked) champ.value = String(totaux[publicVise] || 0);
+    });
+  });
+}
+
+/** Relit les quantités avec bornes. `silencieux` évite le message pendant une saisie incomplète. */
+function lireCommandeRestauration(silencieux) {
+  const totaux = totauxEffectifsReponse();
+  const commande = {};
+  let erreur = '';
+  document.querySelectorAll('.rep-prestation').forEach(function (bloc) {
+    const type = bloc.getAttribute('data-prestation');
+    const err = bloc.querySelector('.rep-prestation-erreur');
+    if (err) err.textContent = '';
+    ['joueurs', 'educateurs'].forEach(function (publicVise) {
+      const caseTous = bloc.querySelector('.rep-prestation-tous[data-public="' + publicVise + '"]');
+      const champ = bloc.querySelector('.rep-prestation-quantite[data-public="' + publicVise + '"]');
+      const limite = totaux[publicVise] || 0;
+      const saisie = caseTous && caseTous.checked
+        ? { valide: true, valeur: limite }
+        : quantiteCommande(champ && champ.value);
+      const quantite = saisie.valeur;
+      if (!saisie.valide || quantite > limite) {
+        const prestation = type === 'repas' ? 'repas' : 'goûters';
+        erreur = 'Le nombre de ' + prestation + ' pour les ' + publicVise + ' doit être un entier compris entre 0 et ' + limite + '.';
+        if (!silencieux && err) err.textContent = erreur;
+      }
+      commande[type + '_' + publicVise] = Math.max(0, quantite);
+      commande[type + '_tous_' + publicVise] = !!(caseTous && caseTous.checked);
+    });
+  });
+  return erreur ? { error: erreur, commande: commande } : { commande: commande };
+}
+
+/** Décompose et affiche instantanément inscription + repas + goûter. */
+function majMontantTotal() {
+  const totalEl = document.getElementById('rep-montant-total');
+  const detailEl = document.getElementById('rep-detail-paiement');
+  if (!totalEl || !detailEl) return;
+  const lu = lireCommandeRestauration(true);
+  const calc = calculerPaiementReponse(nombreEquipesReponse(), totauxEffectifsReponse(),
+    lu.commande, (repDonnees && repDonnees.paiement) || {});
+  const lignes = [];
+  if (calc.inscription) lignes.push('<span>Frais d\'inscription : <strong>' + echapper(eurosDepuisCentimes(calc.inscription)) + '</strong></span>');
+  if (calc.repas) lignes.push('<span>Repas (' + calc.repasQuantite + ') : <strong>' + echapper(eurosDepuisCentimes(calc.repas)) + '</strong></span>');
+  if (calc.gouter) lignes.push('<span>Goûters (' + calc.gouterQuantite + ') : <strong>' + echapper(eurosDepuisCentimes(calc.gouter)) + '</strong></span>');
+  detailEl.innerHTML = lignes.join('') || '<span>Aucun montant dû avec les choix actuels.</span>';
+  totalEl.textContent = eurosDepuisCentimes(calc.total);
+}
+
+/** Réapplique une commande déjà enregistrée quand le club rouvre son lien. */
+function restaurerCommandeInitiale() {
+  ['repas', 'gouter'].forEach(function (type) {
+    const bloc = document.querySelector('.rep-prestation[data-prestation="' + type + '"]');
+    const init = commandeInitiale[type] || {};
+    if (!bloc) return;
+    ['joueurs', 'educateurs'].forEach(function (publicVise) {
+      const caseTous = bloc.querySelector('.rep-prestation-tous[data-public="' + publicVise + '"]');
+      const champ = bloc.querySelector('.rep-prestation-quantite[data-public="' + publicVise + '"]');
+      if (caseTous) caseTous.checked = !!init['tous_' + publicVise];
+      if (champ) champ.value = String(parseInt(init[publicVise], 10) || 0);
+    });
+  });
+  synchroniserQuantitesTous(totauxEffectifsReponse());
+  majMontantTotal();
+}
+
+function annulerRecapitulatif() {
+  confirmationEnAttente = null;
+  const recap = document.getElementById('rep-recap-confirmation');
+  if (recap) { recap.hidden = true; recap.innerHTML = ''; }
 }
 
 /* --------------------------------------------------------------------------
@@ -280,6 +479,8 @@ function brancherEvenements() {
   document.querySelectorAll('.rep-cat').forEach(function (ligne) {
     if (ligne.querySelector('.rep-cat-case').checked) majDetailEquipes(ligne);
   });
+  restaurerCommandeInitiale();
+  majMontantTotal();
 }
 
 function onClicReponse(e) {
@@ -295,13 +496,25 @@ function onClicReponse(e) {
     document.getElementById('rep-zone-absent').hidden = true;
   } else if (cible.closest('#btn-decline-confirm')) {
     envoyerDecline(cible.closest('#btn-decline-confirm'));
+  } else if (cible.closest('#btn-modifier-reponse')) {
+    annulerRecapitulatif();
+  } else if (cible.closest('#btn-valider-confirmation')) {
+    envoyerPresenceConfirmee(cible.closest('#btn-valider-confirmation'));
   }
 }
 
 /** Coche/décoche une catégorie : montre/masque son champ « nombre d'équipes ». */
 function onChangeReponse(e) {
+  const tous = e.target.closest('.rep-prestation-tous');
+  if (tous) {
+    annulerRecapitulatif();
+    synchroniserQuantitesTous(totauxEffectifsReponse());
+    majMontantTotal();
+    return;
+  }
   const boite = e.target.closest('.rep-cat-case');
   if (!boite) return;
+  annulerRecapitulatif();
   const ligne = boite.closest('.rep-cat');
   const nb = ligne.querySelector('.rep-cat-nb');
   const champ = ligne.querySelector('.rep-cat-equipes');
@@ -322,8 +535,15 @@ function onChangeReponse(e) {
 
 /** Validation EN DIRECT du nombre d'équipes vs le maximum de la catégorie. */
 function onInputReponse(e) {
+  const quantite = e.target.closest('.rep-prestation-quantite');
+  if (quantite) {
+    annulerRecapitulatif();
+    majMontantTotal();
+    return;
+  }
   const champ = e.target.closest('.rep-cat-equipes');
   if (champ) {
+    annulerRecapitulatif();
     const ligne = champ.closest('.rep-cat');
     validerLigneCat(ligne);
     majDetailEquipes(ligne);
@@ -331,6 +551,7 @@ function onInputReponse(e) {
   }
   const eqInput = e.target.closest('.rep-eq-joueurs, .rep-eq-educateurs');
   if (eqInput) {
+    annulerRecapitulatif();
     const ligne = eqInput.closest('.rep-cat');
     majNoteEquipe(ligne, eqInput.closest('.rep-equipe'));
     majTotaux();
@@ -376,6 +597,7 @@ async function onConfirmerPresence(e) {
   // pour l'envoi de compatibilité (nb_joueurs_total) — le serveur recalcule de toute façon.
   const detail = {};
   let totalJoueurs = 0;
+  let totalEducateurs = 0;
   let detailValide = true;
   cochees.forEach(function (l) {
     const nomCat = l.getAttribute('data-cat');
@@ -388,6 +610,7 @@ async function onConfirmerPresence(e) {
       if (!isFinite(j) || j < 1 || (isFinite(effMin) && j < effMin)) { detailValide = false; }
       eqs.push({ j: j, e: ed });
       if (isFinite(j)) totalJoueurs += j;
+      totalEducateurs += ed;
     });
     if (eqs.length !== parCat[nomCat]) detailValide = false;
     detail[nomCat] = eqs;
@@ -398,21 +621,70 @@ async function onConfirmerPresence(e) {
     return;
   }
 
-  const bouton = document.getElementById('btn-confirmer');
+  const commandeLue = lireCommandeRestauration(false);
+  if (commandeLue.error) {
+    msg.textContent = '⚠️ ' + commandeLue.error;
+    msg.classList.add('ko');
+    return;
+  }
+  const nbEquipes = Object.keys(parCat).reduce(function (n, cat) { return n + parCat[cat]; }, 0);
+  const calcul = calculerPaiementReponse(nbEquipes,
+    { joueurs: totalJoueurs, educateurs: totalEducateurs }, commandeLue.commande,
+    (repDonnees && repDonnees.paiement) || {});
+  confirmationEnAttente = {
+    parCat: parCat, detail: detail, totalJoueurs: totalJoueurs, totalEducateurs: totalEducateurs,
+    commande: commandeLue.commande, calcul: calcul
+  };
+  afficherRecapitulatifConfirmation(confirmationEnAttente);
+}
+
+/** Affiche le second temps du parcours : le club relit, puis valide explicitement. */
+function afficherRecapitulatifConfirmation(etat) {
+  const recap = document.getElementById('rep-recap-confirmation');
+  if (!recap) return;
+  const equipes = Object.keys(etat.parCat).map(function (cat) {
+    return '<li><strong>' + echapper(cat) + '</strong> : ' + etat.parCat[cat] + ' équipe(s)</li>';
+  }).join('');
+  const lignes = [];
+  if (etat.calcul.inscription) lignes.push('<li>Frais d\'inscription : <strong>' + echapper(eurosDepuisCentimes(etat.calcul.inscription)) + '</strong></li>');
+  if (etat.calcul.repas) lignes.push('<li>Repas : ' + etat.calcul.repasQuantite + ' × ' +
+    echapper(eurosDepuisCentimes(prixEnCentimes(repDonnees.paiement.repas_prix_personne))) +
+    ' = <strong>' + echapper(eurosDepuisCentimes(etat.calcul.repas)) + '</strong></li>');
+  if (etat.calcul.gouter) lignes.push('<li>Goûters : ' + etat.calcul.gouterQuantite + ' × ' +
+    echapper(eurosDepuisCentimes(prixEnCentimes(repDonnees.paiement.gouter_prix_personne))) +
+    ' = <strong>' + echapper(eurosDepuisCentimes(etat.calcul.gouter)) + '</strong></li>');
+  recap.innerHTML = '<section class="rep-recap"><h2>Vérifiez votre confirmation</h2>' +
+    '<p>Vous allez confirmer les éléments suivants :</p><ul>' + equipes + '</ul>' +
+    '<p><strong>' + etat.totalJoueurs + ' joueurs</strong> et <strong>' + etat.totalEducateurs + ' éducateurs</strong>.</p>' +
+    (lignes.length ? '<ul class="rep-recap-paiement">' + lignes.join('') + '</ul>' : '<p>Aucun montant supplémentaire dû.</p>') +
+    '<p class="rep-recap-total">Total à payer : <strong>' + echapper(eurosDepuisCentimes(etat.calcul.total)) + '</strong></p>' +
+    '<div class="rep-actions"><button type="button" class="rep-btn rep-btn-neutre" id="btn-modifier-reponse">Modifier</button>' +
+    '<button type="button" class="rep-btn rep-btn-oui" id="btn-valider-confirmation">Valider la confirmation</button></div>' +
+  '</section>';
+  recap.hidden = false;
+  recap.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+/** Seul ce second clic écrit la réponse. Le premier clic ne fait qu'afficher le récapitulatif. */
+async function envoyerPresenceConfirmee(bouton) {
+  if (!confirmationEnAttente) return;
   bouton.disabled = true;
   const texte = bouton.textContent;
   bouton.textContent = 'Envoi…';
   try {
+    const etat = confirmationEnAttente;
     await apiPost('repondreInvitation', {
       tournoi: repParams.tournoi, club: repParams.club, token: repParams.token,
       reponse: 'accepte',
-      nb_equipes_par_categorie: JSON.stringify(parCat),
-      detail_effectifs: JSON.stringify(detail),
-      nb_joueurs_total: totalJoueurs
+      nb_equipes_par_categorie: JSON.stringify(etat.parCat),
+      detail_effectifs: JSON.stringify(etat.detail),
+      nb_joueurs_total: etat.totalJoueurs,
+      commande_restauration: JSON.stringify(etat.commande)
     });
     afficherConfirmation('🎉 Merci, votre participation est enregistrée !',
-      'Votre dossier complet vous sera envoyé prochainement par l\'organisation.');
+      'Montant total prévu : ' + eurosDepuisCentimes(etat.calcul.total) + '. Votre dossier complet vous sera envoyé prochainement par l\'organisation.');
   } catch (erreur) {
+    const msg = document.getElementById('rep-form-msg');
     msg.textContent = '⚠️ ' + erreur.message;
     msg.classList.add('ko');
     bouton.disabled = false;
