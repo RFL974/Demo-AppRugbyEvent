@@ -56,6 +56,8 @@ let modeSauve;
 api.ecrireChampsConfig = (_onglet, donnees, champs) => {
   if (champs.includes('tarif_engagement_mode')) modeSauve = donnees.tarif_engagement_mode;
 };
+api.lireConfig = () => ({global:{}});
+api.clubsEditionActive = () => [];
 const classeurMode = { getSheetByName: () => ({}) };
 vrai(api.enregistrerInvitation(classeurMode, {tarif_engagement_mode:'par_club'}).ok, 'le choix par club est enregistrable');
 egal(modeSauve, 'par_club', 'le choix par club est inclus dans les champs écrits');

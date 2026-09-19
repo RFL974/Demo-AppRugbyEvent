@@ -379,11 +379,12 @@ async function onEnregistrerSurPlace() {
     gouter_fin_tournoi_montant: gouter.montant
   };
   await avecBoutonOccupe(bouton, message, async function () {
-    await ecrireAdmin('enregistrerSurPlace', data);
+    const resultat = await ecrireAdmin('enregistrerSurPlace', data);
     configCourante.global = Object.assign({}, configCourante.global, data);
     if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
     majApercuInvitation(); // l'aperçu de l'email suit (ligne « Sur place »)
-    afficherMessage(message, '✅ « Sur place » enregistré.', 'ok');
+    appliquerSuiviTarifsEnregistres(resultat);
+    afficherMessage(message, '✅ « Sur place » enregistré. Le suivi de démonstration suit les tarifs sauvegardés.', 'ok');
   });
 }
 

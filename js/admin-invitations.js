@@ -1143,12 +1143,21 @@ function onModalitesChange(evenement) {
  * à enregistrerInvitation, met à jour la config en mémoire, reprend la photo
  * « propre » du formulaire et rafraîchit l'état du dossier.
  */
+/** Le serveur renvoie le suivi recalculé avec les tarifs effectivement enregistrés. */
+function appliquerSuiviTarifsEnregistres(resultat) {
+  if (!resultat || !Array.isArray(resultat.clubs)) return;
+  clubsInvitesCourants = resultat.clubs;
+  afficherClubsInvites();
+  if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
+}
+
 async function enregistrerCarteInvitation(data, form, bouton, message, texteOk) {
   await avecBoutonOccupe(bouton, message, async function () {
-    await ecrireAdmin('enregistrerInvitation', data);
+    const resultat = await ecrireAdmin('enregistrerInvitation', data);
     configCourante.global = Object.assign({}, configCourante.global, data);
     if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
     majDossier(); // les sections du dossier suivent
+    appliquerSuiviTarifsEnregistres(resultat);
     afficherMessage(message, texteOk, 'ok');
   });
 }
