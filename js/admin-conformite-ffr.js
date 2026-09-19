@@ -542,72 +542,129 @@ function majFormesCategories() {
 
 /* --------------------------------------------------------------------------
    BOUTON « APPLIQUER LA NORME FFR » dans la carte de réglage (session 16)
-   Même flux backend que l'écran Conformité (appliquerValeursFFR — source unique),
-   mais AMENÉ DANS LA CARTE et affiché dès qu'un champ est VIDE ou divergent (pas
-   seulement divergent), pour couvrir une catégorie neuve créée vierge.
+   Le bouton de CARTE ne sauvegarde rien : il calcule toutes les valeurs depuis le
+   référentiel déjà chargé, puis remplit le formulaire en une fois. L'ancien bouton
+   de l'écran Conformité conserve plus bas son flux d'écriture explicite.
    -------------------------------------------------------------------------- */
 
-/** Vrai si le champ doit être (re)rempli : valeur FFR connue ET réglage vide OU divergent. */
-function champVideOuEcartFFR(cfgVal, ffrVal) {
-  const b = String(ffrVal == null ? '' : ffrVal).trim();
-  if (b === '') return false;                 // pas de valeur FFR pour ce champ ⇒ rien à proposer
-  const a = String(cfgVal == null ? '' : cfgVal).trim();
-  if (a === '') return true;                  // champ vide + valeur FFR dispo ⇒ à remplir
-  return ecartFFR(a, b);                      // sinon : signalé seulement s'il diverge
+/* Profils RE demandés pour la démonstration. Les VALEURS ne sont pas recopiées ici :
+ * ces clés sélectionnent les lignes existantes de RefFFR_Regles / RefFFR_Temps.
+ * `nb_equipes: 6` désigne la grille publiée qui porte les valeurs de référence du
+ * formulaire (identiques à 5 équipes pour U10/U12), indépendamment des 12 équipes
+ * déjà engagées dans chacune de ces catégories sur la démo. */
+const PROFILS_NORME_FFR_CARTE = {
+  '10': { forme_jeu: 'RE', effectif: '7x7', nb_demi_journees: '2', nb_equipes: '6' },
+  '12': { forme_jeu: 'RE', effectif: '10x10', nb_demi_journees: '2', nb_equipes: '6' }
+};
+
+const DEFAUTS_NORME_FFR_CARTE = {
+  recup_entre_matchs_min: '15',
+  arbitrage_organisation: 'Éducateurs',
+  max_equipes_par_club: '2'
+};
+
+/** Profil explicite de la catégorie, ou null pour les autres catégories. */
+function profilNormeFFRCarte(cat) {
+  return PROFILS_NORME_FFR_CARTE[normaliserCategorieFFR(cat)] || null;
 }
 
-/** Variante « temps » : les grilles peuvent offrir plusieurs valeurs acceptables (variantes A/B). */
-function champTempsVideOuEcartFFR(cfgVal, grilles, champ) {
-  const valeurs = (grilles || []).map(function (g) { return String(g[champ] || '').trim(); })
-    .filter(Boolean).filter(function (v, i, a) { return a.indexOf(v) === i; });
-  if (!valeurs.length) return false;
-  const cfg = String(cfgVal == null ? '' : cfgVal).trim();
-  if (cfg === '') return true;                 // vide + grille dispo ⇒ à remplir
-  return !valeurs.some(function (v) { return !ecartFFR(cfg, v); }); // dans aucune valeur ⇒ hors cadre
+/** Assemble les neuf valeurs du formulaire seulement si la référence est complète. */
+function assemblerNormeFFRCarte(regle, grille, formeJeu) {
+  const effTerrain = String((regle && regle.effectif_terrain) == null ? '' : regle.effectif_terrain).match(/^\d+/);
+  const valeurs = {
+    forme_jeu: String(formeJeu || '').trim(),
+    format_mi_temps: String(grille && grille.nb_periodes || '').trim(),
+    duree_mi_temps_min: String(grille && grille.duree_periode_min || '').trim(),
+    pause_mi_temps_min: String(grille && grille.pause_periodes_min || '').trim(),
+    recup_entre_matchs_min: DEFAUTS_NORME_FFR_CARTE.recup_entre_matchs_min,
+    effectif_min: effTerrain ? effTerrain[0] : '',
+    effectif_max: String(regle && regle.effectif_max_feuille || '').trim(),
+    arbitrage_organisation: DEFAUTS_NORME_FFR_CARTE.arbitrage_organisation,
+    max_equipes_par_club: DEFAUTS_NORME_FFR_CARTE.max_equipes_par_club
+  };
+  const manquants = Object.keys(valeurs).filter(function (cle) { return valeurs[cle] === ''; });
+  return manquants.length
+    ? { erreur: 'Référence FFR incomplète pour cette catégorie (' + manquants.join(', ') + ').' }
+    : { valeurs: valeurs };
 }
 
-/** Y a-t-il au moins un champ temps/effectif à remplir ou à corriger pour cette catégorie ? */
-function categorieAAppliquerFFR(r, temps, cfg, dim) {
-  if (r) {
-    const effTerrain = String(r.effectif_terrain == null ? '' : r.effectif_terrain).match(/^\d+/);
-    if (effTerrain && champVideOuEcartFFR(cfg.effectif_min, effTerrain[0])) return true;
-    if (champVideOuEcartFFR(cfg.effectif_max, r.effectif_max_feuille)) return true;
-    if (!(dim && dim.plein === true) && r.terrain_longueur_m && r.terrain_largeur_m &&
-        (champVideOuEcartFFR(dim && dim.l, r.terrain_longueur_m) ||
-         champVideOuEcartFFR(dim && dim.w, r.terrain_largeur_m))) return true;
+/**
+ * Calcule d'abord la norme complète d'une carte. U10/U12 sélectionnent leurs lignes RE dans
+ * le référentiel brut ; les autres catégories réutilisent les règles/grilles déjà jointes par
+ * getConformiteFFR. Une ambiguïté ou une donnée absente renvoie une erreur et aucune valeur.
+ */
+function calculerNormeFFRCarte(cat, variante) {
+  const profil = profilNormeFFRCarte(cat);
+  if (profil) {
+    if (!refFFRCache) return { erreur: 'Référentiel FFR non chargé. Réessaie le contrôle FFR.' };
+    const cleCat = normaliserCategorieFFR(cat);
+    const regle = (refFFRCache.regles || []).filter(function (r) {
+      return normaliserCategorieFFR(r.categorie) === cleCat &&
+        String(r.forme_jeu || '').trim() === profil.forme_jeu &&
+        String(r.effectif || '').trim() === profil.effectif &&
+        String(r.joint_refffr_formes || '').trim().toUpperCase() === 'OUI';
+    })[0] || null;
+    const grille = (refFFRCache.temps || []).filter(function (g) {
+      return normaliserCategorieFFR(g.categorie) === cleCat &&
+        String(g.effectif || '').trim() === profil.effectif &&
+        String(g.nb_demi_journees || '').trim() === profil.nb_demi_journees &&
+        String(g.nb_equipes || '').trim() === profil.nb_equipes;
+    })[0] || null;
+    if (!regle || !grille) {
+      return { erreur: 'Aucune référence FFR complète n’est disponible pour « ' + cat + ' ».' };
+    }
+    return assemblerNormeFFRCarte(regle, grille,
+      libelleFormeFFRCarte(profil.forme_jeu, profil.effectif));
   }
-  const grilles = (temps && temps.grilles) || [];
-  if (grilles.length) {
-    if (champTempsVideOuEcartFFR(cfg.format_mi_temps, grilles, 'nb_periodes')) return true;
-    if (champTempsVideOuEcartFFR(cfg.duree_mi_temps_min, grilles, 'duree_periode_min')) return true;
-    if (champTempsVideOuEcartFFR(cfg.pause_mi_temps_min, grilles, 'pause_periodes_min')) return true;
-    if (champTempsVideOuEcartFFR(cfg.recup_entre_matchs_min, grilles, 'arret_entre_matchs_min')) return true;
+
+  const res = dernierResConformite;
+  const regles = res && (res.regles || {})[cat] || [];
+  const grilles = res && ((res.temps || {})[cat] || {}).grilles || [];
+  if (regles.length !== 1) {
+    return { erreur: regles.length > 1
+      ? 'Plusieurs formes FFR sont possibles pour « ' + cat + ' ». Choisis d’abord la forme retenue.'
+      : 'Aucune référence FFR n’est disponible pour « ' + cat + ' ».' };
   }
-  return false;
+  let grille = null;
+  if (grilles.length === 1) grille = grilles[0];
+  else if (grilles.length > 1 && variante) {
+    grille = grilles.filter(function (g) {
+      return String(g.variante || '').trim().toUpperCase() === String(variante).trim().toUpperCase();
+    })[0] || null;
+  }
+  if (!grille) {
+    return { erreur: grilles.length > 1
+      ? 'Plusieurs grilles de temps FFR sont possibles pour « ' + cat + ' ». Choisis une variante.'
+      : 'Aucune grille de temps FFR complète n’est disponible pour « ' + cat + ' ».' };
+  }
+  const r = regles[0];
+  return assemblerNormeFFRCarte(r, grille, libelleFormeFFRCarte(r.forme_jeu, r.effectif));
+}
+
+/** Libellé canonique déjà utilisé par le select « Forme de jeu retenue ». */
+function libelleFormeFFRCarte(forme, effectif) {
+  return [String(forme || '').trim(), String(effectif || '').trim()].filter(Boolean).join(' — ');
 }
 
 /** Bouton(s) « Appliquer la norme FFR » d'une carte, ou '' si rien à proposer. */
 function boutonNormeFFRCarte(cat) {
   const res = dernierResConformite;
-  if (!res) return '';                         // conformité pas encore calculée ⇒ pas de bouton
+  if (!res || !refFFRCache) return '';         // conformité / référentiel pas encore chargés
   const regles = (res.regles || {})[cat] || [];
   const temps = (res.temps || {})[cat] || null;
-  if (!regles.length && !temps) return '';     // rien de FFR pour cette catégorie ce mois-ci
+  const profil = profilNormeFFRCarte(cat);
+  if (!profil && !regles.length && !temps) return ''; // rien de FFR pour cette catégorie
   // Ambiguïté réglementaire non levée (ex. U14 10x10|15x15, aucune forme retenue) : on ne tranche
   // jamais par défaut (doctrine §1.12) — on renvoie vers le choix de la forme retenue.
   if (regles.length > 1) {
     return '<p class="ffr-attendu">Plusieurs formes de jeu ce mois-ci — choisis la <strong>forme de jeu ' +
       'retenue</strong> ci-dessus puis enregistre pour appliquer la norme FFR.</p>';
   }
-  const r = regles[0] || null;
-  const cfg = categorieConfigFFR(cat);
-  const dim = dimensionsCategoriesFFR()[cat];
-  if (!categorieAAppliquerFFR(r, temps, cfg, dim)) return ''; // déjà aligné ⇒ rien à faire
   const grilles = (temps && temps.grilles) || [];
   const catAttr = echapper(cat);
-  const aide = '<p class="ffr-appliquer-aide">Remplit les effectifs (et, si 3 à 6 équipes sont ' +
-    'engagées, les durées de jeu) avec la norme FFR du mois. Modifiable ensuite.</p>';
-  if (grilles.length > 1) {
+  const aide = '<p class="ffr-appliquer-aide">Remplit tous les paramètres réglementaires du ' +
+    'formulaire sans les enregistrer. Vérifie puis clique sur « Enregistrer ».</p>';
+  if (!profil && grilles.length > 1) {
     // Variantes A/B : un bouton par découpage, jamais de choix par défaut.
     return aide + grilles.map(function (g) {
       const lib = (g.nb_periodes && g.duree_periode_min)
@@ -629,6 +686,57 @@ function majBoutonNormeCategories() {
     el.hidden = !html;
   });
   majAlertesTempsCategories();
+}
+
+/** Message local à la carte : aucune boîte de confirmation et surtout aucune écriture. */
+function messageNormeFFRCarte(form, texte, type) {
+  const zone = form && form.querySelector('.message-cat');
+  if (!zone) return;
+  if (typeof afficherMessage === 'function') afficherMessage(zone, texte, type);
+  else { zone.textContent = texte; zone.className = 'message-form message-cat ' + type; }
+}
+
+/**
+ * Clic sur le bouton de CARTE : lit la catégorie sur le formulaire courant, calcule toutes les
+ * valeurs, valide toutes les cibles puis seulement après remplit le DOM. Aucun POST, aucune clé,
+ * aucune sauvegarde ; les autres champs de la carte restent intacts.
+ */
+function onClicAppliquerNormeFFRCarte(e) {
+  const btn = e.target.closest('.ffr-appliquer');
+  const form = btn && btn.closest('form.form-categorie');
+  const cat = form && form.getAttribute('data-cat');
+  if (!btn || !form || !cat) return;
+
+  const calc = calculerNormeFFRCarte(cat, btn.getAttribute('data-variante') || '');
+  if (!calc || calc.erreur) {
+    messageNormeFFRCarte(form, '⚠️ ' + ((calc && calc.erreur) || 'Norme FFR indisponible.'), 'ko');
+    return;
+  }
+
+  const cibles = {};
+  const noms = Object.keys(calc.valeurs);
+  for (let i = 0; i < noms.length; i++) {
+    const nom = noms[i];
+    const champ = form.querySelector('[name="' + nom + '"]');
+    if (!champ) {
+      // La forme de jeu est facultative dans le DOM ; tous les huit autres champs sont requis.
+      if (nom === 'forme_jeu') continue;
+      messageNormeFFRCarte(form, '⚠️ Le formulaire est incomplet : champ « ' + nom + ' » introuvable.', 'ko');
+      return;
+    }
+    if (nom === 'forme_jeu' && champ.options &&
+        !Array.from(champ.options).some(function (o) { return o.value === calc.valeurs.forme_jeu; })) {
+      messageNormeFFRCarte(form, '⚠️ La forme FFR « ' + calc.valeurs.forme_jeu +
+        ' » n’est pas proposée dans ce formulaire.', 'ko');
+      return;
+    }
+    cibles[nom] = champ;
+  }
+
+  Object.keys(cibles).forEach(function (nom) { cibles[nom].value = calc.valeurs[nom]; });
+  if (typeof majAlerteTempsCategorie === 'function') majAlerteTempsCategorie(cat);
+  messageNormeFFRCarte(form,
+    '✅ Norme FFR appliquée au formulaire. Rien n’est enregistré tant que tu ne cliques pas sur « Enregistrer ».', 'ok');
 }
 
 /* --------------------------------------------------------------------------

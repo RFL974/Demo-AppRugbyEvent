@@ -1674,12 +1674,12 @@ function onReglagesSubmit(evenement) {
 function onReglagesClick(evenement) {
   const bouton = evenement.target.closest('.bouton-suppr-cat');
   if (bouton) { onSupprimerCategorie(bouton); return; }
-  // Bouton « Appliquer la norme FFR » d'une CARTE catégorie : on réutilise le flux backend testé
-  // (onClicAppliquerFFR). Scopé à .form-categorie pour ne pas doubler le bouton identique de l'écran
+  // Bouton « Appliquer la norme FFR » d'une CARTE catégorie : remplit seulement le formulaire.
+  // Scopé à .form-categorie pour conserver séparément le bouton d'écriture explicite de l'écran
   // Conformité, qui a son propre écouteur délégué sur #bloc-conformite-ffr.
   if (evenement.target.closest('.form-categorie') && evenement.target.closest('.ffr-appliquer') &&
-      typeof onClicAppliquerFFR === 'function') {
-    onClicAppliquerFFR(evenement);
+      typeof onClicAppliquerNormeFFRCarte === 'function') {
+    onClicAppliquerNormeFFRCarte(evenement);
   }
 }
 
