@@ -1036,17 +1036,17 @@ function section10() {
   const apresResume = v.carteId();
   v.ctx.allerA(v.iDe('reglages'), 1);
   const apresReglages = v.carteId();
-  verifier('10.12', 'depuis « Publication », « Équipes » reste REFUSÉE',
-    apresEquipes !== 'equipes', 'arrivé sur ' + apresEquipes);
-  verifier('10.13', 'depuis « Publication », « Résumé » (qui porte la réinitialisation) reste hors de portée',
-    apresResume !== 'resume', 'arrivé sur ' + apresResume);
+  verifier('10.12', 'depuis « Publication », « Équipes » est consultable en démo',
+    apresEquipes === 'equipes', 'arrivé sur ' + apresEquipes);
+  verifier('10.13', 'depuis « Publication », « Résumé » est consultable en démo',
+    apresResume === 'resume', 'arrivé sur ' + apresResume);
   verifier('10.14', 'l\'étape à corriger (« Réglages ») reste, elle, atteignable',
     apresReglages === 'reglages',
     'le verrou doit amener à l\'étape qui bloque, pas l\'interdire — arrivé sur ' + apresReglages);
   verifier('10.15', 'la progression acquise n\'a PAS reculé au passage (monotone)',
     v.atteint() >= atteintApresPub, 'assistantAtteint est passé de ' + atteintApresPub + ' à ' + v.atteint());
-  verifier('10.16', 'le refus est SIGNALÉ (le verrou est secoué), il n\'est pas silencieux',
-    v.secousses.length >= 2, 'secousses comptées : ' + v.secousses.length);
+  verifier('10.16', 'la consultation libre ne déclenche aucun refus',
+    v.secousses.length === 0, 'secousses comptées : ' + v.secousses.length);
 
   /* --- LE RATTRAPAGE DE FOCUS -------------------------------------------- */
   const f = bancCarrousel({});

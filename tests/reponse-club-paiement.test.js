@@ -34,6 +34,38 @@ egal(bac.eurosDepuisCentimes(45375), '453,75 €', 'le total est affiché en eur
 egal(bac.quantiteCommande('1.5').valide, false, 'une quantité décimale n’est pas tronquée silencieusement');
 egal(bac.quantiteCommande('12').valeur, 12, 'une quantité entière reste exploitable');
 
+
+const api = vm.createContext({});
+vm.runInContext(backend, api);
+for (const mode of ['par_club', 'par_equipe']) {
+  for (const nb of [0, 1, 4]) {
+    const cfg = { tarif_engagement_oui: 'oui', tarif_engagement_montant: '50,25', tarif_engagement_mode: mode,
+      repas_sur_place_oui: 'oui', repas_sur_place_mode: 'prix_personne', repas_sur_place_montant: '8,50',
+      gouter_fin_tournoi_oui: 'oui', gouter_fin_tournoi_mode: 'prix_personne', gouter_fin_tournoi_montant: '3,50' };
+    const commande = { repas_joueurs: 9, repas_educateurs: 1, gouter_joueurs: 6, gouter_educateurs: 1 };
+    const r = api.validerCommandeRestauration(cfg, {U10:nb}, 12, 2, commande);
+    const client = bac.calculerPaiementReponse(nb, {joueurs:12,educateurs:2}, commande, r.tarifs);
+    const frais = (mode === 'par_club' ? (nb ? 1 : 0) : nb) * 5025;
+    egal(client.inscription, frais, mode + ' : quantité de facturation correcte pour ' + nb + ' équipes');
+    egal(client.total, frais + 8500 + 2450, 'total attendu inscription + repas + goûter');
+    egal(Math.round(Number(r.total)*100), client.total, 'serveur et navigateur donnent le même montant');
+    egal(r.commande.inscription.mode, mode, 'le mode est figé avec le montant');
+  }
+}
+let modeSauve;
+api.ecrireChampsConfig = (_onglet, donnees, champs) => {
+  if (champs.includes('tarif_engagement_mode')) modeSauve = donnees.tarif_engagement_mode;
+};
+const classeurMode = { getSheetByName: () => ({}) };
+vrai(api.enregistrerInvitation(classeurMode, {tarif_engagement_mode:'par_club'}).ok, 'le choix par club est enregistrable');
+egal(modeSauve, 'par_club', 'le choix par club est inclus dans les champs écrits');
+modeSauve = null;
+vrai(!!api.enregistrerInvitation(classeurMode, {tarif_engagement_mode:'inconnu'}).error, 'une unité inconnue est refusée');
+egal(modeSauve, null, 'le refus de mode précède toute écriture');
+const legacyClub = api.validerCommandeRestauration({tarif_engagement_oui:'oui',tarif_engagement_montant:'50 € par club'}, {U10:3}, 30, 3, {});
+egal(legacyClub.total,'50','un ancien montant explicitement par club reste compris comme tel');
+vrai(bac.blocModalitesPaiement({paiement:{frais_inscription_oui:'oui',frais_inscription_prix:'50',frais_inscription_mode:'par_club'}}).includes('50 € par club'), 'le club voit le mode par club avant sa réponse');
+
 const calcul = bac.calculerPaiementReponse(3, { joueurs: 27, educateurs: 5 }, {
   repas_joueurs: 27, repas_educateurs: 3, gouter_joueurs: 10, gouter_educateurs: 5
 }, {

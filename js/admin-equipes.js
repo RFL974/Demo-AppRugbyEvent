@@ -603,7 +603,7 @@ async function onAjouterEquipesDemo() {
   const confirme = await dialogConfirmer(
     'Préparer le suivi des ' + plan.equipes.length + ' équipe(s) actuellement affichée(s) ?' +
     '\nAucune équipe ne sera ajoutée, supprimée ou remplacée.' +
-    '\nLes exemples de refus et de réponses en attente restent disponibles, sans équipe engagée.',
+    '\nLes commandes de démonstration seront recalculées avec les tarifs enregistrés. Les refus et réponses en attente restent conservés.',
     { ok: 'Préparer le suivi' }
   );
   if (!confirme) return;

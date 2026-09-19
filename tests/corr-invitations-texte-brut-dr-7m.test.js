@@ -347,7 +347,7 @@ function criteres(b) {
     ls.indexOf('RAPPEL IMPORTANT — ' + constante('FFR_RAPPEL_EFFECTIF')) !== -1 &&
     ls.indexOf('POURQUOI CE FORMAT ? ' + constante('FFR_POURQUOI_FORMAT')) !== -1);
   C('N', 'N10', 'services et tarif', () =>
-    ls.indexOf('Sur place : buvette, espace sandwich.') !== -1 && ls.indexOf('Tarif d\'engagement : 20 € par équipe') !== -1);
+    ls.indexOf('Sur place : buvette, espace sandwich.') !== -1 && ls.indexOf('Tarif d\'engagement : 20 € par équipe engagée') !== -1);
   C('N', 'N11', 'échéances de réponse et de paiement, contact', () =>
     ls.indexOf('Réponse souhaitée avant le ' + F('2027-02-15') + '.') !== -1 &&
     ls.indexOf('Date limite de paiement : ' + F('2027-03-01') + '.') !== -1 &&

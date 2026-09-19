@@ -69,7 +69,8 @@ function calculerPaiementReponse(nbEquipes, totaux, commande, paiement) {
   const prixInscription = prixEnCentimes(p.frais_inscription_prix);
   const prixRepas = prixEnCentimes(p.repas_prix_personne);
   const prixGouter = prixEnCentimes(p.gouter_prix_personne);
-  const inscription = Math.max(0, Number(nbEquipes) || 0) * prixInscription;
+  const nombre = Math.max(0, Number(nbEquipes) || 0);
+  const inscription = (p.frais_inscription_mode === 'par_club' ? (nombre > 0 ? 1 : 0) : nombre) * prixInscription;
   const repasQuantite = Math.max(0, Number(c.repas_joueurs) || 0) + Math.max(0, Number(c.repas_educateurs) || 0);
   const gouterQuantite = Math.max(0, Number(c.gouter_joueurs) || 0) + Math.max(0, Number(c.gouter_educateurs) || 0);
   const repas = repasQuantite * prixRepas;
@@ -175,7 +176,7 @@ function blocModalitesPaiement(data) {
   const lignes = [];
   lignes.push('<span><strong>Frais d\'inscription :</strong> ' +
     (p.frais_inscription_oui === 'oui' && prix
-      ? echapper(eurosDepuisCentimes(prix) + ' par équipe')
+      ? echapper(eurosDepuisCentimes(prix) + (p.frais_inscription_mode === 'par_club' ? ' par club' : ' par équipe'))
       : 'aucun frais demandé') + '</span>');
   if (txt(p.date_limite_paiement)) {
     lignes.push('<span><strong>Date limite de paiement :</strong> ' +

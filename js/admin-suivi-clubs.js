@@ -25,7 +25,9 @@ function suiviClubCommande(club) {
   }
   const total = Number(String(commande.total == null ? '' : commande.total).replace(',', '.'));
   return { repas: prestation('repas'), gouter: prestation('gouter'),
-    total: Number.isFinite(total) ? Math.max(0, total) : 0 };
+    total: Number.isFinite(total) ? Math.max(0, total) : 0, inscription: commande.inscription || {},
+    montantRepas: Number(commande.repas && commande.repas.sous_total || 0),
+    montantGouter: Number(commande.gouter && commande.gouter.sous_total || 0) };
 }
 
 function suiviEntierPositif(valeur) {
@@ -294,9 +296,17 @@ function suiviBadgeReponse(club, etat) {
 function suiviPaiementHtml(club, etat) {
   if (!etat.accepte) return '<span class="suivi-badge est-neutre">—</span>';
   if (etat.commande.total <= 0) return '<span class="suivi-badge est-neutre">Rien à payer</span>';
-  if (etat.paye) return '<span class="suivi-badge est-paye">Payé</span>' +
+  const c = etat.commande;
+  const inscription = c.inscription;
+  const parClub = inscription.mode === 'par_club';
+  const nombre = parClub ? 1 : Number(inscription.nb_equipes || 0);
+  const detail = '<small>Inscription : ' + echapper(suiviEuros(Number(inscription.sous_total || 0))) +
+    ' (' + nombre + (parClub ? ' club' : ' équipe' + (nombre > 1 ? 's' : '')) +
+    ' × ' + echapper(suiviEuros(Number(inscription.prix_unitaire || 0))) + ')</small>' +
+    '<small>Repas : ' + echapper(suiviEuros(c.montantRepas)) + ' · Goûters : ' + echapper(suiviEuros(c.montantGouter)) + '</small>';
+  if (etat.paye) return '<span class="suivi-badge est-paye">Payé</span><small>' + echapper(suiviEuros(c.total)) + '</small>' + detail +
     (club.date_paiement ? '<small>le ' + echapper(suiviDate(club.date_paiement)) + '</small>' : '');
-  return '<span class="suivi-badge est-du">À payer</span><small>' + echapper(suiviEuros(etat.commande.total)) + '</small>';
+  return '<span class="suivi-badge est-du">À payer</span><small>' + echapper(suiviEuros(c.total)) + '</small>' + detail;
 }
 
 function suiviActionsHtml(club, etat) {

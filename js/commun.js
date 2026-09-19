@@ -405,3 +405,17 @@ const FFR_POURQUOI_FORMAT = 'Il suit la doctrine FFR de l\'École de Rugby : un 
    organisation n'a décidé d'adopter l'application (chantier Confiance, CF-4b — décision D-039).
    Le rendu gère la liste vide : le pied de l'email n'affiche alors simplement aucune icône. */
 const LIENS_ASSOCIATION = [];
+
+/** Unité historique : par équipe, sauf ancien tarif explicitement « par club ». */
+function modeTarifEngagement(g) {
+  return g.tarif_engagement_mode === 'par_club' || (!g.tarif_engagement_mode &&
+    /par\s+club/i.test(String(g.tarif_engagement_montant || ''))) ? 'par_club' : 'par_equipe';
+}
+function libelleTarifEngagement(g) {
+  const brut = String(g.tarif_engagement_montant || '').trim();
+  if (!brut) return '';
+  const m = brut.match(/\d+(?:[.,]\d{1,2})?/);
+  if (!m) return brut;
+  const prix = Number(m[0].replace(',', '.')).toLocaleString('fr-FR', { maximumFractionDigits: 2 });
+  return prix + ' € ' + (modeTarifEngagement(g) === 'par_club' ? 'par club' : 'par équipe engagée');
+}

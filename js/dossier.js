@@ -803,7 +803,7 @@ function sectionModalites(g) {
   return section('Modalités d\'inscription', listeOuVide([
     ligne('Date limite de paiement',
       txt(g.date_limite_confirmation) ? echapper(dateLongueFr(g.date_limite_confirmation)) : ''),
-    ligne('Tarif d\'engagement', tarifOui ? echapper(txt(g.tarif_engagement_montant)) : ''),
+    ligne('Tarif d\'engagement', tarifOui ? echapper(libelleTarifEngagement(g)) : ''),
     ligne('Modalités de paiement', tarifOui ? echapper(txt(g.tarif_engagement_modalites)) : '')
   ]));
 }

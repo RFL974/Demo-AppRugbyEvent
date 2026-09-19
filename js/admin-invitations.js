@@ -75,6 +75,7 @@ function globalInvitation() {
     g.date_limite_confirmation = fm.date_limite_confirmation.value;
     g.tarif_engagement_oui = fm.tarif_engagement_oui.checked ? 'oui' : 'non';
     g.tarif_engagement_montant = fm.tarif_engagement_montant.value;
+    g.tarif_engagement_mode = fm.tarif_engagement_mode.value;
     g.tarif_engagement_modalites = fm.tarif_engagement_modalites.value;
   }
   const fr = document.getElementById('form-reponse');
@@ -455,7 +456,7 @@ function emailHtmlInvitation(g, cats, imgSrc, salutationHtml, intro, lienReponse
   const tarifOui = estOui(g.tarif_engagement_oui);
   const modalites = ligneJ('Date limite de paiement', String(g.date_limite_confirmation || '').trim()
       ? formaterDateFr(g.date_limite_confirmation) : '')
-    + ligneJ('Tarif d\'engagement', tarifOui ? String(g.tarif_engagement_montant || '').trim() : '')
+    + ligneJ('Tarif d\'engagement', tarifOui ? libelleTarifEngagement(g) : '')
     + ligneJ('Modalités de paiement', tarifOui ? String(g.tarif_engagement_modalites || '').trim() : '');
   const blocModalites = modalites ? (emailTitreSection('Modalités d\'inscription')
     + '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="' + EMAIL_TABLEAU_INFOS + '">' + modalites + '</table>') : '';
@@ -628,7 +629,7 @@ function emailTexteInvitation(g, cats, salutationTexte, intro, lienReponse, lien
   // Sections du menu « Invitation initiale », dans le même ordre.
   const modalites = [];
   if (String(g.date_limite_confirmation || '').trim()) modalites.push('Date limite de paiement : ' + formaterDateFr(g.date_limite_confirmation) + '.');
-  if (estOui(g.tarif_engagement_oui) && String(g.tarif_engagement_montant || '').trim()) modalites.push('Tarif d\'engagement : ' + String(g.tarif_engagement_montant).trim());
+  if (estOui(g.tarif_engagement_oui) && String(g.tarif_engagement_montant || '').trim()) modalites.push('Tarif d\'engagement : ' + libelleTarifEngagement(g));
   if (estOui(g.tarif_engagement_oui) && String(g.tarif_engagement_modalites || '').trim()) modalites.push('Modalités de paiement : ' + String(g.tarif_engagement_modalites).trim());
   if (modalites.length) { L.push('MODALITÉS D\'INSCRIPTION'); modalites.forEach(function (x) { L.push(x); }); L.push(''); }
 
@@ -1090,6 +1091,7 @@ function majInvitation() {
     fm.date_limite_confirmation.value = g.date_limite_confirmation || '';
     fm.tarif_engagement_oui.checked = estOui(g.tarif_engagement_oui);
     fm.tarif_engagement_montant.value = g.tarif_engagement_montant || '';
+    fm.tarif_engagement_mode.value = modeTarifEngagement(g);
     fm.tarif_engagement_modalites.value = g.tarif_engagement_modalites || '';
     majAffichageTarif(fm);
     if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(fm);
@@ -1158,6 +1160,7 @@ function onEnregistrerModalites() {
     date_limite_confirmation:   form.date_limite_confirmation.value,
     tarif_engagement_oui:       form.tarif_engagement_oui.checked ? 'oui' : 'non',
     tarif_engagement_montant:   form.tarif_engagement_montant.value.trim(),
+    tarif_engagement_mode:      form.tarif_engagement_mode.value,
     tarif_engagement_modalites: form.tarif_engagement_modalites.value.trim()
   };
   return enregistrerCarteInvitation(data, form,
@@ -2046,7 +2049,7 @@ function emailHtmlDossier(g, club, imgSrc, salutationHtml, intro, lienDossier) {
   const tarifOui = estOui(g.tarif_engagement_oui);
   const blocModalites = bloc('Modalités d\'inscription',
     ligneJ('Date limite de paiement', String(g.date_limite_confirmation || '').trim() ? formaterDateFr(g.date_limite_confirmation) : '')
-    + ligneJ('Tarif d\'engagement', tarifOui ? String(g.tarif_engagement_montant || '').trim() : '')
+    + ligneJ('Tarif d\'engagement', tarifOui ? libelleTarifEngagement(g) : '')
     + ligneJ('Modalités de paiement', tarifOui ? String(g.tarif_engagement_modalites || '').trim() : ''));
 
   /* --- 6) LE LIEN — non plus pour LIRE le dossier (il est ci-dessus), mais pour ce qui BOUGE :
@@ -2157,7 +2160,7 @@ function emailTexteDossier(g, club, salutationTexte, intro, lienDossier) {
 
   const mod = [];
   if (String(g.date_limite_confirmation || '').trim()) mod.push('Date limite de paiement : ' + formaterDateFr(g.date_limite_confirmation));
-  if (estOui(g.tarif_engagement_oui) && String(g.tarif_engagement_montant || '').trim()) mod.push('Tarif d\'engagement : ' + String(g.tarif_engagement_montant).trim());
+  if (estOui(g.tarif_engagement_oui) && String(g.tarif_engagement_montant || '').trim()) mod.push('Tarif d\'engagement : ' + libelleTarifEngagement(g));
   if (estOui(g.tarif_engagement_oui) && String(g.tarif_engagement_modalites || '').trim()) mod.push('Modalités de paiement : ' + String(g.tarif_engagement_modalites).trim());
   if (mod.length) { L.push('MODALITÉS'); mod.forEach(function (x) { L.push('- ' + x); }); L.push(''); }
 

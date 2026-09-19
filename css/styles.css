@@ -2703,3 +2703,9 @@ body.admin-chargement .ecran-chargement {
 #ecran-chargement-message { white-space: pre-line; text-align: left; }
 
 .ecran-chargement-boite .bouton { margin-top: var(--espace); }
+
+/* Menu mobile : chaque rubrique reste disponible sans parcourir le fil horizontal. */
+.asst-rubrique { display: flex; flex-direction: column; gap: 6px; width: 100%; font-weight: 600; }
+.asst-rubrique select { width: 100%; min-height: 44px; padding: 10px 12px; font: inherit; border: 1px solid #d3e1f0; border-radius: 10px; background: #fff; color: #0e2340; }
+.asst-stepper { max-width: 100%; }
+.asst-step { flex-shrink: 0; min-height: 44px; }

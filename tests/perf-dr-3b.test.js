@@ -646,10 +646,10 @@ async function controles() {
   const apresResume = ctxM.__carte();
   ctxM.allerA(iDe('publication'), 1);
   const apresPublication = ctxM.__carte();
-  verifier('12.6', 'mobile, tournoi vide : « Équipes » est refusé',
-    apresEquipes !== 'equipes', 'arrivé sur ' + apresEquipes);
-  verifier('12.7', 'mobile : « Résumé » (qui porte la réinitialisation) reste hors de portée',
-    apresResume !== 'resume', 'arrivé sur ' + apresResume);
+  verifier('12.6', 'mobile, tournoi vide : « Équipes » est accessible en démo',
+    apresEquipes === 'equipes', 'arrivé sur ' + apresEquipes);
+  verifier('12.7', 'mobile : « Résumé » est consultable en démo',
+    apresResume === 'resume', 'arrivé sur ' + apresResume);
   verifier('12.8', 'mobile : la carte LIBRE « Publication » reste joignable',
     apresPublication === 'publication', 'arrivé sur ' + apresPublication);
 

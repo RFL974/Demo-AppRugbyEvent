@@ -117,7 +117,7 @@ function blocSurPlace(g) {
   // Tarif d'engagement : seulement si un tarif est demandé (sinon rien).
   if (oui(g.tarif_engagement_oui) && txt(g.tarif_engagement_montant)) {
     html += '<ul class="d-liste"><li><span class="d-libelle">Tarif d\'engagement</span>' +
-      '<span class="d-valeur">' + echapper(txt(g.tarif_engagement_montant)) + '</span></li></ul>';
+      '<span class="d-valeur">' + echapper(libelleTarifEngagement(g)) + '</span></li></ul>';
   }
   return html;
 }

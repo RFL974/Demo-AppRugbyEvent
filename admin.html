@@ -13,7 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
 
   <!-- Notre feuille de style commune -->
-  <link rel="stylesheet" href="css/styles.css">
+  <link rel="stylesheet" href="css/styles.css?v=tarifs-mobile-demo-20260920">
   <!-- Surcouche moderne navy/blanc/ciel (re-skin admin — retirer cette ligne pour revenir en arrière) -->
   <link rel="stylesheet" href="css/theme-r92.css?v=partenaires-simple-1">
   <!-- Mode « écrans » : barre latérale + onglets sur grand écran (structure construite par js/ecrans.js) -->
@@ -488,7 +488,7 @@
             Prépare <strong>Clubs invités</strong> et <strong>Suivi des clubs</strong> à partir
             des équipes déjà affichées ci-dessous. Aucune équipe n’est créée ou réintroduite.
             Les exemples de refus et de réponses en attente restent disponibles, sans équipe engagée.
-            Les réponses et paiements existants sont conservés.
+            Les commandes de démonstration sont recalculées avec les tarifs enregistrés. Les réponses et paiements existants sont conservés.
           </p>
         </div>
 
@@ -841,8 +841,14 @@
             <span class="mini-toggle"><input type="checkbox" name="tarif_engagement_oui"> Un tarif d'engagement est demandé</span>
           </label>
           <div id="lignes-tarif-engagement" hidden>
-            <label class="reglage"><span class="r-libelle">Tarif — montant</span>
-              <input class="r-input" type="text" name="tarif_engagement_montant" placeholder="Ex : 50 € par équipe">
+            <label class="reglage"><span class="r-libelle">Tarif — montant en euros</span>
+              <input class="r-input" type="text" name="tarif_engagement_montant" inputmode="decimal" placeholder="Ex : 50,00">
+            </label>
+            <label class="reglage"><span class="r-libelle">Prix applicable</span>
+              <select class="r-input" name="tarif_engagement_mode">
+                <option value="par_equipe">Par équipe engagée sur le tournoi</option>
+                <option value="par_club">Par club, quel que soit le nombre d’équipes</option>
+              </select>
             </label>
             <label class="reglage"><span class="r-libelle">Tarif — modalités de paiement</span>
               <textarea class="r-input" name="tarif_engagement_modalites" rows="3" placeholder="Ex : chèque à l'ordre de… , virement avant le…"></textarea>
@@ -1224,18 +1230,18 @@
        4) api.js     → fournit apiGet()
        5) admin.js   → utilise le tout pour afficher la page -->
   <script src="js/config.js"></script>
-  <script src="js/commun.js"></script>
+  <script src="js/commun.js?v=tarifs-mobile-demo-20260920"></script>
   <script src="js/dialog.js"></script>
   <script src="js/api.js"></script>
   <script src="js/admin.js"></script>
   <script src="js/admin-infos-publication.js"></script>
-  <script src="js/admin-invitations.js"></script>
-  <script src="js/admin-suivi-clubs.js"></script>
+  <script src="js/admin-invitations.js?v=tarifs-mobile-demo-20260920"></script>
+  <script src="js/admin-suivi-clubs.js?v=tarifs-mobile-demo-20260920"></script>
   <script src="js/admin-reglages.js"></script>
   <script src="js/admin-choix-categories.js"></script>
   <script src="js/admin-conformite-ffr.js"></script>
   <!-- Versionnée pour que le navigateur ne conserve pas l'ancien parcours bloquant après déploiement. -->
-  <script src="js/admin-equipes.js?v=demo-equipes-presentes-20260920"></script>
+  <script src="js/admin-equipes.js?v=tarifs-mobile-demo-20260920"></script>
   <script src="js/admin-tableau-bord.js"></script>
   <script src="js/admin-generation.js"></script>
   <script src="js/admin-terrains.js"></script>
@@ -1264,7 +1270,7 @@
        7) assistant.js → assistant à cartes sur mobile (verrou « Suivant »),
                          et aiguillage entre les deux modes au chargement. -->
   <script src="js/ecrans.js?v=navigation-libre-demo-1&amp;partenaires-simple=2"></script>
-  <script src="js/assistant.js?v=partenaires-simple-2"></script>
+  <script src="js/assistant.js?v=tarifs-mobile-demo-20260920"></script>
 
 </body>
 </html>

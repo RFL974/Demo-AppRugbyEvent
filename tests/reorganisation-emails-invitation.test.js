@@ -81,6 +81,7 @@ vm.runInContext('configCourante = __config; clubsInvitesCourants = [];', bac);
 dom['form-modalites'] = {
   date_limite_confirmation: { value: '2027-04-20' },
   tarif_engagement_oui: { checked: true },
+  tarif_engagement_mode: { value: 'par_equipe' },
   tarif_engagement_montant: { value: '35 € par équipe' },
   tarif_engagement_modalites: { value: 'Virement avant le tournoi' }
 };
