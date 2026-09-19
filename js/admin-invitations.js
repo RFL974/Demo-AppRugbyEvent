@@ -99,6 +99,11 @@ function globalInvitation() {
     g.buvette_disponible = fs.buvette_disponible.checked ? 'oui' : 'non';
     g.espace_sandwich_disponible = fs.espace_sandwich_disponible.checked ? 'oui' : 'non';
     g.boutique_disponible = fs.boutique_disponible.checked ? 'oui' : 'non';
+    g.gouter_fin_tournoi_oui = fs.gouter_fin_tournoi_oui.checked ? 'oui' : 'non';
+    g.gouter_fin_tournoi_mode = fs.gouter_fin_tournoi_oui.checked
+      ? String(fs.gouter_fin_tournoi_mode.value || '') : '';
+    g.gouter_fin_tournoi_montant = g.gouter_fin_tournoi_mode === 'prix_personne'
+      ? fs.gouter_fin_tournoi_montant.value : '';
   }
   return g;
 }
@@ -443,7 +448,7 @@ function emailHtmlInvitation(g, cats, imgSrc, salutationHtml, intro, lienReponse
 
   // Les quatre sections suivent l'ordre du menu « Invitation initiale ».
   const tarifOui = estOui(g.tarif_engagement_oui);
-  const modalites = ligneJ('Confirmation des effectifs avant le', String(g.date_limite_confirmation || '').trim()
+  const modalites = ligneJ('Date limite de paiement', String(g.date_limite_confirmation || '').trim()
       ? formaterDateFr(g.date_limite_confirmation) : '')
     + ligneJ('Tarif d\'engagement', tarifOui ? String(g.tarif_engagement_montant || '').trim() : '')
     + ligneJ('Modalités de paiement', tarifOui ? String(g.tarif_engagement_modalites || '').trim() : '');
@@ -479,6 +484,16 @@ function emailHtmlInvitation(g, cats, imgSrc, salutationHtml, intro, lienReponse
   if (estOui(g.buvette_disponible)) pastilles.push('🥤 Buvette');
   if (estOui(g.espace_sandwich_disponible)) pastilles.push('🥪 Espace sandwich');
   if (estOui(g.boutique_disponible)) pastilles.push('🛍️ Boutique');
+  const gouterOui = estOui(g.gouter_fin_tournoi_oui);
+  if (gouterOui) pastilles.push('🍪 Goûter de fin de tournoi');
+  let detailGouter = '';
+  if (gouterOui && g.gouter_fin_tournoi_mode === 'prix_personne' && String(g.gouter_fin_tournoi_montant || '').trim()) {
+    detailGouter = String(g.gouter_fin_tournoi_montant).trim() + ' € par personne';
+  } else if (gouterOui && g.gouter_fin_tournoi_mode === 'compris_inscription') {
+    detailGouter = 'Compris dans les frais d\'inscription';
+  } else if (gouterOui && g.gouter_fin_tournoi_mode === 'offert_organisateur') {
+    detailGouter = 'Offert par l\'organisateur du tournoi';
+  }
   let surPlace = '';
   if (pastilles.length) {
     surPlace = emailTitreSection('Sur place');
@@ -486,6 +501,10 @@ function emailHtmlInvitation(g, cats, imgSrc, salutationHtml, intro, lienReponse
       return '<span style="display:inline-block;background:' + EMAIL_NAVY + ';color:#fff;border-radius:14px;'
         + 'padding:7px 14px;' + A + 'font-size:13px;margin:0 8px 8px 0;">' + echapper(p) + '</span>';
     }).join('') + '</p>';
+    if (detailGouter) {
+      surPlace += '<p style="margin:2px 0 0;' + A + 'font-size:14px;color:' + EMAIL_TXT + ';"><strong>Goûter :</strong> '
+        + echapper(detailGouter) + '</p>';
+    }
   }
 
   // Bouton d'action unique, placé en bas après lecture complète de l'invitation.
@@ -589,7 +608,7 @@ function emailTexteInvitation(g, cats, salutationTexte, intro, lienReponse, lien
   }
   // Sections du menu « Invitation initiale », dans le même ordre.
   const modalites = [];
-  if (String(g.date_limite_confirmation || '').trim()) modalites.push('Confirmation des effectifs avant le ' + formaterDateFr(g.date_limite_confirmation) + '.');
+  if (String(g.date_limite_confirmation || '').trim()) modalites.push('Date limite de paiement : ' + formaterDateFr(g.date_limite_confirmation) + '.');
   if (estOui(g.tarif_engagement_oui) && String(g.tarif_engagement_montant || '').trim()) modalites.push('Tarif d\'engagement : ' + String(g.tarif_engagement_montant).trim());
   if (estOui(g.tarif_engagement_oui) && String(g.tarif_engagement_modalites || '').trim()) modalites.push('Modalités de paiement : ' + String(g.tarif_engagement_modalites).trim());
   if (modalites.length) { L.push('MODALITÉS D\'INSCRIPTION'); modalites.forEach(function (x) { L.push(x); }); L.push(''); }
@@ -620,6 +639,17 @@ function emailTexteInvitation(g, cats, salutationTexte, intro, lienReponse, lien
   if (estOui(g.buvette_disponible)) services.push('buvette');
   if (estOui(g.espace_sandwich_disponible)) services.push('espace sandwich');
   if (estOui(g.boutique_disponible)) services.push('boutique');
+  if (estOui(g.gouter_fin_tournoi_oui)) {
+    let gouter = 'goûter de fin de tournoi';
+    if (g.gouter_fin_tournoi_mode === 'prix_personne' && String(g.gouter_fin_tournoi_montant || '').trim()) {
+      gouter += ' — ' + String(g.gouter_fin_tournoi_montant).trim() + ' € par personne';
+    } else if (g.gouter_fin_tournoi_mode === 'compris_inscription') {
+      gouter += ' — compris dans les frais d\'inscription';
+    } else if (g.gouter_fin_tournoi_mode === 'offert_organisateur') {
+      gouter += ' — offert par l\'organisateur du tournoi';
+    }
+    services.push(gouter);
+  }
   if (services.length) { L.push('SUR PLACE'); L.push('Sur place : ' + services.join(', ') + '.'); L.push(''); }
 
   L.push('Voir la version en ligne : ' + (lienInvitation || lienInvitationPublique()));
@@ -1977,7 +2007,7 @@ function emailHtmlDossier(g, club, imgSrc, salutationHtml, intro, lienDossier) {
 
   const tarifOui = estOui(g.tarif_engagement_oui);
   const blocModalites = bloc('Modalités d\'inscription',
-    ligneJ('Confirmation attendue avant le', String(g.date_limite_confirmation || '').trim() ? formaterDateFr(g.date_limite_confirmation) : '')
+    ligneJ('Date limite de paiement', String(g.date_limite_confirmation || '').trim() ? formaterDateFr(g.date_limite_confirmation) : '')
     + ligneJ('Tarif d\'engagement', tarifOui ? String(g.tarif_engagement_montant || '').trim() : '')
     + ligneJ('Modalités de paiement', tarifOui ? String(g.tarif_engagement_modalites || '').trim() : ''));
 
@@ -2088,7 +2118,7 @@ function emailTexteDossier(g, club, salutationTexte, intro, lienDossier) {
   }
 
   const mod = [];
-  if (String(g.date_limite_confirmation || '').trim()) mod.push('Confirmation attendue avant le ' + formaterDateFr(g.date_limite_confirmation));
+  if (String(g.date_limite_confirmation || '').trim()) mod.push('Date limite de paiement : ' + formaterDateFr(g.date_limite_confirmation));
   if (estOui(g.tarif_engagement_oui) && String(g.tarif_engagement_montant || '').trim()) mod.push('Tarif d\'engagement : ' + String(g.tarif_engagement_montant).trim());
   if (estOui(g.tarif_engagement_oui) && String(g.tarif_engagement_modalites || '').trim()) mod.push('Modalités de paiement : ' + String(g.tarif_engagement_modalites).trim());
   if (mod.length) { L.push('MODALITÉS'); mod.forEach(function (x) { L.push('- ' + x); }); L.push(''); }

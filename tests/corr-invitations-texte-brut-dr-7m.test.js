@@ -348,15 +348,15 @@ function criteres(b) {
     ls.indexOf('POURQUOI CE FORMAT ? ' + constante('FFR_POURQUOI_FORMAT')) !== -1);
   C('N', 'N10', 'services et tarif', () =>
     ls.indexOf('Sur place : buvette, espace sandwich.') !== -1 && ls.indexOf('Tarif d\'engagement : 20 € par équipe') !== -1);
-  C('N', 'N11', 'échéances de réponse et de confirmation, contact', () =>
+  C('N', 'N11', 'échéances de réponse et de paiement, contact', () =>
     ls.indexOf('Réponse souhaitée avant le ' + F('2027-02-15') + '.') !== -1 &&
-    ls.indexOf('Confirmation des effectifs avant le ' + F('2027-03-01') + '.') !== -1 &&
+    ls.indexOf('Date limite de paiement : ' + F('2027-03-01') + '.') !== -1 &&
     ls.indexOf('Contact : Alex Démo · 06 00 00 00 00 · contact@exemple.invalid') !== -1);
   C('N', 'N12', 'signature en fin de texte', () => ls.slice(-3).join('|') === '|Au plaisir de vous accueillir,|L\'organisation du tournoi');
   C('N', 'N13', 'ordre des blocs aligné sur le menu « Invitation initiale »', () => {
     const reperes = ['{{SALUTATION}}', INTRO, '▶ Répondre à l\'invitation : {{LIEN_REPONSE}}', 'Première ligne du descriptif fictif.',
       'VOUS ÊTES INVITÉS', '- U10 : ', 'RAPPEL IMPORTANT', 'LA JOURNÉE', 'MODALITÉS D\'INSCRIPTION',
-      'Confirmation des effectifs avant le', 'RÉPONSE À L\'INVITATION', 'Réponse souhaitée avant le',
+      'Date limite de paiement', 'RÉPONSE À L\'INVITATION', 'Réponse souhaitée avant le',
       'Contact : ', 'SUR PLACE', 'Sur place : ', 'Voir la version en ligne : ', 'Au plaisir de vous accueillir,'];
     let pos = -1;
     return reperes.every((r) => { const i = ls.findIndex((l, k) => k > pos && l.indexOf(r) === 0); if (i === -1) return false; pos = i; return true; });

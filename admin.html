@@ -700,6 +700,25 @@
           <label class="reglage"><span class="r-libelle">Boutique</span>
             <span class="mini-toggle"><input type="checkbox" name="boutique_disponible"> Boutique sur place</span>
           </label>
+          <label class="reglage"><span class="r-libelle">Fin du tournoi</span>
+            <span class="mini-toggle"><input type="checkbox" name="gouter_fin_tournoi_oui"> Goûter de fin de tournoi</span>
+          </label>
+          <fieldset class="reglage gouter-options" id="options-gouter-fin-tournoi" hidden>
+            <legend class="r-libelle">Modalité du goûter</legend>
+            <span class="mini-toggle">
+              <label><input type="radio" name="gouter_fin_tournoi_mode" value="prix_personne"> Montant du goûter / personne</label>
+            </span>
+            <label id="champ-gouter-fin-tournoi-montant" hidden>
+              <span class="r-libelle">Montant par personne</span>
+              <input class="r-input" type="number" name="gouter_fin_tournoi_montant" min="0.01" step="0.01" inputmode="decimal" placeholder="Ex : 3,50">
+            </label>
+            <span class="mini-toggle">
+              <label><input type="radio" name="gouter_fin_tournoi_mode" value="compris_inscription"> Montant compris dans les frais d'inscription</label>
+            </span>
+            <span class="mini-toggle">
+              <label><input type="radio" name="gouter_fin_tournoi_mode" value="offert_organisateur"> Offert par l'organisateur du tournoi</label>
+            </span>
+          </fieldset>
           <div class="ligne-action">
             <button type="button" class="bouton" id="bouton-enregistrer-surplace">Enregistrer « Sur place »</button>
             <span class="message-form" id="message-surplace"></span>
@@ -708,13 +727,13 @@
       </section>
 
       <!-- 4 bis-2) RÉPONSE À L'INVITATION (Phase 1) : date limite de réponse (distincte de la
-           date de confirmation des effectifs, Phase 2) + contact référent. Validation « au
+           date limite de paiement, Phase 2) + contact référent. Validation « au
            moins un des deux » (tél / email) au blur/submit. -->
       <section class="carte" id="bloc-reponse">
         <h2>Réponse à l'invitation</h2>
         <p class="note-generation">
-          Date limite de <strong>réponse</strong> à l'invitation (distincte de la date de
-          <em>confirmation des effectifs</em>, propre au dossier Phase 2) et <strong>contact
+          Date limite de <strong>réponse</strong> à l'invitation (distincte de la date limite de
+          <em>paiement</em>, propre au dossier Phase 2) et <strong>contact
           référent</strong>. Renseigne <strong>au moins</strong> un téléphone <strong>ou</strong> un email.
         </p>
         <form id="form-reponse">
@@ -751,9 +770,6 @@
           du dossier d'invitation. Tous les champs sont <strong>facultatifs</strong>.
         </p>
         <form id="form-modalites">
-          <label class="reglage"><span class="r-libelle">Date limite de confirmation</span>
-            <input class="r-input" type="date" name="date_limite_confirmation">
-          </label>
           <label class="reglage">
             <span class="r-libelle">Tarif d'engagement</span>
             <span class="mini-toggle"><input type="checkbox" name="tarif_engagement_oui"> Un tarif d'engagement est demandé</span>
@@ -766,6 +782,9 @@
               <textarea class="r-input" name="tarif_engagement_modalites" rows="3" placeholder="Ex : chèque à l'ordre de… , virement avant le…"></textarea>
             </label>
           </div>
+          <label class="reglage"><span class="r-libelle">Date limite de paiement</span>
+            <input class="r-input" type="date" name="date_limite_confirmation">
+          </label>
           <div class="ligne-action">
             <button type="button" class="bouton" id="bouton-enregistrer-modalites">Enregistrer les modalités</button>
             <span class="message-form" id="message-modalites"></span>

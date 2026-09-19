@@ -791,12 +791,12 @@ function sectionEncadrement(g) {
   ]));
 }
 
-/** 11) MODALITÉS D'INSCRIPTION : date limite de confirmation, tarif d'engagement
+/** 11) MODALITÉS D'INSCRIPTION : date limite de paiement, tarif d'engagement
  *  (montant + modalités) SEULEMENT si un tarif est demandé. */
 function sectionModalites(g) {
   const tarifOui = String(txt(g.tarif_engagement_oui)).toLowerCase() === 'oui';
   return section('Modalités d\'inscription', listeOuVide([
-    ligne('Confirmation attendue avant le',
+    ligne('Date limite de paiement',
       txt(g.date_limite_confirmation) ? echapper(dateLongueFr(g.date_limite_confirmation)) : ''),
     ligne('Tarif d\'engagement', tarifOui ? echapper(txt(g.tarif_engagement_montant)) : ''),
     ligne('Modalités de paiement', tarifOui ? echapper(txt(g.tarif_engagement_modalites)) : '')

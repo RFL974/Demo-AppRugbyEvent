@@ -298,7 +298,7 @@ async function onEnregistrerContacts() {
 }
 
 /* --------------------------------------------------------------------------
-   PHASE 1 — carte « Sur place » (buvette / sandwich / boutique)
+   PHASE 1 — carte « Sur place » (buvette / sandwich / boutique / goûter)
    et carte « Réponse à l'invitation » (date limite + contact référent).
    -------------------------------------------------------------------------- */
 
@@ -310,18 +310,52 @@ function majSurPlace() {
   form.buvette_disponible.checked = estOui(g.buvette_disponible);
   form.espace_sandwich_disponible.checked = estOui(g.espace_sandwich_disponible);
   form.boutique_disponible.checked = estOui(g.boutique_disponible);
+  form.gouter_fin_tournoi_oui.checked = estOui(g.gouter_fin_tournoi_oui);
+  Array.from(form.querySelectorAll('[name="gouter_fin_tournoi_mode"]')).forEach(function (radio) {
+    radio.checked = radio.value === String(g.gouter_fin_tournoi_mode || '');
+  });
+  form.gouter_fin_tournoi_montant.value = g.gouter_fin_tournoi_montant || '';
+  majAffichageGouterSurPlace();
   if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
 }
 
-/** Enregistre la carte « Sur place » (3 booléens rangés en 'oui'/'non'). */
+/** Affiche les options du goûter, puis le montant uniquement pour le tarif par personne. */
+function majAffichageGouterSurPlace() {
+  const form = document.getElementById('form-surplace');
+  if (!form) return;
+  const actif = form.gouter_fin_tournoi_oui.checked;
+  const options = document.getElementById('options-gouter-fin-tournoi');
+  const montant = document.getElementById('champ-gouter-fin-tournoi-montant');
+  const mode = String(form.gouter_fin_tournoi_mode.value || '');
+  if (options) options.hidden = !actif;
+  if (montant) montant.hidden = !actif || mode !== 'prix_personne';
+}
+
+/** Enregistre la carte « Sur place ». Le goûter actif exige une modalité complète et cohérente. */
 async function onEnregistrerSurPlace() {
   const message = document.getElementById('message-surplace');
   const bouton = document.getElementById('bouton-enregistrer-surplace');
   const form = document.getElementById('form-surplace');
+  const gouterOui = form.gouter_fin_tournoi_oui.checked;
+  const gouterMode = gouterOui ? String(form.gouter_fin_tournoi_mode.value || '') : '';
+  const modesGouter = ['prix_personne', 'compris_inscription', 'offert_organisateur'];
+  if (gouterOui && modesGouter.indexOf(gouterMode) === -1) {
+    afficherMessage(message, '⚠️ Choisis la modalité du goûter de fin de tournoi.', 'ko');
+    return;
+  }
+  const montantBrut = String(form.gouter_fin_tournoi_montant.value || '').trim().replace(',', '.');
+  const montantGouter = gouterMode === 'prix_personne' ? montantBrut : '';
+  if (gouterMode === 'prix_personne' && (!/^\d+(?:\.\d{1,2})?$/.test(montantGouter) || Number(montantGouter) <= 0)) {
+    afficherMessage(message, '⚠️ Indique un montant par personne supérieur à 0.', 'ko');
+    return;
+  }
   const data = {
     buvette_disponible:         form.buvette_disponible.checked ? 'oui' : 'non',
     espace_sandwich_disponible: form.espace_sandwich_disponible.checked ? 'oui' : 'non',
-    boutique_disponible:        form.boutique_disponible.checked ? 'oui' : 'non'
+    boutique_disponible:        form.boutique_disponible.checked ? 'oui' : 'non',
+    gouter_fin_tournoi_oui:     gouterOui ? 'oui' : 'non',
+    gouter_fin_tournoi_mode:    gouterMode,
+    gouter_fin_tournoi_montant: montantGouter
   };
   await avecBoutonOccupe(bouton, message, async function () {
     await ecrireAdmin('enregistrerSurPlace', data);
@@ -433,7 +467,7 @@ function majDossier() {
     ['Infos pratiques (lieu, adresse)', !!(g.tournoi_lieu || g.tournoi_adresse)],
     ['Programme (RDV, coup d\'envoi, pause, fin)', !!(g.heure_rdv || g.heure_debut || g.pause_dejeuner_debut || g.heure_fin_communiquee)],
     ['Format sportif (' + cats.length + ' catégorie' + (cats.length > 1 ? 's' : '') + ')', cats.length > 0],
-    ['Modalités d\'inscription (date limite, tarif)', !!(g.date_limite_confirmation || oui(g.tarif_engagement_oui))],
+    ['Modalités d\'inscription (date limite de paiement, tarif)', !!(g.date_limite_confirmation || oui(g.tarif_engagement_oui))],
     ['Parking & accès (texte, photo)', !!(g.parking_texte || g.parking_photo_id)],
     ['Encadrement & assurance', !!(g.encadrement_ratio || g.encadrement_diplomes || oui(g.assurance_attestation_requise))],
     ['Sécurité (poste de secours, référent)', oui(g.securite_secours_oui) || !!(g.referent_nom || g.securite_referent_nom)],

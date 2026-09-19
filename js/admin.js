@@ -1120,7 +1120,7 @@ function brancherEcouteursAdmin() {
   // Les cartes de contenu le rafraîchissent après leur enregistrement via majDossier().
   ecouter('apercu-dossier-email-club', 'change', majApercuDossierEmail);
 
-  // Phase 1 — carte « Sur place » (3 cases à cocher) : bouton dédié.
+  // Phase 1 — carte « Sur place » : services + modalité du goûter, bouton dédié.
   ecouter('form-surplace', 'submit', function (e) { e.preventDefault(); });
   ecouter('bouton-enregistrer-surplace', 'click', onEnregistrerSurPlace);
 
@@ -1136,7 +1136,11 @@ function brancherEcouteursAdmin() {
   ecouter('form-modalites', 'change', majApercuInvitation);
   ecouter('form-contacts-securite', 'input', majApercuInvitation);
   ecouter('form-contacts-securite', 'change', majApercuInvitation);
-  ecouter('form-surplace', 'change', majApercuInvitation);
+  ecouter('form-surplace', 'input', majApercuInvitation);
+  ecouter('form-surplace', 'change', function () {
+    majAffichageGouterSurPlace();
+    majApercuInvitation();
+  });
   ecouter('form-reponse', 'input', majApercuInvitation);
   ecouter('form-reponse', 'change', majApercuInvitation);
   ecouter('apercu-invitation-intro', 'input', majApercuInvitation);

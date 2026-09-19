@@ -100,7 +100,10 @@ dom['form-contacts-securite'] = {
 dom['form-surplace'] = {
   buvette_disponible: { checked: true },
   espace_sandwich_disponible: { checked: true },
-  boutique_disponible: { checked: false }
+  boutique_disponible: { checked: false },
+  gouter_fin_tournoi_oui: { checked: true },
+  gouter_fin_tournoi_mode: { value: 'offert_organisateur' },
+  gouter_fin_tournoi_montant: { value: '' }
 };
 dom['form-parking'] = { parking_texte: { value: 'Parking LIVE, entrée ouest' } };
 dom['form-encadrement'] = {
@@ -114,6 +117,7 @@ egal(g.date_limite_confirmation, '2027-04-20', 'l’aperçu lit les modalités e
 egal(g.contact_reponse_nom, 'Camille Réponse', 'l’aperçu lit la réponse en direct');
 egal(g.referent_nom, 'Alex Terrain', 'l’aperçu lit Contacts & sécurité en direct');
 egal(g.buvette_disponible, 'oui', 'l’aperçu lit Sur place en direct');
+egal(g.gouter_fin_tournoi_mode, 'offert_organisateur', 'l’aperçu lit la modalité du goûter en direct');
 
 const cats = bac.catsInvitationTriees();
 const htmlInitial = bac.emailHtmlInvitation(g, cats, '', 'Bonjour Camille,', 'Introduction.',
@@ -140,6 +144,8 @@ egal(occurrences(htmlInitial, "Répondre à l'invitation"), 1,
   'HTML initial : un seul bouton de réponse, conservé en bas du message');
 vrai(htmlInitial.indexOf("Répondre à l'invitation") > htmlInitial.indexOf(titresInitiaux[3]),
   'HTML initial : le bouton unique se trouve après la dernière section du menu');
+vrai(htmlInitial.includes('Goûter de fin de tournoi') && htmlInitial.includes('Offert par l&#39;organisateur du tournoi'),
+  'HTML initial : le goûter offert est annoncé sans ambiguïté');
 
 const club = { club_nom: 'RC Test', categories_engagees: '["U10"]' };
 const htmlFinal = bac.emailHtmlDossier(config.global, club, '', 'Bonjour,', 'Votre dossier.',

@@ -482,6 +482,14 @@ select.r-input { cursor: pointer; }
   color: var(--bleu-ciel);
 }
 .mini-toggle input { width: 16px; height: 16px; accent-color: var(--accent); cursor: pointer; }
+.gouter-options {
+  margin: 0 0 4px 22px;
+  padding: 8px 0 2px 14px;
+  border: 0;
+  border-left: 2px solid rgba(94, 160, 232, 0.35);
+  gap: 9px;
+}
+.gouter-options .mini-toggle label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
 .champ-reglage input:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ==========================================================================

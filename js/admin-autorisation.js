@@ -61,8 +61,8 @@ var AUTORISATION_SAISIE = [
     { p: 'org_ambulance', l: 'Ambulance', t: 'select', o: ['non', 'oui'] }
   ] },
   { titre: 'B.5 — Logistique', champs: [
-    // `prefill` : si VIDE, ces champs reprennent le tarif d'engagement saisi dans « Modalités
-    // d'inscription » (jamais d'écrasement d'une valeur déjà saisie) — voir prefillAutorisation.
+    // `prefill` : ces champs reprennent automatiquement le tarif d'engagement saisi dans
+    // « Modalités d'inscription », qui est leur source de vérité — voir prefillAutorisation.
     { p: 'org_droits_oui', l: 'Droits d\'inscription', t: 'select', o: ['non', 'oui'], prefill: true },
     { p: 'org_droits_montant', l: 'Montant / équipe', t: 'number', dep: 'org_droits_oui', prefill: true },
     { p: 'org_hebergement_oui', l: 'Hébergement', t: 'select', o: ['non', 'oui'] },
@@ -70,9 +70,9 @@ var AUTORISATION_SAISIE = [
     { p: 'org_repas_oui', l: 'Repas', t: 'select', o: ['non', 'oui'] },
     { p: 'org_repas_fournisseur', l: 'Repas — fournisseur', t: 'text', dep: 'org_repas_oui' },
     { p: 'org_repas_prix', l: 'Repas — prix / pers.', t: 'number', dep: 'org_repas_oui' },
-    { p: 'org_gouters_oui', l: 'Goûters', t: 'select', o: ['non', 'oui'] },
+    { p: 'org_gouters_oui', l: 'Goûters', t: 'select', o: ['non', 'oui'], prefill: true },
     { p: 'org_gouters_fournisseur', l: 'Goûters — fournisseur', t: 'text', dep: 'org_gouters_oui' },
-    { p: 'org_gouters_prix', l: 'Goûters — prix / pers.', t: 'number', dep: 'org_gouters_oui' }
+    { p: 'org_gouters_prix', l: 'Goûters — prix / pers.', t: 'number', dep: 'org_gouters_oui', prefill: true }
   ] }
 ];
 
@@ -85,7 +85,8 @@ function valAutorisation(param) {
 /** Valeur de PRÉ-REMPLISSAGE d'un champ (repris d'une info déjà saisie ailleurs), ou '' si aucune.
  *  Aujourd'hui : les « Droits d'inscription » (B.5) reprennent le TARIF D'ENGAGEMENT des modalités
  *  d'inscription. Le montant côté modalités est du texte libre → on n'en garde que le 1er nombre
- *  (le champ autorisation est numérique). N'écrase JAMAIS : n'est utilisé que si le champ est vide. */
+ *  (le champ autorisation est numérique). Pour B.5, cette source est prioritaire afin qu'une
+ *  ancienne saisie ne contredise jamais les modalités actuellement affichées aux clubs. */
 function prefillAutorisation(param) {
   const g = (typeof configCourante !== 'undefined' && configCourante && configCourante.global) || {};
   if (param === 'org_droits_oui') {
@@ -93,18 +94,29 @@ function prefillAutorisation(param) {
     return (t === 'oui' || t === 'non') ? t : '';
   }
   if (param === 'org_droits_montant') {
+    const t = String(g.tarif_engagement_oui == null ? '' : g.tarif_engagement_oui).trim().toLowerCase();
+    if (t !== 'oui') return '';
     const m = String(g.tarif_engagement_montant == null ? '' : g.tarif_engagement_montant).match(/\d+(?:[.,]\d+)?/);
+    return m ? m[0].replace(',', '.') : '';
+  }
+  const gouterPrix = String(g.gouter_fin_tournoi_oui || '').toLowerCase() === 'oui' &&
+    g.gouter_fin_tournoi_mode === 'prix_personne';
+  if (param === 'org_gouters_oui') return gouterPrix ? 'oui' : '';
+  if (param === 'org_gouters_prix' && gouterPrix) {
+    const m = String(g.gouter_fin_tournoi_montant == null ? '' : g.gouter_fin_tournoi_montant)
+      .match(/\d+(?:[.,]\d+)?/);
     return m ? m[0].replace(',', '.') : '';
   }
   return '';
 }
 
-/** Valeur EFFECTIVE d'une question contrôleur (grisage) : la valeur stockée, ou à défaut son
- *  pré-remplissage. Ainsi un champ lié est grisé de façon cohérente même quand la question qui le
- *  pilote est encore vide mais pré-remplie à « non ». */
+/** Valeur EFFECTIVE d'une question contrôleur (grisage) : pour B.5, les modalités sont
+ *  prioritaires ; ailleurs, la valeur stockée reste prioritaire. */
 function valControleurEffectiveAutorisation(param) {
   const stored = valAutorisation(param);
-  return stored !== '' ? stored : prefillAutorisation(param);
+  const prefill = prefillAutorisation(param);
+  if ((param === 'org_droits_oui' || param === 'org_gouters_oui') && prefill !== '') return prefill;
+  return stored !== '' ? stored : prefill;
 }
 
 /** Catégories présentes (pour les récompenses par catégorie + le mémo arbitrage). */
@@ -119,10 +131,12 @@ function catsPresentesAutorisation() {
  *  non modifiable) ; l'état est rebasculé en direct par onChangeAutorisation. */
 function champSaisieAutorisation(c) {
   const stored = valAutorisation(c.p);
-  // Pré-remplissage : SEULEMENT si le champ est vide (jamais d'écrasement d'une saisie).
-  const prefill = (stored === '' && c.prefill) ? prefillAutorisation(c.p) : '';
-  const estPrefill = (stored === '' && prefill !== '');
-  const v = stored !== '' ? stored : prefill;
+  const prefill = c.prefill ? prefillAutorisation(c.p) : '';
+  // Les deux champs B.5 sont le reflet direct des modalités : une valeur enregistrée plus
+  // ancienne ne doit jamais contredire le tarif actuellement demandé.
+  const modalitesPrioritaires = c.prefill && prefill !== '';
+  const estPrefill = prefill !== '' && (stored === '' || modalitesPrioritaires);
+  const v = modalitesPrioritaires ? prefill : (stored !== '' ? stored : prefill);
   // Grisage : sur la valeur EFFECTIVE de la question contrôleur (stockée ou pré-remplie).
   const grise = !!(c.dep && valControleurEffectiveAutorisation(c.dep) === 'non');
   const dis = grise ? ' disabled' : '';
@@ -140,24 +154,22 @@ function champSaisieAutorisation(c) {
   }
   // data-dep porte la question CONTRÔLEUR : onChangeAutorisation retrouve les champs à (dé)griser.
   const attrDep = c.dep ? ' data-dep="' + echapper(c.dep) + '"' : '';
+  const sourcePrefill = c.p.indexOf('org_gouters_') === 0
+    ? 'de la carte « Sur place »' : 'des modalités d\'inscription';
   const note = estPrefill
-    ? '<span class="autorisation-prefill-note">↩ repris des modalités d\'inscription — vérifie puis enregistre</span>'
+    ? '<span class="autorisation-prefill-note">↩ repris automatiquement ' + sourcePrefill + '</span>'
     : '';
   return '<label class="reglage' + (grise ? ' est-grise' : '') + (estPrefill ? ' est-prefill' : '') + '"' + attrDep + '>' +
     '<span class="r-libelle">' + echapper(c.l) + '</span>' + controle + note + '</label>';
 }
 
-/** Questions dont le LOGICIEL connaît déjà la réponse (session 22) : on ne les pose plus dans la
- *  carte, pour ne pas surcharger le document — la feuille de report montre la valeur reprise et
- *  son origine. Garde-fou : une valeur DÉJÀ SAISIE reste toujours affichée (jamais masquer une
- *  saisie existante). `dossier` = feuille assemblée par le backend (null si indisponible). */
+/** Questions dont le LOGICIEL connaît déjà la réponse : on masque les replis inutiles, sauf B.5
+ *  qui reste volontairement visible avec ses valeurs reprises des modalités d'inscription.
+ *  `dossier` = feuille assemblée par le backend (null si indisponible). */
 function questionsDejaRepondues(dossier) {
   const masque = {};
-  // Droits d'inscription : répondus par les MODALITÉS D'INSCRIPTION (tarif d'engagement).
-  if (valAutorisation('org_droits_oui') === '' && prefillAutorisation('org_droits_oui') !== '') {
-    masque.org_droits_oui = true;
-    if (valAutorisation('org_droits_montant') === '') masque.org_droits_montant = true;
-  }
+  // Droits d'inscription : ils restent visibles dans B.5 pour que l'organisateur voie
+  // immédiatement le « oui » et le montant repris des modalités d'inscription.
   // Nombre de participants (repli manuel) : répondu par la cascade des clubs (effectifs déclarés).
   // Nombre d'éducateurs (B.3) : répondu par les éducateurs DÉCLARÉS à la réponse d'invitation.
   if (dossier && dossier.sections) {
@@ -333,6 +345,7 @@ var ACTIONS_AUTORISATION_CROCHET = {
   enregistrerPlanTerrains:       'B.1 nombre de terrains et nature de la surface',
   enregistrerContactsSecurite:   'B.4 responsable sécurité, antenne de secours',
   enregistrerInvitation:         'B.5 droits d\'inscription (tarif_engagement_*)',
+  enregistrerSurPlace:           'B.5 goûter de fin de tournoi (prix par personne)',
   ajouterClubInvite:             'A.4 (le nom du club sert au rapprochement des équipes)',
   modifierStatutClubInvite:      'A.4 clubs et participants, B.3 éducateurs',
   modifierClubInvite:            'A.4',
@@ -373,7 +386,6 @@ var ACTIONS_AUTORISATION_SANS_IMPACT = {
   envoyerInvitationsGroupe: 'invitation_envoyee — non lue par la feuille',
   envoyerDossierEmail:      'dossier_envoye — non lue par la feuille',
   regenererJetonClub:       'club_token — non lu par la feuille',
-  enregistrerSurPlace:      'buvette / sandwich / boutique — non lues par la feuille',
   enregistrerReponseInvitation: 'contacts de réponse et email_expediteur — non lus par la feuille'
 };
 
@@ -392,7 +404,8 @@ var CHAMPS_SANS_IMPACT_AUTORISATION = {
   enregistrerInfosTournoi: ['tournoi_description', 'zone_vacances', 'perfs_mot_cle_club'],
   enregistrerInvitation:   ['date_limite_confirmation', 'tarif_engagement_modalites',
                             'parking_texte', 'encadrement_ratio', 'encadrement_diplomes',
-                            'assurance_attestation_requise']
+                            'assurance_attestation_requise'],
+  enregistrerSurPlace:     ['buvette_disponible', 'espace_sandwich_disponible', 'boutique_disponible']
 };
 
 /* ⭐ DES RÉVISIONS, PAS UN BOOLÉEN — et les deux scénarios qui l'imposent :
@@ -1147,17 +1160,24 @@ function planRemplissageAutorisation(g, nbClubs, nbEquipes, categories, matchsPa
   var tarifOuiP = String(g.tarif_engagement_oui == null ? '' : g.tarif_engagement_oui).trim().toLowerCase();
   if (tarifOuiP !== 'oui' && tarifOuiP !== 'non') tarifOuiP = '';
   var mTarifP = String(g.tarif_engagement_montant == null ? '' : g.tarif_engagement_montant).match(/\d+(?:[.,]\d+)?/);
-  var droitsOuiEff = v('org_droits_oui') || tarifOuiP;
+  var droitsOuiEff = tarifOuiP || v('org_droits_oui');
   ouinon(droitsOuiEff, 'Case à cocher105', 'Case à cocher106');
-  setT('Texte56', v('org_droits_montant') || ((droitsOuiEff === 'oui' && mTarifP) ? mTarifP[0].replace(',', '.') : ''));
+  var montantDroitsEff = droitsOuiEff === 'oui'
+    ? ((tarifOuiP === 'oui' && mTarifP) ? mTarifP[0].replace(',', '.') : v('org_droits_montant'))
+    : '';
+  setT('Texte56', montantDroitsEff);
   ouinon(v('org_hebergement_oui'), 'Case à cocher107', 'Case à cocher108');
   setT('Texte57', v('org_hebergement_structure'));
   ouinon(v('org_repas_oui'), 'Case à cocher109', 'Case à cocher110');
   setT('Texte58', v('org_repas_fournisseur'));
   setT('Texte59', v('org_repas_prix'));
-  ouinon(v('org_gouters_oui'), 'Case à cocher111', 'Case à cocher112');
+  var gouterPrixP = String(g.gouter_fin_tournoi_oui || '').toLowerCase() === 'oui' &&
+    g.gouter_fin_tournoi_mode === 'prix_personne';
+  var mGouterP = String(g.gouter_fin_tournoi_montant == null ? '' : g.gouter_fin_tournoi_montant).match(/\d+(?:[.,]\d+)?/);
+  var gouterOuiEff = gouterPrixP ? 'oui' : v('org_gouters_oui');
+  ouinon(gouterOuiEff, 'Case à cocher111', 'Case à cocher112');
   setT('Texte60', v('org_gouters_fournisseur'));
-  setT('Texte61', v('org_gouters_prix'));
+  setT('Texte61', gouterPrixP && mGouterP ? mGouterP[0].replace(',', '.') : v('org_gouters_prix'));
 
   // B.2 Récompenses par catégorie (org_recompenses_<cat> ; U10→'10', M8→'8', U15F→'15' ignoré).
   Object.keys(g).forEach(function (k) {
