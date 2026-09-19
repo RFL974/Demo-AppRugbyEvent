@@ -642,7 +642,8 @@ async function onAjouterEquipe(evenement) {
 }
 
 /**
- * Ajoute le jeu d'équipes préparé pour la démonstration Racing.
+ * Ajoute le jeu d'équipes préparé pour la démonstration Racing, puis le registre fictif partagé
+ * par « Clubs invités » et « Suivi des clubs ».
  *
  * Le lot est calculé et contrôlé en entier avant le premier POST. Les écritures restent
  * séquentielles : à chaque réponse confirmée, la ligne serveur est intégrée à la liste. En cas
@@ -667,20 +668,18 @@ async function onAjouterEquipesDemo() {
       noms.join(', ') + '. Corrige ou supprime ces lignes avant de relancer. Aucune équipe n\'a été ajoutée.', 'ko');
     return;
   }
-  if (!plan.manquantes.length) {
-    afficherMessage(message, '✅ Les 21 équipes préparées sont déjà présentes avec les bons effectifs.', 'ok');
-    return;
-  }
-
   const resumeExistantes = plan.dejaPresentes.length
     ? '\n' + plan.dejaPresentes.length + ' équipe(s) déjà conforme(s) seront ignorée(s).'
     : '';
   const confirme = await dialogConfirmer(
-    'Ajouter ' + plan.manquantes.length + ' équipe(s) préparée(s) avec leurs effectifs ?' +
+    (plan.manquantes.length
+      ? 'Ajouter ' + plan.manquantes.length + ' équipe(s) préparée(s) avec leurs effectifs'
+      : 'Les 21 équipes sont déjà conformes. Actualiser') +
+    ' et préparer 8 clubs fictifs dans « Clubs invités » et « Suivi des clubs » ?' +
     resumeExistantes +
     '\n\nLes deux équipes U10 du Stade Français et l\'U12 de Châtenay-Malabry ne seront pas ajoutées : ' +
     'elles restent réservées au parcours d\'invitation.',
-    { ok: 'Ajouter les équipes' }
+    { ok: 'Préparer la démonstration' }
   );
   if (!confirme) return;
 
@@ -727,7 +726,19 @@ async function onAjouterEquipesDemo() {
         return;
       }
     }
-    afficherMessage(message, '✅ Chargement terminé : les 21 équipes préparées sont présentes avec leurs effectifs.', 'ok');
+    if (bouton) bouton.textContent = 'Préparation du suivi des clubs…';
+    afficherMessage(message, '⏳ Préparation des réponses et du suivi des clubs…', 'ok');
+    try {
+      await ecrireAdmin('chargerClubsDemoRacing', {}, { delaiMs: 20000 });
+      if (typeof rafraichirRessourceAdmin === 'function') {
+        await rafraichirRessourceAdmin('clubsInvites');
+      }
+    } catch (erreur) {
+      afficherMessage(message, '⚠️ Les équipes sont présentes, mais le jeu de clubs n\'a pas pu être confirmé : ' +
+        erreur.message + '\nTu peux relancer ce bouton sans créer de doublon.', 'ko');
+      return;
+    }
+    afficherMessage(message, '✅ Démonstration prête : 21 équipes et 8 clubs fictifs cohérents dans les invitations et le suivi.', 'ok');
     verifierEnArrierePlan = true;
   } finally {
     if (bouton) bouton.textContent = 'Démo — Ajouter les 21 équipes préparées';

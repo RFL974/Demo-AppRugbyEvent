@@ -27,6 +27,7 @@ const elements = {
 let appels = [];
 let confirmations = [];
 let confirmation = true;
+let rafraichissementsClubs = 0;
 let ecrireImpl = async function (action, payload) {
   return { ok: true, equipe: Object.assign({ id_equipe: 'E' + appels.length, source: 'manuel' }, payload) };
 };
@@ -55,6 +56,10 @@ const contexte = vm.createContext({
   async ecrireAdmin(action, payload, options) {
     appels.push({ action, payload: Object.assign({}, payload), options });
     return ecrireImpl(action, payload, options);
+  },
+  async rafraichirRessourceAdmin(ressource) {
+    if (ressource === 'clubsInvites') rafraichissementsClubs++;
+    return true;
   },
   estRefusCle: () => false
 });
@@ -90,6 +95,8 @@ const html = lire('admin.html');
 const admin = lire('js/admin.js');
 vrai(html.includes('id="bouton-charger-equipes-demo"') && html.includes('Ajouter les 21 équipes préparées'),
   'le bouton Démo est présent dans la carte Équipes');
+vrai(html.includes('<strong>Clubs invités</strong>') && html.includes('<strong>Suivi des clubs</strong>'),
+  'l’aide annonce les deux vues alimentées par le même jeu fictif');
 vrai(html.indexOf('id="bouton-charger-equipes-demo"') < html.indexOf('id="liste-equipes"'),
   'le bouton Démo est placé avant la liste des équipes');
 vrai(admin.includes("ecouter('bouton-charger-equipes-demo', 'click', onAjouterEquipesDemo)"),
@@ -104,23 +111,29 @@ vrai(admin.includes("ecouter('bouton-charger-equipes-demo', 'click', onAjouterEq
   egal(confirmations.length, 1, 'une confirmation précède le chargement');
   vrai(confirmations[0].texte.includes('Stade Français') && confirmations[0].texte.includes('Châtenay-Malabry'),
     'la confirmation rappelle les trois équipes volontairement exclues');
-  egal(appels.length, 21, 'le premier chargement envoie exactement 21 écritures');
-  vrai(appels.every(a => a.action === 'ajouterEquipe'),
-    'le lot réutilise uniquement l’action d’ajout existante');
-  egal(appels.map(a => [a.payload.categorie, a.payload.nom_equipe,
+  egal(appels.length, 22, 'le premier chargement envoie 21 équipes puis un seul jeu de clubs');
+  vrai(appels.slice(0, 21).every(a => a.action === 'ajouterEquipe'),
+    'les 21 équipes réutilisent l’action d’ajout existante');
+  egal(appels.slice(0, 21).map(a => [a.payload.categorie, a.payload.nom_equipe,
     a.payload.nb_joueurs, a.payload.nb_educateurs]), attendues,
   'chaque POST transporte la catégorie et les deux effectifs exacts');
-  vrai(appels.every(a => a.options && a.options.delaiMs === 9000),
+  vrai(appels.slice(0, 21).every(a => a.options && a.options.delaiMs === 9000),
     'chaque ajout conserve le budget et l’idempotence du parcours existant');
+  egal(appels[21].action, 'chargerClubsDemoRacing',
+    'le registre commun aux invitations et au suivi est chargé après les équipes');
+  egal(appels[21].options.delaiMs, 20000, 'le chargement groupé des clubs dispose du délai adapté');
+  egal(rafraichissementsClubs, 1, 'les deux écrans relisent immédiatement leur source commune');
   egal(contexte.equipesCourantes.length, 21, 'les 21 réponses serveur sont intégrées à la liste locale');
-  vrai(elements['message-equipe'].textContent.includes('Chargement terminé'),
-    'un succès complet est annoncé seulement après la dernière équipe');
+  vrai(elements['message-equipe'].textContent.includes('21 équipes') &&
+    elements['message-equipe'].textContent.includes('8 clubs fictifs'),
+    'un succès complet est annoncé seulement après les équipes et le suivi');
 
   appels = [];
   confirmations = [];
   await contexte.onAjouterEquipesDemo();
-  egal(appels.length, 0, 'une relance sur un lot déjà conforme ne crée aucun doublon');
-  egal(confirmations.length, 0, 'un lot déjà conforme ne demande pas de confirmation inutile');
+  egal(appels.length, 1, 'une relance sur des équipes conformes ne rejoue que le lot idempotent de clubs');
+  egal(appels[0].action, 'chargerClubsDemoRacing', 'la relance ne réécrit aucune équipe');
+  egal(confirmations.length, 1, 'la mise à jour du jeu de suivi reste explicitement confirmée');
 
   contexte.configCourante.categories = [{ categorie: 'U10', presente: 'oui' }];
   contexte.equipesCourantes = [];
