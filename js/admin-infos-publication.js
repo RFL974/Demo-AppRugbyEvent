@@ -1076,6 +1076,18 @@ async function executerGesteAccesScores(action) {
     if (message) afficherMessage(message, '⚠️ ' + err.message, 'ko');
   }
   await chargerAccesScores();   // ⭐ l'écran suit le serveur, jamais l'inverse
+  /* Google peut appliquer la rotation puis perdre sa réponse au second saut de la Web App (404).
+     ⛔ On ne réémet jamais cette écriture. La réussite n'est réconciliée qu'après relecture, si le
+     serveur montre EXACTEMENT l'incrément attendu et un nouveau lien pour la même édition. */
+  if (!applique && action === 'ROTATION' && accesScoresCourant &&
+      String(accesScoresCourant.edition_id || '') === String(etat.edition_id || '') &&
+      Number(accesScoresCourant.version) === Number(versionLue) + 1 &&
+      Number(accesScoresCourant.rotations) === Number(etat.rotations) + 1 &&
+      String(accesScoresCourant.lien || '') !== '' &&
+      String(accesScoresCourant.lien) !== String(etat.lien || '')) {
+    applique = true;
+    if (message) afficherMessage(message, '✅ Lien et QR code renouvelés.', 'ok');
+  }
   /* ⭐ CORR-ACCES-45MIN-DEMO — un accès OUVERT ou REPRIS alors que la saisie est déjà échue est aussitôt refermé
      par le serveur : le « ✅ Ouvert » ne doit pas rester affiché. ⛔ Les autres gestes (pause, renouvellement,
      clôture) ne « referment » rien : leur message reste celui du serveur. */

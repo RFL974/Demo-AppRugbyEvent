@@ -351,6 +351,25 @@ async function section2() {
     envoiRot && envoiRot.corps.transition === 'ROTATION' && envoiRot.corps.version_lue === '2' && /^adm-/.test(envoiRot.corps.requete_id) &&
     envoiRot.corps.cle === CLE_ADMIN_FICTIVE && JSON.stringify(rotOui.actions()) === '["getAccesScoresAdmin","changerAccesScores","getAccesScoresAdmin"]',
     rotOui.actions());
+  let lecturesRotation404 = 0;
+  const lienRenouvele = LIEN_FICTIF.replace(JETON_FICTIF, 'abcdef0123456789'.repeat(4));
+  const rot404 = bancAdmin({ dialogues: [true], serveur: (c) => {
+    if (c.action === 'getAccesScoresAdmin') {
+      lecturesRotation404++;
+      return lecturesRotation404 === 1 ? ETATS.OUVERT : Object.assign({}, ETATS.OUVERT,
+        { version: 3, rotations: 1, lien: lienRenouvele });
+    }
+    if (c.action === 'changerAccesScores') return new Error('Le serveur a répondu avec une erreur (404).');
+    return { error: 'Action inattendue : ' + c.action };
+  } });
+  await rot404.ctx.chargerAccesScores();
+  await rot404.ctx.onClicGesteAccesScores({ target: rot404.el('acces-saisie-actions').querySelectorAll('button')
+    .find((x) => x.getAttribute('data-geste-acces') === 'ROTATION') });
+  verifier('2.8.1', 'ROTATION appliquée mais réponse 404 perdue : aucune seconde écriture ; la relecture exacte confirme le nouveau lien et le QR',
+    JSON.stringify(rot404.actions()) === '["getAccesScoresAdmin","changerAccesScores","getAccesScoresAdmin"]' &&
+    /Lien et QR code renouvelés/.test(rot404.el('message-acces-saisie').textContent) &&
+    rot404.el('acces-saisie-lien').href === lienRenouvele && rot404.qrDonnees.slice(-1)[0] === lienRenouvele,
+    { actions: rot404.actions(), message: rot404.el('message-acces-saisie').textContent });
   const gelNon = await geste('OUVERT', 'FIGER', [false]);
   verifier('2.9', 'pause manuelle : confirmation explicite qui REPREND l\'avertissement ; « Annuler » n\'envoie rien',
     gelNon.dialogues.length === 1 && /ne confirme pas la fin/.test(gelNon.dialogues[0].message) &&
