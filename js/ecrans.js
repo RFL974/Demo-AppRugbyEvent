@@ -5,16 +5,13 @@
  *  Sur ordinateur (≥ 1024px), la longue page qui déroule devient une interface
  *  à BARRE LATÉRALE : un écran PAR ÉTAPE de la préparation (les mêmes étapes
  *  que le fil « Où en suis-je ? », qui vit désormais dans la barre latérale).
- *  Sur mobile, l'assistant à cartes reste le mode guidé (avec son verrou
- *  « Suivant ») — c'est assistant.js qui choisit au chargement.
+ *  Sur mobile, l'assistant à cartes reste le mode guidé — c'est assistant.js qui
+ *  choisit au chargement.
  *
- *  VERROU (même logique que l'assistant) : un item de la barre latérale reste
- *  🔒 verrouillé tant qu'une étape PRÉCÉDENTE n'est pas ✅ complète (enregistrée /
- *  générée / répartie, d'après le « cerveau » calculerEtatsEtapes d'admin.js)
- *  ou qu'elle a des modifications non enregistrées. Une étape complète reçoit
- *  une coche ✓ bleu ciel sur fond blanc. L'après-midi ne bloque pas la
- *  Publication (elle se génère plus tard, une fois les scores du matin saisis
- *  — même règle que le verdict « prêt à publier » du cerveau).
+ *  MODE DÉMO : tous les onglets de la barre latérale sont directement accessibles,
+ *  quel que soit l'avancement. Les pastilles continuent d'indiquer « fait / à faire /
+ *  à refaire », mais ne deviennent plus des cadenas. Cette liberté de navigation
+ *  ne retire aucune protection métier portée par les actions elles-mêmes.
  *
  *  Même technique éprouvée que l'assistant : on DÉPLACE les blocs existants
  *  (déplacer un nœud DOM conserve ses écouteurs) → admin.js continue de
@@ -208,10 +205,6 @@ function construireEcrans() {
             '<span class="ecr-marque-titre">Administration</span>' +
             '<span class="ecr-marque-sous">Le tournoi</span>' +
           '</div>' +
-          // Pourquoi une étape est inaccessible : affiché NOIR SUR BLANC au clic sur un onglet
-          // grisé, EN HAUT de la barre pour rester visible quelle que soit sa longueur. Avant,
-          // l'onglet se contentait de trembler — on restait bloqué sans savoir quoi enregistrer.
-          '<div id="ecr-verrou-msg" class="ecr-verrou-msg" role="status" hidden></div>' +
           '<ul class="ecr-liste">';
   ECRANS_DEF.forEach(function (e) {
     h += '<li><button type="button" class="ecr-onglet' + (e.danger ? ' est-danger' : '') +
@@ -247,9 +240,9 @@ function construireEcrans() {
     if (btn) ecransActiver(btn.getAttribute('data-ecran'));
   });
 
-  // Verrou : toute saisie ou clic dans un écran peut changer l'état (champ
-  // modifié, répartition calculée, enregistrement réussi…) → on réévalue les
-  // pastilles/verrous juste après (les écouteurs métier d'admin.js d'abord).
+  // Toute saisie ou clic dans un écran peut changer son état (champ modifié,
+  // répartition calculée, enregistrement réussi…) : on réévalue les pastilles
+  // juste après, une fois les écouteurs métier d'admin.js passés.
   if (typeof assistantMajVerrouDiffere === 'function') {
     zone.addEventListener('input', assistantMajVerrouDiffere);
     zone.addEventListener('change', assistantMajVerrouDiffere);
@@ -290,65 +283,6 @@ function ecransEtats() {
   try { return calculerEtatsEtapes(); } catch (e) { return null; }
 }
 
-/**
- * Verrous de la barre latérale : renvoie un tableau aligné sur ECRANS_DEF —
- * null si l'écran est accessible, sinon la RAISON humaine du blocage.
- * Un écran est verrouillé si, sur un écran PRÉCÉDENT :
- *   1) une étape du cerveau n'est pas ✅ « fait » (à faire / à refaire) ; ou
- *   2) des modifications ne sont pas enregistrées (même règle que l'assistant).
- * Exceptions : l'étape « après-midi » ne verrouille jamais la suite (elle se
- * génère plus tard, une fois les scores du matin saisis), et un écran marqué
- * `libre` (Réinitialiser) n'est JAMAIS verrouillé.
- */
-function ecransCalculerVerrous(etats) {
-  const verrous = [];
-  let blocage = null; // première raison rencontrée en remontant les écrans
-  ECRANS_DEF.forEach(function (def) {
-    verrous.push(def.libre ? null : blocage);
-    if (blocage) return; // déjà bloqué en amont : inutile de chercher plus loin
-    // Un écran LIBRE est une voie PARALLÈLE et facultative (inviter un club, demande
-    // d'autorisation, feuille de journée, réinitialisation) : il n'est jamais verrouillé, et il ne
-    // doit pas davantage verrouiller la SUITE. Sans ce retour, une simple retouche non enregistrée
-    // dans « Inviter un club » gelait Équipes, Terrains, Poules, Publication et Après-midi — le
-    // chemin principal était bloqué par une étape explicitement déclarée optionnelle.
-    if (def.libre) return;
-    (def.cles || []).forEach(function (cle) {
-      if (cle === 'apresmidi') return; // ne bloque jamais la suite
-      const e = (etats || []).find(function (x) { return x.cle === cle; });
-      if (!blocage && e && e.statut !== 'fait') blocage = e.titre + ' — ' + e.detail;
-    });
-    if (!blocage) {
-      const modifs = ecransRaisonsModifs(def);
-      if (modifs.length) blocage = modifs[0];
-    }
-  });
-  return verrous;
-}
-
-/** Modifications non enregistrées sur un écran (réutilise la détection de
- *  l'assistant : formulaires ≠ dernière « photo » enregistrée + états en attente). */
-function ecransRaisonsModifs(def) {
-  const ecran = document.getElementById('ecran-' + def.id);
-  if (!ecran || typeof raisonsModifsDans !== 'function') return [];
-  return raisonsModifsDans(def.id, ecran, ecransZonesSurveillees());
-}
-
-/** Zones surveillées : les formulaires des écrans + la zone terrains (champs
- *  sans <form>). #form-equipe et #form-club-invite sont exclus : règle dédiée
- *  (formulaires d'ajout immédiat, pas d'état « enregistré » à comparer). */
-function ecransZonesSurveillees() {
-  const zone = document.getElementById('ecrans');
-  if (!zone) return [];
-  const zones = [];
-  zone.querySelectorAll('form').forEach(function (f) {
-    if (f.id === 'form-equipe' || f.id === 'form-club-invite') return;
-    zones.push(f);
-  });
-  const zt = document.getElementById('zone-terrains');
-  if (zt && zone.contains(zt)) zones.push(zt);
-  return zones;
-}
-
 /** L'écran « du moment » : le premier dont une étape n'est pas encore ✅ faite
  *  (c'est là que le travail continue). Tout est fait → Publication. */
 function ecransEcranCourant(etats) {
@@ -363,9 +297,8 @@ function ecransEcranCourant(etats) {
 }
 
 /**
- * Affiche l'écran demandé (et masque les autres). Refuse si l'écran est
- * 🔒 verrouillé (une étape précédente n'est pas complète) : l'onglet tremble
- * et son infobulle explique quoi terminer d'abord.
+ * Affiche l'écran demandé (et masque les autres). En mode démo, chaque onglet
+ * est joignable directement, même si les étapes précédentes restent à faire.
  * @param {string}  id                 id logique ('infos', 'horaires', …)
  * @param {Object}  [opt]
  * @param {boolean} [opt.sansScroll]   ne pas remonter en haut (1er affichage, fil d'étapes)
@@ -374,13 +307,6 @@ function ecransActiver(id, opt) {
   opt = opt || {};
   const idx = ECRANS_DEF.findIndex(function (e) { return e.id === id; });
   if (idx === -1) return;
-
-  // VERROU : impossible d'ouvrir un écran tant qu'une étape précédente n'est
-  // pas complète. (Revenir en arrière reste toujours possible : les écrans
-  // déjà faits ne sont jamais verrouillés.)
-  const verrous = ecransCalculerVerrous(ecransEtats());
-  if (verrous[idx]) { ecransSecouerOnglet(id); ecransDireVerrou(verrous[idx]); return; }
-  ecransDireVerrou(null); // écran ouvert : plus rien à expliquer
 
   ECRANS_DEF.forEach(function (e) {
     const ecran = document.getElementById('ecran-' + e.id);
@@ -407,83 +333,39 @@ function ecransActiver(id, opt) {
   if (!opt.sansScroll) window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
-/** Dit POURQUOI un écran est verrouillé (ou efface le message si `raison` est nulle).
- *  L'explication s'efface d'elle-même au bout de quelques secondes. */
-let ecransVerrouTimer = null;
-function ecransDireVerrou(raison) {
-  const zone = document.getElementById('ecr-verrou-msg');
-  if (!zone) return;
-  if (ecransVerrouTimer) { clearTimeout(ecransVerrouTimer); ecransVerrouTimer = null; }
-  if (!raison) { zone.hidden = true; zone.textContent = ''; return; }
-  zone.hidden = false;
-  zone.innerHTML = '🔒 <strong>Pour ouvrir cette étape, termine d\'abord&nbsp;:</strong><br>' + echapper(raison);
-  ecransVerrouTimer = setTimeout(function () {
-    zone.hidden = true; zone.textContent = ''; ecransVerrouTimer = null;
-  }, 12000);
-}
-
-/** Petit tremblement de l'onglet quand on clique un écran verrouillé. */
-function ecransSecouerOnglet(id) {
-  const btn = document.querySelector('.ecr-onglet[data-ecran="' + id + '"]');
-  if (!btn) return;
-  btn.classList.remove('est-secoue');
-  void btn.offsetWidth; // relance l'animation CSS
-  btn.classList.add('est-secoue');
-}
-
 /** Ouvre l'écran qui contient le bloc demandé, puis défile jusqu'à lui.
  *  Appelé (via assistant.js) quand on clique un lien du verdict « prêt à
- *  publier ». Si l'écran visé est verrouillé, on ouvre l'écran « du moment ». */
+ *  publier ». */
 function ecransAllerVersBloc(blocId) {
   const bloc = document.getElementById(blocId);
   const ecran = bloc && bloc.closest('.ecran');
   if (!ecran) return;
   const def = ECRANS_DEF.find(function (e) { return 'ecran-' + e.id === ecran.id; });
   if (!def) return;
-  const etats = ecransEtats();
-  const idx = ECRANS_DEF.indexOf(def);
-  if (ecransCalculerVerrous(etats)[idx]) {
-    ecransActiver(ecransEcranCourant(etats), { sansScroll: true });
-    return;
-  }
   ecransActiver(def.id, { sansScroll: true });
   if (bloc.scrollIntoView) bloc.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 /**
- * Pastilles + verrous de la barre latérale, nourris par le « cerveau » :
- *   ✓ fait (coche ciel sur fond blanc) · ⚪️ à faire · 🟠 « ! » à refaire ·
- *   🔒 verrouillé (une étape précédente n'est pas complète).
+ * Pastilles d'état de la barre latérale, nourries par le « cerveau » :
+ *   ✓ fait (coche ciel sur fond blanc) · ⚪️ à faire · 🟠 « ! » à refaire.
  *  Appelée après chaque majEtatAvancement() via assistantMajVerrou (assistant.js).
- *  Si l'écran AFFICHÉ vient d'être verrouillé (ex. réinitialisation), on
- *  bascule automatiquement sur l'écran « du moment ».
  */
 function ecransMajPastilles() {
   if (!ecransEstActif()) return;
   const etats = ecransEtats();
   if (!etats) return; // données pas encore chargées
-  const verrous = ecransCalculerVerrous(etats);
-
-  ECRANS_DEF.forEach(function (def, i) {
+  ECRANS_DEF.forEach(function (def) {
     const btn = document.querySelector('.ecr-onglet[data-ecran="' + def.id + '"]');
     const pastille = document.getElementById('ecr-pastille-' + def.id);
     if (!btn || !pastille) return;
 
-    const verrou = verrous[i];
-    btn.classList.toggle('est-verrouille', !!verrou);
-    btn.setAttribute('aria-disabled', verrou ? 'true' : 'false');
-
+    // Nettoyage explicite pour une page qui aurait chargé une ancienne version du script :
+    // aucun onglet de la démo ne doit conserver un état visuel ou ARIA verrouillé.
+    btn.classList.remove('est-verrouille');
+    btn.removeAttribute('aria-disabled');
     pastille.classList.remove('est-fait', 'est-afaire', 'est-arefaire', 'est-verrou');
     const concernes = etats.filter(function (e) { return def.cles.indexOf(e.cle) !== -1; });
-
-    if (verrou) {
-      // Écran hors de portée : cadenas + explication en infobulle.
-      pastille.hidden = false;
-      pastille.classList.add('est-verrou');
-      pastille.innerHTML = (typeof svgIcone === 'function') ? svgIcone('verrou') : '🔒';
-      btn.title = 'Termine d\'abord : ' + verrou;
-      return;
-    }
     btn.title = concernes.map(function (e) { return e.titre + ' : ' + e.detail; }).join(' · ');
     if (!concernes.length) { pastille.hidden = true; return; }
     pastille.hidden = false;
@@ -494,11 +376,4 @@ function ecransMajPastilles() {
     else              { pastille.classList.add('est-fait');     pastille.textContent = '✓'; }
   });
 
-  // L'écran affiché vient d'être verrouillé (ex. tournoi réinitialisé depuis
-  // la Publication) → on ramène l'utilisateur là où le travail reprend.
-  const actif = document.querySelector('.ecr-onglet.est-actif');
-  const idxActif = actif ? ECRANS_DEF.findIndex(function (e) { return e.id === actif.getAttribute('data-ecran'); }) : -1;
-  if (idxActif !== -1 && verrous[idxActif]) {
-    ecransActiver(ecransEcranCourant(etats), { sansScroll: true });
-  }
 }

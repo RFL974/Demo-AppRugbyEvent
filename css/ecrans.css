@@ -214,7 +214,7 @@ body.avec-ecrans .ecran[hidden] { display: none !important; }
 /* --------------------------------------------------------------------------
    PASTILLES D'ÉTAT des onglets (nourries par le « cerveau » d'admin.js) :
    ✓ fait (coche ciel sur fond blanc) · ⚪️ à faire (point creux) ·
-   🟠 « ! » à refaire · 🔒 verrouillé (une étape précédente n'est pas complète).
+   🟠 « ! » à refaire. En mode démo, chaque onglet reste accessible.
    -------------------------------------------------------------------------- */
 .ecr-pastille {
   flex: 0 0 auto;
@@ -239,26 +239,6 @@ body.avec-ecrans .ecran[hidden] { display: none !important; }
 .ecr-pastille.est-arefaire { background: #FFB570; color: #5C2E00; }
 /* Sur l'onglet actif (fond clair, desktop), le point « à faire » reste visible. */
 .ecr-onglet.est-actif .ecr-pastille.est-afaire { border-color: rgba(90, 107, 128, 0.6); }
-/* Écran verrouillé : petit cadenas à la place de la pastille. */
-.ecr-pastille.est-verrou { background: transparent; font-size: 0.75rem; }
-
-/* --------------------------------------------------------------------------
-   VERROU DES ONGLETS — un écran hors de portée est grisé et ne réagit pas ;
-   cliquer dessus le fait trembler (l'infobulle dit quoi terminer d'abord).
-   -------------------------------------------------------------------------- */
-.ecr-onglet.est-verrouille { opacity: 0.45; cursor: not-allowed; }
-.ecr-onglet.est-verrouille:hover { background: transparent; }
-@media (min-width: 1024px) {
-  .ecr-onglet.est-verrouille:hover { color: rgba(255, 255, 255, 0.78); }
-}
-.ecr-onglet.est-secoue { animation: ecr-secousse 0.35s ease; }
-@keyframes ecr-secousse {
-  20% { transform: translateX(-4px); }
-  40% { transform: translateX(4px); }
-  60% { transform: translateX(-3px); }
-  80% { transform: translateX(3px); }
-}
-
 /* --------------------------------------------------------------------------
    En mode écrans, les étapes de « Où en suis-je ? » vivent dans la barre
    latérale → on masque le fil (doublon), mais on GARDE le verdict « prêt à
@@ -266,16 +246,3 @@ body.avec-ecrans .ecran[hidden] { display: none !important; }
    -------------------------------------------------------------------------- */
 body.avec-ecrans #etat-avancement .ea-entete,
 body.avec-ecrans #etat-avancement .ea-fil { display: none; }
-
-/* Explication du VERROU : pourquoi cette étape est inaccessible. Affichée au clic sur un
-   onglet grisé — avant, l'onglet se contentait de trembler sans rien dire. */
-.ecr-verrou-msg {
-  margin: 8px 10px 0;
-  padding: 9px 11px;
-  border-radius: 10px;
-  background: rgba(214, 141, 20, .16);
-  color: #b26a00;
-  font-size: .82rem;
-  line-height: 1.45;
-}
-.theme-clair .ecr-verrou-msg { background: #FFF4E0; color: #8a5200; }
