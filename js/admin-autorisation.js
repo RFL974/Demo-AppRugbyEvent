@@ -384,7 +384,6 @@ var ACTIONS_AUTORISATION_CHEMIN_PROPRE = {
    `getDossierAutorisation` (contrôlé une par une le 2026-08-25). */
 var ACTIONS_AUTORISATION_SANS_IMPACT = {
   listerClubsInvites:       'lecture seule',
-  publierPlanningClubs:     'drapeau de visibilité du planning',
   publierTournoi:           'drapeau de publication',
   enregistrerAffiche:       'image de l\'affiche',
   supprimerAffiche:         'image de l\'affiche',

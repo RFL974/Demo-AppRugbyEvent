@@ -2220,16 +2220,6 @@ a.bouton { display: inline-block; text-decoration: none; }
    de classe n'aurait été stylé que dans l'une des deux. */
 .dossier-apercu-lib { color: var(--bleu-ciel); }
 
-/* Verrou « planning visible par les clubs » (carte Poules & planning) : l'état saute aux yeux,
-   parce qu'une publication oubliée ne se voit nulle part ailleurs. */
-.publi-planning {
-  margin: 12px 0; padding: 12px 14px; border-radius: var(--rayon);
-  border-left: 4px solid; background: rgba(3, 16, 36, 0.4);
-}
-.publi-planning.est-masque { border-left-color: #d68d14; }
-.publi-planning.est-visible { border-left-color: #2f9e63; }
-.publi-planning-etat { margin: 0 0 10px; line-height: 1.5; }
-.publi-planning-note { margin: 10px 0 0; font-size: 0.85rem; color: var(--bleu-ciel); line-height: 1.5; }
 #ligne-apercu-dossier select { max-width: 260px; }
 
 /* ==========================================================================

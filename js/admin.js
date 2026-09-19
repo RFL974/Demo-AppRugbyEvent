@@ -942,7 +942,6 @@ async function chargerAdmin() {
       majApercuInvitation();
       majPublication();
       majDossier();
-      majPublicationPlanning(); // verrou « planning visible par les clubs »
       // ⛔ PARTENAIRES et DEMANDE D'AUTORISATION ne sont plus lus ici : leurs trois lectures
       //    (listerSponsors, lireMesuresSponsors, getDossierAutorisation) partent désormais à
       //    l'ARRIVÉE sur leur écran, via `ouvrirEtapeAdmin`. Voir le bloc « CHARGEMENT DIFFÉRÉ »
@@ -1048,9 +1047,6 @@ function brancherEcouteursAdmin() {
   // Carte « Dossier » : le bouton d'aperçu est RECONSTRUIT à chaque majApercuDossier() (la liste
   // des clubs change) — écouteur DÉLÉGUÉ sur la carte, jamais sur le bouton lui-même.
   ecouter('bloc-dossier', 'click', onClicApercuDossier);
-
-  // Verrou « planning visible par les clubs » : bouton reconstruit à chaque état → délégué.
-  ecouter('publication-planning', 'click', onPublierPlanning);
 
   // Bouton publier / masquer le tournoi.
   ecouter('bouton-publier', 'click', onPublier);
@@ -1256,8 +1252,6 @@ async function rechargerEtRendre(opt) {
   afficherPlanning(data.poules, data.matchs);
   majApresMidi();
   majFeuilleJour();
-  majPublicationPlanning(); // le verrou « visible par les clubs » suit chaque génération
-
   if (opt.infos)       { majInfosTournoi(); majContactsSecurite(); majInvitation(); majPerfsMotCleClub(); }
   if (opt.publication) majPublication();
   majDossier(); // la config vient d'être rechargée : l'état du dossier suit

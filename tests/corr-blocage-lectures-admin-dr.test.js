@@ -384,7 +384,7 @@ function bac(opt) {
     svgIcone: function () { return ''; },
     injecterReglages: function () {}, injecterTerrains: function () {},
     afficherPlanning: function () { ctx._planning++; }, majApresMidi: function () {},
-    majFeuilleJour: function () {}, majPublicationPlanning: function () {},
+    majFeuilleJour: function () {},
     majInfosTournoi: function () {}, majContactsSecurite: function () {},
     majInvitation: function () {}, majPerfsMotCleClub: function () {},
     majPublication: function () {}, majDossier: function () {},

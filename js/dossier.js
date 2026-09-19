@@ -36,6 +36,12 @@
 // dans commun-dossier.js (partagés avec invitation-club.html).
 document.addEventListener('DOMContentLoaded', initDossier);
 
+/** Le planning du dossier suit désormais l'unique publication du tournoi. */
+function dossierTournoiPublie(donneesPubliques) {
+  const global = donneesPubliques && donneesPubliques.config && donneesPubliques.config.global;
+  return String((global && global.tournoi_publie) || '').toLowerCase() === 'oui';
+}
+
 async function initDossier() {
   const zone = document.getElementById('dossier');
   revelerOutilsAdmin();
@@ -72,10 +78,9 @@ async function initDossier() {
       contactEmail:   (r && r.contact_email) || '',
       club:           clubParam,
       token:          token,
-      // VERROU : poules et matchs ne s'affichent que si l'organisateur les a publiés. Tout ce qui
-      // n'est pas un « oui » explicite vaut non — témoin absent (tournoi d'avant la fonction),
-      // vide, ou config partielle. Le défaut est FERMÉ, comme les listes blanches du backend.
-      planningVisible: String((config.global || {}).planning_visible_clubs || '').toLowerCase() === 'oui',
+      // Une seule publication : dès que le tournoi est publié, poules et matchs apparaissent.
+      // L'ancien drapeau planning_visible_clubs est volontairement ignoré.
+      tournoiPublie:   dossierTournoiPublie(data),
       // L'instantané public complet : il porte AUSSI les partenaires et leurs réglages
       // d'affichage. On le garde tel quel plutôt que d'en extraire des morceaux — le
       // bandeau partenaires a besoin de `config.global` autant que de `sponsors`.
@@ -530,7 +535,7 @@ function sectionJournee(g, cats) {
 function sectionMesEquipes(ctx) {
   const liste = (ctx.equipes || []).filter(function (e) { return txt(e.nom_equipe); });
   if (!liste.length) return '';
-  const publie = ctx.planningVisible;   // poules et planning : montrés seulement une fois validés
+  const publie = ctx.tournoiPublie;   // poules et planning suivent la publication du tournoi
 
   const lignes = liste.map(function (e) {
     const detail = [];
@@ -592,7 +597,7 @@ function nomEquipeParId(equipesTournoi, id) {
  * Aucun match connu du tout ⇒ section entièrement masquée.
  */
 function sectionMonPlanning(ctx, catsFormat) {
-  if (!ctx.planningVisible) return '';            // pas encore validé par l'organisation
+  if (!ctx.tournoiPublie) return '';              // le tournoi n'est pas encore publié
   const mesIds = (ctx.equipes || []).map(function (e) { return txt(e.id_equipe); }).filter(Boolean);
   if (!mesIds.length) return '';
 

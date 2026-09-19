@@ -529,10 +529,6 @@
         <!-- Modification manuelle des poules du matin (rééquilibrer les niveaux avant de jouer) -->
         <button id="bouton-modifier-poules" class="bouton" hidden data-ic="crayon">Modifier les poules du matin</button>
         <div id="edition-poules"></div>
-        <!-- VERROU DE PUBLICATION : générer n'est pas valider. Tant que l'organisateur n'a pas
-             regardé l'équilibre des poules, les clubs ne voient rien dans leur dossier. Toute
-             génération ou réorganisation remet ce témoin à « non » — rendu par majPublicationPlanning(). -->
-        <div id="publication-planning"></div>
         <div id="affichage-planning"></div>
       </section>
 
@@ -1005,7 +1001,8 @@
         <p class="note-generation">
           Rend le tournoi <strong>visible du public</strong> sur la page publique. Tant qu'il n'est
           pas publié, les visiteurs voient un écran « à venir ».<br>
-          Indépendant de la génération des poules : prépare d'abord tout, publie quand c'est prêt.
+          Dès sa publication, le planning apparaît aussi automatiquement dans le
+          <strong>dossier des clubs</strong>. Prépare d'abord tout, publie quand c'est prêt.
         </p>
         <p class="publication-etat">État : <strong id="etat-publication">…</strong></p>
 

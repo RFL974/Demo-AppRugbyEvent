@@ -1230,8 +1230,8 @@ async function onPublier() {
   const bouton = document.getElementById('bouton-publier');
   const publier = !estPublie(); // on bascule vers l'état inverse
   const question = publier
-    ? 'Publier le tournoi ?\n\nLe tournoi deviendra visible du public. Les infos saisies (nom, date, lieu, description, affiche) seront aussi enregistrées.'
-    : 'Masquer le tournoi ? Les visiteurs reverront l\'écran « à venir ».';
+    ? 'Publier le tournoi ?\n\nLe tournoi deviendra visible du public et le planning apparaîtra automatiquement dans les dossiers des clubs. Les infos saisies (nom, date, lieu, description, affiche) seront aussi enregistrées.'
+    : 'Masquer le tournoi ? Les visiteurs reverront l\'écran « à venir » et le planning sera masqué dans les dossiers des clubs.';
   if (!await dialogConfirmer(question, { ok: publier ? 'Publier' : 'Masquer' })) return;
 
   bouton.disabled = true;
@@ -1257,7 +1257,9 @@ async function onPublier() {
     document.getElementById('form-infos-tournoi').tournoi_affiche.value = ''; // vide le champ fichier
     majPublication();
     majTableauBord();
-    afficherMessage(message, publier ? '✅ Tournoi publié.' : '✅ Tournoi masqué.', 'ok');
+    afficherMessage(message, publier
+      ? '✅ Tournoi publié. Le planning est maintenant visible dans les dossiers des clubs.'
+      : '✅ Tournoi masqué. Le planning est retiré des dossiers des clubs.', 'ok');
   } catch (erreur) {
     afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
   } finally {
