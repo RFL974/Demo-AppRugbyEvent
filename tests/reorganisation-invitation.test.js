@@ -99,7 +99,7 @@ const ordreInterieur = [
   'bloc-surplace',
   'bloc-apercu-invitation'
 ];
-const ordreDossier = ['bloc-parking', 'bloc-encadrement', 'bloc-dossier'];
+const ordreDossier = ['bloc-parking', 'bloc-encadrement', 'bloc-dossier', 'bloc-apercu-dossier-email'];
 
 egal(blocsEtape(ecrans, 'invitation'), ordreEcran, 'ordinateur : Clubs invités précède le dépliant');
 egal(blocsEtape(assistant, 'invitation'), ordreEcran, 'mobile : Clubs invités précède le dépliant');
@@ -108,7 +108,8 @@ vrai(!/\{ id: 'dossier'[,}]/.test(assistant), 'mobile : l’étape Dossier a qui
 
 const page = noeud('page', 'main');
 ['bloc-contacts-securite', 'bloc-modalites', 'bloc-clubs-invites', 'bloc-apercu-invitation',
-  'bloc-surplace', 'bloc-reponse', 'bloc-parking', 'bloc-encadrement', 'bloc-dossier']
+  'bloc-surplace', 'bloc-reponse', 'bloc-parking', 'bloc-encadrement', 'bloc-dossier',
+  'bloc-apercu-dossier-email']
   .forEach(id => page.appendChild(noeud(id)));
 const contexte = vm.createContext({
   document: {
@@ -136,7 +137,7 @@ egal(dossier.tagName, 'DETAILS', 'le dossier final emploie le composant déplian
 vrai(!Object.prototype.hasOwnProperty.call(dossier, 'open'), 'le dossier final est fermé par défaut');
 egal(dossier.children[0].textContent, 'Dossier final', 'le second dépliant porte le titre demandé');
 egal(dossier.children.slice(1).map(n => n.id), ordreDossier,
-  'le dossier final conserve exactement l’ordre de ses trois cartes');
+  'le dossier final place l’aperçu après ses trois cartes de contenu');
 
 const memeGroupe = contexte.preparerInvitationInitiale();
 const memeDossier = contexte.preparerDossierFinal();
@@ -161,5 +162,7 @@ vrai(construireAssistant.indexOf("typeof preparerDossierFinal === 'function'") <
   'mobile : le dossier final est préparé avant le déplacement des blocs');
 vrai(html.includes('toutes les cartes du menu « Invitation initiale »'),
   'le texte de l’aperçu décrit sa nouvelle source complète');
+vrai(html.includes('id="bloc-apercu-dossier-email"') && html.includes("n'envoie et n'enregistre rien</strong>"),
+  'le menu Dossier final contient son aperçu permanent et non destructif');
 
 console.log('OK — ' + controles + ' contrôles passés.');

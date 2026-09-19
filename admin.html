@@ -825,6 +825,36 @@
         </p>
       </section>
 
+      <!-- Aperçu permanent et non destructif de l'email de dossier final. Le choix du club
+           personnalise le rendu ; aucun lien n'est renouvelé et aucun email n'est envoyé ici. -->
+      <section class="carte" id="bloc-apercu-dossier-email">
+        <h2>Aperçu de l'email du dossier final</h2>
+        <p class="note-generation">
+          Choisis un club pour voir l'<strong>email final personnalisé</strong>. L'aperçu reprend
+          les informations enregistrées dans <strong>Parking &amp; accès</strong> et
+          <strong>Encadrement &amp; assurance</strong>, puis le <strong>Dossier complet</strong>.
+          L'objet et l'introduction proposés pourront encore être modifiés au moment de l'envoi.
+          Enregistre d'abord les cartes modifiées pour actualiser ce rendu. Cette carte
+          <strong>n'envoie et n'enregistre rien</strong>.
+        </p>
+        <div class="apercu-email" id="apercu-dossier-email">
+          <label class="ae-champ"><span class="ae-label">Aperçu pour</span>
+            <select class="r-input" id="apercu-dossier-email-club"></select>
+          </label>
+          <label class="ae-champ"><span class="ae-label">Objet proposé</span>
+            <input type="text" class="r-input" id="apercu-dossier-email-objet" readonly>
+          </label>
+          <label class="ae-champ"><span class="ae-label">Introduction proposée</span>
+            <textarea class="r-input" id="apercu-dossier-email-intro" rows="2" readonly></textarea>
+          </label>
+          <p class="ae-salutation">
+            La salutation, les catégories engagées et le lien personnel sont adaptés au club
+            sélectionné. Aperçu du <strong>rendu HTML réel</strong> :
+          </p>
+          <iframe id="apercu-dossier-email-rendu" class="ae-iframe" title="Aperçu de l'email du dossier final"></iframe>
+        </div>
+      </section>
+
       <!-- Amont : demande d'autorisation de tournoi EDR (feuille de report du formulaire FFR) -->
       <section class="carte" id="bloc-autorisation">
         <h2>Demande d'autorisation de tournoi</h2>

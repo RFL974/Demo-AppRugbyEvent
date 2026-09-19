@@ -1111,6 +1111,10 @@ function brancherEcouteursAdmin() {
   ecouter('form-encadrement', 'submit', function (e) { e.preventDefault(); });
   ecouter('bouton-enregistrer-encadrement', 'click', onEnregistrerEncadrement);
 
+  // Aperçu permanent du dossier final : le choix du club le personnalise immédiatement.
+  // Les cartes de contenu le rafraîchissent après leur enregistrement via majDossier().
+  ecouter('apercu-dossier-email-club', 'change', majApercuDossierEmail);
+
   // Phase 1 — carte « Sur place » (3 cases à cocher) : bouton dédié.
   ecouter('form-surplace', 'submit', function (e) { e.preventDefault(); });
   ecouter('bouton-enregistrer-surplace', 'click', onEnregistrerSurPlace);

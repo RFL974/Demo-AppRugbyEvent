@@ -99,7 +99,8 @@ const INVITATION_INITIALE_BLOCS = [
 const DOSSIER_FINAL_BLOCS = [
   'bloc-parking',
   'bloc-encadrement',
-  'bloc-dossier'
+  'bloc-dossier',
+  'bloc-apercu-dossier-email'
 ];
 
 /** Regroupe les cartes de la première invitation dans un dépliant natif, fermé par défaut. */

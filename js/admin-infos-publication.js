@@ -448,6 +448,7 @@ function majDossier() {
   }).join('') + '</ul>';
 
   majApercuDossier();
+  if (typeof majApercuDossierEmail === 'function') majApercuDossierEmail();
 }
 
 /**

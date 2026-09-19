@@ -864,6 +864,8 @@ function majInvitation() {
     fe.assurance_attestation_requise.checked = estOui(g.assurance_attestation_requise);
     if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(fe);
   }
+
+  if (typeof majApercuDossierEmail === 'function') majApercuDossierEmail();
 }
 
 /** Révèle / masque les champs du tarif selon la case « Tarif d'engagement ». */
@@ -1262,6 +1264,7 @@ function afficherClubsInvites() {
   });
   zone.innerHTML = html;
   majApercuInvitation(); // l'exemple de prénom de l'aperçu suit la liste
+  majApercuDossierEmail(); // le choix du club et le rendu final suivent la même liste
 }
 
 /** Ligne d'un club en mode ÉDITION inline des coordonnées (nom + contact). */
@@ -1619,6 +1622,61 @@ function introDossierDefaut(g, club) {
   return 'Nous avons bien reçu votre engagement pour le ' + nom + '. '
     + 'Voici le dossier complet de la journée' + (nomClub ? ' pour ' + nomClub : '')
     + ' : infos pratiques, programme, format sportif, sécurité et contact.';
+}
+
+/** Clubs proposés dans l'aperçu : acceptés d'abord, puis les autres par ordre alphabétique. */
+function clubsApercuDossierEmail() {
+  return (clubsInvitesCourants || []).filter(function (c) {
+    return String(c.club_nom || '').trim();
+  }).slice().sort(function (a, b) {
+    const aa = estAccepte(a.statut) ? 0 : 1, bb = estAccepte(b.statut) ? 0 : 1;
+    return (aa - bb) || String(a.club_nom).localeCompare(String(b.club_nom), 'fr');
+  });
+}
+
+/** Aperçu permanent du mail final. Fonction purement visuelle : aucun appel réseau, aucune écriture. */
+function majApercuDossierEmail() {
+  const select = document.getElementById('apercu-dossier-email-club');
+  const objet = document.getElementById('apercu-dossier-email-objet');
+  const intro = document.getElementById('apercu-dossier-email-intro');
+  const rendu = document.getElementById('apercu-dossier-email-rendu');
+  if (!select || !objet || !intro || !rendu) return;
+
+  const clubs = clubsApercuDossierEmail();
+  const ancienNom = select.value;
+  if (clubs.length) {
+    select.innerHTML = clubs.map(function (c) {
+      const nom = String(c.club_nom).trim();
+      return '<option value="' + echapper(nom) + '">' + echapper(nom)
+        + (estAccepte(c.statut) ? '' : ' (' + echapper(String(c.statut || 'invité')) + ')') + '</option>';
+    }).join('');
+    const conserve = clubs.some(function (c) { return memeTexteSouple(c.club_nom, ancienNom); });
+    select.value = conserve ? ancienNom : String(clubs[0].club_nom || '');
+    select.disabled = false;
+  } else {
+    select.innerHTML = '<option value="">Club exemple (aucun club chargé)</option>';
+    select.value = '';
+    select.disabled = true;
+  }
+
+  const club = clubs.find(function (c) { return memeTexteSouple(c.club_nom, select.value); }) || {
+    club_nom: 'Club exemple', club_contact_prenom: '',
+    categories_engagees: JSON.stringify(catsInvitationTriees().map(function (c) { return c.categorie; }))
+  };
+  // Même source que la vraie fenêtre d'envoi : uniquement la configuration enregistrée.
+  const g = Object.assign({}, configCourante.global || {});
+  const prenom = String(club.club_contact_prenom || '').trim();
+  const salutation = prenom ? 'Bonjour ' + echapper(prenom) + ',' : 'Bonjour,';
+  const img = String(g.tournoi_affiche_id || '').trim() ? urlAffiche(g.tournoi_affiche_id, 800) : '';
+  const token = String(club.club_token || '').trim();
+  const lien = token ? lienDossierClub(String(club.club_nom || ''), token) : '';
+  const sujet = sujetDossier(g);
+  objet.value = sujet;
+  // Le champ est informatif : fixer aussi sa valeur par défaut évite qu'une restauration
+  // automatique de formulaire du navigateur ne le remette à vide après le rendu.
+  objet.defaultValue = sujet;
+  intro.value = introDossierDefaut(g, club);
+  rendu.srcdoc = emailHtmlDossier(g, club, img, salutation, intro.value, lien);
 }
 
 /**

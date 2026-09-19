@@ -102,6 +102,12 @@ dom['form-surplace'] = {
   espace_sandwich_disponible: { checked: true },
   boutique_disponible: { checked: false }
 };
+dom['form-parking'] = { parking_texte: { value: 'Parking LIVE, entrée ouest' } };
+dom['form-encadrement'] = {
+  encadrement_ratio: { value: '1 éducateur pour 6 joueurs' },
+  encadrement_diplomes: { value: 'Diplôme LIVE' },
+  assurance_attestation_requise: { checked: false }
+};
 
 const g = bac.globalInvitation();
 egal(g.date_limite_confirmation, '2027-04-20', 'l’aperçu lit les modalités en direct');
@@ -153,10 +159,59 @@ vrai(htmlFinal.indexOf(bac.emailTitreSection('Dossier complet')) < htmlFinal.ind
 vrai(texteFinal.indexOf('DOSSIER COMPLET') < texteFinal.indexOf('LA JOURNÉE'),
   'texte final : le contenu assemblé vient sous Dossier complet');
 
+// Aperçu permanent du menu : personnalisation par club, valeurs enregistrées et aucune écriture.
+dom['apercu-dossier-email-club'] = { value: 'RC Test', innerHTML: '', disabled: false };
+dom['apercu-dossier-email-objet'] = { value: '' };
+dom['apercu-dossier-email-intro'] = { value: '' };
+dom['apercu-dossier-email-rendu'] = { srcdoc: '' };
+bac.__clubs = [
+  { club_nom: 'Club Invité', statut: 'Invité', club_contact_prenom: 'Luc' },
+  { club_nom: 'RC Test', statut: 'Accepté', club_contact_prenom: 'Camille',
+    club_token: 'jeton-test', categories_engagees: '["U10"]' }
+];
+vm.runInContext('clubsInvitesCourants = __clubs;', bac);
+bac.majApercuDossierEmail();
+vrai(dom['apercu-dossier-email-club'].innerHTML.indexOf('RC Test') <
+  dom['apercu-dossier-email-club'].innerHTML.indexOf('Club Invité'),
+  'aperçu final : les clubs acceptés sont proposés en premier');
+egal(dom['apercu-dossier-email-club'].value, 'RC Test',
+  'aperçu final : le club sélectionné est conservé');
+egal(dom['apercu-dossier-email-objet'].value, 'Votre dossier complet — Tournoi Test',
+  'aperçu final : l’objet proposé est visible');
+egal(dom['apercu-dossier-email-objet'].defaultValue, 'Votre dossier complet — Tournoi Test',
+  'aperçu final : le navigateur ne peut pas restaurer un objet vide');
+vrai(dom['apercu-dossier-email-intro'].value.includes('pour RC Test'),
+  'aperçu final : l’introduction est personnalisée');
+vrai(dom['apercu-dossier-email-rendu'].srcdoc.includes('Bonjour Camille,'),
+  'aperçu final : la salutation est personnalisée');
+vrai(dom['apercu-dossier-email-rendu'].srcdoc.includes('Parking P3, entrée nord') &&
+  dom['apercu-dossier-email-rendu'].srcdoc.includes('1 éducateur pour 8 joueurs'),
+  'aperçu final : Parking et Encadrement utilisent les valeurs réellement enregistrées');
+vrai(!dom['apercu-dossier-email-rendu'].srcdoc.includes('Parking LIVE, entrée ouest') &&
+  !dom['apercu-dossier-email-rendu'].srcdoc.includes('1 éducateur pour 6 joueurs'),
+  'aperçu final : une saisie non enregistrée n’est pas présentée comme prête à envoyer');
+vrai(dom['apercu-dossier-email-rendu'].srcdoc.includes('club=RC+Test') &&
+  dom['apercu-dossier-email-rendu'].srcdoc.includes('token=jeton-test'),
+  'aperçu final : le lien existant du club est représenté sans le renouveler');
+
+const invitations = lire('js/admin-invitations.js');
+const debutApercuFinal = invitations.indexOf('function majApercuDossierEmail()');
+const finApercuFinal = invitations.indexOf('/**\n * Corps HTML de l\'email de dossier final', debutApercuFinal);
+const sourceApercuFinal = invitations.slice(debutApercuFinal, finApercuFinal);
+vrai(debutApercuFinal >= 0 && finApercuFinal > debutApercuFinal,
+  'la fonction d’aperçu final est isolée dans le code réel');
+vrai(!/(ecrireAdmin|fetch\s*\(|apiPost|envoyerDossierEmail|regenererJetonClub)/.test(sourceApercuFinal),
+  'l’aperçu permanent ne contient aucun chemin d’écriture, d’envoi ou de renouvellement');
+
 const admin = lire('js/admin.js');
 vrai(admin.includes("ecouter('form-modalites', 'input', majApercuInvitation)"),
   'les modalités rafraîchissent immédiatement l’aperçu');
 vrai(admin.includes("ecouter('form-contacts-securite', 'input', majApercuInvitation)"),
   'Contacts & sécurité rafraîchit immédiatement l’aperçu');
+vrai(admin.includes("ecouter('apercu-dossier-email-club', 'change', majApercuDossierEmail)"),
+  'le choix du club rafraîchit immédiatement l’aperçu final');
+vrai(!admin.includes("ecouter('form-parking', 'input', majApercuDossierEmail)") &&
+  !admin.includes("ecouter('form-encadrement', 'input', majApercuDossierEmail)"),
+  'les saisies non enregistrées ne modifient pas le rendu annoncé comme envoyable');
 
 console.log('OK — ' + controles + ' contrôles passés.');
