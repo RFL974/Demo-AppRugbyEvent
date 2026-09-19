@@ -92,6 +92,7 @@ const INVITATION_INITIALE_BLOCS = [
   'bloc-modalites',
   'bloc-reponse',
   'bloc-contacts-securite',
+  'bloc-pieces-jointes-invitation',
   'bloc-surplace',
   'bloc-apercu-invitation'
 ];
@@ -99,6 +100,7 @@ const INVITATION_INITIALE_BLOCS = [
 const DOSSIER_FINAL_BLOCS = [
   'bloc-parking',
   'bloc-encadrement',
+  'bloc-pieces-jointes-dossier',
   'bloc-dossier',
   'bloc-apercu-dossier-email'
 ];

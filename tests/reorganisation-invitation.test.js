@@ -96,10 +96,11 @@ const ordreInterieur = [
   'bloc-modalites',
   'bloc-reponse',
   'bloc-contacts-securite',
+  'bloc-pieces-jointes-invitation',
   'bloc-surplace',
   'bloc-apercu-invitation'
 ];
-const ordreDossier = ['bloc-parking', 'bloc-encadrement', 'bloc-dossier', 'bloc-apercu-dossier-email'];
+const ordreDossier = ['bloc-parking', 'bloc-encadrement', 'bloc-pieces-jointes-dossier', 'bloc-dossier', 'bloc-apercu-dossier-email'];
 
 egal(blocsEtape(ecrans, 'invitation'), ordreEcran, 'ordinateur : Clubs invités précède le dépliant');
 egal(blocsEtape(assistant, 'invitation'), ordreEcran, 'mobile : Clubs invités précède le dépliant');
@@ -108,7 +109,7 @@ vrai(!/\{ id: 'dossier'[,}]/.test(assistant), 'mobile : l’étape Dossier a qui
 
 const page = noeud('page', 'main');
 ['bloc-contacts-securite', 'bloc-modalites', 'bloc-clubs-invites', 'bloc-apercu-invitation',
-  'bloc-surplace', 'bloc-reponse', 'bloc-parking', 'bloc-encadrement', 'bloc-dossier',
+  'bloc-surplace', 'bloc-reponse', 'bloc-pieces-jointes-invitation', 'bloc-parking', 'bloc-encadrement', 'bloc-pieces-jointes-dossier', 'bloc-dossier',
   'bloc-apercu-dossier-email']
   .forEach(id => page.appendChild(noeud(id)));
 const contexte = vm.createContext({

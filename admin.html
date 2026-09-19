@@ -654,6 +654,36 @@
 
       <!-- 4 bis-3) SUR PLACE (Phase 1) : services affichés en pastilles sur l'invitation,
            uniquement s'ils sont cochés. -->
+      <!-- Documents temporaires joints uniquement aux emails de l'invitation initiale. -->
+      <section class="carte" id="bloc-pieces-jointes-invitation">
+        <h2>Pièces jointes</h2>
+        <p class="note-generation">
+          Ajoute les documents à transmettre avec l'<strong>invitation initiale</strong> :
+          présentation, règlement ou tout autre document utile. Ils seront joints aux prochains
+          envois individuels ou groupés depuis cet onglet, sans être enregistrés dans le Google
+          Sheet ni dans Drive. Maximum : <strong>5 fichiers</strong>,
+          <strong>5 Mo par fichier</strong> et <strong>10 Mo au total</strong>.
+        </p>
+        <label class="reglage reglage-fichier-dossier">
+          <span class="r-libelle">Documents à joindre</span>
+          <span class="zone-depot" id="zone-depot-pieces-invitation">
+            <input type="file" id="pieces-jointes-invitation" multiple
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.odt,.ods,.txt,.csv,.jpg,.jpeg,.png" hidden>
+            <span class="zd-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5M7.5 9.5 12 5l4.5 4.5M4.5 19h15"></path></svg></span>
+            <span class="zd-texte"><strong>Glisse tes documents ici</strong><br>ou clique pour les choisir</span>
+          </span>
+        </label>
+        <div id="liste-pieces-jointes-invitation" class="liste-pieces-jointes" aria-live="polite">
+          <p class="pieces-jointes-vide">Aucun document sélectionné.</p>
+        </div>
+        <div class="ligne-action">
+          <button type="button" class="bouton bouton-doux" id="bouton-vider-pieces-invitation" hidden>
+            Retirer tous les documents
+          </button>
+          <span class="message-form" id="message-pieces-invitation"></span>
+        </div>
+      </section>
+
       <section class="carte" id="bloc-surplace">
         <h2>Sur place</h2>
         <p class="note-generation">
@@ -796,6 +826,38 @@
             <span class="message-form" id="message-encadrement"></span>
           </div>
         </form>
+      </section>
+
+      <!-- Les pièces jointes restent dans la mémoire du navigateur : elles ne sont enregistrées
+           ni dans le Google Sheet ni dans Drive. Elles sont ajoutées aux prochains emails de
+           dossier final envoyés depuis cet onglet. -->
+      <section class="carte" id="bloc-pieces-jointes-dossier">
+        <h2>Pièces jointes</h2>
+        <p class="note-generation">
+          Ajoute les documents à transmettre avec le <strong>dossier final</strong> : attestation,
+          règlement du tournoi ou tout autre document utile. Ils seront joints à chaque prochain
+          envoi depuis cet onglet, sans être enregistrés dans le Google Sheet ni dans Drive.
+          Maximum : <strong>5 fichiers</strong>, <strong>5 Mo par fichier</strong> et
+          <strong>10 Mo au total</strong>.
+        </p>
+        <label class="reglage reglage-fichier-dossier">
+          <span class="r-libelle">Documents à joindre</span>
+          <span class="zone-depot" id="zone-depot-pieces-dossier">
+            <input type="file" id="pieces-jointes-dossier" multiple
+              accept=".pdf,.doc,.docx,.xls,.xlsx,.odt,.ods,.txt,.csv,.jpg,.jpeg,.png" hidden>
+            <span class="zd-icone" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V5M7.5 9.5 12 5l4.5 4.5M4.5 19h15"></path></svg></span>
+            <span class="zd-texte"><strong>Glisse tes documents ici</strong><br>ou clique pour les choisir</span>
+          </span>
+        </label>
+        <div id="liste-pieces-jointes-dossier" class="liste-pieces-jointes" aria-live="polite">
+          <p class="pieces-jointes-vide">Aucun document sélectionné.</p>
+        </div>
+        <div class="ligne-action">
+          <button type="button" class="bouton bouton-doux" id="bouton-vider-pieces-dossier" hidden>
+            Retirer tous les documents
+          </button>
+          <span class="message-form" id="message-pieces-dossier"></span>
+        </div>
       </section>
 
       <!-- 5 bis) Dossier club : ouvre le générateur de dossier (page dédiée

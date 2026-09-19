@@ -1111,6 +1111,11 @@ function brancherEcouteursAdmin() {
   ecouter('form-encadrement', 'submit', function (e) { e.preventDefault(); });
   ecouter('bouton-enregistrer-encadrement', 'click', onEnregistrerEncadrement);
 
+  // Invitation initiale et dossier final — deux sélections indépendantes de documents
+  // temporaires (aucune sauvegarde Sheet/Drive), utilisables par clic ou glisser-déposer.
+  brancherPiecesJointesInvitation();
+  brancherPiecesJointesDossier();
+
   // Aperçu permanent du dossier final : le choix du club le personnalise immédiatement.
   // Les cartes de contenu le rafraîchissent après leur enregistrement via majDossier().
   ecouter('apercu-dossier-email-club', 'change', majApercuDossierEmail);

@@ -418,6 +418,57 @@ select.r-input { cursor: pointer; }
   flex-wrap: wrap;
 }
 
+/* Documents temporaires du dossier final : liste compacte, lisible et retirable avant envoi. */
+.reglage-fichier-dossier { align-items: stretch; }
+.liste-pieces-jointes { margin-top: 12px; }
+.pieces-jointes-vide {
+  margin: 0;
+  color: var(--texte-doux, #b8c7d9);
+  font-size: 0.9rem;
+}
+.piece-jointe-dossier {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  border: 1px solid rgba(184, 216, 248, 0.2);
+  border-radius: 9px;
+  background: rgba(3, 16, 36, 0.42);
+}
+.piece-jointe-dossier:first-child { margin-top: 0; }
+.piece-jointe-icone { color: var(--accent, #7cc0ec); font-size: 1.05rem; }
+.piece-jointe-infos { min-width: 0; flex: 1; }
+.piece-jointe-nom {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--texte, #f2f6fb);
+  font-weight: 600;
+}
+.piece-jointe-taille { color: var(--texte-doux, #b8c7d9); font-size: 0.78rem; }
+.piece-jointe-retirer {
+  border: 0;
+  border-radius: 7px;
+  padding: 6px 9px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  cursor: pointer;
+}
+.piece-jointe-retirer:hover { background: rgba(255, 255, 255, 0.16); }
+.eml-pieces-jointes {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid rgba(124, 192, 236, 0.32);
+  border-radius: 8px;
+  background: rgba(124, 192, 236, 0.1);
+  color: #dceafa;
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.eml-pieces-jointes strong { color: #ffffff; }
+
 /* Heure de fin : groupe "case auto + champ heure" */
 .fin-groupe { display: inline-flex; align-items: center; gap: 10px; }
 .mini-toggle {

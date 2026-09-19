@@ -390,9 +390,10 @@ function cleFormatApresMidi(cat) {
 
 /* Repères FFR affichés aux clubs (page d'invitation ET email) — texte brut, chaque
    rendu y ajoute son habillage (⚠️/💡, gras, styles). Décisions Romain, session 20. */
-const FFR_RAPPEL_EFFECTIF = 'venir à l\'effectif minimum signifie que chaque enfant joue la '
-  + 'quasi-totalité du temps de jeu de l\'équipe, or la FFR plafonne le temps de jeu par joueur '
-  + 'et par jour. Prévoyez une feuille de match complète pour faire tourner les enfants.';
+const FFR_RAPPEL_EFFECTIF = 'Venir avec l\'effectif minimum signifie que chaque enfant joue '
+  + 'l\'intégralité du temps de jeu de l\'équipe. Pour préserver leur sécurité et permettre une '
+  + 'bonne rotation, pensez à prévoir une feuille de match complète afin que chacun bénéficie '
+  + 'd\'un temps de jeu adapté.';
 const FFR_POURQUOI_FORMAT = 'Il suit la doctrine FFR de l\'École de Rugby : un maximum de temps '
   + 'de jeu pour chaque enfant, des matchs équilibrés entre équipes de même niveau, et aucune '
   + 'phase finale à élimination (interdites en tournoi EDR) — c\'est le classement final qui '
