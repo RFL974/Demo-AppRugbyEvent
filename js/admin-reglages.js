@@ -747,21 +747,49 @@ async function onAjouterCategorie(evenement) {
   }
 }
 
-/**
- * Supprime une catégorie (après confirmation).
- */
-async function onSupprimerCategorie(bouton) {
-  const nom = bouton.getAttribute('data-cat');
-  if (!await dialogConfirmer('Supprimer la catégorie « ' + nom + ' » ?\n' +
-               '(Les équipes de cette catégorie ne sont pas supprimées.)',
-               { ok: 'Supprimer', danger: true })) return;
+/** Actualise les cartes uniquement si aucune saisie ni écriture n'est en cours. */
+function actualiserCartesCategoriesSansBrouillon() {
+  const zone = document.getElementById('zone-categories');
+  if (!zone || typeof assistantEstPropre !== 'function') return false;
+  if ((typeof choixCategoriesAValider === 'function' && choixCategoriesAValider()) ||
+      Array.from(zone.querySelectorAll('form')).some(function (f) { return !assistantEstPropre(f); }) ||
+      zone.querySelector('button:disabled')) return false;
+  zone.innerHTML = afficherCategories(configCourante.categories || []);
+  remplirSelectCategories(configCourante.categories || []);
+  if (typeof majChoixCategoriesTournoi === 'function') majChoixCategoriesTournoi();
+  if (typeof majFormesCategories === 'function') majFormesCategories();
+  if (typeof majConformiteFFR === 'function') majConformiteFFR().catch(function () {});
+  return true;
+}
 
+/** Supprime une catégorie une seule fois, puis confirme son absence en lecture. */
+async function onSupprimerCategorie(bouton) {
+  if (bouton.disabled) return;
+  const nom = bouton.getAttribute('data-cat');
   bouton.disabled = true;
   try {
-    await ecrireAdmin('supprimerCategorie', { categorie: nom });
-    await rechargerReglages();
+    if (!await dialogConfirmer('Supprimer la catégorie « ' + nom + ' » ?\n' +
+      '(Les équipes de cette catégorie ne sont pas supprimées.)',
+      { ok: 'Supprimer', danger: true })) return;
+    let erreurEcriture = null;
+    try {
+      await ecrireAdmin('supprimerCategorie', { categorie: nom }, { delaiMs: 30000 });
+    } catch (err) {
+      // Une réponse perdue peut cacher une suppression réussie. Ne JAMAIS rejouer.
+      erreurEcriture = err;
+    }
+    const cfg = await lireConfigAdmin(undefined, { delaiMs: 30000 });
+    if (cfg.categories.some(function (c) { return c.categorie === nom; })) {
+      throw erreurEcriture || new Error('La catégorie est encore présente dans la configuration relue.');
+    }
+    rendreCategoriesChoix(cfg);
+    majChoixCategoriesTournoi();
+    // L'absence est vérifiée : la relecture FFR ne retient pas le bouton.
+    if (typeof majConformiteFFR === 'function') majConformiteFFR().catch(function () {});
   } catch (erreur) {
-    await dialogAlerter('Erreur : ' + erreur.message);
+    await dialogAlerter('Suppression non confirmée. Actualise les catégories avant un nouvel essai. ' +
+      expliquerErreurCategories(erreur));
+  } finally {
     bouton.disabled = false;
   }
 }

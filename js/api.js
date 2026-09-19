@@ -258,6 +258,10 @@ async function apiPost(action, data, options) {
   return executerAvecRejeuAbandon(async function (controleur, abandon, suivi) {
     const reglages = {
       method: 'POST',
+      // Les lectures protégées passent aussi par POST puis une redirection GET.
+      // Comme pour apiGet, ne pas réutiliser une réponse HTTP mise en cache.
+      // Précaution de fraîcheur, pas une preuve de résolution des 404 Google.
+      cache: 'no-store',
       // On envoie en "text/plain" volontairement : ça évite une vérification
       // préalable du navigateur (le "preflight" CORS) que Apps Script ne sait pas gérer.
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },

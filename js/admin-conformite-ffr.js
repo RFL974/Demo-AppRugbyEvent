@@ -22,6 +22,8 @@
 
 /* Référentiel FFR mémorisé (une seule requête par session, réutilisée par les cartes). */
 var refFFRCache = null;
+var refFFREnCours = null;
+var refFFRErreur = null;
 
 /* Dernier verdict de conformité (regles/temps) — mémorisé pour construire l'aperçu du bouton
    « Appliquer les valeurs FFR » au clic, sans nouvel appel réseau. */
@@ -37,12 +39,41 @@ function invaliderDatesCompatiblesFFR() {
   if (bouton) bouton.disabled = false;
 }
 
-/** Charge (et mémorise) le référentiel FFR. Migration douce : listes vides si indisponible. */
+/** Mémorise une réponse valide seulement ; une panne réseau reste réessayable. */
 async function chargerRefFFR() {
   if (refFFRCache) return refFFRCache;
-  try { refFFRCache = await apiGet('getRefFFR'); }
-  catch (e) { refFFRCache = { formes: [], dates: [], regles: [], temps: [], millesime: null }; }
-  return refFFRCache;
+  if (refFFREnCours) return refFFREnCours;
+  refFFRErreur = null;
+  refFFREnCours = (async function () {
+    try {
+      const ref = await apiGet('getRefFFR', null, { delaiMs: 30000 });
+      if (!ref || !Array.isArray(ref.formes) || !Array.isArray(ref.dates)) {
+        throw new Error('Référentiel FFR incomplet.');
+      }
+      // Une vraie liste vide reste neutre, mais ne verrouille pas la session non plus.
+      if (ref.formes.length || ref.dates.length) refFFRCache = ref;
+      return ref;
+    } catch (e) {
+      refFFRErreur = e;
+      return null;
+    } finally {
+      refFFREnCours = null;
+    }
+  })();
+  return refFFREnCours;
+}
+
+function messageRepriseFFR(texte) {
+  return '<div class="ffr-bloc ffr-neutre">' + echapper(texte) +
+    ' Aucun verdict de conformité. <button type="button" class="bouton secondaire" data-action="reessayer-ffr">Réessayer le contrôle FFR</button></div>';
+}
+
+function onReessayerControleFFR(e) {
+  const cible = e.target && e.target.closest('[data-action="reessayer-ffr"]');
+  if (!cible || cible.disabled) return;
+  cible.disabled = true;
+  // Lecture seulement, aucun enregistrement de date ou de catégorie.
+  return majConformiteFFR();
 }
 
 /* --------------------------------------------------------------------------
@@ -119,15 +150,18 @@ async function majConformiteFFR() {
   // Écouteur délégué posé UNE fois sur le conteneur (son innerHTML est remplacé à chaque calcul,
   // mais l'élément persiste) : gère les clics sur les boutons « Appliquer les valeurs FFR ».
   if (!zone._ffrAppliquerWired) { zone.addEventListener('click', onClicAppliquerFFR); zone._ffrAppliquerWired = true; }
+  if (!zone._ffrRepriseWired) { zone.addEventListener('click', onReessayerControleFFR); zone._ffrRepriseWired = true; }
 
+  zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Chargement du référentiel FFR…</div>';
   await chargerRefFFR(); // dispo du référentiel + formes pour les cartes
   if (generation !== conformiteFFRGeneration) return;
 
   const refVide = !refFFRCache ||
     ((refFFRCache.formes || []).length === 0 && (refFFRCache.dates || []).length === 0);
   if (refVide) {
-    zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Référentiel FFR non chargé — ' +
-      'aucun contrôle de conformité n\'est appliqué.</div>';
+    zone.innerHTML = messageRepriseFFR(refFFRErreur
+      ? 'Lecture du référentiel FFR indisponible pour le moment.'
+      : 'Référentiel FFR vide ou indisponible.');
     majFormesCategories();
     return;
   }
@@ -147,13 +181,17 @@ async function majConformiteFFR() {
       date: dateISO,
       categories: categories.join(','),
       zone: zoneVacancesCourante()
-    });
+    }, { delaiMs: 30000 });
   } catch (e) {
     if (generation !== conformiteFFRGeneration) return;
-    zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Contrôle FFR indisponible pour le moment.</div>';
+    zone.innerHTML = messageRepriseFFR('Contrôle FFR indisponible pour le moment.');
     return;
   }
   if (generation !== conformiteFFRGeneration) return;
+  if (!res || res.refDisponible !== true) {
+    zone.innerHTML = messageRepriseFFR('Le serveur ne confirme pas la disponibilité du référentiel FFR.');
+    return;
+  }
   dernierResConformite = res; // mémorisé pour l'aperçu du bouton d'application
   zone.innerHTML = rendreConformiteFFR(res);
   majFormesCategories();
@@ -892,7 +930,7 @@ async function onChercherDatesCompatibles() {
       mois: mois,
       categories: categories.join(','),
       zone: zoneVacancesCourante()
-    });
+    }, { delaiMs: 30000 });
     if (generation === datesCompatiblesGeneration) zone.innerHTML = rendreDatesCompatibles(res);
   } catch (e) {
     if (generation === datesCompatiblesGeneration) zone.innerHTML = '<p class="date-finder-vide">Recherche indisponible pour le moment.</p>';

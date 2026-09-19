@@ -38,7 +38,7 @@ function bac(categories = []) {
   const serveur = { global: { tournoi_nom: 'Brouillon', heure_debut: '10:00' }, categories: clone(categories) };
   const equipes = [{ id: 'E1', categorie: 'U12', joueurs: 21 }];
   const matchs = [{ id: 'M1', categorie: 'U12', equipe_a: 'E1' }];
-  const appels = { lectures: 0, ecritures: [], confirmations: [], api: [], propres: 0, rendus: 0 };
+  const appels = { lectures: 0, lecturesTerminees: 0, ecritures: [], confirmations: [], api: [], propres: 0, rendus: 0 };
   const hooks = {};
   const ctx = vm.createContext({
     console, configCourante: clone(serveur),
@@ -62,18 +62,26 @@ function bac(categories = []) {
     lireConfigAdmin: async (_, opt) => {
       appels.lectures++; appels.budget = opt;
       if (hooks.lire) await hooks.lire(appels.lectures);
+      appels.lecturesTerminees++;
       return clone(serveur);
     },
     ecrireAdmin: async (action, data) => {
-      appels.ecritures.push({ action, data: clone(data) });
-      if (hooks.avantEcrire) await hooks.avantEcrire(data);
-      const i = serveur.categories.findIndex(c => c.categorie === data.categorie);
-      if (action === 'supprimerCategorie') {
-        if (i < 0) throw Error('Catégorie introuvable');
-        serveur.categories.splice(i, 1);
-      } else if (i < 0) serveur.categories.push(clone(data)); else serveur.categories[i] = clone(data);
-      if (hooks.apresEcrire) await hooks.apresEcrire(data);
-      return { ok: true };
+      // Reproduit le contrat réel d'ecrireAdmin : une mutation de catégorie
+      // invalide les lectures à son départ puis à son retour, même incertain.
+      ctx.invaliderLecturesCategories();
+      try {
+        appels.ecritures.push({ action, data: clone(data) });
+        if (hooks.avantEcrire) await hooks.avantEcrire(data);
+        const i = serveur.categories.findIndex(c => c.categorie === data.categorie);
+        if (action === 'supprimerCategorie') {
+          if (i < 0) throw Error('Catégorie introuvable');
+          serveur.categories.splice(i, 1);
+        } else if (i < 0) serveur.categories.push(clone(data)); else serveur.categories[i] = clone(data);
+        if (hooks.apresEcrire) await hooks.apresEcrire(data);
+        return { ok: true };
+      } finally {
+        ctx.invaliderLecturesCategories();
+      }
     },
     apiGet: async (action, params) => {
       appels.api.push({ action, params });
@@ -201,7 +209,7 @@ async function main() {
     egal(b.appels.ecritures.length, 1, 'suppression non rejouée : ' + texte);
     egal(b.appels.lectures, 2, 'prélecture et réconciliation seule');
     egal(b.appels.menu, [], 'retrait confirmé par la relecture');
-    ok(b.ctx.choixCategoriesAValider(), 'validation explicite encore nécessaire');
+    ok(!b.ctx.choixCategoriesAValider(), 'absence confirmée : choix réconcilié sans deuxième clic');
     b.hooks.apresEcrire = null; await b.valider();
     egal(b.appels.ecritures.length, 1, 'reprise sans suppression doublonnée');
     egal(b.appels.confirmations.length, 1, 'pas de confirmation superflue après retrait constaté');
@@ -248,6 +256,38 @@ async function main() {
     egal(b.appels.ecritures.length, 1, 'double soumission pendant POST'); post.resolve(); await p;
     egal(b.serveur.categories.length, 1);
   }
+  {
+    const b = bac(); const fond = suspendre();
+    b.hooks.lire = n => n === 2 ? fond.promise : undefined;
+    b.choisir(['U10']); const p = b.valider(); await tour();
+    egal(b.appels.lectures, 2, 'prélecture finie et relecture de fond déjà lancée');
+    egal(b.appels.lecturesTerminees, 1, 'une seule lecture a bloqué le parcours');
+    egal(b.appels.ecritures.length, 1, 'une écriture explicitement réussie');
+    ok(!b.element('bouton-valider-categories').disabled && !b.element('choix-categories-champs').disabled,
+      'formulaire libéré avant la relecture de fond');
+    egal(b.appels.api.length, 1, 'FFR démarrée sans attendre la relecture de fond');
+    egal(b.appels.menu.map(c => c.categorie), ['U10'], 'état local confirmé rendu immédiatement');
+    await b.valider();
+    egal(b.appels.lectures, 2, 'un second clic sans nouveau brouillon n’ajoute aucun appel');
+    egal(b.appels.ecritures.length, 1, 'un second clic sans nouveau brouillon n’ajoute aucune écriture');
+    fond.resolve(); await p;
+    egal(b.appels.lecturesTerminees, 2, 'vérification de fond terminée ensuite');
+    egal(b.appels.rendus, 2, 'réponse de fond propriétaire réconciliée après les invalidations de l’écriture');
+    ok(!b.ctx.choixCategoriesAValider(), 'état confirmé après la vérification de fond');
+  }
+  {
+    const b = bac(); const ancienne = suspendre();
+    b.hooks.lire = n => n === 2 ? ancienne.promise : undefined;
+    b.choisir(['U10']); const p = b.valider(); await tour();
+    const rendusAvant = b.appels.rendus;
+    b.choisir(['U10', 'U12']);
+    const messageRecent = b.element('message-choix-categories').textContent;
+    ancienne.resolve(); await p;
+    egal(b.appels.rendus, rendusAvant, 'relecture de fond périmée ignorée sans rendu');
+    ok(b.cases[2].checked && b.cases[3].checked, 'brouillon plus récent conservé');
+    egal(b.element('message-choix-categories').textContent, messageRecent, 'message du brouillon plus récent conservé');
+    ok(b.ctx.choixCategoriesAValider(), 'nouveau choix reste à valider');
+  }
   for (const texte of ['HTTP 404', 'Erreur serveur pendant l’écriture.', 'Réponse JSON illisible']) {
     const b = bac(); b.choisir(['U10', 'U12']);
     b.hooks.apresEcrire = () => { throw Error(texte); }; await b.valider();
@@ -264,15 +304,18 @@ async function main() {
     const b = bac(); b.choisir(['U10']);
     b.hooks.lire = n => { if (n === echec) throw Error('Lecture interrompue'); };
     await b.valider(); egal(b.appels.ecritures.length, echec === 1 ? 0 : 1, 'échec prélecture/relecture');
-    ok(b.ctx.choixCategoriesAValider()); ok(b.cases[2].checked, 'sélection gardée');
+    ok(b.ctx.choixCategoriesAValider() === (echec === 1)); ok(b.cases[2].checked, 'sélection gardée');
     ok(!b.element('bouton-valider-categories').disabled, 'reprise disponible');
-    egal(b.appels.api.length, 0, 'pas de verdict après échec');
+    egal(b.appels.api.length, echec === 1 ? 0 : 1, 'verdict seulement après réconciliation complète');
     b.hooks.lire = null; await b.valider(); egal(b.appels.ecritures.length, 1, 'reprise sûre');
   }
   {
     const b = bac(); b.choisir(['U10']); b.hooks.apresEcrire = () => { b.serveur.categories = []; };
     await b.valider(); ok(b.ctx.choixCategoriesAValider(), 'relecture doit confirmer la présence');
     ok(b.element('message-choix-categories').textContent.includes('non confirmée'));
+    egal(b.appels.menu, [], 'divergence réconciliée avec l’état serveur autoritatif');
+    egal(b.element('zone-categories').innerHTML, '', 'vue catégories réconciliée après divergence');
+    ok(b.element('bloc-conformite-ffr').innerHTML.includes('Choisis et valide'), 'ancien verdict FFR neutralisé');
   }
   for (const rejeter of [false, true]) {
     const b = bac([{ categorie: 'U10', presente: 'oui' }]); const retard = suspendre();

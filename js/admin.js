@@ -168,7 +168,14 @@ let clubsInvitesCourants = [];
  * sont désormais inventoriées et verrouillées par le contrôle G-J
  * (tests/frontend-autorisation-sync.test.js) : toute NOUVELLE écriture doit passer par ici. */
 async function ecrireAdmin(action, data, options) {
-  const res = await apiPostProtege(action, data, 'admin', 'admin', options);
+  const changeCategories = ['enregistrerCategorie', 'supprimerCategorie'].indexOf(action) !== -1;
+  const invalider = function () {
+    if (changeCategories && typeof invaliderLecturesCategories === 'function') invaliderLecturesCategories();
+  };
+  invalider();
+  let res;
+  try { res = await apiPostProtege(action, data, 'admin', 'admin', options); }
+  finally { invalider(); } // Même une réponse perdue peut cacher une écriture réussie.
   // ⭐ M1-B2 / B2-0.5 — l'écriture a RÉUSSI (apiPost LÈVE sur {error}, voir api.js:100) : si elle
   //   touche une donnée que lit la « Demande d'autorisation », la feuille affichée devient fausse
   //   à CET INSTANT. On l'efface tout de suite — local, certain, gratuit — et on la relira quand
@@ -214,7 +221,12 @@ async function lireConfigAdmin(cle, options) {
   const r = cle
     ? await apiPost('getConfigAdmin', { cle: cle }, options)
     : await apiPostProtege('getConfigAdmin', {}, 'admin', 'admin', options);
-  return (r && r.config) || { global: {}, categories: [] };
+  // Une réponse incomplète n'est PAS un tournoi vide : elle ne doit jamais
+  // autoriser une création ou faire croire qu'une suppression est confirmée.
+  if (!r || !r.config || !r.config.global || !Array.isArray(r.config.categories)) {
+    throw new Error('Configuration du serveur incomplète ; aucune modification ne peut être validée.');
+  }
+  return r.config;
 }
 
 /**
@@ -1185,6 +1197,7 @@ function brancherEcouteursAdmin() {
 async function rechargerEtRendre(opt) {
   opt = opt || {};
   const budget = { delaiMs: DELAI_LECTURE_ADMIN_MS };
+  const revisionCats = typeof versionCategoriesCourante === 'function' ? versionCategoriesCourante() : null;
 
   // ⭐ R1 — MÊME REGISTRE DE FRAÎCHEUR QUE LA LISTE. Ce chemin écrit `equipesCourantes` depuis un
   //   `getAll` global : sans jeton partagé, un « Rafraîchir » commencé AVANT un ajout et terminé
@@ -1202,6 +1215,9 @@ async function rechargerEtRendre(opt) {
   //   et rien ne le disait. Les deux lectures aboutissent d'abord ; on ne modifie l'état qu'ensuite.
   const besoinConfig = !!(opt.reglages || opt.selectCats || opt.terrains || opt.infos || opt.publication);
   const cfg = besoinConfig ? await lireConfigAdmin(undefined, budget) : null;
+  if (revisionCats !== null && revisionCats !== versionCategoriesCourante()) {
+    throw new Error('Les catégories ont changé pendant la lecture. Relance le rafraîchissement.');
+  }
 
   // ⛔ Résultat PÉRIMÉ pour les équipes : on ne touche ni la mémoire ni la liste. Le reste du
   //   rendu (planning, matchs) ne dépend pas de ce registre et suit son cours.
@@ -1240,6 +1256,12 @@ async function rafraichirAdmin() {
   bouton.textContent = '⏳ …';
   try {
     await rechargerEtRendre({ equipes: true, publication: true, heure: true });
+    // Le compteur seul ne suffit pas : rendre aussi les cartes sans écraser un brouillon.
+    if (typeof actualiserCartesCategoriesSansBrouillon === 'function' &&
+        !actualiserCartesCategoriesSansBrouillon()) {
+      const repere = document.getElementById('maj-admin');
+      if (repere) repere.textContent += ' — cartes catégories conservées (saisie ou action en cours).';
+    }
   } catch (err) {
     // ⭐ CORR-BLOCAGE-LECTURES-ADMIN-DR — L'ÉCHEC EST DIT. Il était avalé en silence : l'écran
     //   gardait des données anciennes en se présentant comme à jour, et l'horodatage « Mis à jour
@@ -1666,7 +1688,7 @@ function onReglagesClick(evenement) {
  * (utilisé après ajout/suppression de catégorie).
  */
 async function rechargerReglages() {
-  const cfg = await lireConfigAdmin(); // config complète (clé admin), pas la vue publique getConfig
+  const cfg = await lireConfigAdmin(undefined, { delaiMs: DELAI_LECTURE_ADMIN_MS });
   configCourante = cfg;
   injecterReglages(cfg.global, cfg.categories);
   injecterTerrains();                        // les catégories présentes ont pu changer

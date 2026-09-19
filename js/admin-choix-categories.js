@@ -4,6 +4,17 @@
 const CHOIX_CATEGORIES_TOURNOI = Object.freeze(['U6', 'U8', 'U10', 'U12', 'U14']);
 let choixCategoriesEnCours = false;
 let choixCategoriesModifie = false;
+let revisionCategories = 0;
+let verificationCategoriesEnCours = 0;
+
+function versionCategoriesCourante() { return revisionCategories; }
+function invaliderLecturesCategories() { revisionCategories++; }
+
+function expliquerErreurCategories(err) {
+  return err && err.name === 'AbortError'
+    ? 'Le serveur n’a pas répondu dans le délai prévu.'
+    : ((err && err.message) || 'Réponse du serveur indisponible.');
+}
 
 function afficherMessageChoixCategories(element, texte, type) {
   element.textContent = texte;
@@ -35,6 +46,8 @@ function majChoixCategoriesTournoi() {
 }
 
 function onChangerChoixCategories() {
+  // Une vérification de fond plus ancienne ne doit jamais écraser ce nouveau brouillon.
+  invaliderLecturesCategories();
   choixCategoriesModifie = true;
   if (typeof invaliderConformiteFFRAffichee === 'function') invaliderConformiteFFRAffichee();
   const retirees = categoriesRetireesChoix(configCourante, selectionChoixCategories());
@@ -57,6 +70,14 @@ function categoriesRetireesChoix(cfg, selection) {
     const cle = cleCategorieChoix(c.categorie);
     return gerees.indexOf(cle) !== -1 && gardees.indexOf(cle) === -1;
   });
+}
+
+function choixCategoriesConfirme(cfg, selection) {
+  return selection.every(function (nom) {
+    return (cfg.categories || []).some(function (c) {
+      return cleCategorieChoix(c.categorie) === cleCategorieChoix(nom) && estPresente(c);
+    });
+  }) && categoriesRetireesChoix(cfg, selection).length === 0;
 }
 
 function rendreCategoriesChoix(cfg) {
@@ -91,13 +112,55 @@ function nouvelleCategorieChoisie(nom) {
   };
 }
 
+async function verifierChoixCategoriesEnArrierePlan(proprietaire, selection, message) {
+  let relue;
+  try {
+    relue = await lireConfigAdmin(undefined, { delaiMs: 30000 });
+  } catch (premiereErreur) {
+    // Une deuxième lecture est permise : elle ne réémet aucune mutation et évite
+    // de rendre la vue incertaine sur une panne de lecture isolée.
+    if (proprietaire !== versionCategoriesCourante()) return false;
+    try {
+      relue = await lireConfigAdmin(undefined, { delaiMs: 30000 });
+    } catch (_) {
+      if (proprietaire !== versionCategoriesCourante()) return false;
+      choixCategoriesModifie = true;
+      masquerCategoriesChoixIncertaines();
+      if (typeof invaliderConformiteFFRAffichee === 'function') invaliderConformiteFFRAffichee();
+      afficherMessageChoixCategories(message,
+        '⚠️ Les modifications ont été acceptées, mais leur vérification de fond est indisponible. ' +
+        'Les vues concernées sont à vérifier avant une nouvelle modification. ' + expliquerErreurCategories(premiereErreur), 'ko');
+      if (typeof majConformiteFFR === 'function') await majConformiteFFR();
+      return false;
+    }
+  }
+  if (proprietaire !== versionCategoriesCourante()) return false;
+  rendreCategoriesChoix(relue);
+  if (!choixCategoriesConfirme(relue, selection)) {
+    choixCategoriesModifie = true;
+    if (typeof invaliderConformiteFFRAffichee === 'function') invaliderConformiteFFRAffichee();
+    afficherMessageChoixCategories(message,
+      '⚠️ Validation non confirmée : le serveur ne confirme pas encore exactement le choix affiché. ' +
+      'Son état actuel a été réconcilié ; vérifie les cases puis valide à nouveau sans recréer à l’aveugle.', 'ko');
+    if (typeof majConformiteFFR === 'function') await majConformiteFFR();
+    return false;
+  }
+  choixCategoriesModifie = false;
+  majChoixCategoriesTournoi();
+  return true;
+}
+
 async function onValiderChoixCategories(e) {
   e.preventDefault();
   if (choixCategoriesEnCours) return;
+  if (verificationCategoriesEnCours && !choixCategoriesModifie) return;
   const message = document.getElementById('message-choix-categories');
   const bouton = document.getElementById('bouton-valider-categories');
   const champs = document.getElementById('choix-categories-champs');
   const selection = selectionChoixCategories();
+  // Invalide une éventuelle vérification de fond appartenant au choix précédent.
+  invaliderLecturesCategories();
+  let proprietaire = versionCategoriesCourante();
   choixCategoriesEnCours = true;
   choixCategoriesModifie = true;
   bouton.disabled = true;
@@ -107,6 +170,7 @@ async function onValiderChoixCategories(e) {
   afficherMessageChoixCategories(message, 'Lecture des catégories enregistrées…', '');
   let ecritureTentee = false;
   let valide = false;
+  let verifierEnArrierePlan = false;
   try {
     // État frais obligatoire, aussi lors d'une reprise après une réponse perdue.
     const cfg = await lireConfigAdmin(undefined, { delaiMs: 30000 });
@@ -126,7 +190,10 @@ async function onValiderChoixCategories(e) {
     for (const categorie of retirees) {
       afficherMessageChoixCategories(message, 'Suppression de ' + categorie.categorie + ' et de ses réglages…', '');
       ecritureTentee = true;
-      await ecrireAdmin('supprimerCategorie', { categorie: categorie.categorie });
+      await ecrireAdmin('supprimerCategorie', { categorie: categorie.categorie }, { delaiMs: 30000 });
+      cfg.categories = (cfg.categories || []).filter(function (c) {
+        return cleCategorieChoix(c.categorie) !== cleCategorieChoix(categorie.categorie);
+      });
     }
     for (const nom of selection) {
       const existante = (cfg.categories || []).find(function (c) {
@@ -137,22 +204,23 @@ async function onValiderChoixCategories(e) {
       const data = existante ? Object.assign({}, existante, { presente: 'oui' }) : nouvelleCategorieChoisie(nom);
       afficherMessageChoixCategories(message, 'Enregistrement de ' + nom + '…', '');
       ecritureTentee = true;
-      await ecrireAdmin('enregistrerCategorie', data);
+      await ecrireAdmin('enregistrerCategorie', data, { delaiMs: 30000 });
       if (!existante) (cfg.categories || (cfg.categories = [])).push(data);
       else Object.assign(existante, data);
     }
-    // Un acquittement seul ne prouve pas la suppression : vérifier l'absence aussi.
-    const relue = ecritureTentee ? await lireConfigAdmin(undefined, { delaiMs: 30000 }) : cfg;
-    if (!selection.every(function (nom) {
-      return (relue.categories || []).some(function (c) {
-        return cleCategorieChoix(c.categorie) === cleCategorieChoix(nom) && estPresente(c);
-      });
-    }) || categoriesRetireesChoix(relue, selection).length) {
-      throw new Error('La présence des catégories choisies ou le retrait des catégories décochées reste à confirmer.');
-    }
+    // Chaque écriture de catégorie invalide les lectures avant et après son POST.
+    // La vérification de fond doit donc posséder la révision obtenue APRÈS le lot,
+    // sinon sa propre réponse serait systématiquement considérée comme ancienne.
+    proprietaire = versionCategoriesCourante();
+    // Une réponse explicite de succès permet d'afficher immédiatement l'état attendu.
+    // La présence et l'absence sont ensuite contrôlées sans bloquer le formulaire.
+    const relue = cfg;
+    if (!choixCategoriesConfirme(relue, selection)) throw new Error('Le choix local confirmé est incohérent.');
     rendreCategoriesChoix(relue);
     choixCategoriesModifie = false;
     valide = true;
+    verifierEnArrierePlan = ecritureTentee;
+    if (verifierEnArrierePlan) verificationCategoriesEnCours = proprietaire;
     const presentes = (relue.categories || []).some(estPresente);
     afficherMessageChoixCategories(message, presentes
       ? '✅ Catégories validées. Les réglages des catégories cochées, les équipes et les matchs sont conservés. Tu peux choisir la date.'
@@ -162,17 +230,25 @@ async function onValiderChoixCategories(e) {
     if (ecritureTentee) {
       // Réconciliation en lecture seule : aucun rejeu automatique, même après 404.
       try {
-        rendreCategoriesChoix(await lireConfigAdmin(undefined, { delaiMs: 30000 }));
+        const relue = await lireConfigAdmin(undefined, { delaiMs: 30000 });
+        rendreCategoriesChoix(relue);
+        if (choixCategoriesConfirme(relue, selection)) {
+          choixCategoriesModifie = false;
+          valide = true;
+        }
         reconciliation = 'L’état actuel a été relu ; ton choix reste à valider. ';
       } catch (_) {
         masquerCategoriesChoixIncertaines();
         reconciliation = 'La relecture est indisponible ; les vues concernées sont à vérifier. ';
       }
     }
-    afficherMessageChoixCategories(message, (ecritureTentee
+    if (valide) {
+      afficherMessageChoixCategories(message,
+        '✅ Choix des catégories confirmé par relecture du serveur après une réponse interrompue. Aucune écriture répétée.', 'ok');
+    } else afficherMessageChoixCategories(message, (ecritureTentee
       ? '⚠️ Validation non confirmée : certaines modifications peuvent déjà être enregistrées. '
       : '⚠️ Lecture impossible ; aucune catégorie envoyée. ') +
-      reconciliation + 'Clique à nouveau sur Valider pour relire le serveur avant toute modification. ' + err.message, 'ko');
+      reconciliation + 'Clique à nouveau sur Valider pour relire le serveur avant toute modification. ' + expliquerErreurCategories(err), 'ko');
   } finally {
     choixCategoriesEnCours = false;
     bouton.disabled = false;
@@ -181,6 +257,13 @@ async function onValiderChoixCategories(e) {
   }
   if (valide) {
     majChoixCategoriesTournoi();
-    if (typeof majConformiteFFR === 'function') await majConformiteFFR();
+    // Le contrôle FFR démarre dès que l'écriture est confirmée, sans attendre la
+    // relecture de fond. L'appelant peut toutefois attendre la fin des deux tâches.
+    const controleFFR = typeof majConformiteFFR === 'function' ? majConformiteFFR() : Promise.resolve();
+    const verification = verifierEnArrierePlan
+      ? verifierChoixCategoriesEnArrierePlan(proprietaire, selection, message)
+      : Promise.resolve(true);
+    await Promise.allSettled([controleFFR, verification]);
+    if (verificationCategoriesEnCours === proprietaire) verificationCategoriesEnCours = 0;
   }
 }
