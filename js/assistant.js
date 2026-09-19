@@ -31,7 +31,7 @@ const ASSISTANT_ETAPES = [
   /* « Inviter un club » (Phase 1) puis le Dossier complet (Phase 2) viennent AVANT les Équipes :
      les clubs qui acceptent génèrent leurs équipes automatiquement à l'envoi du dossier final
      (même ordre que la barre latérale desktop). Cartes libres : jamais verrouillées. */
-  { id: 'invitation', titre: 'Inviter',     icone: '✉️', blocs: ['bloc-modalites', 'bloc-clubs-invites', 'bloc-apercu-invitation', 'bloc-surplace', 'bloc-reponse'] },
+  { id: 'invitation', titre: 'Inviter',     icone: '✉️', blocs: ['bloc-clubs-invites', 'bloc-invitation-initiale'] },
   { id: 'dossier',   titre: 'Dossier',      icone: '📄', blocs: ['bloc-parking', 'bloc-encadrement', 'bloc-contacts-securite', 'bloc-dossier'] },
   { id: 'equipes',   titre: 'Équipes',      icone: '👥', blocs: ['bloc-equipes'] },
   { id: 'terrains',  titre: 'Terrains',     icone: '🗺️', blocs: ['bloc-terrains'] },
@@ -130,6 +130,8 @@ function initAssistant() {
 function construireAssistant() {
   const main = document.querySelector('main');
   if (!main || document.getElementById('assistant')) return;
+
+  if (typeof preparerInvitationInitiale === 'function') preparerInvitationInitiale();
 
   const asst = document.createElement('div');
   asst.id = 'assistant';

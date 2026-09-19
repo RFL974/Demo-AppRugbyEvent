@@ -40,11 +40,11 @@ const ECRANS_DEF = [
   { id: 'infos',       titre: 'Infos du tournoi',  icone: 'info',     blocs: ['bloc-choix-categories', 'bloc-cadre-tournoi', 'bloc-infos-tournoi'], cles: [] },
   { id: 'horaires',    titre: 'Horaires',          icone: 'horloge',  blocs: ['zone-horaires'],           cles: ['horaires'] },
   { id: 'categories',  titre: 'Catégories',        icone: 'etiquette', blocs: ['zone-categories'],        cles: ['categories'] },
-  /* Phase 1 — « Inviter un club » : page unique regroupant la LISTE des clubs invités (+ ajout,
-     statut, envoi individuel), l'aperçu de l'email d'invitation (+ envoi groupé), puis sa config
-     (Sur place + Réponse à l'invitation). Libre : préparable très tôt. Placé AVANT les Équipes :
-     les clubs qui acceptent génèrent leurs équipes automatiquement à l'envoi du dossier final. */
-  { id: 'invitation',  titre: 'Inviter un club',   icone: 'courrier', blocs: ['bloc-modalites', 'bloc-clubs-invites', 'bloc-apercu-invitation', 'bloc-surplace', 'bloc-reponse'], cles: [], libre: true },
+  /* Phase 1 — « Inviter un club » : les clubs invités restent visibles en tête ; les réglages et
+     l'aperçu de la première invitation sont regroupés dans un dépliant. Libre : préparable très
+     tôt. Placé AVANT les Équipes : les clubs qui acceptent génèrent leurs équipes automatiquement
+     à l'envoi du dossier final. */
+  { id: 'invitation',  titre: 'Inviter un club',   icone: 'courrier', blocs: ['bloc-clubs-invites', 'bloc-invitation-initiale'], cles: [], libre: true },
   /* Le dossier COMPLET (Phase 2), envoyé aux clubs qui ont accepté : se génère à tout moment
      (sections vides masquées), jamais verrouillé. L'écran regroupe aussi les cartes du dossier
      (modalités, parking, encadrement) : on complète, puis on génère. */
@@ -91,6 +91,38 @@ const ECRANS_DEF = [
   { id: 'reinitialisation', titre: 'Réinitialiser', icone: 'balai',   blocs: ['bloc-reinitialisation'],   cles: [], danger: true, libre: true }
 ];
 
+/* Ordre métier des cartes de la première invitation. Elles restent les blocs d'origine : ce
+   regroupement ne recrée aucun formulaire et conserve donc tous leurs écouteurs. */
+const INVITATION_INITIALE_BLOCS = [
+  'bloc-modalites',
+  'bloc-reponse',
+  'bloc-surplace',
+  'bloc-apercu-invitation'
+];
+
+/** Regroupe les cartes de la première invitation dans un dépliant natif, fermé par défaut. */
+function preparerInvitationInitiale() {
+  const clubs = document.getElementById('bloc-clubs-invites');
+  let groupe = document.getElementById('bloc-invitation-initiale');
+
+  if (!groupe) {
+    if (!clubs || !clubs.parentNode) return null;
+    groupe = document.createElement('details');
+    groupe.id = 'bloc-invitation-initiale';
+    groupe.className = 'carte invitation-initiale';
+    const titre = document.createElement('summary');
+    titre.textContent = 'Invitation initiale';
+    groupe.appendChild(titre);
+    clubs.parentNode.insertBefore(groupe, clubs.nextSibling);
+  }
+
+  INVITATION_INITIALE_BLOCS.forEach(function (id) {
+    const bloc = document.getElementById(id);
+    if (bloc) groupe.appendChild(bloc);
+  });
+  return groupe;
+}
+
 /* Icônes filaires (SVG, trait fin arrondi, couleur = celle du texte de l'onglet).
    Dessinées dans un carré 24×24 ; chaque entrée = l'INTÉRIEUR du <svg>. */
 const ECRANS_ICONES = {
@@ -131,6 +163,8 @@ function construireEcrans() {
   const main = document.querySelector('main');
   const conteneur = document.querySelector('.conteneur');
   if (!main || !conteneur || ecransEstActif()) return;
+
+  preparerInvitationInitiale();
 
   document.body.classList.add('avec-ecrans');
 

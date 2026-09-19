@@ -1466,6 +1466,9 @@ details.carte > summary:hover { color: var(--accent); }
 /* Zone de danger repliable : titre en rouge, comme le <h2> équivalent. */
 details.carte-danger > summary { color: #ff9b8f; }
 
+/* « Inviter un club » : les quatre cartes de préparation vivent dans un seul dépliant. */
+details.invitation-initiale > .carte:last-child { margin-bottom: 0; }
+
 /* Aperçu de l'affiche du tournoi dans l'admin */
 .apercu-affiche { margin: 4px 0 12px; }
 .apercu-affiche img {
