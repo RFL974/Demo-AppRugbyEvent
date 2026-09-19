@@ -77,4 +77,24 @@ vrai(generation.includes('Les scores enregistrés restent corrigeables'),
 vrai(css.includes('.match-demo') && css.includes('.bandeau-demo'),
   'le repère de démonstration possède ses styles dédiés');
 
+const boutons = { 'bouton-simuler-scores-matin': {}, 'bouton-simuler-scores-apresmidi': {} };
+const ctxBoutons = vm.createContext({ document: { getElementById: id => boutons[id] },
+  equipesCourantes: [], matchsCourants: [] });
+vm.runInContext(generation, ctxBoutons);
+const eq24 = ['U10', 'U12'].flatMap(categorie => Array.from({ length: 12 }, () => ({ categorie })));
+const m36 = Array.from({ length: 36 }, () => ({ phase: 'poule' }));
+ctxBoutons.equipesCourantes = eq24.slice(0, 21); ctxBoutons.matchsCourants = m36;
+ctxBoutons.majBoutonsScoresDemo();
+vrai(boutons['bouton-simuler-scores-matin'].disabled, '21 équipes : le matin attend les trois inscriptions');
+ctxBoutons.equipesCourantes = eq24; ctxBoutons.majBoutonsScoresDemo();
+vrai(!boutons['bouton-simuler-scores-matin'].disabled, '24 équipes et 36 matchs : bouton matin accessible');
+vrai(boutons['bouton-simuler-scores-apresmidi'].disabled, 'sans planning après-midi : bouton désactivé');
+for (const nb of [12, 18, 24]) {
+  ctxBoutons.matchsCourants = m36.concat(Array.from({ length: nb }, () => ({ phase: 'classement' })));
+  ctxBoutons.majBoutonsScoresDemo();
+  vrai(!boutons['bouton-simuler-scores-apresmidi'].disabled, nb + ' matchs de classement : bouton accessible');
+}
+ctxBoutons.equipesCourantes = eq24.slice(0, 21); ctxBoutons.majBoutonsScoresDemo();
+vrai(boutons['bouton-simuler-scores-apresmidi'].disabled, '21 équipes : après-midi attend les inscriptions');
+
 console.log('OK — ' + controles + '/' + controles + ' contrôles passés.');

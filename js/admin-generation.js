@@ -187,9 +187,9 @@ function majBoutonsScoresDemo() {
       ? 'Disponible avec 12 équipes U10, 12 équipes U12 et les 36 matchs du matin.' : '';
   }
   if (boutonAprem) {
-    boutonAprem.disabled = !(structureEquipes && aprem.length === 18);
+    boutonAprem.disabled = !(structureEquipes && aprem.length > 0);
     boutonAprem.title = boutonAprem.disabled
-      ? 'Disponible après la génération des 18 matchs de classement croisé.' : '';
+      ? 'Disponible avec 12 équipes U10, 12 équipes U12 et un classement croisé ou croisé diagonal généré.' : '';
   }
 }
 
