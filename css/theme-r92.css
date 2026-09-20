@@ -348,8 +348,7 @@ body.theme-clair {
 .theme-clair .club-invite-item { border-left: 4px solid rgba(120, 180, 255, 0.5); }
 .theme-clair .club-invite-item.club-etat-a-enregistrer { border-left-color: #e5a33c; }
 .theme-clair .club-invite-item.club-etat-attente       { border-left-color: #9b7fd4; }
-.theme-clair .club-invite-item.club-etat-a-envoyer     { border-left-color: #2E8FE0; }
-.theme-clair .club-invite-item.club-etat-complet       { border-left-color: #35c06a; }
+.theme-clair .club-invite-item.club-etat-equipes-ajoutees { border-left-color: #2E8FE0; }
 .theme-clair .club-invite-item.club-etat-decline       { border-left-color: #e07878; }
 /* Cartes de format d'après-midi */
 .theme-clair .format-carte { background: var(--r92-navy); border-color: var(--r92-navy); }

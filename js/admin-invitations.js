@@ -1342,9 +1342,8 @@ async function chargerClubsInvites() {
  *  - 'a-enregistrer' (orange) : Accepté, sélection PAS (ou PLUS) enregistrée — le club a répondu
  *    ou modifié sa réponse (repondreInvitation efface la marque), action requise ;
  *  - 'attente'       (violet) : pas encore de réponse (Invité) ;
- *  - 'a-envoyer'     (bleu)   : Accepté, sélection enregistrée, DOSSIER PAS ENCORE ENVOYÉ —
- *    le club n'a toujours rien reçu, c'est la dernière action qui lui manque ;
- *  - 'complet'       (vert)   : sélection enregistrée ET dossier envoyé — rien à faire ;
+ *  - 'equipes-ajoutees' (bleu) : ajout des équipes confirmé par le serveur ;
+ *    l'envoi du dossier est suivi séparément dans « Suivi des clubs » ;
  *  - 'decline'       (rouge)  : invitation déclinée.
  * Colonne selection_enregistree absente (vieux Sheet) ⇒ orange : défaut PRUDENT, la carte
  * réclame une relecture plutôt que de se dire à jour.
@@ -1353,19 +1352,16 @@ function etatClubInvite(club) {
   if (memeTexteSouple(club.statut, 'Décliné')) return 'decline';
   if (estAccepte(club.statut)) {
     if (!String(club.selection_enregistree || '').trim()) return 'a-enregistrer';
-    // Sélection enregistrée : il RESTE à envoyer le dossier. Tant qu'il ne l'est pas, la carte
-    // le dit — c'est une action à faire, pas un état terminé. Le club, lui, n'a encore rien reçu.
-    return String(club.dossier_envoye || '').trim() ? 'complet' : 'a-envoyer';
+    return 'equipes-ajoutees';
   }
   return 'attente';
 }
 
 /** Libellés humains des états (badge de la carte — jamais la couleur seule). */
 const LIBELLES_ETAT_CLUB = {
-  'a-enregistrer': 'À enregistrer',
+  'a-enregistrer': 'Équipes à ajouter',
   'attente': 'En attente de réponse',
-  'a-envoyer': 'Dossier à envoyer',
-  'complet': 'Dossier envoyé',
+  'equipes-ajoutees': 'Équipes ajoutées',
   'decline': 'Déclinée'
 };
 
@@ -1390,6 +1386,7 @@ function panneauAccepteClub(club, nom) {
   const engBrut = String(club.categories_engagees || '').trim();
   const eng = parseCatsEngagees(engBrut);
   const toutParDefaut = eng.length === 0; // rien encore enregistré → tout coché
+  const ajoutees = !!String(club.selection_enregistree || '').trim();
   const cases = cats.map(function (c) {
     const val = String(c.categorie || '');
     const coche = toutParDefaut || eng.indexOf(val.toUpperCase()) !== -1;
@@ -1407,7 +1404,9 @@ function panneauAccepteClub(club, nom) {
       '<input type="text" class="club-prenom-input" value="' + echapper(String(club.club_contact_prenom || '')) + '" ' +
              'placeholder="Ex : Camille" autocomplete="off"></label>' +
     '<div class="club-panneau-actions">' +
-      '<button type="button" class="bouton bouton-cats-club" data-club="' + echapper(nom) + '">' + svgIcone('enregistrer') + 'Ajouter les équipes au tournoi</button>' +
+      '<button type="button" class="bouton bouton-cats-club" data-club="' + echapper(nom) + '"' +
+        (ajoutees ? ' disabled title="Les équipes ont déjà été ajoutées au tournoi"' : '') + '>' +
+        svgIcone('enregistrer') + 'Ajouter les équipes au tournoi</button>' +
     '</div>' +
   '</div>';
 }
@@ -1452,15 +1451,13 @@ function parseCatsEnginesNb(brut) {
 
 /**
  * Ordre de tri de la PILE (décisions Romain, session liserés) — suit l'état de la carte :
- *   0 = orange « À enregistrer » (action requise, en haut)
+ *   0 = orange « Équipes à ajouter » (action requise, en haut)
  *   1 = violet « En attente de réponse » (rien à faire, milieu)
- *   2 = vert « Sélection enregistrée » (à jour, en bas)
+ *   2 = bleu « Équipes ajoutées » (à jour, en bas)
  *   3 = rouge « Déclinée » (cartes mortes, tout en bas)
  */
 function bucketClub(club) {
-  // Ordre de la pile : ce qui demande une action d'abord (enregistrer, puis envoyer), l'attente
-  // ensuite, et tout en bas ce qui est terminé ou décliné.
-  return { 'a-enregistrer': 0, 'a-envoyer': 1, 'attente': 2, 'complet': 3, 'decline': 4 }[etatClubInvite(club)];
+  return { 'a-enregistrer': 0, 'attente': 1, 'equipes-ajoutees': 2, 'decline': 3 }[etatClubInvite(club)];
 }
 
 /** Affiche la liste des clubs invités (triée), avec statut, réponse remontée, panneau, envoi. */
@@ -1503,7 +1500,7 @@ function afficherClubsInvites() {
     const badges =
       '<span class="club-etat-badge etat-' + etat + '">' + LIBELLES_ETAT_CLUB[etat] + '</span>' +
       (invite ? '<span class="club-envoye club-badge-invite" title="Invitation envoyée">✉️ Invité le ' + echapper(invite) + '</span>' : '') +
-      (envoye ? '<span class="club-envoye" title="Dossier envoyé">le ' + echapper(envoye) + '</span>' : '') +
+      (envoye ? '<span class="club-envoye" title="Dossier envoyé">Dossier envoyé le ' + echapper(envoye) + '</span>' : '') +
       (alerte ? '<span class="club-alerte-ecart" tabindex="0" role="button" title="' + echapper(alerte) + '" data-club="' + echapper(nom) + '">⚠️ Écart</span>' : '');
     // Invitation initiale uniquement ; les relances restent dans le suivi des clubs.
     const motifInvitation = invite ? 'Invitation déjà envoyée — relances dans Suivi des clubs'
@@ -1602,6 +1599,10 @@ async function onAjouterClubInvite(evenement) {
  *  Passer à « Accepté » fait apparaître le panneau de sélection des catégories (pré-cochées
  *  sur toutes par défaut). Revenir à « Invité »/« Décliné » CONSERVE categories_engagees. */
 async function onChangerStatutClub(evenement) {
+  if (evenement.target.closest('.club-cat-case, .club-prenom-input')) {
+    actualiserBoutonEquipesClub(evenement.target.closest('.club-panneau'));
+    return;
+  }
   const select = evenement.target.closest('.statut-club');
   if (!select) return;
   const nom = select.getAttribute('data-club');
@@ -1626,7 +1627,7 @@ async function onClicClubsInvites(evenement) {
   const btnInviter = evenement.target.closest('.bouton-inviter-club');
   if (btnInviter && !btnInviter.disabled) return envoyerInvitationClubUI(btnInviter.getAttribute('data-club'));
   const btnCats = evenement.target.closest('.bouton-cats-club');
-  if (btnCats) return enregistrerCatsClub(btnCats);
+  if (btnCats && !btnCats.disabled) return enregistrerCatsClub(btnCats);
   // Édition inline des coordonnées (Sprint 6, point 6e).
   const btnEdit = evenement.target.closest('.bouton-editer-club');
   if (btnEdit) { clubEnEdition = btnEdit.getAttribute('data-club'); afficherClubsInvites(); return; }
@@ -1715,8 +1716,25 @@ async function supprimerClubInviteUI(bouton) {
   }
 }
 
+/** Une modification du formulaire permet une nouvelle synchronisation, sans réactiver un ajout identique. */
+function actualiserBoutonEquipesClub(panneau) {
+  if (!panneau) return;
+  const club = clubsInvitesCourants.find(function (c) { return memeTexteSouple(c.club_nom, panneau.getAttribute('data-club')); });
+  const bouton = panneau.querySelector('.bouton-cats-club');
+  if (!club || !bouton || bouton.getAttribute('aria-busy') === 'true') return;
+  const cochees = Array.prototype.slice.call(panneau.querySelectorAll('.club-cat-case:checked'))
+    .map(function (c) { return String(c.value).trim().toUpperCase(); }).sort();
+  const enregistrees = parseCatsEngagees(club.categories_engagees).sort();
+  const prenom = panneau.querySelector('.club-prenom-input');
+  const identique = JSON.stringify(cochees) === JSON.stringify(enregistrees) &&
+    (!prenom || prenom.value.trim() === String(club.club_contact_prenom || '').trim());
+  bouton.disabled = !!String(club.selection_enregistree || '').trim() && identique;
+  bouton.title = bouton.disabled ? 'Les équipes ont déjà été ajoutées au tournoi' : '';
+}
+
 /** Enregistre les catégories engagées cochées (+ le prénom du contact) d'un club Accepté. */
 async function enregistrerCatsClub(bouton) {
+  if (!bouton || bouton.disabled) return;
   const nom = bouton.getAttribute('data-club');
   const message = document.getElementById('message-club-invite');
   const panneau = bouton.closest('.club-panneau');
@@ -1728,13 +1746,14 @@ async function enregistrerCatsClub(bouton) {
   const cats = cochees.join(',');
 
   bouton.disabled = true;
+  bouton.setAttribute('aria-busy', 'true');
   const texte = bouton.textContent;
   bouton.textContent = 'Enregistrement…';
   try {
     // UN SEUL appel : le serveur enregistre la sélection, SYNCHRONISE les équipes (ajouts +
-    // retraits prudents), puis ne pose la marque « sélection enregistrée » (liseré VERT) qu'en
+    // retraits prudents), puis ne pose la marque « sélection enregistrée » (liseré BLEU) qu'en
     // cas de succès complet. Un échec laisse donc la carte ORANGE — l'état affiché est prouvé,
-    // jamais deviné (correctif de revue : deux appels séparés pouvaient laisser une carte verte
+    // jamais deviné (correctif de revue : deux appels séparés pouvaient laisser une carte bleue
     // alors que les équipes n'étaient pas synchronisées).
     let res = await ecrireAdmin('enregistrerCategoriesEngagees', {
       club_nom: nom, categories_engagees: cats, club_contact_prenom: prenom
@@ -1758,7 +1777,7 @@ async function enregistrerCatsClub(bouton) {
       club.club_contact_prenom = prenom;
       club.alerte_ecart = (res && res.alerte) || '';
       // Marque telle que RENVOYÉE par le serveur (aucun repli optimiste : un backend qui ne la
-      // renvoie pas laisse la carte orange plutôt que d'annoncer un vert non prouvé).
+      // renvoie pas laisse la carte orange plutôt que d'annoncer un ajout non prouvé).
       club.selection_enregistree = (res && res.selection_enregistree) || '';
     }
 
@@ -1776,13 +1795,18 @@ async function enregistrerCatsClub(bouton) {
 
     afficherClubsInvites();
     if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
-    afficherMessage(message, (cochees.length
+    const confirme = !!(res && String(res.selection_enregistree || '').trim());
+    afficherMessage(message, (!confirme
+      ? '⚠️ « ' + nom + ' » — ajout des équipes non confirmé. Réessaie ou recharge les clubs.'
+      : cochees.length
       ? '✅ « ' + nom + ' » — catégories engagées : ' + cats + '.'
-      : '✅ « ' + nom + ' » — sélection enregistrée (aucune catégorie cochée).') + txtEquipes, 'ok');
+      : '✅ « ' + nom + ' » — sélection enregistrée (aucune catégorie cochée).') + txtEquipes, confirme ? 'ok' : 'ko');
   } catch (erreur) {
     afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
     bouton.disabled = false;
     bouton.textContent = texte;
+  } finally {
+    bouton.removeAttribute('aria-busy');
   }
 }
 
