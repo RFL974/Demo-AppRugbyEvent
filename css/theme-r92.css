@@ -716,10 +716,90 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
 .theme-clair .suivi-indicateur.est-actif { background:#e5f4ff; box-shadow:inset 0 -3px #155b91; }
 .theme-clair .suivi-filtre { border-radius:8px; min-height:40px; }
 .theme-clair .suivi-filtre.est-actif { color:var(--cv-action); background:#dff2ff; border-color:#b9def5; }
-.theme-clair .club-etat-badge.etat-attente { color:#8a5400; background:#fff3d6; }
-.theme-clair .club-etat-badge.etat-equipes-ajoutees { color:#155b91; background:#eaf3fb; }
-.theme-clair .club-etat-badge.etat-a-enregistrer { color:#8a5400; background:#fff3d6; }
-.theme-clair .club-etat-badge.etat-decline { color:#b42318; background:#fdece9; }
+/* --------------------------------------------------------------------------
+   CODE COULEUR DES CLUBS — un seul système, quatre états, deux supports.
+   Les couleurs d'origine venaient du thème sombre (textes pâles sur fonds
+   translucides) : sur fond blanc elles devenaient illisibles, et plusieurs
+   textes disparaissaient complètement. Ici, chaque état a UNE famille de
+   couleur, portée par deux choses seulement — le liseré de la carte et sa
+   pastille d'état. Tout le reste de la carte reste neutre : la couleur signale,
+   elle ne décore pas. Le libellé dit toujours l'état, jamais la couleur seule.
+
+     · en attente de réponse   → ardoise : rien à faire, la balle est au club
+     · équipes à ajouter       → ambre   : une action est attendue de l'organisateur
+     · équipes ajoutées        → vert    : c'est fait
+     · déclinée                → rouge   : le club ne vient pas
+
+   Contrastes vérifiés au-dessus de 4,5:1 (WCAG AA, texte courant).
+   -------------------------------------------------------------------------- */
+.theme-clair .club-invite-item,
+.theme-clair .suivi-club-ligne { border-left:4px solid var(--cv-bordure); }
+.theme-clair .club-invite-item.club-etat-attente,
+.theme-clair .suivi-club-ligne.club-etat-attente { border-left-color:#8fa3b8; }
+.theme-clair .club-invite-item.club-etat-a-enregistrer,
+.theme-clair .suivi-club-ligne.club-etat-a-enregistrer { border-left-color:#d09a2a; }
+.theme-clair .club-invite-item.club-etat-equipes-ajoutees,
+.theme-clair .suivi-club-ligne.club-etat-equipes-ajoutees { border-left-color:#3a9d70; }
+.theme-clair .club-invite-item.club-etat-decline,
+.theme-clair .suivi-club-ligne.club-etat-decline { border-left-color:#d9736a; }
+
+/* La pastille d'état est la MÊME sur « Inviter un club » et sur « Suivi des clubs » : un état,
+   une couleur, où qu'il s'affiche. (Les pastilles `est-*` du suivi — réponse et paiement — sont
+   un autre axe et gardent les leurs : ambre = quelque chose à faire, vert = c'est réglé.) */
+.theme-clair .club-etat-badge { font-size:12px; font-weight:650; letter-spacing:0; padding:4px 10px; }
+.theme-clair .club-etat-badge.etat-attente,
+.theme-clair .suivi-badge.etat-attente { color:#41556b; background:#eef2f7; }
+.theme-clair .club-etat-badge.etat-a-enregistrer,
+.theme-clair .suivi-badge.etat-a-enregistrer { color:var(--cv-attention); background:#fff3d6; }
+.theme-clair .club-etat-badge.etat-equipes-ajoutees,
+.theme-clair .suivi-badge.etat-equipes-ajoutees { color:var(--cv-succes); background:#e6f7ee; }
+.theme-clair .club-etat-badge.etat-decline,
+.theme-clair .suivi-badge.etat-decline { color:var(--cv-danger); background:#fdece9; }
+
+/* Repères de date (« Invité le… », « Dossier envoyé le… ») : information, pas état.
+   Ils restent neutres pour ne pas concurrencer la pastille. */
+.theme-clair .club-envoye,
+.theme-clair .club-badge-invite { color:#41556b; background:#eef2f7; border-radius:999px; padding:4px 10px; font-size:12px; margin-left:0; }
+
+/* Le menu de statut avait du texte blanc sur fond blanc : il était invisible. */
+.theme-clair .statut-club { color:var(--cv-texte); background:#fff; border:1px solid var(--cv-bordure); border-radius:8px; padding:8px 10px; min-height:40px; font-size:13px; }
+.theme-clair .club-prenom-champ input { color:var(--cv-texte); background:#fff; border:1px solid var(--cv-bordure); border-radius:8px; padding:9px 10px; min-height:40px; }
+
+/* Résumé de la réponse du club : un fait, pas un état — fond neutre et texte lisible.
+   C'est son titre qui dit qu'une réponse est arrivée, plus un aplat de couleur. */
+.theme-clair .club-reponse { background:#f4f8fb; border:1px solid var(--cv-bordure); border-radius:10px; padding:12px 14px; }
+.theme-clair .club-reponse-titre { color:var(--cv-secondaire); font-size:12px; font-weight:600; letter-spacing:0; }
+.theme-clair .club-rep-ligne { color:var(--cv-texte); font-size:13px; line-height:1.6; }
+.theme-clair .club-panneau { background:#fff; border:1px solid var(--cv-bordure); border-radius:12px; padding:16px; }
+
+/* Avertissements de la carte : même ambre que l'état « équipes à ajouter ». */
+.theme-clair .club-alerte-ecart { color:var(--cv-attention); background:#fff3d6; border-color:#e8cd93; }
+.theme-clair .club-edit-avert { color:var(--cv-attention); }
+
+/* Commandes indisponibles : grisé clair, encore lisible — plus de pavé sombre. */
+.theme-clair .bouton-inviter-club[disabled],
+.theme-clair .bouton-cats-club[disabled] { color:#5a6b7f; background:#eef2f7; border-color:#d7e1ea; }
+
+/* Une carte par club, plusieurs par ligne : un club tient en quelques lignes, il n'a pas
+   besoin de toute la largeur. La grille s'adapte d'elle-même au nombre de colonnes possibles. */
+.theme-clair #liste-clubs-invites { display:grid; grid-template-columns:repeat(auto-fill,minmax(330px,1fr)); gap:16px; align-items:start; margin-top:20px; }
+.theme-clair #liste-clubs-invites .club-invite-item { display:flex; flex-direction:column; align-items:stretch; gap:12px; margin:0; padding:16px; background:#fff; border:1px solid var(--cv-bordure); border-left-width:4px; border-radius:12px; }
+.theme-clair #liste-clubs-invites .nom { gap:2px; font-size:15px; font-weight:650; }
+.theme-clair #liste-clubs-invites .club-contact { font-size:12px; opacity:1; color:var(--cv-secondaire); }
+.theme-clair #liste-clubs-invites .equipe-actions { display:flex; flex-wrap:wrap; gap:8px; align-items:center; }
+/* Trois rangées dans une carte étroite : l'état, l'envoi, puis les réglages.
+   ⚠️ AUCUN `order` ici, volontairement : il décalerait l'ordre visuel de l'ordre du DOM, donc
+   de l'ordre de tabulation et de lecture d'un lecteur d'écran. La mise en page suit l'ordre
+   d'origine des commandes — seul le bouton d'envoi prend toute la largeur pour créer la coupure. */
+.theme-clair #liste-clubs-invites .statut-club { flex:1 1 120px; }
+.theme-clair #liste-clubs-invites .bouton-inviter-club { flex:1 0 100%; min-height:40px; font-size:13px; padding:9px 12px; }
+.theme-clair #liste-clubs-invites .bouton-icone { flex:0 0 auto; width:40px; height:40px; min-height:40px; display:inline-flex; align-items:center; justify-content:center; padding:0; border-radius:8px; }
+/* Le crayon n'avait aucun contour : il se lisait comme un décor, pas comme un bouton. */
+.theme-clair #liste-clubs-invites .bouton-editer-club { color:var(--cv-action); background:#fff; border:1px solid var(--cv-bordure); }
+.theme-clair #liste-clubs-invites .bouton-editer-club:hover { background:var(--cv-selection); }
+.theme-clair #liste-clubs-invites .club-panneau { margin-top:0; padding:14px; }
+.theme-clair #liste-clubs-invites .club-reponse { padding:10px 12px; }
+@media (max-width:767px) { .theme-clair #liste-clubs-invites { grid-template-columns:1fr; } }
 @media(max-width:1099px){.cv-horaires{grid-template-columns:1fr;}.cv-terrains{grid-template-columns:1fr;}.cv-horaires-resume{min-height:0;}}
 @media(max-width:767px){.cv-frise{grid-template-columns:1fr; padding:12px 0;}.cv-frise li{padding:0 0 24px 32px;}.cv-frise li::before{left:4px;top:4px;}.cv-frise li::after{left:10px;top:14px;bottom:0;width:2px;height:auto;right:auto;}.cv-actions-enregistrer{bottom:8px;flex-wrap:wrap;}.cv-actions-enregistrer .bouton{width:100%;}.cv-horaires .carte{padding:18px;}}
 @media print{.cv-actions-enregistrer,.cv-options > summary{display:none!important;}.cv-options{border:0;}.cv-horaires-resume{position:static;}.cv-terrains{display:block;}}
@@ -858,10 +938,10 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
    L'onglet ouvert montre les paramètres de SA catégorie à gauche et la
    référence FFR correspondante à droite.
    -------------------------------------------------------------------------- */
-.cv-cat-onglets { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:-1px; position:relative; z-index:1; }
-.theme-clair .cv-cat-onglet { min-height:44px; padding:11px 22px; border:1px solid var(--cv-bordure); border-bottom-color:transparent; border-radius:12px 12px 0 0; background:#eef4fa; color:var(--cv-secondaire); font-size:14px; font-weight:600; }
-.theme-clair .cv-cat-onglet:hover { background:var(--cv-selection); color:var(--cv-action); }
-.theme-clair .cv-cat-onglet.est-actif { background:#fff; color:var(--cv-action); border-color:var(--cv-bordure); border-bottom-color:#fff; }
+.cv-cat-onglets, .cv-onglets { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:-1px; position:relative; z-index:1; }
+.theme-clair .cv-cat-onglet, .theme-clair .cv-onglet { min-height:44px; padding:11px 22px; border:1px solid var(--cv-bordure); border-bottom-color:transparent; border-radius:12px 12px 0 0; background:#eef4fa; color:var(--cv-secondaire); font-size:14px; font-weight:600; }
+.theme-clair .cv-cat-onglet:hover, .theme-clair .cv-onglet:hover { background:var(--cv-selection); color:var(--cv-action); }
+.theme-clair .cv-cat-onglet.est-actif, .theme-clair .cv-onglet.est-actif { background:#fff; color:var(--cv-action); border-color:var(--cv-bordure); border-bottom-color:#fff; }
 .theme-clair .cv-cat-onglet-ajout { background:transparent; border-style:dashed; color:var(--cv-action); font-weight:550; }
 .theme-clair .cv-cat-onglet-ajout.est-actif { background:#fff; border-style:solid; }
 .cv-cat-onglet span[aria-hidden] { margin-right:6px; font-weight:700; }
@@ -912,3 +992,39 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 
 @media (max-width:1099px) { .cv-cat-panneau { grid-template-columns:1fr; } .theme-clair .cv-cat-carte { border-radius:16px; } }
 @media (max-width:767px) { .theme-clair .cv-cat-section .grille-reglages { grid-template-columns:1fr; } .cv-cat-onglets { gap:4px; } .theme-clair .cv-cat-onglet { padding:11px 14px; } }
+
+/* --------------------------------------------------------------------------
+   ÉCRAN « INVITER UN CLUB » — onglets, et pour « Invitation initiale » quatre
+   cartes de préparation à gauche, l'aperçu de l'email (pièces jointes incluses)
+   à droite. Les cartes sont celles du HTML : seul leur assemblage change.
+   -------------------------------------------------------------------------- */
+.cv-panneau { min-width:0; }
+.theme-clair .cv-panneau > .carte:first-child,
+.theme-clair .cv-panneau > :first-child > .carte:first-child { border-top-left-radius:0; }
+.cv-panneau > .carte { margin:0; }
+
+.cv-invitation-initiale { display:grid; grid-template-columns:minmax(0,1.9fr) minmax(330px,.95fr); gap:24px; align-items:start; }
+.cv-invitation-initiale > * { min-width:0; }
+.cv-invitation-cartes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; align-items:start; }
+.cv-invitation-cartes > * { min-width:0; }
+
+/* La carte « Pièces jointes » devient une partie de l'aperçu : plus de carte dans la carte. */
+.theme-clair .cv-sous-carte { margin:24px 0 0; padding:20px 0 0; background:none; border:0; border-top:1px solid var(--cv-bordure); border-radius:0; box-shadow:none; }
+.theme-clair .cv-sous-carte > h3 { margin:0 0 8px; font-size:15px; font-weight:650; letter-spacing:-.02em; color:var(--cv-texte); }
+
+/* Onglet « Dossier final » : Parking puis Encadrement à gauche, l'aperçu de l'email du dossier
+   (pièces jointes incluses) à droite, et le dossier complet sous l'ensemble. */
+.cv-dossier-final { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(330px,.95fr); gap:24px; align-items:start; }
+.cv-dossier-final > * { min-width:0; }
+.cv-dossier-cartes { display:grid; gap:24px; align-content:start; }
+.cv-dossier-final #bloc-dossier { grid-column:1/-1; }
+
+@media (max-width:1399px) {
+  .cv-invitation-initiale, .cv-dossier-final { grid-template-columns:1fr; }
+  .cv-dossier-final #bloc-dossier { grid-column:auto; }
+}
+@media (max-width:1099px) {
+  .cv-invitation-cartes { grid-template-columns:1fr; }
+  .theme-clair .cv-invitation-cartes > .carte:first-child,
+  .theme-clair .cv-dossier-cartes > .carte:first-child { border-top-left-radius:16px; }
+}

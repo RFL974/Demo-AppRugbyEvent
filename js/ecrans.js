@@ -507,6 +507,116 @@ function preparerDateVerification() {
  if(zone)zone.after(asavoir);else carte.appendChild(asavoir);
 }
 
+/**
+ * Transforme un écran en ONGLETS : une barre, puis un panneau par groupe. Les blocs sont
+ * DÉPLACÉS dans leur panneau — identifiants, contenus et écouteurs délégués intacts, rien
+ * n'est recréé. Le premier groupe est ouvert. La barre n'étant jamais re-rendue, ses écouteurs
+ * vivent sur elle plutôt que sur le document.
+ *
+ * `groupes` : [{ cle, titre, blocs:[id…], classe }].
+ */
+function construireOngletsEcran(ecran, groupes) {
+ if(!ecran||ecran.querySelector('.cv-onglets'))return null;
+ const barre=document.createElement('div');
+ barre.className='cv-onglets';barre.setAttribute('role','tablist');
+ const paires=[];
+ groupes.forEach(function(groupe,i){
+   const panneau=document.createElement('div');
+   panneau.className='cv-panneau'+(groupe.classe?' '+groupe.classe:'');
+   panneau.id=ecran.id+'-p-'+groupe.cle;
+   panneau.setAttribute('role','tabpanel');
+   panneau.hidden=i!==0;
+   groupe.blocs.forEach(function(id){const bloc=document.getElementById(id);if(bloc)panneau.appendChild(bloc);});
+   const onglet=document.createElement('button');
+   onglet.type='button';onglet.className='cv-onglet'+(i?'':' est-actif');
+   onglet.setAttribute('role','tab');onglet.setAttribute('aria-controls',panneau.id);
+   onglet.setAttribute('aria-selected',i?'false':'true');onglet.tabIndex=i?-1:0;
+   onglet.textContent=groupe.titre;
+   barre.appendChild(onglet);paires.push([onglet,panneau]);
+ });
+ function activer(onglet){
+   paires.forEach(function(paire){
+     const actif=paire[0]===onglet;
+     paire[0].classList.toggle('est-actif',actif);
+     paire[0].setAttribute('aria-selected',actif?'true':'false');
+     paire[0].tabIndex=actif?0:-1;
+     paire[1].hidden=!actif;
+   });
+ }
+ barre.addEventListener('click',function(e){
+   const onglet=e.target.closest('.cv-onglet');if(onglet)activer(onglet);
+ });
+ barre.addEventListener('keydown',function(e){
+   const onglet=e.target.closest('.cv-onglet');
+   const pas={ArrowRight:1,ArrowLeft:-1,Home:'debut',End:'fin'}[e.key];
+   if(!onglet||pas===undefined)return;
+   const liste=paires.map(function(paire){return paire[0];});
+   const i=liste.indexOf(onglet);
+   const cible=pas==='debut'?liste[0]:pas==='fin'?liste[liste.length-1]:liste[(i+pas+liste.length)%liste.length];
+   e.preventDefault();activer(cible);cible.focus();
+ });
+ ecran.insertBefore(barre,ecran.firstChild);
+ paires.forEach(function(paire){ecran.appendChild(paire[1]);});
+ return barre;
+}
+
+/**
+ * Les pièces jointes rejoignent leur aperçu : on ne prépare pas un email d'un côté et ses
+ * documents de l'autre. La SECTION d'origine est déplacée telle quelle (mêmes champs, même zone
+ * de dépôt, mêmes identifiants) juste avant le bouton d'envoi, et perd son habillage de carte.
+ */
+function fusionnerPiecesJointes(idApercu, idPieces) {
+ const apercu=document.getElementById(idApercu);
+ const pieces=document.getElementById(idPieces);
+ if(!apercu||!pieces||pieces.classList.contains('cv-sous-carte'))return;
+ const titre=pieces.querySelector('h2');
+ if(titre){const h3=document.createElement('h3');h3.textContent=titre.textContent;titre.replaceWith(h3);}
+ pieces.classList.add('cv-sous-carte');
+ const envoi=apercu.querySelector(':scope > .ligne-action');
+ if(envoi)apercu.insertBefore(pieces,envoi);else apercu.appendChild(pieces);
+}
+
+/** Range des cartes déjà posées dans un panneau sous un conteneur commun, en tête du panneau. */
+function grouperCartesPanneau(idPanneau, classe, ids) {
+ const panneau=document.getElementById(idPanneau);
+ if(!panneau)return;
+ const groupe=document.createElement('div');groupe.className=classe;
+ ids.forEach(function(id){const bloc=document.getElementById(id);if(bloc)groupe.appendChild(bloc);});
+ panneau.insertBefore(groupe,panneau.firstChild);
+}
+
+/**
+ * Écran « Inviter un club » en onglets. Les deux dépliants d'origine restent construits (le repli
+ * sans JavaScript et l'assistant mobile s'appuient dessus) mais ne servent plus de contenant ici :
+ * vidés de leurs cartes, ils sont masqués.
+ */
+function preparerOngletsInvitation() {
+ const ecran=document.getElementById('ecran-invitation');
+ if(!ecran||ecran.querySelector('.cv-onglets'))return;
+ const modalites=document.getElementById('bloc-modalites');
+ if(modalites)modalites.querySelector('h2').textContent='Modalités d’inscription au tournoi';
+ fusionnerPiecesJointes('bloc-apercu-invitation','bloc-pieces-jointes-invitation');
+ fusionnerPiecesJointes('bloc-apercu-dossier-email','bloc-pieces-jointes-dossier');
+ const CARTES_INITIALE=['bloc-modalites','bloc-reponse','bloc-contacts-securite','bloc-surplace'];
+ const CARTES_FINAL=['bloc-parking','bloc-encadrement'];
+ construireOngletsEcran(ecran,[
+   {cle:'initiale',titre:'Invitation initiale',classe:'cv-invitation-initiale',
+    blocs:CARTES_INITIALE.concat(['bloc-apercu-invitation'])},
+   {cle:'final',titre:'Dossier final',classe:'cv-dossier-final',
+    blocs:CARTES_FINAL.concat(['bloc-apercu-dossier-email','bloc-dossier'])},
+   {cle:'clubs',titre:'Clubs invités',blocs:['bloc-clubs-invites']}
+ ]);
+ // Les cartes de préparation forment un bloc à elles seules : leur hauteur ne doit pas suivre
+ // celle de l'aperçu, bien plus haut, sinon un trou s'ouvre entre les rangées.
+ grouperCartesPanneau(ecran.id+'-p-initiale','cv-invitation-cartes',CARTES_INITIALE);
+ grouperCartesPanneau(ecran.id+'-p-final','cv-dossier-cartes',CARTES_FINAL);
+ // Les dépliants sont désormais vides : on les garde dans le DOM (ils restent les points
+ // d'accroche des autres modes d'affichage) et on les retire de l'œil.
+ ['bloc-invitation-initiale','bloc-dossier-final'].forEach(function(id){
+   const groupe=document.getElementById(id);if(groupe)groupe.hidden=true;
+ });
+}
+
 /** Déplace les contrôles d’origine : les événements et identifiants restent identiques. */
 function preparerOutilsCiel() {
  [['liste-equipes','.equipe-item','Rechercher une équipe'],['liste-suivi-clubs','.suivi-club-ligne','Rechercher un club']].forEach(function(def){
@@ -548,6 +658,7 @@ function preparerOutilsCiel() {
    document.getElementById('bloc-infos-tournoi').appendChild(affiche);
    preparerDateVerification();
  }
+ preparerOngletsInvitation();
  const generation=document.getElementById('bloc-generation');
  if(generation && !document.getElementById('cv-outils-planning')){
    const outils=document.createElement('details');outils.id='cv-outils-planning';outils.className='cv-options';
