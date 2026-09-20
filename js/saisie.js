@@ -21,6 +21,16 @@ let categorieActiveSaisie = '';
 let terrainActifSaisie = '';    // nom du grand terrain filtré ('' = tous les terrains)
 const CLE_CAT_SAISIE = 'r92_saisie_cat';
 const CLE_TERRAIN_SAISIE = 'r92_saisie_terrain';
+/* ⛔ AUCUNE MÉMORISATION POUR CE FILTRE. La page de saisie est protégée : le contrôle G.4 de
+   `sec-cle-stockage-dr-5b` exige que `localStorage` ne soit JAMAIS touché pendant son
+   parcours — une lecture au chargement suffisait à le mettre en défaut. Le choix vit donc
+   dans le module, pour la durée de la session : la table de marque reste ouverte toute la
+   journée, elle n'a pas besoin qu'on se souvienne d'elle d'une fois sur l'autre. */
+let statutSaisie = 'asaisir';  // 'asaisir' | 'termines' | 'tous'
+/* Ce que la passerelle protégée envoie de la Config. ⛔ Aujourd'hui `tournoi_nom` SEUL :
+   la charge utile est délibérément minimale (aucune donnée du tournoi avant la clé). Le
+   bandeau n'affiche donc que ce qu'il a réellement — il n'invente ni date ni lieu. */
+let globalSaisie = {};
 
 /* Points FFR du score détaillé (jeu à XV) — MIROIR de backend/Code.gs (POINTS_*), à garder synchrone :
    essai 5, transformation 2, pénalité 3, drop 3. Le backend reste la source de vérité (il recalcule). */
@@ -82,6 +92,7 @@ async function initSaisie() {
     matchs = data.matchs || [];
     grandsTerrains = lireGrandsTerrains(data.config);
     categoriesSaisie = (data.config && data.config.categories) || [];
+    globalSaisie = (data.config && data.config.global) || {};
     capacitesCat = (caps && caps.categories) || {};
     afficherMatchs();
     majHeureSaisie();
@@ -114,6 +125,7 @@ async function rafraichirSaisie() {
     matchs = data.matchs || [];
     grandsTerrains = lireGrandsTerrains(data.config);
     categoriesSaisie = (data.config && data.config.categories) || [];
+    globalSaisie = (data.config && data.config.global) || {};
     capacitesCat = (caps && caps.categories) || {};
     afficherMatchs();
     majHeureSaisie();
@@ -125,10 +137,124 @@ async function rafraichirSaisie() {
   }
 }
 
+/**
+ * Le bandeau d'identité : à qui appartient cette table de marque.
+ * ⛔ PAS d'avatar ni d'onglets de navigation, contrairement au bandeau de la page publique :
+ *    la personne à la table N'EST PAS l'organisateur connecté, et il n'y a rien d'autre à
+ *    visiter depuis cette page. Lui prêter une session qu'elle n'a pas serait mentir.
+ * ⛔ Ni date ni lieu : la passerelle ne les envoie pas (voir `globalSaisie`).
+ */
+function majEnteteSaisie() {
+  const entete = document.querySelector('.entete');
+  if (!entete) return;
+  const nom = String(globalSaisie.tournoi_nom || '').trim();
+  let marque = document.getElementById('cv-saisie-marque');
+  if (!marque) {
+    marque = document.createElement('div');
+    marque.id = 'cv-saisie-marque';
+    marque.className = 'cv-saisie-marque';
+    marque.innerHTML = '<img class="cv-saisie-logo" src="assets/logo-tournoi.svg" alt="" ' +
+      'onerror="this.style.display=\'none\'">' +
+      '<span class="cv-saisie-titres"><strong id="cv-saisie-nom"></strong>' +
+      '<span class="cv-saisie-role">Table de marque</span></span>';
+    entete.insertBefore(marque, entete.firstChild);
+  }
+  const cible = document.getElementById('cv-saisie-nom');
+  if (cible) cible.textContent = nom || 'Le tournoi';
+  marque.hidden = false;
+}
+
+/** Le pied : ce que la validation déclenche, et l'état de la liaison. */
+function majPiedSaisie() {
+  const carte = document.querySelector('main .carte');
+  if (!carte || document.getElementById('cv-saisie-pied')) return;
+  const pied = document.createElement('div');
+  pied.id = 'cv-saisie-pied';
+  pied.className = 'cv-saisie-pied';
+  pied.innerHTML = '<div class="cv-saisie-info"><strong>Saisissez tous les matchs pour mettre à jour ' +
+      'les classements.</strong><span>Les scores sont pris en compte immédiatement après validation.</span></div>' +
+    '<div class="cv-saisie-liaison"><span class="cv-saisie-point" aria-hidden="true"></span>' +
+      '<span id="cv-saisie-liaison-texte"></span></div>';
+  carte.appendChild(pied);
+}
+
+/**
+ * La barre de filtres : catégorie, grand terrain, statut, puis le compteur.
+ * ⛔ Les deux premiers blocs sont ceux du HTML de la passerelle, DÉPLACÉS — on ne les recrée
+ *    pas, et le dépôt backend n'est pas touché. Seuls le filtre de statut et le compteur sont
+ *    neufs, parce qu'ils n'existaient nulle part.
+ */
+function preparerBarreSaisie() {
+  if (document.getElementById('cv-saisie-filtres')) return;
+  const cat = document.getElementById('filtre-cat-saisie');
+  if (!cat || !cat.parentNode) return;
+  const barre = document.createElement('div');
+  barre.id = 'cv-saisie-filtres';
+  barre.className = 'cv-saisie-filtres';
+  cat.parentNode.insertBefore(barre, cat);
+  barre.appendChild(cat);
+  const terrain = document.getElementById('filtre-terrain-saisie');
+  if (terrain) barre.appendChild(terrain);
+
+  const statut = document.createElement('div');
+  statut.id = 'filtre-statut-saisie';
+  statut.className = 'mp-filtre';
+  statut.innerHTML = '<label class="mp-label" for="select-statut-saisie">Filtrer :</label>' +
+    '<select id="select-statut-saisie" class="r-input"></select>';
+  barre.appendChild(statut);
+
+  const compteur = document.createElement('div');
+  compteur.id = 'compteur-saisie';
+  compteur.className = 'cv-saisie-compteur';
+  compteur.setAttribute('role', 'status');
+  barre.appendChild(compteur);
+
+  // Posé ICI, une seule fois : la barre n'est jamais re-rendue, son écouteur survit.
+  statut.querySelector('select').addEventListener('change', function (e) {
+    statutSaisie = e.target.value;
+    afficherMatchs();
+  });
+}
+
+/**
+ * Pose ce que la page ne porte pas elle-même : sa feuille de style et son `viewport`.
+ *
+ * ⛔ POURQUOI DEPUIS LE SCRIPT, ET PAS DANS LE HTML. `SaisieProtegee.html` est FIGÉ : son
+ *    empreinte est vérifiée octet pour octet contre le déploiement validé (contrôle S.3 de
+ *    `backend-corr-acces-45min-demo`). Y ajouter une ligne imposerait un redéploiement Apps
+ *    Script. Le script, lui, est servi comme ressource et peut compléter l'entête.
+ * ⚠️ Le `viewport` manque à cette page alors que toutes les autres l'ont : sans lui, un
+ *    téléphone la rend en « mode bureau » à 980 px, dézoomée, et aucune règle @media mobile ne
+ *    se déclenche. La table de marque se tient pourtant debout au bord du terrain.
+ */
+function preparerEnteteDocument() {
+  const tete = document.head;
+  if (!tete) return;
+  if (!document.querySelector('meta[name="viewport"]')) {
+    const meta = document.createElement('meta');
+    meta.name = 'viewport';
+    meta.content = 'width=device-width, initial-scale=1.0';
+    tete.appendChild(meta);
+  }
+  if (!document.getElementById('cv-feuille-saisie')) {
+    const base = document.querySelector('link[rel="stylesheet"]');
+    const href = (base && base.getAttribute('href') || 'css/styles.css').replace(/styles\.css.*$/, 'saisie.css');
+    const lien = document.createElement('link');
+    lien.id = 'cv-feuille-saisie';
+    lien.rel = 'stylesheet';
+    lien.href = href;
+    tete.appendChild(lien);
+  }
+}
+
 /** Affiche l'heure de la dernière mise à jour des données. */
 function majHeureSaisie() {
+  const quand = new Date().toLocaleTimeString('fr-FR');
   const el = document.getElementById('maj-saisie');
-  if (el) el.textContent = 'Mis à jour à ' + new Date().toLocaleTimeString('fr-FR');
+  if (el) el.textContent = 'Mis à jour à ' + quand;
+  // Le pied redit la même chose, à l'endroit où l'on cherche « est-ce que ça marche ? ».
+  const liaison = document.getElementById('cv-saisie-liaison-texte');
+  if (liaison) liaison.innerHTML = '<strong>Connecté</strong> · dernière actualisation : ' + echapper(quand);
 }
 
 /* comparerCategorie() est désormais dans commun.js (partagé avec tournoi.js). */
@@ -172,33 +298,70 @@ function lireGrandsTerrains(config) {
  * avec ses numéros de mini-terrains en rappel). Ne propose que les grands terrains dont au
  * moins un mini-terrain a des matchs. Masqué s'il y a moins de deux grands terrains à choisir.
  */
+/**
+ * Les terrains proposés au filtre, pour LA CATÉGORIE AFFICHÉE.
+ *
+ * ⭐ LE FILTRE COÏNCIDE AVEC LA RÉPARTITION. Chaque catégorie a ses terrains (U10 sur 1 et 2,
+ *    U12 sur 3 et 4…) : proposer les terrains de tout le tournoi conduisait à choisir un
+ *    terrain où la catégorie affichée ne joue pas, donc à une liste vide sans rien qui
+ *    l'explique. On ne propose que ce qui existe pour elle.
+ * ⭐ ET IL NE DISPARAÎT PLUS FAUTE DE RÉPARTITION. Tant que l'admin n'a pas APPLIQUÉ la
+ *    répartition, `repartition_grands_terrains` est absente et les grands terrains n'ont pas
+ *    de nom : le filtre se masquait entièrement, alors que les matchs, eux, sont bien répartis
+ *    sur des terrains numérotés. Il se rabat donc sur ces terrains de jeu.
+ * @return {{cle:string, libelle:string}[]} `cle` = nom du grand terrain, ou « terrain:N ».
+ */
+function terrainsProposesSaisie() {
+  const utilises = {};
+  matchs.forEach(function (m) {
+    if (m.categorie === categorieActiveSaisie) utilises[String(m.terrain)] = true;
+  });
+  const noms = Object.keys(grandsTerrains).filter(function (n) {
+    return (grandsTerrains[n] || []).some(function (t) { return utilises[String(t)]; });
+  });
+  if (noms.length) {
+    return noms.map(function (n) {
+      // Les mini-terrains RÉELLEMENT employés par cette catégorie : annoncer les autres
+      // ferait attendre des matchs qui ne viendront pas.
+      const minis = (grandsTerrains[n] || []).filter(function (t) { return utilises[String(t)]; });
+      return { cle: n, libelle: n + ' (terrain' + (minis.length > 1 ? 's' : '') + ' ' + minis.join(', ') + ')' };
+    });
+  }
+  return Object.keys(utilises)
+    .sort(function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); })
+    .map(function (t) { return { cle: 'terrain:' + t, libelle: 'Terrain ' + t }; });
+}
+
+/** Remplit le menu des terrains et fixe `terrainActifSaisie`. Masqué s'il n'y a pas de choix. */
 function peuplerFiltreTerrain() {
   const bloc = document.getElementById('filtre-terrain-saisie');
   const sel = document.getElementById('select-terrain-saisie');
   if (!bloc || !sel) return;
 
-  const utilises = {};
-  matchs.forEach(function (m) { utilises[String(m.terrain)] = true; });
-  const noms = Object.keys(grandsTerrains).filter(function (n) {
-    return (grandsTerrains[n] || []).some(function (t) { return utilises[String(t)]; });
-  });
-
-  bloc.hidden = (noms.length < 2);
+  const options = terrainsProposesSaisie();
+  bloc.hidden = (options.length < 2);
   if (bloc.hidden) { terrainActifSaisie = ''; return; }
 
+  // ⛔ Un terrain mémorisé qui n'existe pas pour CETTE catégorie ne doit pas la vider :
+  //    on retombe sur « Tous les terrains ».
   const memo = localStorage.getItem(CLE_TERRAIN_SAISIE) || '';
-  terrainActifSaisie = (noms.indexOf(memo) >= 0) ? memo : '';
+  terrainActifSaisie = options.some(function (o) { return o.cle === memo; }) ? memo : '';
 
-  sel.innerHTML = '<option value="">Tous les terrains</option>' + noms.map(function (n) {
-    const minis = (grandsTerrains[n] || []).join(', ');
-    return '<option value="' + echapper(n) + '"' + (n === terrainActifSaisie ? ' selected' : '') + '>' +
-      echapper(n) + ' (terrains ' + echapper(minis) + ')</option>';
+  sel.innerHTML = '<option value="">Tous les terrains</option>' + options.map(function (o) {
+    return '<option value="' + echapper(o.cle) + '"' + (o.cle === terrainActifSaisie ? ' selected' : '') +
+      '>' + echapper(o.libelle) + '</option>';
   }).join('');
 }
 
-/** Applique le filtre « grand terrain » à une liste de matchs (liste inchangée si « Tous »). */
+/** Applique le filtre « terrain » à une liste de matchs (liste inchangée si « Tous »).
+ *  Accepte les deux formes : un grand terrain nommé, ou « terrain:N » (repli sans répartition). */
 function filtrerParTerrain(liste) {
-  if (!terrainActifSaisie || !grandsTerrains[terrainActifSaisie]) return liste;
+  if (!terrainActifSaisie) return liste;
+  if (terrainActifSaisie.indexOf('terrain:') === 0) {
+    const num = terrainActifSaisie.slice('terrain:'.length);
+    return liste.filter(function (m) { return String(m.terrain) === num; });
+  }
+  if (!grandsTerrains[terrainActifSaisie]) return liste;
   const ok = {};
   grandsTerrains[terrainActifSaisie].forEach(function (t) { ok[String(t)] = true; });
   return liste.filter(function (m) { return ok[String(m.terrain)]; });
@@ -257,7 +420,11 @@ function phaseAccordeon(titre, liste, replie, resume) {
   return '<details class="phase-accordeon"' + (replie ? '' : ' open') + '>' +
     '<summary class="planning-phase phase-sommaire">' + titre +
       ' <span class="phase-resume">(' + resume + ')</span></summary>' +
-    '<div class="phase-contenu">' + cartesMatchs(liste) + '</div>' +
+    // ⛔ `.phase-contenu` est une GRILLE, faite pour ranger les cartes en colonnes. Un tableau
+    //    y devient un élément de grille et se retrouve enfermé dans une seule piste — mesuré :
+    //    663 px au lieu des 1 342 disponibles, colonne « Action » coupée. On la neutralise.
+    '<div class="phase-contenu' + (listeTableauPossible(liste) ? ' est-tableau' : '') + '">' +
+      rendreMatchs(liste) + '</div>' +
   '</details>';
 }
 
@@ -322,11 +489,19 @@ function afficherMatchs() {
     return;
   }
 
+  preparerEnteteDocument(); // feuille de style et viewport, absents du HTML figé
+  majEnteteSaisie();      // le bandeau d'identité du tournoi
+  preparerBarreSaisie();  // la barre, construite une seule fois
   peuplerFiltreCat();     // remplit le menu + fixe categorieActiveSaisie
+  // ⛔ APRÈS la catégorie, jamais avant : les terrains proposés dépendent d'elle.
   peuplerFiltreTerrain(); // remplit le menu + fixe terrainActifSaisie
 
-  const ms = filtrerParTerrain(
+  // Le périmètre de la VUE (catégorie + grand terrain) sert de base au compteur : le filtre de
+  // statut dit ce qu'on regarde dedans, il ne doit pas changer ce qu'on compte.
+  const base = filtrerParTerrain(
     matchs.filter(function (m) { return m.categorie === categorieActiveSaisie; }));
+  peuplerFiltreStatut(base);
+  const ms = filtrerParStatut(base);
   const matin = ms.filter(function (m) { return String(m.phase) !== 'classement'; });
   const aprem = ms.filter(function (m) { return String(m.phase) === 'classement'; });
 
@@ -355,14 +530,130 @@ function afficherMatchs() {
   }
 
   if (!matin.length && !aprem.length) {
-    html = terrainActifSaisie
-      ? '<p class="vide">Aucun match pour cette catégorie sur « ' + echapper(terrainActifSaisie) +
-        ' ». Choisis « Tous les terrains » ou une autre catégorie.</p>'
-      : '<p class="vide">Aucun match pour cette catégorie.</p>';
+    // On dit CE QUI a vidé la liste : le statut choisi d'abord, le terrain ensuite. Sans cela,
+    // « Aucun match » laisse croire qu'il n'y en a pas, alors qu'ils sont juste filtrés.
+    const nomStatut = (STATUTS_SAISIE.find(function (s) { return s.cle === statutSaisie; }) || {}).libelle;
+    html = (statutSaisie !== 'tous')
+      ? '<p class="vide">Aucun match « ' + echapper(nomStatut) + ' » ici. Choisis « Tous » pour voir le reste.</p>'
+      : (terrainActifSaisie
+        ? '<p class="vide">Aucun match pour cette catégorie sur « ' + echapper(terrainActifSaisie) +
+          ' ». Choisis « Tous les terrains » ou une autre catégorie.</p>'
+        : '<p class="vide">Aucun match pour cette catégorie.</p>');
   }
 
   zone.innerHTML = html;
+  majPiedSaisie();
   initialiserDetailEtEcarts(); // totaux en points + alertes « 5 essais d'écart » des cartes rendues
+}
+
+/* ==========================================================================
+   LA TABLE DE MARQUE EN TABLEAU
+   --------------------------------------------------------------------------
+   ⛔ LE CONTRAT DE VALIDATION NE CHANGE PAS, il change seulement de forme. Le
+   gestionnaire de clic (plus bas dans ce fichier) cherche `.bouton-valider`, puis
+   remonte à `.match[data-id]`, y lit `input.score` (A puis B) et écrit dans
+   `.message-form`. Une ligne de tableau porte exactement les mêmes repères : c'est
+   ce qui permet de refaire la mise en page SANS toucher à l'envoi des scores.
+   ⛔ La saisie DÉTAILLÉE (essais, transformations, pénalités, drops) ne tient pas dans
+   une ligne : une catégorie qui l'emploie reste en cartes. On ne perd pas une fonction
+   métier pour une question de mise en page.
+   ========================================================================== */
+
+/** Vrai si toute la liste peut se saisir en deux champs — donc s'afficher en tableau. */
+function listeTableauPossible(liste) {
+  return liste.every(function (m) { return !tireAuBut(m.categorie) && !estEnAttente(m); });
+}
+
+/** Une ligne de match : mêmes repères que la carte, une autre mise en page. */
+function ligneMatchTableau(m) {
+  const termine = estTermine(m.statut);
+  const sa = (m.score_A === '' || m.score_A == null) ? '' : m.score_A;
+  const sb = (m.score_B === '' || m.score_B == null) ? '' : m.score_B;
+  const champ = function (eqId, valeur) {
+    return '<input class="r-input score" aria-label="Score de ' + echapper(nomEquipe(eqId)) +
+      '" type="number" min="0" inputmode="numeric" value="' + echapper(String(valeur)) + '"' +
+      (termine ? ' disabled' : '') + '>';
+  };
+  const arbitre = libelleArbitreScf(m, nomEquipe);
+  const cell = function (libelle, contenu, classe) {
+    return '<td class="' + (classe || '') + '" data-libelle="' + echapper(libelle) + '">' + contenu + '</td>';
+  };
+  return '<tr class="match' + (termine ? ' match-termine' : '') +
+      (estMatchCoupe(m) ? ' match-coupe' : '') +
+      (m.demo_a_saisir === true ? ' match-demo' : '') + '" data-id="' + echapper(m.id_match) + '">' +
+    cell('Heure', echapper(m.heure_debut), 'ts-heure') +
+    cell('Terrain', 'Terrain ' + echapper(String(m.terrain)), 'ts-terrain') +
+    cell('Poule', echapper(String(m.poule == null ? '' : m.poule)), 'ts-poule') +
+    cell('Équipe 1', '<strong>' + echapper(nomEquipe(m.equipe_A)) + '</strong>', 'ts-eq ts-eq-a') +
+    cell('Score', champ(m.equipe_A, sa) + '<span class="ts-tiret" aria-hidden="true">–</span>' +
+         champ(m.equipe_B, sb), 'ts-score') +
+    cell('Équipe 2', '<strong>' + echapper(nomEquipe(m.equipe_B)) + '</strong>', 'ts-eq ts-eq-b') +
+    cell('Statut', (termine ? '<span class="badge-ok">✓ terminé</span>' : 'À saisir') +
+         (arbitre ? '<span class="arbitre-tag">🧑‍⚖️ ' + echapper(arbitre) + '</span>' : ''), 'ts-statut') +
+    cell('Action', '<button class="bouton bouton-valider" type="button">' +
+         (termine ? 'Corriger' : 'Valider') + '</button>' +
+         '<div class="ecart-essais" hidden></div><div class="message-form"></div>', 'ts-action') +
+    '</tr>';
+}
+
+/** Le tableau complet d'une phase. Même tri que les cartes. */
+function tableauMatchs(liste) {
+  const tri = liste.slice().sort(function (a, b) {
+    const priorite = Number(b.demo_a_saisir === true) - Number(a.demo_a_saisir === true);
+    return priorite || String(a.heure_debut).localeCompare(String(b.heure_debut));
+  });
+  return '<div class="table-scroll"><table class="table-saisie"><thead><tr>' +
+    ['Heure', 'Terrain', 'Poule', 'Équipe 1', 'Score', 'Équipe 2', 'Statut', 'Action']
+      .map(function (t) { return '<th scope="col">' + t + '</th>'; }).join('') +
+    '</tr></thead><tbody>' + tri.map(ligneMatchTableau).join('') + '</tbody></table></div>';
+}
+
+/** Tableau si la liste s'y prête, cartes sinon. Un seul point de décision. */
+function rendreMatchs(liste) {
+  return listeTableauPossible(liste) ? tableauMatchs(liste) : cartesMatchs(liste);
+}
+
+/* --------------------------------------------------------------------------
+   FILTRE PAR STATUT — « À saisir », « Terminés », « Tous »
+   -------------------------------------------------------------------------- */
+
+const STATUTS_SAISIE = [
+  { cle: 'asaisir', libelle: 'À saisir' },
+  { cle: 'termines', libelle: 'Terminés' },
+  { cle: 'tous', libelle: 'Tous' }
+];
+
+/** Applique le filtre de statut. ⛔ Un match « en attente » n'est jamais « à saisir ». */
+function filtrerParStatut(liste) {
+  if (statutSaisie === 'termines') return liste.filter(function (m) { return estTermine(m.statut); });
+  if (statutSaisie === 'asaisir') {
+    return liste.filter(function (m) { return !estTermine(m.statut) && !estEnAttente(m); });
+  }
+  return liste;
+}
+
+/**
+ * Remplit le menu de statut et son compteur. Le libellé porte le NOMBRE pour chaque entrée :
+ * « À saisir (6 matchs) » dit d'un coup d'œil ce qui reste, sans avoir à choisir pour le voir.
+ */
+function peuplerFiltreStatut(base) {
+  const sel = document.getElementById('select-statut-saisie');
+  if (!sel) return;
+  const total = base.length;
+  const aSaisir = base.filter(function (m) { return !estTermine(m.statut) && !estEnAttente(m); }).length;
+  const termines = base.filter(function (m) { return estTermine(m.statut); }).length;
+  const nb = { asaisir: aSaisir, termines: termines, tous: total };
+  sel.innerHTML = STATUTS_SAISIE.map(function (s) {
+    return '<option value="' + s.cle + '"' + (s.cle === statutSaisie ? ' selected' : '') + '>' +
+      s.libelle + ' (' + nb[s.cle] + ' match' + (nb[s.cle] > 1 ? 's' : '') + ')</option>';
+  }).join('');
+  const compteur = document.getElementById('compteur-saisie');
+  if (compteur) {
+    compteur.innerHTML = aSaisir
+      ? '<strong>' + aSaisir + ' match' + (aSaisir > 1 ? 's' : '') + '</strong><span>à compléter</span>'
+      : '<strong>Tout est saisi</strong><span>' + total + ' match' + (total > 1 ? 's' : '') + '</span>';
+    compteur.classList.toggle('est-complet', aSaisir === 0);
+  }
 }
 
 /** Titre de l'accordéon après-midi, selon le format des matchs de la catégorie affichée. */

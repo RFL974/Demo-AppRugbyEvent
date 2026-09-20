@@ -103,6 +103,7 @@ function appliquerDonneesSaisie(data) {
   matchs = data.matchs || [];
   grandsTerrains = lireGrandsTerrains(data.config);
   categoriesSaisie = (data.config && data.config.categories) || [];
+  globalSaisie = (data.config && data.config.global) || {};
   capacitesCat = (data.capacites && data.capacites.categories) || {};
   afficherMatchs();
   majHeureSaisie();

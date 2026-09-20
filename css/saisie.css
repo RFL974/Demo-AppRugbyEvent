@@ -1,0 +1,101 @@
+/* ==========================================================================
+   TABLE DE MARQUE — feuille propre à la page de saisie des scores
+   --------------------------------------------------------------------------
+   ⭐ POURQUOI UNE FEUILLE À PART. La passerelle protégée ne sert que `styles.css`,
+   qui porte l'héritage du thème sombre ; `theme-r92.css` est écrit pour
+   l'administration et ne lui est pas servi. Les composants de cet écran vivent donc
+   ici : rien n'est ajouté à `styles.css`, rien n'est emprunté à l'admin.
+   ⛔ Les variables `--cv-*` viennent de `tokens.css`, importé par `styles.css`.
+   ========================================================================== */
+
+/* --- Bandeau d'identité : quel tournoi, et quel rôle a cette page --------- */
+.cv-saisie-marque { display:flex; align-items:center; gap:14px; margin-bottom:16px; padding:16px 20px;
+  border-radius:14px; background:var(--cv-texte); color:#fff; }
+.cv-saisie-logo { width:34px; height:34px; flex:0 0 auto; }
+.cv-saisie-titres { display:flex; flex-direction:column; gap:2px; min-width:0; }
+.cv-saisie-titres strong { font-size:17px; font-weight:650; letter-spacing:-.01em; overflow-wrap:anywhere; }
+.cv-saisie-role { font-size:12px; opacity:.75; text-transform:uppercase; letter-spacing:.06em; }
+
+/* --- La barre de filtres : catégorie, grand terrain, statut, compteur ----- */
+.cv-saisie-filtres { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));
+  gap:16px; align-items:end; margin:18px 0 22px; padding:18px 20px;
+  border:1px solid var(--cv-bordure); border-radius:14px; background:#f8fbfe; }
+.cv-saisie-filtres .mp-filtre { display:flex; flex-direction:column; gap:7px; margin:0; min-width:0; }
+.cv-saisie-filtres .mp-label { font-size:12px; font-weight:600; color:var(--cv-secondaire); }
+.cv-saisie-filtres select { width:100%; min-height:44px; }
+.cv-saisie-compteur { display:flex; flex-direction:column; gap:2px; justify-self:end; padding:12px 18px;
+  border-radius:12px; background:var(--cv-selection); color:var(--cv-action); text-align:right; }
+.cv-saisie-compteur strong { font-size:17px; font-weight:700; }
+.cv-saisie-compteur span { font-size:12px; color:var(--cv-secondaire); }
+.cv-saisie-compteur.est-complet { background:#e9f6ef; color:var(--cv-succes); }
+
+/* --- Le tableau ----------------------------------------------------------- */
+/* Le conteneur de phase est une grille à deux colonnes pour les cartes ; le tableau, lui, veut
+   toute la largeur d'un seul tenant.
+   ⚠️ La règle à neutraliser est `#liste-matchs .phase-contenu` (styles.css, au-dessus de 900px) :
+   un identifiant, donc plus spécifique que deux classes. On la reprend telle quelle en y
+   ajoutant la nôtre — sinon la déclaration ne gagne pas, et le tableau reste enfermé dans
+   une piste de grille (mesuré : 663 px au lieu de 1 342). */
+#liste-matchs .phase-contenu.est-tableau { display:block; }
+
+.table-saisie { width:100%; border-collapse:separate; border-spacing:0; font-size:14px; }
+.table-saisie thead th { padding:14px 12px; border-bottom:1px solid var(--cv-bordure);
+  background:#f4f9fd; color:var(--cv-secondaire); font-size:12px; font-weight:600; text-align:left;
+  white-space:nowrap; }
+.table-saisie td { padding:14px 12px; border-bottom:1px solid var(--cv-bordure);
+  color:var(--cv-texte); vertical-align:middle; }
+.table-saisie tbody tr:last-child td { border-bottom:0; }
+.table-saisie tbody tr:hover td { background:#f8fbfe; }
+.ts-heure, .ts-terrain, .ts-poule { color:var(--cv-secondaire); white-space:nowrap; }
+.ts-eq { font-weight:650; }
+.ts-eq-b { text-align:right; }
+.ts-score { white-space:nowrap; text-align:center; }
+.ts-score .score { width:64px; min-height:44px; text-align:center; font-size:16px; font-weight:650; }
+.ts-tiret { margin:0 8px; color:var(--cv-secondaire); }
+.ts-statut { white-space:nowrap; color:var(--cv-secondaire); font-size:13px; }
+.ts-action { text-align:right; white-space:nowrap; }
+.ts-action .bouton-valider { margin:0; }
+.ts-action .message-form:empty { display:none; }
+.ts-action .message-form { margin-top:6px; font-size:12px; white-space:normal; }
+/* Un match laissé à saisir pour la démonstration : même repère que sur les cartes. */
+.table-saisie tr.match-demo td { background:#fff8e8; }
+
+/* --- Pied : ce que la validation déclenche, et l'état de la liaison ------- */
+.cv-saisie-pied { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));
+  gap:18px; align-items:center; margin-top:24px; }
+.cv-saisie-info { display:flex; flex-direction:column; gap:4px; padding:16px 18px;
+  border:1px solid #bcd8ef; border-radius:12px; background:var(--cv-selection); }
+.cv-saisie-info strong { font-size:14px; color:var(--cv-action); }
+.cv-saisie-info span { font-size:13px; color:var(--cv-secondaire); line-height:1.5; }
+.cv-saisie-liaison { display:flex; align-items:center; gap:10px; justify-self:end; padding:14px 18px;
+  border:1px solid var(--cv-bordure); border-radius:12px; background:#fff;
+  font-size:13px; color:var(--cv-secondaire); }
+.cv-saisie-point { width:10px; height:10px; border-radius:50%; background:var(--cv-succes); flex:0 0 auto; }
+
+/* --------------------------------------------------------------------------
+   TÉLÉPHONE — le tableau redevient des cartes
+   ⭐ La table de marque se tient debout, au bord du terrain, souvent sur un
+   téléphone. Un tableau à huit colonnes y obligerait à défiler LATÉRALEMENT pour
+   atteindre les champs de score et le bouton Valider : le geste le plus fréquent
+   deviendrait le plus risqué. Les lignes se déplient donc en cartes — même DOM,
+   mêmes identifiants, donc la validation ne change pas d'un pouce.
+   -------------------------------------------------------------------------- */
+@media (max-width:767px) {
+  .table-saisie, .table-saisie tbody, .table-saisie tr, .table-saisie td { display:block; width:100%; }
+  .table-saisie thead { position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); }
+  .table-saisie tr.match { margin-bottom:14px; border:1px solid var(--cv-bordure); border-radius:12px;
+    background:#fff; overflow:hidden; }
+  .table-saisie td { display:flex; align-items:center; justify-content:space-between; gap:14px;
+    padding:11px 14px; border-bottom:1px solid var(--cv-bordure); text-align:left; }
+  .table-saisie td::before { content:attr(data-libelle); flex:0 0 auto; font-size:12px;
+    font-weight:600; color:var(--cv-secondaire); }
+  .table-saisie td:last-child { border-bottom:0; }
+  .ts-eq-b { text-align:left; }
+  .ts-score { justify-content:flex-end; }
+  .ts-score .score { width:72px; }
+  .ts-action { display:block; }
+  .ts-action::before { display:block; margin-bottom:8px; }
+  .ts-action .bouton-valider { width:100%; }
+  .cv-saisie-compteur { justify-self:stretch; text-align:left; }
+  .cv-saisie-liaison { justify-self:stretch; }
+}
