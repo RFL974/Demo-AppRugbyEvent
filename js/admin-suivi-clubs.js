@@ -395,7 +395,7 @@ function afficherSuiviClubs() {
         '<div class="suivi-cellule" data-label="Repas"><span>' + echapper(suiviLibellePrestation('repas', e)) + '</span></div>' +
         '<div class="suivi-cellule" data-label="Goûter"><span>' + echapper(suiviLibellePrestation('gouter', e)) + '</span></div>' +
         '<div class="suivi-cellule" data-label="Paiement">' + suiviPaiementHtml(club, e) + '</div>' +
-        '<div class="suivi-club-actions">' + suiviActionsHtml(club, e) + '</div></article>';
+        '<div class="suivi-club-actions"><details name="detail-club"><summary>Ouvrir</summary><div class="cv-detail-club"><button type="button" class="bouton-lien cv-fermer-club" aria-label="Fermer la fiche du club">Fermer ×</button><h3>' + echapper(club.club_nom || 'Club') + '</h3><p>' + echapper(club.club_contact_email || 'Aucun email') + '</p>' + suiviPaiementHtml(club, e) + suiviActionsHtml(club, e) + '</div></details></div></article>';
     }).join('');
 }
 

@@ -338,13 +338,16 @@ function construireDossier(g, categories, club, ctx) {
     accueilPersonnalise(g, club),                               //  2. le mot d'accueil
     barrePartage(g, ctx),                                       //  2 bis. partager à ses éducateurs
     sectionJournee(g, catsFormat),                              //  3. LE JOUR J : la journée en un coup d'œil
+    '<div class="cv-dossier-grid"><div>',
     sectionMesEquipes(ctx),                                     //  3 bis. … avec QUI (équipes, poules)
     sectionMonPlanning(ctx, catsFormat),                        //  3 ter. … et QUAND (matchs du club)
+    '</div><aside>',
     sectionInfosPratiques(g),                                   //  4.   … où, et ce qu'on y trouve
     sectionParking(g),                                          //  5.   … comment y accéder
     sectionContact(g),                                          //  6.   … qui appeler (remonté : c'était en bas)
     sectionSecurite(g),                                         //  7.   … et en cas de pépin
     sectionSuivi(g, cats),                                      //  8.   … suivre les scores sur place
+    '</aside></div>',
     sectionCategories(catsFormat, filtreApplique),              //  9. RAPPEL SPORTIF (déjà lu à l'invitation)
     sectionEncadrement(g),                                      // 10. ce qu'on attend du club
     sectionMonEngagement(g, club, ctx),                         // 10 bis. ce que le club a déclaré

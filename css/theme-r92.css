@@ -44,7 +44,8 @@ body.theme-clair { color:var(--cv-texte); background:var(--cv-fond); padding:24p
 .theme-clair .ea-verdict { color:var(--cv-texte); }
 .theme-clair .ea-verdict svg { width:20px; height:20px; }
 .theme-clair .champ-reglage { align-items:start; flex-direction:column; gap:6px; padding:12px 0; }
-.theme-clair .champ-reglage input { width:100%; text-align:left; }
+.theme-clair .champ-reglage input:not([type=checkbox]):not([type=radio]) { width:100%; text-align:left; }
+.theme-clair .champ-reglage input[type=checkbox],.theme-clair .champ-reglage input[type=radio] { min-height:0; width:18px; height:18px; padding:0; flex-shrink:0; }
 .theme-clair .champ-reglage .fin-groupe { display:flex; gap:16px; width:100%; align-items:center; }
 .cv-categories-comparaison { width:100%; border-collapse:collapse; margin-bottom:24px; font-size:14px; }
 .cv-categories-comparaison th,.cv-categories-comparaison td { padding:12px; border-bottom:1px solid var(--cv-bordure); text-align:left; }
@@ -67,6 +68,26 @@ body.theme-clair { color:var(--cv-texte); background:var(--cv-fond); padding:24p
 .suivi-club-ligne { border-radius:0; border-width:0 0 1px; margin:0; padding:12px; }
 .suivi-club-actions details { width:100%; }
 .suivi-club-actions summary { color:var(--cv-action); cursor:pointer; padding:8px; }
+.cv-terrains { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; align-items:start; }
+.cv-terrains-plan { background:var(--cv-fond); border-radius:12px; padding:20px; min-height:300px; }
+.suivi-cellule[data-label="Paiement"] > small:nth-of-type(n+2) { display:none; }
+.cv-detail-club { padding:20px; background:#fff; border:1px solid var(--cv-bordure); border-radius:12px; display:flex; flex-direction:column; gap:12px; }
+.suivi-club-actions details[open] { position:relative; }
+.suivi-club-actions details[open] .cv-detail-club { position:fixed; right:32px; top:104px; bottom:24px; width:360px; max-width:calc(100vw - 24px); overflow-y:auto; z-index:40; box-shadow:var(--cv-ombre); }
+.theme-clair .suivi-clubs-entete,.theme-clair .suivi-club-ligne { grid-template-columns:minmax(145px,1.3fr) repeat(4,minmax(85px,1fr)) 75px; gap:8px; }
+.cv-publication { display:grid; grid-template-columns:1fr 1fr; gap:24px; align-items:start; }
+.cv-publication > * { min-width:0; }
+.cv-publication .publication-acces { margin-top:0; }
+.theme-clair #form-choix-categories { display:flex; flex-wrap:wrap; }
+.theme-clair .choix-categories { gap:8px; }
+.theme-clair .choix-categories label { min-width:64px; min-height:44px; padding:8px; font-size:13px; border-color:var(--cv-bordure); }
+.theme-clair .choix-categories label:has(:checked) { background:var(--cv-selection); border-color:var(--cv-action); }
+.theme-clair #bloc-sponsors-liste:has(#form-sponsor:not([hidden])) { display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+.theme-clair #bloc-sponsors-liste > :not(#liste-sponsors):not(#form-sponsor) { grid-column:1/-1; }
+.theme-clair #form-sponsor { margin-top:0; }
+@media (max-width:1199px) { .cv-terrains,.cv-publication { grid-template-columns:1fr; } .theme-clair .suivi-club-ligne { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media (max-width:640px) { .theme-clair .suivi-club-ligne { grid-template-columns:1fr; } }
+@media (max-width:900px) { .theme-clair #bloc-sponsors-liste:has(#form-sponsor:not([hidden])) { display:block; } .suivi-club-actions details[open] .cv-detail-club { position:static; width:auto; box-shadow:none; max-height:none; } }
 @media (max-width:1099px) { body.theme-clair { padding:20px; } .cv-infos,.cv-horaires { grid-template-columns:1fr; } .cv-infos #bloc-infos-tournoi,.cv-infos #bloc-cadre-tournoi,.cv-infos #bloc-choix-categories { grid-column:auto; grid-row:auto; } .cv-horaires-resume { position:static; } }
 @media (max-width:767px) { body.theme-clair { padding:12px; } .theme-clair .carte { padding:18px; } #form-infos-tournoi { grid-template-columns:1fr; } .theme-clair .grille-reglages { grid-template-columns:1fr; } }
 /* --------------------------------------------------------------------------

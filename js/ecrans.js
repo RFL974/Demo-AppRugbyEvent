@@ -243,6 +243,14 @@ function construireEcrans() {
     if (btn) ecransActiver(btn.getAttribute('data-ecran'));
   });
 
+  zone.addEventListener('click', function (evenement) {
+    const bouton = evenement.target.closest('.cv-fermer-club');
+    if (!bouton) return;
+    const detail = bouton.closest('details');
+    detail.open = false;
+    detail.querySelector('summary').focus();
+  });
+
   // Toute saisie ou clic dans un écran peut changer son état (champ modifié,
   // répartition calculée, enregistrement réussi…) : on réévalue les pastilles
   // juste après, une fois les écouteurs métier d'admin.js passés.
@@ -328,7 +336,9 @@ function ecransActiver(id, opt) {
   });
   const titreCiel = document.getElementById('cv-titre-page');
   if (titreCiel) titreCiel.textContent = ECRANS_DEF[idx].titre;
+  const menuEtaitOuvert = document.body.classList.contains("cv-menu-ouvert");
   fermerMenuCiel();
+  if (menuEtaitOuvert && titreCiel) titreCiel.focus();
   ecransMajPastilles();
   // ⭐ ARRIVÉE SUR UNE ÉTAPE — point de passage UNIQUE, partagé avec `allerA` (assistant.js) :
   //   il porte À LA FOIS le chargement différé des lectures de l'écran et le rattrapage

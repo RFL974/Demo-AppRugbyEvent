@@ -51,7 +51,7 @@ function afficherHoraires(global) {
   // Carte simple (non repliable : chaque étape a désormais son propre écran,
   // plier n'avait plus de raison d'être).
   return (
-    '<section class="carte">' +
+    '<div class="cv-horaires"><section class="carte">' +
       '<h2>Horaires de la journée</h2>' +
       '<form id="form-horaires" class="form-reglages">' +
         champHeure('heure_debut', 'Heure de début des matchs', val('heure_debut')) +
@@ -89,7 +89,13 @@ function afficherHoraires(global) {
           '<span id="message-horaires" class="message-form"></span>' +
         '</div>' +
       '</form>' +
-    '</section>'
+    '</section><aside class="carte cv-horaires-resume"><h2>Repères de la journée</h2>' +
+      '<p class="note-generation">Horaires enregistrés. La pause et la fin suivent les réglages du tournoi.</p><dl>' +
+      '<dt>Accueil des équipes</dt><dd data-horaire="heure_rdv">' + val('heure_rdv', '—') + '</dd>' +
+      '<dt>Premiers matchs</dt><dd data-horaire="heure_debut">' + val('heure_debut', '—') + '</dd>' +
+      '<dt>Début de la pause déjeuner</dt><dd data-horaire="pause_dejeuner_debut">' + val('pause_dejeuner_debut', '—') + '</dd>' +
+      '<dt>Fin des matchs</dt><dd data-horaire="heure_fin">' + val('heure_fin', '—') + '</dd>' +
+      '</dl><p class="note-generation">La fin communiquée aux clubs inclut la marge prévue après le dernier match.</p></aside></div>'
   );
 }
 
@@ -197,6 +203,9 @@ async function onEnregistrerHoraires(evenement) {
     await ecrireAdmin('enregistrerHoraires', data);
     // On met à jour la config gardée en mémoire.
     configCourante.global = Object.assign({}, configCourante.global, data);
+    document.querySelectorAll('[data-horaire]').forEach(function (repere) {
+      repere.textContent = data[repere.getAttribute('data-horaire')] || '—';
+    });
     // Valeurs désormais ENREGISTRÉES → l'assistant reprend sa photo de référence.
     if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
     majEtatAvancement(); // le fil « Où en suis-je ? » suit les horaires
@@ -224,8 +233,11 @@ function afficherCategories(categories) {
 
   html += '<h2 style="margin:24px 0 12px;">Catégories</h2>';
   if (categories && categories.length > 0) {
-    categories.forEach(function (cat) {
-      html += formulaireCategorie(cat);
+    html += '<div class="table-scroll"><table class="cv-categories-comparaison"><caption>Vue d’ensemble des réglages enregistrés</caption><thead><tr><th>Catégorie</th><th>Effectif</th><th>Durée d’une période</th><th>Récupération</th><th>Terrains</th></tr></thead><tbody>' + categories.map(function (cat) {
+      return '<tr><th>' + echapper(cat.categorie) + '</th><td>' + echapper(String(cat.effectif_min || '—')) + ' à ' + echapper(String(cat.effectif_max || '—')) + '</td><td>' + echapper(String(cat.duree_mi_temps_min || '—')) + ' min</td><td>' + echapper(String(cat.recup_entre_matchs_min || '—')) + ' min</td><td>' + echapper(String(cat.terrains || 'Automatique')) + '</td></tr>';
+    }).join('') + '</tbody></table></div>';
+    categories.forEach(function (cat, index) {
+      html += '<details class="cv-categorie-detail"' + (index === 0 ? ' open' : '') + '><summary>Réglages ' + echapper(cat.categorie) + '</summary>' + formulaireCategorie(cat) + '</details>';
     });
   } else {
     html += '<p class="vide">Aucune catégorie. Ajoute-en une ci-dessus.</p>';

@@ -52,7 +52,7 @@ a:hover { text-decoration: underline; }
   width: 100%;
   max-width: var(--largeur-max);
   margin: 0 auto;
-  padding: 0 20px;
+  padding: 0 32px;
 }
 
 /* L'attribut HTML [hidden] doit toujours l'emporter : sans ce !important, une règle
@@ -78,11 +78,12 @@ a:hover { text-decoration: underline; }
    3. EN-TÊTE (navy, logo + retour au site)
    --------------------------------------------------------- */
 .entete {
-  background: var(--navy);
+  background: rgb(255 255 255 / .88);
+  backdrop-filter: blur(16px);
   position: sticky;
   top: 0;
   z-index: 100;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+  border-bottom: 1px solid var(--cv-bordure);
 }
 .entete .conteneur {
   display: flex;
@@ -99,22 +100,22 @@ a:hover { text-decoration: underline; }
    --------------------------------------------------------- */
 .bandeau-titre {
   position: relative;
-  background: linear-gradient(135deg, var(--navy-clair), var(--navy));
+  background: transparent;
   color: var(--blanc);
-  padding: 44px 0;
+  padding: 28px 0 0;
   overflow: hidden;
 }
 .bandeau-titre::before {
   content: "";
   position: absolute;
   top: 0; left: 0; right: 0;
-  height: 4px;
+  height: 0;
   background: var(--bleu-vif);
 }
 .bandeau-titre > .conteneur { position: relative; z-index: 1; }
 .sous-titre {
   font-family: var(--cv-font);
-  color: #7db8ec;
+  color: var(--cv-action);
   font-weight: 700;
   letter-spacing: 1.5px;
   text-transform: none;
@@ -126,10 +127,10 @@ a:hover { text-decoration: underline; }
   font-weight: 800;
   font-size: 2.2rem;
   letter-spacing: 0.5px;
-  color: var(--blanc);
-  line-height: 1.05;
+  color: var(--cv-texte);
+  line-height: 1.2;
 }
-.chapo { color: #c3d6ec; font-size: 1.1rem; margin-top: 12px; max-width: 640px; }
+.chapo { color: var(--cv-secondaire); font-size: 1.1rem; margin-top: 12px; max-width: 640px; }
 
 /* ---------------------------------------------------------
    5. ZONE DE CONTENU + CARTE
@@ -198,6 +199,15 @@ a:hover { text-decoration: underline; }
   margin-bottom: 6px;
 }
 #select-equipe { margin-bottom: 10px; }
+.cv-equipe-grid { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr); gap:24px; align-items:start; }
+.cv-equipe-grid > * { min-width:0; }
+.cv-prochain { background:var(--cv-selection); border:1px solid #c9deef; padding:24px; border-radius:16px; margin:20px 0; }
+.cv-prochain h2 { font-size:18px; color:var(--cv-action); }
+.cv-prochain .match { margin-bottom:0; background:transparent; border:0; padding:16px 0 0; }
+.cv-rangs { padding:20px; background:#f7fafd; border:1px solid var(--cv-bordure); border-radius:16px; margin-top:20px; }
+.cv-public-brand { display:flex; align-items:center; gap:16px; }
+.cv-public-brand .titre-page { font-size:20px; }
+@media(max-width:767px) { .cv-equipe-grid { grid-template-columns:1fr; } .conteneur { padding:0 16px; } .cv-public-brand .titre-page { font-size:17px; } .cv-prochain { padding:18px; } }
 .mp-filtre { margin-bottom: 16px; }
 
 /* ---------------------------------------------------------
@@ -224,7 +234,14 @@ a:hover { text-decoration: underline; }
   gap: 20px;
   align-items: flex-start;
 }
-.tete-controls { flex: 1 1 auto; min-width: 0; }
+.tete-controls { flex:1 1 auto; min-width:0; display:grid; grid-template-columns:1fr 1.5fr; gap:16px 24px; }
+.tete-controls .live-barre { grid-column:2; grid-row:1; justify-content:flex-end; margin:0; }
+.tete-controls .onglets { grid-column:1; grid-row:1; margin:0; }
+.tete-controls .mp-filtre { margin:0; }
+.tete-cote:not(:has(> :not([hidden]))) { display:none; }
+.cv-classements-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr)); gap:24px; }
+.cv-classements-grid > section { min-width:0; }
+@media(max-width:767px) { .tete-controls { grid-template-columns:1fr; } .tete-controls .live-barre,.tete-controls .onglets { grid-column:auto; grid-row:auto; justify-content:flex-start; } }
 
 /* Colonne de droite : le podium, puis le rail partenaires. Sur ordinateur cette colonne
    est vide les trois quarts du temps — le rail s'y installe sans rien pousser. */

@@ -247,7 +247,7 @@
         <div class="sponsors-accueil-tete">
           <div>
             <p class="sponsors-sur-titre">Partenaires</p>
-            <h2>Une action à la fois</h2>
+            <h2>Vos partenaires</h2>
             <p class="note-generation">Ajoute tes partenaires, vérifie leur visibilité, puis publie quand tout est prêt.</p>
           </div>
           <span class="sponsors-statut" id="sponsors-statut-publication" aria-live="polite">Partenaires masqués</span>
@@ -1029,7 +1029,7 @@
 
       <!-- 6) Publication : rend le tournoi visible (ou non) sur la page publique -->
       <section class="carte" id="bloc-publication">
-        <h2>Publier le tournoi</h2>
+        <div class="cv-publication"><div><h2>Page publique du tournoi</h2>
         <p class="note-generation">
           Rend le tournoi <strong>visible du public</strong> sur la page publique. Tant qu'il n'est
           pas publié, les visiteurs voient un écran « à venir ».<br>
@@ -1095,7 +1095,14 @@
              ⛔ Le lien ne contient AUCUNE clé : la page de saisie demande la clé scores pour
              elle-même. Le contenu dynamique est rempli par admin-infos-publication.js, après la
              connexion à l'administration. -->
-        <div class="publication-acces acces-saisie" id="acces-saisie">
+        <button id="bouton-publier" class="bouton">…</button>
+        <!-- Pourquoi « Publier » est grisé, le cas échéant. Rempli par majVerrouPublier()
+             (admin-infos-publication.js) à partir du MÊME cerveau que le fil « Où en suis-je ? ».
+             ⛔ Ne concerne QUE l'action publier : « Masquer » n'est jamais grisé, et « Copier » /
+             « Ouvrir » restent actifs dans tous les cas. -->
+        <div id="message-verrou-publier" class="message-form" role="status" aria-live="polite"></div>
+        <div id="message-publication" class="message-form"></div>
+        </div>        <div class="publication-acces acces-saisie" id="acces-saisie">
           <p class="publication-acces-lib">L'accès de la table de marque (saisie des scores)</p>
           <p class="acces-saisie-quoi">
             C'est la page sur laquelle la personne à la table de marque <strong>saisit les scores
@@ -1158,13 +1165,7 @@
           </details>
         </div>
 
-        <button id="bouton-publier" class="bouton">…</button>
-        <!-- Pourquoi « Publier » est grisé, le cas échéant. Rempli par majVerrouPublier()
-             (admin-infos-publication.js) à partir du MÊME cerveau que le fil « Où en suis-je ? ».
-             ⛔ Ne concerne QUE l'action publier : « Masquer » n'est jamais grisé, et « Copier » /
-             « Ouvrir » restent actifs dans tous les cas. -->
-        <div id="message-verrou-publier" class="message-form" role="status" aria-live="polite"></div>
-        <div id="message-publication" class="message-form"></div>
+        </div>
       </section>
 
       <!-- 7) Réinitialisation : remet le tournoi à zéro (zone de danger).

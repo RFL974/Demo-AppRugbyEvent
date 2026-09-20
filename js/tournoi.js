@@ -102,6 +102,8 @@ function basculer(cible) {
     b.setAttribute('aria-selected', actif ? 'true' : 'false');
   });
   document.getElementById('vue-equipe').hidden = (cible !== 'equipe');
+  const choix = document.getElementById('cv-choix-equipe');
+  if (choix) choix.hidden = (cible !== 'equipe');
   document.getElementById('vue-classements').hidden = (cible !== 'classements');
 }
 
@@ -216,6 +218,8 @@ function appliquerPublication() {
   document.querySelector('.live-barre').hidden = !pub;
   document.querySelector('.onglets').hidden = !pub;
   document.getElementById('vues').hidden = !pub;
+  const choix = document.getElementById('cv-choix-equipe');
+  if (choix) choix.hidden = !pub || document.getElementById('vue-equipe').hidden;
   // Le podium : masqué si non publié ; sinon c'est afficherPodium qui décide (certitude).
   if (!pub) { const pod = document.getElementById('podium'); if (pod) pod.hidden = true; }
   // Le filtre catégorie : masqué si non publié ; sinon c'est peuplerCategorie qui décide.
@@ -487,7 +491,9 @@ function afficherEquipe() {
   const matin = mes.filter(function (m) { return String(m.phase) !== 'classement'; });
   const aprem = mes.filter(function (m) { return String(m.phase) === 'classement'; });
 
-  let html = '';
+  const prochain = mes.filter(function (m) { return !estTermine(m.statut); }).slice().sort(function (a,b) { return String(a.heure_debut).localeCompare(String(b.heure_debut)); })[0];
+  let html = '<div class="cv-equipe-grid"><section class="cv-programme">';
+  if (prochain) html += '<section class="cv-prochain"><h2>Prochain match</h2>' + carteMatch(prochain, id) + '</section>';
   // Objet catégorie (vocabulaire Super Challenge : Samedi/Dimanche au lieu de Matin/Après-midi).
   const catObjP = (config.categories || []).find(function (c) { return c.categorie === (mes[0] && mes[0].categorie); });
   if (matin.length) html += '<div class="planning-phase">' + (phaseLabelScf(catObjP, false) || '🌅 Matin — poules') + '</div>' + cartes(matin, id);
@@ -505,7 +511,9 @@ function afficherEquipe() {
   html += encartFil();
 
   const eq = equipes.find(function (x) { return x.id_equipe === id; });
+  html += '</section><aside class="cv-rangs">';
   if (eq) html += sectionClassementsEquipe(eq);
+  html += '</aside></div>';
   zone.innerHTML = html;
   brancherEncartsFil();
 }
@@ -620,7 +628,9 @@ function afficherClassements() {
   html += '<div class="planning-phase">🌅 Poules (matin)</div>';
   matin.forEach(function (cat) {
     html += '<h3 class="live-cat">' + echapper(cat.categorie) + '</h3>';
-    cat.groupes.forEach(function (g) { html += tableComplete(g.titre, g.classement); });
+    html += '<div class="cv-classements-grid">';
+    cat.groupes.forEach(function (g) { html += '<section>' + tableComplete(g.titre, g.classement) + '</section>'; });
+    html += '</div>';
   });
 
   html += sectionApresMidiClassements(categorieActive);
@@ -1009,7 +1019,9 @@ function sectionApresMidiClassements(categorie) {
   let html = '<div class="planning-phase">' + ((fmt === 'POULES_NIVEAU')
     ? '🏉 Après-midi — poules de niveau' : '🏉 Après-midi — classement croisé par niveau') + '</div>';
   classementParGroupe('aprem').forEach(function (cat) {
-    cat.groupes.forEach(function (g) { html += tableComplete(g.titre, g.classement); });
+    html += '<div class="cv-classements-grid">';
+    cat.groupes.forEach(function (g) { html += '<section>' + tableComplete(g.titre, g.classement) + '</section>'; });
+    html += '</div>';
   });
 
   const gen = classementGeneral(categorie);

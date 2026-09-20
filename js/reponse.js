@@ -260,7 +260,7 @@ function formulairePresence(data) {
   const commandes = blocCommandePrestation('repas', 'Repas', p.repas_prix_personne) +
     blocCommandePrestation('gouter', 'Goûter', p.gouter_prix_personne);
 
-  return '<form id="form-presence" class="rep-form">' +
+  return '<form id="form-presence" class="rep-form"><div class="cv-reponse-champs">' +
     blocModalitesPaiement(data) +
     '<h2 class="rep-titre">Vos équipes engagées</h2>' +
     '<p class="rep-aide">Cochez les catégories concernées et indiquez le nombre d\'équipes pour chacune.</p>' +
@@ -271,7 +271,7 @@ function formulairePresence(data) {
       '<span>Total éducateurs : <strong id="rep-total-educateurs">0</strong></span>' +
     '</div>' +
     (commandes ? '<section class="rep-commandes"><h2 class="rep-titre">Repas et goûter</h2>' + commandes + '</section>' : '') +
-    '<section class="rep-total-du"><h2>Total à payer</h2>' +
+    '</div><aside class="cv-reponse-recap"><section class="rep-total-du"><h2>Total à payer</h2>' +
       '<div id="rep-detail-paiement"></div>' +
       '<p><strong id="rep-montant-total">0 €</strong></p>' +
     '</section>' +
@@ -279,7 +279,7 @@ function formulairePresence(data) {
       '<button type="submit" class="rep-btn rep-btn-oui" id="btn-confirmer">Vérifier et confirmer</button>' +
       '<span class="rep-form-msg" id="rep-form-msg"></span>' +
     '</div>' +
-    '<div id="rep-recap-confirmation" hidden></div>' +
+    '</aside><div id="rep-recap-confirmation" hidden></div>' +
   '</form>';
 }
 

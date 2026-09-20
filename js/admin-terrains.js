@@ -191,7 +191,7 @@ function injecterTerrains() {
        '<strong>taille de chaque catégorie</strong>. L\'appli calcule combien de mini-terrains ' +
        'y tiennent (couloirs de circulation compris).</p>';
 
-  h += '<h3 class="terr-titre">Grands terrains disponibles</h3>';
+  h += '<div class="cv-terrains"><section><h3 class="terr-titre">Grands terrains disponibles</h3>';
   h += '<div id="liste-terrains-physiques">';
   plan.terrains.forEach(function (t, i) { h += ligneTerrainPhysique(t, i); });
   h += '</div>';
@@ -236,12 +236,12 @@ function injecterTerrains() {
        '</div>';
 
   // Répartition automatique (étape 2)
-  h += '<h3 class="terr-titre">Répartition automatique</h3>';
+  h += '</section><section class="cv-terrains-plan"><h3 class="terr-titre">Répartition automatique</h3>';
   h += '<p class="note-generation">Répartit les mini-terrains entre catégories <strong>selon le nombre ' +
        'd\'équipes</strong>, en gardant chaque catégorie groupée et en réservant la table des marques. ' +
        'Prévisualise la carte, puis applique.</p>';
   h += '<button type="button" class="bouton" id="bouton-repartir">' + svgIcone('terrain') + 'Répartir les terrains</button>';
-  h += '<div id="repartition-resultat"></div>';
+  h += '<div id="repartition-resultat"></div></section></div>';
 
   zone.innerHTML = h;
 

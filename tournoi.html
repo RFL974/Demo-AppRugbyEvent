@@ -28,8 +28,9 @@
   <!-- ============ EN-TÊTE (navy, comme le site vitrine) ============ -->
   <header class="entete">
     <div class="conteneur">
-      <div class="logo">
+      <div class="logo cv-public-brand">
         <img src="assets/logo-tournoi.svg" alt="" width="64" height="64" decoding="async">
+        <h1 class="titre-page" id="titre-tournoi">Le tournoi</h1>
       </div>
     </div>
   </header>
@@ -38,7 +39,6 @@
   <section class="bandeau-titre">
     <div class="conteneur">
       <p class="sous-titre">En direct</p>
-      <h1 class="titre-page" id="titre-tournoi">Le tournoi</h1>
       <p class="chapo">Poules, planning et scores en temps réel. Choisis ton équipe pour suivre tes matchs.</p>
     </div>
   </section>
@@ -82,6 +82,11 @@
               <label class="mp-label" for="select-categorie">Choisis ta catégorie :</label>
               <select id="select-categorie" class="r-input"></select>
             </div>
+            <div id="cv-choix-equipe">            <label class="mp-label" for="select-equipe">Choisis ton équipe :</label>
+            <select id="select-equipe" class="r-input">
+              <option value="">— Chargement… —</option>
+            </select>
+</div>
           </div>
 
           <!-- Colonne de droite : le podium (quand il est certain) puis le rail partenaires.
@@ -98,10 +103,6 @@
         <div id="vues">
           <!-- 📋 Mon équipe : sélecteur + matchs + classements de l'équipe -->
           <div id="vue-equipe" role="tabpanel">
-            <label class="mp-label" for="select-equipe">Choisis ton équipe :</label>
-            <select id="select-equipe" class="r-input">
-              <option value="">— Chargement… —</option>
-            </select>
             <div id="mon-planning">
               <p class="vide">Sélectionne ton équipe pour voir tes matchs.</p>
             </div>

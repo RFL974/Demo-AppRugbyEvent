@@ -180,12 +180,12 @@ h1, h2, h3 {
    En-tête de page
    ========================================================================== */
 .entete {
-  text-align: center;
-  padding: var(--espace) 0 calc(var(--espace) * 1.5);
+  text-align:left;
+  padding:20px 0 24px;
 }
 
 .entete h1 {
-  font-size: 2.4rem;
+  font-size: 2rem;
   color: var(--texte);
 }
 
@@ -660,7 +660,8 @@ select.r-input { cursor: pointer; }
   border: none;
   cursor: pointer;
   padding: 10px 18px;
-  border-radius: 8px;
+  min-height:44px;
+  border-radius: 10px;
   font-family: var(--cv-font);
   text-transform: none;
   letter-spacing: 0.5px;
@@ -685,7 +686,7 @@ select.r-input { cursor: pointer; }
   border: 1px solid rgba(255, 120, 120, 0.4);
   border-left: 4px solid #c0392b;
 }
-.carte-danger h2 { color: #ff9b8f; }
+.carte-danger h2 { color: var(--cv-danger); }
 .liste-danger {
   margin: 4px 0 12px 20px;
   color: var(--bleu-ciel);
@@ -697,7 +698,7 @@ select.r-input { cursor: pointer; }
    puis ce qui n'a pas pu être relu). Sans ça, `textContent` les collerait en un seul paragraphe
    et la distinction « acquis » / « à vérifier » se perdrait à la lecture. */
 .message-form { min-height: 1.3em; font-family: var(--cv-font); white-space: pre-line; }
-.message-form.ok { color: #9fe0a0; }
+.message-form.ok { color: var(--cv-succes); }
 .message-form.ko { color: var(--cv-danger); }
 
 /* Reprise CIBLÉE d'une lecture (CORR-BLOCAGE-LECTURES-ADMIN-DR) : masquée tant que tout va bien,
@@ -874,7 +875,7 @@ button .ic { margin-right: 0.45em; }
 }
 .avc-complet {
   background: rgba(159, 224, 160, 0.16);
-  color: #9fe0a0;
+  color: var(--cv-succes);
   border: 1px solid rgba(159, 224, 160, 0.5);
 }
 .avc-partiel {
@@ -905,7 +906,7 @@ button .ic { margin-right: 0.45em; }
   font-size: 0.85rem; font-weight: 600;
   padding: 1px 8px; border-radius: 999px;
 }
-.edit-equilibre.ok { color: #9fe0a0; background: rgba(159, 224, 160, 0.14); border: 1px solid rgba(159, 224, 160, 0.4); }
+.edit-equilibre.ok { color: var(--cv-succes); background: rgba(159, 224, 160, 0.14); border: 1px solid rgba(159, 224, 160, 0.4); }
 .edit-equilibre.ko { color: var(--cv-attention); background: rgba(255, 170, 80, 0.12); border: 1px solid rgba(255, 180, 100, 0.4); }
 
 /* Grille de poules côte à côte (empile sur mobile) */
@@ -1050,7 +1051,7 @@ button .ic { margin-right: 0.45em; }
   /* On centre le contenu et on limite la largeur pour le confort de lecture */
   .conteneur { max-width: none; margin: 0 auto; }
 
-  .entete h1 { font-size: 3.2rem; }
+  .entete h1 { font-size: 2rem; }
 
   .grille-reglages { grid-template-columns: repeat(3, 1fr); }
 }
@@ -1118,7 +1119,7 @@ button .ic { margin-right: 0.45em; }
   font-size: 0.95rem;
   margin-bottom: 8px;
 }
-.badge-ok { color: #9fe0a0; font-weight: 600; }
+.badge-ok { color: var(--cv-succes); font-weight: 600; }
 
 /* Scoreboard VERTICAL : chaque équipe sur sa ligne, son score à droite.
    Clair et sans ambiguïté sur téléphone (fini l'enroulement des scores). */
@@ -1141,6 +1142,8 @@ button .ic { margin-right: 0.45em; }
 }
 /* Champ de score : compact et centré (on annule le width:100% de .r-input). */
 .match-saisie .score {
+  min-height:48px;
+  font-size:22px;
   width: 72px;
   flex: 0 0 auto;
   text-align: center;
@@ -1170,7 +1173,7 @@ button .ic { margin-right: 0.45em; }
 .bandeau-attente {
   background: rgba(242, 193, 78, 0.12);
   border: 1px solid rgba(242, 193, 78, 0.35);
-  color: #f2c14e;
+  color: var(--cv-attention);
   border-radius: 8px;
   padding: 8px 10px;
   font-size: 0.9rem;
@@ -1198,7 +1201,7 @@ button .ic { margin-right: 0.45em; }
 .bandeau-amical {
   background: rgba(159, 224, 160, 0.12);
   border: 1px solid rgba(159, 224, 160, 0.35);
-  color: #9fe0a0;
+  color: var(--cv-succes);
 }
 .bandeau-coupe {
   background: rgba(46, 143, 224, 0.12);
@@ -1318,7 +1321,7 @@ button .ic { margin-right: 0.45em; }
 .ecart-essais {
   background: rgba(242, 193, 78, 0.12);
   border: 1px solid rgba(242, 193, 78, 0.35);
-  color: #f2c14e;
+  color: var(--cv-attention);
   border-radius: 8px;
   padding: 7px 10px;
   font-size: 0.88rem;
@@ -1375,7 +1378,7 @@ button .ic { margin-right: 0.45em; }
 }
 .mp-adv { font-weight: 600; font-size: 1.05rem; }
 .mp-resultat { font-family: var(--cv-font); font-weight: 600; }
-.mp-resultat.gagne { color: #9fe0a0; }
+.mp-resultat.gagne { color: var(--cv-succes); }
 .mp-resultat.perd  { color: var(--cv-danger); }
 .mp-resultat.nul   { color: var(--bleu-ciel); }
 
@@ -1569,7 +1572,7 @@ button .ic { margin-right: 0.45em; }
 .barre-connexion.connecte {
   border: 1px solid rgba(159, 224, 160, 0.4);
   background: rgba(159, 224, 160, 0.08);
-  color: #9fe0a0;
+  color: var(--cv-succes);
 }
 .barre-connexion.deconnecte {
   border: 1px solid rgba(255, 180, 100, 0.45);
@@ -1683,7 +1686,7 @@ details.carte > summary::before {
 details.carte[open] > summary::before { transform: rotate(90deg); }
 details.carte > summary:hover { color: var(--accent); }
 /* Zone de danger repliable : titre en rouge, comme le <h2> équivalent. */
-details.carte-danger > summary { color: #ff9b8f; }
+details.carte-danger > summary { color: var(--cv-danger); }
 
 /* « Inviter un club » : les cartes de préparation vivent dans deux dépliants successifs. */
 details.invitation-initiale > .carte:last-child,
@@ -1729,7 +1732,7 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
 }
 .perfs-chiffres { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; align-items: baseline; }
 .pc { font-family: var(--cv-font); font-size: 1.4rem; }
-.pc-v { color: #9fe0a0; }
+.pc-v { color: var(--cv-succes); }
 .pc-n { color: var(--bleu-ciel); }
 .pc-d { color: var(--cv-danger); }
 .pc-pct { margin-left: auto; color: var(--texte); font-size: 1.2rem; }
@@ -1766,7 +1769,7 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
 .perfs-bilan { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0 4px; }
 .perfs-stat { display: flex; flex-direction: column; align-items: center; min-width: 34px; }
 .perfs-stat-val { font-family: var(--cv-font); font-size: 1.3rem; line-height: 1; color: var(--texte); }
-.perfs-stat-val.gagne { color: #9fe0a0; }
+.perfs-stat-val.gagne { color: var(--cv-succes); }
 .perfs-stat-val.perd  { color: var(--cv-danger); }
 .perfs-stat-val.nul   { color: var(--bleu-ciel); }
 .perfs-stat-lib { font-size: 0.7rem; color: #7f92a8; text-transform: none; letter-spacing: 0.5px; }
@@ -1792,7 +1795,7 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
 .frise-puce.nul   { background: var(--cv-bordure); border: 1px solid var(--cv-bordure); }
 .frise-heure { font-size: 0.72rem; color: var(--bleu-ciel); }
 .frise-issue { font-family: var(--cv-font); font-size: 1.2rem; line-height: 1; }
-.frise-puce.gagne .frise-issue { color: #9fe0a0; }
+.frise-puce.gagne .frise-issue { color: var(--cv-succes); }
 .frise-puce.perd  .frise-issue { color: var(--cv-danger); }
 .frise-puce.nul   .frise-issue { color: var(--bleu-ciel); }
 .frise-lien { flex: 0 0 auto; width: 14px; height: 2px; background: var(--cv-bordure); }
