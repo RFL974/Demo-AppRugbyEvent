@@ -31,8 +31,12 @@ for(const id of ['liste-clubs-invites','liste-suivi-clubs']){
  assert(dom[id].innerHTML.includes('club-etat-equipes-ajoutees" data-club="ANTONY"'));
  assert(dom[id].innerHTML.includes('club-etat-a-enregistrer" data-club="RACING 92"'));
 }
-assert(dom['liste-suivi-clubs'].innerHTML.includes('suivi-rappel-equipes'));
-assert(dom['liste-suivi-clubs'].innerHTML.includes('pour débloquer l’envoi du dossier final'));
+// Le rappel de blocage a quitté le tableau pour la FICHE du club (panneau latéral), où il est
+// visible sans second clic : c'est l'explication du bouton « dossier final » grisé.
+const ficheBloquee=c.suiviHtmlFiche(clubs[1]);
+assert(ficheBloquee.includes('suivi-rappel-equipes'));
+assert(ficheBloquee.includes('pour débloquer l’envoi du dossier final'));
+assert(!c.suiviHtmlFiche(club).includes('suivi-rappel-equipes'));
 // Catégories absentes sur un ancien engagement : le dossier reste disponible et utilise les équipes.
 club.categories_engagees='';assert(dossierActif(club));assert.equal(c.categoriesDuClubInvite(club).join(','),'U10');
 // Évite d'attribuer une équipe au mauvais club (PUC et PUC-2 sont deux clubs distincts).

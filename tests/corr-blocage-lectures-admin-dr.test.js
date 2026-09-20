@@ -155,6 +155,16 @@ const SRC_EQUIPES = [
   bloc(F_EQUIPES, 'function effectifSaisi('),
   bloc(F_EQUIPES, 'function estEquipeAuto('),
   bloc(F_EQUIPES, 'function resumeEffectifs('),
+  // Le rendu en tableau : onglets par catégorie, club déduit du nom, filtre par club.
+  ligne(F_EQUIPES, 'let equipesOngletDemande'),
+  ligne(F_EQUIPES, 'let equipesClubDemande'),
+  bloc(F_EQUIPES, 'function activerOngletEquipes('),
+  bloc(F_EQUIPES, 'function activerFiltreClubEquipes('),
+  bloc(F_EQUIPES, 'function choisirOngletEquipes('),
+  bloc(F_EQUIPES, 'function choisirFiltreClubEquipes('),
+  bloc(F_EQUIPES, 'function clubDeEquipe('),
+  bloc(F_EQUIPES, 'function htmlOngletsEquipes('),
+  bloc(F_EQUIPES, 'function htmlEquipesTableau('),
   bloc(F_EQUIPES, 'function afficherEquipes('),
   bloc(F_EQUIPES, 'function remplirSelectCategories('),
   bloc(F_EQUIPES, 'function prendreJetonEquipes('),
@@ -560,8 +570,10 @@ async function principal() {
       b.postsDe('ajouterEquipe').length === 1 && b.getsDe('getEquipes').length === 1,
       json({ post: b.postsDe('ajouterEquipe').length, get: b.getsDe('getEquipes').length }));
 
+    // Le tableau porte les effectifs dans deux colonnes étiquetées, plus dans un résumé.
     verifier('1.9', 'les effectifs affichés viennent de la réponse serveur confirmée',
-      b.el('liste-equipes').innerHTML.indexOf('13 joueurs · 2 éducs') !== -1,
+      b.el('liste-equipes').innerHTML.indexOf('data-label="Joueurs" class="cv-table-nombre">13<') !== -1 &&
+      b.el('liste-equipes').innerHTML.indexOf('data-label="Éducateurs" class="cv-table-nombre">2<') !== -1,
       b.el('liste-equipes').innerHTML);
   }
 

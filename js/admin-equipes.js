@@ -116,69 +116,178 @@ function resumeEffectifs(eq) {
   return bouts.join(' · ');
 }
 
+/* ============================================================================
+ *  LES ÉQUIPES EN TABLEAU — onglets par catégorie, recherche, filtre par club
+ * ============================================================================
+ *  ⭐ AUCUNE LECTURE AJOUTÉE. Les onglets, leurs compteurs, la colonne « Club » et le filtre par
+ *  club sont TOUS calculés depuis `equipesCourantes`, déjà en mémoire : changer d'onglet ou de
+ *  club ne demande rien au serveur et s'affiche dans la même image.
+ *
+ *  ⛔ POURQUOI LE CLUB N'EST PAS UNE LECTURE. Une équipe ne porte pas de champ « club » en base.
+ *  Le lien se DÉDUIT de son nom — « CLAMART-1 » appartient à « CLAMART » — exactement la règle
+ *  que `equipesDuClubInvite()` applique déjà dans l'autre sens, côté invitations. Les deux écrans
+ *  ne peuvent donc pas se contredire. Demander la liste des clubs invités pour cet écran
+ *  ajouterait un aller-retour réseau à un écran qui n'en fait aucun ; quand cette liste se
+ *  trouve DÉJÀ chargée (retour depuis « Inviter un club » ou « Suivi »), on s'en sert seulement
+ *  pour rétablir l'orthographe exacte du club. Jamais pour attendre.
+ * ========================================================================== */
+
+/* L'onglet de catégorie et le club demandés. ⛔ Portés par le module : `afficherEquipes()` est
+   rappelée après chaque écriture et chaque relecture ; un repère posé dans le DOM disparaîtrait
+   avec elle, et l'organisateur retomberait sur « Toutes » à chaque ajout. */
+let equipesOngletDemande = 'toutes';
+let equipesClubDemande = '';
+
+function activerOngletEquipes(cle) { equipesOngletDemande = String(cle || 'toutes'); }
+function activerFiltreClubEquipes(nom) { equipesClubDemande = String(nom || ''); }
+
 /**
- * Affiche la liste des équipes, regroupées par catégorie.
+ * Quel onglet MONTRER, d'après ce qui est demandé et ce qui existe.
+ * ⛔ PURE : elle ne réécrit jamais la demande. C'est ce qui fait qu'un rendu transitoire — une
+ * relecture qui retombe sans équipe, une liste vidée le temps d'une écriture — ne fait pas
+ * oublier l'onglet ouvert : il réapparaît dès que les données reviennent.
+ */
+function choisirOngletEquipes(categories) {
+  if (equipesOngletDemande === 'toutes') return 'toutes';
+  if ((categories || []).indexOf(equipesOngletDemande) !== -1) return equipesOngletDemande;
+  return 'toutes';
+}
+
+/** Même règle pour le filtre par club : ce qui n'existe plus n'est pas montré, ni oublié. */
+function choisirFiltreClubEquipes(clubs) {
+  if (!equipesClubDemande) return '';
+  return (clubs || []).indexOf(equipesClubDemande) !== -1 ? equipesClubDemande : '';
+}
+
+/**
+ * Le club d'une équipe, déduit de son nom : « CLAMART-1 » → « CLAMART ».
+ * ⭐ Le suffixe retiré est strictement `-<chiffres>` : « ISSY-LES-MOULINEAUX » reste entier.
+ * Quand la liste des clubs invités est déjà chargée, son orthographe fait foi (accents, casse) ;
+ * sinon le nom déduit suffit — on n'attend aucune lecture pour afficher cette colonne.
+ */
+function clubDeEquipe(nom) {
+  const base = String(nom || '').trim().replace(/-\d+$/, '').trim();
+  if (!base) return '';
+  const invites = typeof clubsInvitesCourants !== 'undefined' ? (clubsInvitesCourants || []) : [];
+  const meme = typeof memeTexteSouple === 'function' ? memeTexteSouple
+    : function (a, b) { return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase(); };
+  const trouve = invites.find(function (c) { return meme(c.club_nom, base); });
+  return trouve ? String(trouve.club_nom).trim() : base;
+}
+
+/** La barre d'onglets : « Toutes » puis une catégorie par onglet, chacune avec son compte. */
+function htmlOngletsEquipes(categories, comptes, actif, total) {
+  return [['toutes', 'Toutes', total]].concat((categories || []).map(function (cat) {
+    return [cat, cat, comptes[cat] || 0];
+  })).map(function (x) {
+    const choisi = actif === x[0];
+    // ⚠️ `aria-label` OBLIGATOIRE : le compte est collé au libellé dans le HTML, et sans lui le
+    //    nom accessible de l'onglet serait « U106 ».
+    return '<button type="button" class="cv-onglet' + (choisi ? ' est-actif' : '') + '" role="tab" ' +
+      'data-cat-equipes="' + echapper(x[0]) + '" aria-selected="' + (choisi ? 'true' : 'false') + '" ' +
+      'tabindex="' + (choisi ? '0' : '-1') + '" aria-label="' + echapper(x[1]) + ' — ' + x[2] +
+      ' équipe' + (x[2] > 1 ? 's' : '') + '">' + echapper(x[1]) +
+      '<span class="cv-onglet-compte">' + x[2] + '</span></button>';
+  }).join('');
+}
+
+/** Le tableau : une ligne par équipe, son club déduit, ses effectifs déclarés et ses actions. */
+function htmlEquipesTableau(liste) {
+  const colonnes = ['Équipe', 'Club', 'Catégorie', 'Joueurs', 'Éducateurs', 'Action'];
+  return '<div class="cv-table" role="table" aria-label="Équipes participantes">' +
+    '<div class="cv-table-entete" role="row">' +
+      colonnes.map(function (c) { return '<span role="columnheader">' + c + '</span>'; }).join('') +
+    '</div>' +
+    liste.map(function (eq) {
+      // Une équipe née d'une réponse d'invitation tient ses effectifs du club : quand rien n'est
+      // déclaré ici, on le DIT plutôt que d'afficher un vide qui passerait pour un oubli.
+      const auto = !resumeEffectifs(eq) && estEquipeAuto(eq);
+      const marque = auto ? '<span class="equipe-effectifs est-auto" ' +
+        'title="Effectifs déclarés par le club dans sa réponse à l’invitation">déclarés par le club</span>' : '';
+      const nombre = function (valeur) {
+        const v = effectifSaisi(valeur);
+        return v === '' ? '<span class="cv-table-vide" title="Non déclaré">—</span>' : echapper(v);
+      };
+      const nom = String(eq.nom_equipe || '');
+      return '<div class="equipe-item" role="row" data-id="' + echapper(eq.id_equipe) + '">' +
+        '<span class="nom" role="cell" data-label="Équipe">' + echapper(nom) + marque + '</span>' +
+        '<span role="cell" data-label="Club" class="cv-table-doux">' + echapper(clubDeEquipe(nom) || '—') + '</span>' +
+        '<span role="cell" data-label="Catégorie" class="cv-table-doux">' + echapper(eq.categorie || '(sans catégorie)') + '</span>' +
+        '<span role="cell" data-label="Joueurs" class="cv-table-nombre">' + nombre(eq.nb_joueurs) + '</span>' +
+        '<span role="cell" data-label="Éducateurs" class="cv-table-nombre">' + nombre(eq.nb_educateurs) + '</span>' +
+        '<div class="equipe-actions" role="cell" data-label="Action">' +
+          '<button class="bouton-modif" title="Modifier" data-id="' + echapper(eq.id_equipe) + '" ' +
+                  'data-nom="' + echapper(nom) + '">' + svgIcone('crayon') +
+            '<span class="cv-modif-libelle">Éditer</span></button>' +
+          '<details class="cv-menu-actions"><summary aria-label="Autres actions pour ' + echapper(nom) + '">•••</summary>' +
+            '<button class="bouton-suppr bouton-icone" title="Supprimer" aria-label="Supprimer" ' +
+                    'data-id="' + echapper(eq.id_equipe) + '" data-nom="' + echapper(nom) + '">' +
+              svgIcone('corbeille') + ' Supprimer</button></details>' +
+        '</div>' +
+      '</div>';
+    }).join('') + '</div>';
+}
+
+/**
+ * Affiche la liste des équipes : barre d'onglets par catégorie, filtre par club, puis le tableau.
+ *
+ * ⛔ « Tout supprimer » reste RENDU DANS `#liste-equipes` : l'écouteur de la liste est posé sur
+ * ce conteneur (`ecouter('liste-equipes', 'click', onClicListe)`), et un bouton sorti de là ne
+ * serait plus entendu. Il n'apparaît que sur l'onglet d'une catégorie précise — « Toutes » ne
+ * propose pas un geste qui viderait tout le tournoi d'un clic.
+ *
  * @param {Object[]} equipes
  */
 function afficherEquipes(equipes) {
   const zone = document.getElementById('liste-equipes');
+  if (!zone) return;
+  const toutes = (equipes || []).slice();
 
-  if (!equipes || equipes.length === 0) {
+  // Regroupement et ordre : les catégories de la configuration d'abord, les autres ensuite.
+  const comptes = {};
+  toutes.forEach(function (eq) {
+    const cat = eq.categorie || '(sans catégorie)';
+    comptes[cat] = (comptes[cat] || 0) + 1;
+  });
+  const categories = ((typeof configCourante !== 'undefined' && configCourante && configCourante.categories) || [])
+    .map(function (c) { return c.categorie; }).filter(Boolean);
+  Object.keys(comptes).forEach(function (c) { if (categories.indexOf(c) === -1) categories.push(c); });
+
+  const clubs = Array.from(new Set(toutes.map(function (eq) { return clubDeEquipe(eq.nom_equipe); })
+    .filter(Boolean))).sort(function (a, b) { return a.localeCompare(b, 'fr'); });
+  const ongletActif = choisirOngletEquipes(categories);
+  const clubActif = choisirFiltreClubEquipes(clubs);
+
+  const barre = document.getElementById('cv-equipes-onglets');
+  if (barre) barre.innerHTML = htmlOngletsEquipes(categories, comptes, ongletActif, toutes.length);
+  const choixClub = document.getElementById('cv-equipes-club');
+  if (choixClub) {
+    choixClub.innerHTML = '<option value="">Tous les clubs</option>' + clubs.map(function (c) {
+      return '<option value="' + echapper(c) + '"' + (c === clubActif ? ' selected' : '') + '>' + echapper(c) + '</option>';
+    }).join('');
+  }
+
+  const affichees = toutes.filter(function (eq) {
+    if (ongletActif !== 'toutes' && (eq.categorie || '(sans catégorie)') !== ongletActif) return false;
+    if (clubActif && clubDeEquipe(eq.nom_equipe) !== clubActif) return false;
+    return true;
+  }).sort(function (a, b) {
+    return String(a.categorie || '').localeCompare(String(b.categorie || ''), 'fr') ||
+      String(a.nom_equipe || '').localeCompare(String(b.nom_equipe || ''), 'fr');
+  });
+
+  if (!toutes.length) {
     zone.innerHTML = '<p class="vide">Aucune équipe saisie pour le moment.</p>';
     return;
   }
-
-  // On regroupe les équipes par catégorie.
-  const parCategorie = {};
-  equipes.forEach(function (eq) {
-    const cat = eq.categorie || '(sans catégorie)';
-    if (!parCategorie[cat]) parCategorie[cat] = [];
-    parCategorie[cat].push(eq);
-  });
-
-  // On affiche dans l'ordre des catégories de la config, puis les éventuelles autres.
-  const ordre = configCourante.categories.map(function (c) { return c.categorie; });
-  Object.keys(parCategorie).forEach(function (c) {
-    if (ordre.indexOf(c) === -1) ordre.push(c);
-  });
-
-  let html = '';
-  ordre.forEach(function (cat) {
-    const liste = parCategorie[cat];
-    if (!liste) return;
-
-    let items = '';
-    liste.forEach(function (eq) {
-      // Effectifs déclarés : affichés à côté du nom. Une équipe créée par une réponse
-      // d'invitation ('auto') tient les siens du club — on le dit plutôt que d'afficher un vide.
-      const resume = resumeEffectifs(eq);
-      let badge = '';
-      if (resume) badge = '<span class="equipe-effectifs">' + echapper(resume) + '</span>';
-      else if (estEquipeAuto(eq)) badge = '<span class="equipe-effectifs est-auto" ' +
-        'title="Effectifs déclarés par le club dans sa réponse à l\'invitation">déclarés par le club</span>';
-      items +=
-        '<div class="equipe-item" data-id="' + eq.id_equipe + '">' +
-          '<span class="nom">' + echapper(eq.nom_equipe) + '</span>' + badge +
-          '<div class="equipe-actions">' +
-            '<button class="bouton-modif bouton-icone" title="Modifier" aria-label="Modifier" ' +
-                    'data-id="' + eq.id_equipe + '" data-nom="' + echapper(eq.nom_equipe) + '">' + svgIcone('crayon') + '</button>' +
-            '<details class="cv-menu-actions"><summary aria-label="Autres actions pour '+echapper(eq.nom_equipe)+'">•••</summary><button class="bouton-suppr bouton-icone" title="Supprimer" aria-label="Supprimer" ' +
-                    'data-id="' + eq.id_equipe + '" data-nom="' + echapper(eq.nom_equipe) + '">' + svgIcone('corbeille') + ' Supprimer</button></details>' +
-          '</div>' +
-        '</div>';
-    });
-
-    html +=
-      '<div class="groupe-categorie">' +
-        '<h3>' + echapper(cat) + ' <span class="cat-mini">(' + liste.length + ')</span>' +
-          '<button class="bouton-suppr bouton-suppr-tout" data-cat="' + echapper(cat) + '">' +
-            'Tout supprimer</button>' +
-        '</h3>' +
-        items +
-      '</div>';
-  });
-
-  zone.innerHTML = html;
+  const vidage = ongletActif !== 'toutes'
+    ? '<div class="cv-table-outils"><button class="bouton-suppr bouton-suppr-tout" data-cat="' +
+      echapper(ongletActif) + '">Supprimer les ' + (comptes[ongletActif] || 0) + ' équipes ' +
+      echapper(ongletActif) + '</button></div>'
+    : '';
+  zone.innerHTML = vidage + (affichees.length
+    ? htmlEquipesTableau(affichees)
+    : '<p class="vide">Aucune équipe ne correspond à ce filtre.</p>');
   if(typeof actualiserRecherchesCiel==='function')actualiserRecherchesCiel();
 }
 
@@ -739,6 +848,9 @@ function onModifierEquipe(bouton) {
 
   // Édition : nom + effectifs déclarés (joueurs / éducateurs). Vide = « non déclaré », jamais 0.
   item.classList.add('en-edition');
+  // La ligne cesse d'être une rangée de tableau : ses cellules laissent place à des champs, et
+  // un `role="row"` sans `role="cell"` dedans annoncerait une rangée vide.
+  item.removeAttribute('role');
   item.innerHTML =
     '<input class="champ-edit-nom" type="text" value="' + echapper(nom) + '" autocomplete="off" ' +
            'aria-label="Nom de l\'équipe">' +

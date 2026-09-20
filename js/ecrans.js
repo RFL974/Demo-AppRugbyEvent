@@ -617,12 +617,126 @@ function preparerOngletsInvitation() {
  });
 }
 
+/**
+ * Écran « Suivi des clubs » : un tableau à gauche, la fiche du club choisi à droite.
+ *
+ * Les trois zones du HTML (résumé, filtres, liste) sont DÉPLACÉES dans une barre d'outils et
+ * gardent leurs identifiants : `afficherSuiviClubs()` continue de peindre exactement les mêmes
+ * conteneurs. Le panneau latéral est le seul nœud créé ici — il est vide jusqu'à ce qu'un club
+ * soit choisi, et c'est admin-suivi-clubs.js qui le remplit, sans aucune lecture réseau.
+ */
+function preparerSuiviClubs() {
+ const ecran=document.getElementById('ecran-suivi-clubs');
+ const bloc=document.getElementById('bloc-suivi-clubs');
+ const liste=document.getElementById('liste-suivi-clubs');
+ if(!ecran||!bloc||!liste||document.getElementById('cv-fiche-club'))return;
+ const titre=bloc.querySelector('h2');if(titre)titre.remove(); // le titre d'écran le dit déjà
+ // La longue note disait trois choses que l'écran montre maintenant tout seul ; seule la règle
+ // de tri n'est pas déductible du rendu, on la garde.
+ const note=bloc.querySelector('.note-generation');
+ if(note){note.className='cv-note-tri';note.textContent='Les clubs qui demandent une action apparaissent en premier.';}
+ const barre=document.createElement('div');barre.className='cv-barre-outils';
+ barre.appendChild(document.getElementById('suivi-clubs-filtres'));
+ const droite=document.createElement('div');droite.className='cv-barre-droite';
+ const recherche=document.getElementById('cv-recherche-liste-suivi-clubs');
+ if(recherche)droite.appendChild(recherche.closest('.cv-recherche'));
+ // Le PDF couvre TOUS les clubs participants : il reste dans la barre d'outils de l'écran, pas
+ // dans la fiche d'un club — l'y mettre ferait croire à un document par club.
+ const pdf=bloc.querySelector('.suivi-pdf-actions');
+ if(pdf){
+   const bouton=document.getElementById('bouton-pdf-suivi-restauration');
+   const petit=pdf.querySelector('small');
+   if(bouton&&petit){
+     petit.id='aide-pdf-suivi';petit.className='cv-sr'; // gardé pour les lecteurs d'écran
+     bouton.setAttribute('aria-describedby','aide-pdf-suivi');
+     bouton.setAttribute('title',petit.textContent);
+     bouton.classList.add('bouton-doux');
+     bouton.textContent='Récapitulatif (PDF)';
+     bouton.setAttribute('aria-label','Télécharger le récapitulatif des repas et goûters (PDF)');
+   }
+   droite.appendChild(pdf);
+ }
+ barre.appendChild(droite);
+ bloc.insertBefore(barre,liste);
+ if(note)bloc.insertBefore(note,liste);
+ const fiche=document.createElement('aside');
+ fiche.id='cv-fiche-club';fiche.className='carte cv-fiche-club est-vide';
+ fiche.setAttribute('aria-label','Fiche du club sélectionné');
+ ecran.classList.add('cv-suivi');ecran.appendChild(fiche);
+ if(typeof afficherFicheClub==='function')afficherFicheClub();
+}
+
+/**
+ * Écran « Équipes » : onglets par catégorie, recherche, filtre par club, et l'ajout en dépliant.
+ *
+ * Le formulaire d'ajout est DÉPLACÉ dans un dépliant (ses écouteurs de soumission, posés par
+ * admin.js sur le <form>, sont donc conservés) ; la barre d'onglets et le filtre par club sont
+ * créés vides ici, avec leurs écouteurs POSÉS SUR EUX — `afficherEquipes()` réécrit leur
+ * contenu à chaque rendu, jamais le conteneur, donc les écouteurs survivent.
+ */
+function preparerEquipes() {
+ const bloc=document.getElementById('bloc-equipes');
+ const liste=document.getElementById('liste-equipes');
+ const form=document.getElementById('form-equipe');
+ if(!bloc||!liste||!form||document.getElementById('cv-equipes-onglets'))return;
+ const titre=bloc.querySelector('h2');if(titre)titre.remove(); // le titre d'écran le dit déjà
+ const barre=document.createElement('div');barre.className='cv-barre-outils';
+ const onglets=document.createElement('div');
+ onglets.id='cv-equipes-onglets';onglets.className='cv-onglets';onglets.setAttribute('role','tablist');
+ onglets.setAttribute('aria-label','Filtrer les équipes par catégorie');
+ barre.appendChild(onglets);
+ const droite=document.createElement('div');droite.className='cv-barre-droite';
+ const recherche=document.getElementById('cv-recherche-liste-equipes');
+ if(recherche)droite.appendChild(recherche.closest('.cv-recherche'));
+ const filtreClub=document.createElement('label');filtreClub.className='cv-filtre-club';
+ filtreClub.innerHTML='<span class="cv-sr">Filtrer par club</span>'+
+   '<select class="r-input" id="cv-equipes-club"><option value="">Tous les clubs</option></select>';
+ droite.appendChild(filtreClub);
+ // L'ajout n'occupe plus le haut de l'écran en permanence : un bouton l'ouvre, le formulaire
+ // d'origine vit dedans, inchangé.
+ const ajout=document.createElement('details');ajout.id='cv-ajout-equipe';ajout.className='cv-ajout';
+ ajout.innerHTML='<summary><span aria-hidden="true">+</span> Ajouter une équipe</summary>';
+ const aide=form.nextElementSibling; // la note « Joueurs et Éducs sont facultatifs »
+ ajout.appendChild(form);
+ if(aide&&aide.classList&&aide.classList.contains('note-generation'))ajout.appendChild(aide);
+ droite.appendChild(ajout);
+ barre.appendChild(droite);
+ // La barre passe EN TÊTE de la carte, pas juste au-dessus du tableau : #message-equipe et
+ // #reprise-equipes vivent entre les deux dans le HTML, et une barre insérée sous eux aurait
+ // relégué le « ✅ ajoutée » au-dessus des onglets, loin du geste qui l'a produit.
+ bloc.insertBefore(barre,bloc.firstChild);
+ onglets.addEventListener('click',function(e){
+   const onglet=e.target.closest('[data-cat-equipes]');if(!onglet)return;
+   activerOngletEquipes(onglet.getAttribute('data-cat-equipes'));
+   afficherEquipes(equipesCourantes);
+ });
+ onglets.addEventListener('keydown',function(e){
+   const onglet=e.target.closest('[data-cat-equipes]');
+   const pas={ArrowRight:1,ArrowLeft:-1,Home:'debut',End:'fin'}[e.key];
+   if(!onglet||pas===undefined)return;
+   const liste2=Array.from(onglets.querySelectorAll('[data-cat-equipes]'));
+   const i=liste2.indexOf(onglet);
+   const cible=pas==='debut'?liste2[0]:pas==='fin'?liste2[liste2.length-1]:liste2[(i+pas+liste2.length)%liste2.length];
+   e.preventDefault();cible.click();
+   const apres=onglets.querySelector('[data-cat-equipes="'+cible.getAttribute('data-cat-equipes')+'"]');
+   if(apres)apres.focus();
+ });
+ filtreClub.querySelector('select').addEventListener('change',function(e){
+   activerFiltreClubEquipes(e.target.value);
+   afficherEquipes(equipesCourantes);
+ });
+ // La barre d'onglets et la liste des clubs naissent VIDES : c'est `afficherEquipes()` qui les
+ // remplit, et elle a déjà tourné une fois avant la construction de cet écran. On repeint donc
+ // tout de suite, sinon les onglets n'apparaîtraient qu'au premier ajout d'équipe.
+ if(typeof afficherEquipes==='function'&&typeof equipesCourantes!=='undefined')afficherEquipes(equipesCourantes);
+}
+
 /** Déplace les contrôles d’origine : les événements et identifiants restent identiques. */
 function preparerOutilsCiel() {
  [['liste-equipes','.equipe-item','Rechercher une équipe'],['liste-suivi-clubs','.suivi-club-ligne','Rechercher un club']].forEach(function(def){
    const liste=document.getElementById(def[0]);if(!liste||document.getElementById('cv-recherche-'+def[0]))return;
    const barre=document.createElement('div');barre.className='cv-recherche';
-   barre.innerHTML='<label>'+def[2]+'<input class="r-input" type="search" id="cv-recherche-'+def[0]+'" data-liste="'+def[0]+'" data-lignes="'+def[1]+'" placeholder="Nom…"></label><span role="status" class="cv-recherche-resultat"></span>';
+   barre.innerHTML='<label><span class="cv-recherche-libelle">'+def[2]+'</span><input class="r-input" type="search" id="cv-recherche-'+def[0]+'" data-liste="'+def[0]+'" data-lignes="'+def[1]+'" placeholder="'+def[2]+'…"></label><span role="status" class="cv-recherche-resultat"></span>';
    liste.before(barre);barre.querySelector('input').addEventListener('input',actualiserRecherchesCiel);
  });
  const apresmidi=document.getElementById('bloc-apresmidi');
@@ -659,6 +773,8 @@ function preparerOutilsCiel() {
    preparerDateVerification();
  }
  preparerOngletsInvitation();
+ preparerSuiviClubs();
+ preparerEquipes();
  const generation=document.getElementById('bloc-generation');
  if(generation && !document.getElementById('cv-outils-planning')){
    const outils=document.createElement('details');outils.id='cv-outils-planning';outils.className='cv-options';

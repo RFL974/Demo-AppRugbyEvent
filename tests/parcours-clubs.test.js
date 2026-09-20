@@ -58,7 +58,7 @@ c.rafraichirRessourceAdmin=async()=>{};
  await c.onEnvoyerInvitationsGroupe();assert.equal(posts.at(-1).data.renvoyer,'non');
  let dossierOuvert='';const original=c.genererDossierFinal;c.genererDossierFinal=nom=>{dossierOuvert=nom;};
  const btn={disabled:false,getAttribute:k=>k==='data-action'?'envoyer-dossier':'Accepté'};
- const event={target:{closest:s=>s==='#liste-suivi-clubs [data-action][data-club]'?btn:null}};
+ const event={target:{closest:s=>s.includes('[data-action][data-club]')?btn:null}};
  clicks.forEach(fn=>fn(event));assert.equal(dossierOuvert,'Accepté');
  dossierOuvert='';btn.disabled=true;clicks.forEach(fn=>fn(event));assert.equal(dossierOuvert,'');
  c.genererDossierFinal=original;let preview=0;c.renouvelerLienSiDemande=async()=>false;c.ouvrirApercuEmail=()=>preview++;

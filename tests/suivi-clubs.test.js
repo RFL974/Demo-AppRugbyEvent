@@ -11,17 +11,23 @@ const lire = rel => fs.readFileSync(path.join(racine, rel), 'utf8');
 let controles = 0;
 function vrai(v, m) { assert.ok(v, m); controles++; }
 function egal(a, b, m) { assert.equal(a, b, m); controles++; }
-function noeud() { return { innerHTML: '', textContent: '', closest() { return null; } }; }
+function noeud() {
+  return { innerHTML: '', textContent: '', closest() { return null; },
+    classList: { toggle() {}, add() {}, remove() {} },
+    querySelector() { return null; }, querySelectorAll() { return []; } };
+}
 
 async function principal() {
   const dom = {
     'suivi-clubs-resume': noeud(), 'suivi-clubs-filtres': noeud(),
-    'liste-suivi-clubs': noeud(), 'message-suivi-clubs': noeud(), 'message-club-invite': noeud()
+    'liste-suivi-clubs': noeud(), 'message-suivi-clubs': noeud(), 'message-club-invite': noeud(),
+    'cv-fiche-club': noeud()
   };
   const posts = [], confirmations = [];
   const contexte = vm.createContext({
     console, setTimeout,
-    document: { getElementById: id => dom[id] || null, addEventListener() {} },
+    document: { getElementById: id => dom[id] || null, addEventListener() {},
+      querySelector: () => null, querySelectorAll: () => [] },
     configCourante: { global: {
       repas_sur_place_oui: 'oui', repas_sur_place_mode: 'prix_personne',
       gouter_fin_tournoi_oui: 'oui', gouter_fin_tournoi_mode: 'prix_personne'
@@ -112,17 +118,47 @@ async function principal() {
     dom['suivi-clubs-resume'].innerHTML.includes('Paiements attendus'), 'le résumé expose les deux actions prioritaires');
   vrai(dom['liste-suivi-clubs'].innerHTML.indexOf('Sans réponse') < dom['liste-suivi-clubs'].innerHTML.indexOf('Accepté impayé'),
     'les réponses manquantes apparaissent avant les paiements manquants');
-  vrai(dom['liste-suivi-clubs'].innerHTML.includes('15 repas') && dom['liste-suivi-clubs'].innerHTML.includes('10 goûters'),
-    'les commandes sont lisibles dans la ligne du club');
-  vrai(dom['liste-suivi-clubs'].innerHTML.includes('185') && dom['liste-suivi-clubs'].innerHTML.includes('À payer'),
-    'le montant et son état sont visibles');
-  vrai(dom['liste-suivi-clubs'].innerHTML.includes('Relancer la réponse') &&
-    dom['liste-suivi-clubs'].innerHTML.includes('Relancer le paiement'), 'les deux relances sont proposées au bon endroit');
-  vrai(dom['liste-suivi-clubs'].innerHTML.includes('Confirmation à renvoyer') &&
-    dom['liste-suivi-clubs'].innerHTML.includes('Confirmation envoyée le 19/09/2026 à 18:22'),
-    'le suivi expose la panne et la preuve horodatée d’un envoi réussi');
-  vrai(dom['liste-suivi-clubs'].innerHTML.includes('Renvoyer la confirmation'),
+  // Le TABLEAU porte des valeurs comparables : une quantité par prestation, le montant, l'état.
+  ['Club', 'Réponse', 'Repas', 'Goûters', 'Montant', 'Paiement', 'Action'].forEach(function (c) {
+    vrai(dom['liste-suivi-clubs'].innerHTML.includes('<span role="columnheader">' + c + '</span>'),
+      'le tableau garde sa colonne « ' + c + ' »');
+  });
+  vrai(dom['liste-suivi-clubs'].innerHTML.includes('data-label="Repas" title="15 repas">15<') &&
+    dom['liste-suivi-clubs'].innerHTML.includes('data-label="Goûters" title="10 goûters">10<'),
+    'les quantités commandées sont lisibles dans la ligne, le libellé long restant au survol');
+  vrai(dom['liste-suivi-clubs'].innerHTML.includes('data-label="Montant">185 €<'),
+    'le montant dû a sa propre colonne');
+  vrai(dom['liste-suivi-clubs'].innerHTML.includes('data-label="Paiement"><span class="suivi-badge est-du">En attente'),
+    'l’état de paiement est dit dans la ligne');
+  vrai(dom['liste-suivi-clubs'].innerHTML.includes('data-action="ouvrir-fiche" data-club="Accepté impayé"'),
+    'chaque ligne ouvre la fiche de SON club');
+  // ⛔ Aucune couleur seule : le liseré d'état de la ligne est doublé de sa pastille écrite.
+  vrai(dom['liste-suivi-clubs'].innerHTML.includes('class="suivi-badge etat-a-enregistrer">Équipes à ajouter'),
+    'l’état d’inscription reste écrit dans la ligne, pas seulement coloré');
+
+  // La FICHE d'un club : le détail chiffré et toutes les actions, sans aucune lecture réseau.
+  const avant = posts.length;
+  contexte.suiviSelectionnerClub('Accepté impayé');
+  egal(posts.length, avant, 'ouvrir la fiche d’un club ne déclenche aucune lecture réseau');
+  const fiche = dom['cv-fiche-club'].innerHTML;
+  vrai(fiche.includes('Accepté impayé') && fiche.includes('12 joueurs · 3 éducateurs'),
+    'la fiche nomme le club et ses effectifs annoncés');
+  vrai(fiche.includes('Frais d’inscription') && fiche.includes('Repas') && fiche.includes('Goûters'),
+    'la fiche détaille la commande, frais d’inscription compris');
+  vrai(fiche.includes('<dt>Total</dt><dd>185 €</dd>'), 'le total de la fiche est celui de la réponse figée');
+  vrai(fiche.includes('Aucune preuve de paiement enregistrée.'), 'la fiche dit l’absence de preuve de paiement');
+  vrai(fiche.includes('data-action="marquer-paye"') && fiche.includes('data-action="relance-paiement"'),
+    'les deux gestes de paiement sont proposés dès l’ouverture de la fiche');
+  vrai(fiche.includes('Confirmation à renvoyer'),
+    'la fiche expose la panne de confirmation');
+  vrai(fiche.includes('data-action="renvoyer-confirmation"'),
     'une confirmation absente propose une action de rattrapage explicite');
+  vrai(fiche.includes('Ouvrir la fiche complète') && fiche.includes('id="cv-fiche-reste" hidden'),
+    'le reste des actions attend un clic, et n’est donc pas dans la première lecture');
+  contexte.suiviSelectionnerClub('Accepté payé');
+  vrai(dom['cv-fiche-club'].innerHTML.includes('Confirmation envoyée le 19/09/2026 à 18:22'),
+    'la preuve horodatée d’un envoi réussi est lisible dans la fiche');
+  contexte.suiviSelectionnerClub('Accepté impayé');
 
   await contexte.suiviMarquerPaiement('Accepté impayé', true);
   egal(posts[0].action, 'enregistrerPaiementClub', 'marquer payé appelle uniquement l’action dédiée');

@@ -5,6 +5,19 @@
 
 let suiviClubsFiltre = 'tous';
 
+/* Le club dont la fiche est ouverte dans le panneau latéral, et l'état déplié de cette fiche.
+   ⭐ Portés par le MODULE, pas par le DOM : `afficherSuiviClubs()` repeint la liste à chaque
+   écriture et à chaque relecture ; un repère posé dans le HTML disparaîtrait avec elle, et la
+   fiche se refermerait toute seule sous les doigts de l'organisateur. */
+let suiviClubSelectionne = '';
+let suiviFicheDepliee = false;
+
+/** Un nombre à partir d'un montant figé (texte « 5.00 » ou « 5,00 »). Jamais NaN. */
+function suiviNombre(valeur) {
+  const n = Number(String(valeur == null ? '' : valeur).replace(',', '.'));
+  return Number.isFinite(n) ? n : 0;
+}
+
 function suiviClubDetail(club) {
   try {
     const detail = JSON.parse(String((club && club.detail_effectifs) || '{}')) || {};
@@ -16,18 +29,25 @@ function suiviClubCommande(club) {
   const detail = suiviClubDetail(club);
   const commande = detail._restauration && typeof detail._restauration === 'object'
     ? detail._restauration : {};
+  // ⭐ Le prix unitaire et le sous-total FIGÉS lors de la réponse du club sont conservés tels
+  //    quels : la fiche détaille « 22 × 5 € » sans recalculer quoi que ce soit, et sans jamais
+  //    relire les tarifs courants — qui ont pu changer depuis que le club a commandé.
   function prestation(nom) {
     const p = commande[nom] || {};
     return {
       joueurs: Math.max(0, Number(p.joueurs) || 0),
-      educateurs: Math.max(0, Number(p.educateurs) || 0)
+      educateurs: Math.max(0, Number(p.educateurs) || 0),
+      prix: suiviNombre(p.prix_unitaire),
+      sousTotal: suiviNombre(p.sous_total)
     };
   }
   const total = Number(String(commande.total == null ? '' : commande.total).replace(',', '.'));
+  // ⛔ Plus de `montantRepas` / `montantGouter` : ils doublaient `repas.sousTotal` et
+  //    `gouter.sousTotal` que `prestation()` expose désormais — deux champs pour le même
+  //    montant, c'est par là qu'une divergence commence. (Et leur `Number('5,00')` rendait NaN
+  //    sur un montant à virgule, là où `suiviNombre` le lit.)
   return { repas: prestation('repas'), gouter: prestation('gouter'),
-    total: Number.isFinite(total) ? Math.max(0, total) : 0, inscription: commande.inscription || {},
-    montantRepas: Number(commande.repas && commande.repas.sous_total || 0),
-    montantGouter: Number(commande.gouter && commande.gouter.sous_total || 0) };
+    total: Number.isFinite(total) ? Math.max(0, total) : 0, inscription: commande.inscription || {} };
 }
 
 function suiviEntierPositif(valeur) {
@@ -281,36 +301,153 @@ function suiviRangClub(club) {
   return 3;
 }
 
+/* ============================================================================
+ *  LE TABLEAU ET LA FICHE — un écran de lecture, une fiche d'action
+ * ============================================================================
+ *  La ligne répond à « où en est ce club ? » : un état par colonne, rien de plus. Tout le
+ *  détail et toutes les actions vivent dans la FICHE, à droite, pour le club sélectionné.
+ *
+ *  ⭐ AUCUNE LECTURE RÉSEAU ICI. Le tableau, les compteurs, les filtres et la fiche sont tous
+ *  calculés depuis `clubsInvitesCourants`, déjà en mémoire — la même liste que « Inviter un
+ *  club ». Sélectionner un club ne demande donc rien au serveur : `suiviSelectionnerClub()`
+ *  repeint la seule fiche, sans toucher au tableau.
+ *
+ *  ⛔ JAMAIS LA COULEUR SEULE (doctrine du lot précédent) : le liseré d'état de la ligne est
+ *  toujours doublé de sa pastille écrite, dans la cellule « Club ».
+ * ========================================================================== */
+
+/** Deux lettres pour la vignette du club — le début de son nom, jamais une invention. */
+function suiviInitiales(nom) {
+  const propre = String(nom || '').trim();
+  return (propre.slice(0, 2) || '??').toLocaleUpperCase('fr');
+}
+
 function suiviBadgeReponse(club, etat) {
   const trace = club.confirmation_reponse_envoyee
     ? '<small>Confirmation envoyée le ' + echapper(suiviDate(club.confirmation_reponse_envoyee)) + '</small>'
     : ((etat.accepte || etat.decline) ? '<small class="suivi-confirmation-a-renvoyer">Confirmation à renvoyer</small>' : '');
   if (etat.accepte) return '<span class="suivi-badge est-oui">Oui</span>' +
-    (club.date_reponse ? '<small>le ' + echapper(suiviDate(club.date_reponse)) + '</small>' : '') + trace;
+    (club.date_reponse ? '<small>Confirmée le ' + echapper(suiviDate(club.date_reponse)) + '</small>' : '') + trace;
   if (etat.decline) return '<span class="suivi-badge est-non">Non</span>' +
-    (club.date_reponse ? '<small>le ' + echapper(suiviDate(club.date_reponse)) + '</small>' : '') + trace;
+    (club.date_reponse ? '<small>Déclinée le ' + echapper(suiviDate(club.date_reponse)) + '</small>' : '') + trace;
   return '<span class="suivi-badge est-attente">En attente</span>' +
     (club.invitation_envoyee ? '<small>invitation envoyée le ' + echapper(suiviDate(club.invitation_envoyee)) + '</small>'
       : '<small>invitation non envoyée</small>');
 }
 
-function suiviPaiementHtml(club, etat) {
-  if (!etat.accepte) return '<span class="suivi-badge est-neutre">—</span>';
-  if (etat.commande.total <= 0) return '<span class="suivi-badge est-neutre">Rien à payer</span>';
-  const c = etat.commande;
-  const inscription = c.inscription;
-  const parClub = inscription.mode === 'par_club';
-  const nombre = parClub ? 1 : Number(inscription.nb_equipes || 0);
-  const detail = '<small>Inscription : ' + echapper(suiviEuros(Number(inscription.sous_total || 0))) +
-    ' (' + nombre + (parClub ? ' club' : ' équipe' + (nombre > 1 ? 's' : '')) +
-    ' × ' + echapper(suiviEuros(Number(inscription.prix_unitaire || 0))) + ')</small>' +
-    '<small>Repas : ' + echapper(suiviEuros(c.montantRepas)) + ' · Goûters : ' + echapper(suiviEuros(c.montantGouter)) + '</small>';
-  if (etat.paye) return '<span class="suivi-badge est-paye">Payé</span><small>' + echapper(suiviEuros(c.total)) + '</small>' + detail +
-    (club.date_paiement ? '<small>le ' + echapper(suiviDate(club.date_paiement)) + '</small>' : '');
-  return '<span class="suivi-badge est-du">À payer</span><small>' + echapper(suiviEuros(c.total)) + '</small>' + detail;
+/** La pastille de réponse, seule : c'est tout ce que la colonne « Réponse » du tableau porte. */
+function suiviPastilleReponse(etat) {
+  if (etat.accepte) return '<span class="suivi-badge est-oui">Oui</span>';
+  if (etat.decline) return '<span class="suivi-badge est-non">Non</span>';
+  return '<span class="suivi-badge est-attente">En attente</span>';
 }
 
-function suiviActionsHtml(club, etat) {
+function suiviLibellePrestation(type, etat) {
+  const quantite = etat.commande[type].joueurs + etat.commande[type].educateurs;
+  if (quantite) return String(quantite) + (type === 'repas' ? ' repas' : ' goûter' + (quantite > 1 ? 's' : ''));
+  const g = (configCourante && configCourante.global) || {};
+  const actif = type === 'repas' ? estOui(g.repas_sur_place_oui) : estOui(g.gouter_fin_tournoi_oui);
+  const mode = type === 'repas' ? g.repas_sur_place_mode : g.gouter_fin_tournoi_mode;
+  if (!actif) return 'Non proposé';
+  if (mode === 'compris_inscription') return 'Compris · quantité non demandée';
+  if (mode === 'offert_organisateur') return 'Offert · quantité non demandée';
+  return 'Aucun';
+}
+
+/**
+ * La cellule compacte d'une prestation : un NOMBRE quand il y en a un, sinon un tiret qui dit
+ * pourquoi au survol. ⛔ Jamais « 0 » là où la question n'a pas été posée au club : un zéro
+ * affirme « aucun repas commandé », ce qui est faux quand les repas sont compris dans
+ * l'inscription — le libellé long reste disponible dans le `title`.
+ */
+function suiviQuantitePrestation(type, etat) {
+  const long = suiviLibellePrestation(type, etat);
+  const quantite = etat.commande[type].joueurs + etat.commande[type].educateurs;
+  if (etat.decline) return { texte: '—', titre: 'Le club ne participe pas' };
+  if (!etat.accepte) return { texte: '—', titre: 'Le club n’a pas encore accepté' };
+  if (quantite) return { texte: String(quantite), titre: long };
+  return { texte: '—', titre: long };
+}
+
+/** L'état de paiement en un mot, pour la colonne du tableau. */
+function suiviEtatPaiement(etat) {
+  if (!etat.accepte) return { cle: 'neutre', libelle: 'Non concerné' };
+  if (etat.commande.total <= 0) return { cle: 'neutre', libelle: 'Rien à payer' };
+  if (etat.paye) return { cle: 'paye', libelle: 'Payé' };
+  return { cle: 'du', libelle: 'En attente' };
+}
+
+/**
+ * Le détail chiffré de la commande, ligne à ligne, tel que le club l'a figé.
+ *
+ * ⭐ LES FRAIS D'INSCRIPTION SONT UNE LIGNE COMME LES AUTRES. Sans eux, la somme des lignes ne
+ * fait pas le total affiché juste en dessous — une fiche qui se contredit elle-même.
+ * ⛔ Aucun prix n'est relu dans les réglages courants : un tarif modifié après la commande ne
+ * doit pas réécrire ce que le club a validé.
+ */
+function suiviLignesCommande(etat) {
+  const c = etat.commande;
+  const lignes = [];
+  const ins = c.inscription || {};
+  const fraisInscription = suiviNombre(ins.sous_total);
+  if (fraisInscription > 0) {
+    const parClub = ins.mode === 'par_club';
+    const nb = parClub ? 1 : Math.max(0, Number(ins.nb_equipes) || 0);
+    lignes.push({
+      libelle: 'Frais d’inscription', quantite: nb,
+      unite: parClub ? 'club' : 'équipe' + (nb > 1 ? 's' : ''),
+      prix: suiviNombre(ins.prix_unitaire), montant: fraisInscription
+    });
+  }
+  [['repas', 'Repas'], ['gouter', 'Goûters']].forEach(function (paire) {
+    const p = c[paire[0]];
+    if (!p || (p.sousTotal <= 0 && !p.joueurs && !p.educateurs)) return;
+    // Pas de prix unitaire figé (réponse ancienne) : une seule ligne, sans détail inventé.
+    if (p.prix <= 0) {
+      lignes.push({ libelle: paire[1], quantite: p.joueurs + p.educateurs, prix: 0, montant: p.sousTotal });
+      return;
+    }
+    const deuxCotes = p.joueurs > 0 && p.educateurs > 0;
+    [['joueurs', 'joueurs'], ['educateurs', 'éducateurs']].forEach(function (cote) {
+      const q = p[cote[0]];
+      if (!q) return;
+      lignes.push({
+        libelle: paire[1] + (deuxCotes ? ' ' + cote[1] : ''), quantite: q,
+        prix: p.prix, montant: q * p.prix
+      });
+    });
+  });
+  return lignes;
+}
+
+function suiviHtmlLignesCommande(etat) {
+  // ⛔ MÊME RÈGLE QUE LA LIGNE DU TABLEAU, qui affiche « — » tant que le club n'a pas accepté :
+  //    un récapitulatif figé avant la réponse n'est pas une commande, et la fiche ne doit pas
+  //    chiffrer ce que la ligne d'à côté déclare absent.
+  const lignes = etat.accepte ? suiviLignesCommande(etat) : [];
+  if (!lignes.length) {
+    return '<p class="cv-fiche-vide">' + (etat.accepte ? 'Aucune commande enregistrée.'
+      : (etat.decline ? 'Aucune commande : le club ne participe pas.'
+        : 'Aucune commande : le club n’a pas encore répondu.')) + '</p>';
+  }
+  return '<dl class="cv-fiche-commande">' + lignes.map(function (l) {
+    const detail = l.prix > 0
+      ? ' <span class="cv-fiche-detail">(' + l.quantite + (l.unite ? ' ' + echapper(l.unite) : '') +
+        ' × ' + echapper(suiviEuros(l.prix)) + ')</span>'
+      : (l.quantite ? ' <span class="cv-fiche-detail">(' + l.quantite + ')</span>' : '');
+    return '<div class="cv-fiche-ligne"><dt>' + echapper(l.libelle) + detail + '</dt>' +
+      '<dd>' + echapper(suiviEuros(l.montant)) + '</dd></div>';
+  }).join('') +
+    '<div class="cv-fiche-ligne cv-fiche-total"><dt>Total</dt><dd>' +
+    echapper(suiviEuros(etat.commande.total)) + '</dd></div></dl>';
+}
+
+/**
+ * Les actions d'un club. `opt.sansPaiement` retire la paire « Marquer payé / Relancer le
+ * paiement » : la fiche la montre déjà en tête, on ne la répète pas dans le dépliant.
+ */
+function suiviActionsHtml(club, etat, opt) {
+  const options = opt || {};
   const nom = echapper(String(club.club_nom || ''));
   const actions = [];
   if (etat.attente) {
@@ -323,7 +460,7 @@ function suiviActionsHtml(club, etat) {
     actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="renvoyer-confirmation" data-club="' +
       nom + '">Renvoyer la confirmation</button>');
   }
-  if (etat.paiementAttendu) {
+  if (etat.paiementAttendu && !options.sansPaiement) {
     actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="relance-paiement" data-club="' +
       nom + '">Relancer le paiement</button>' +
       '<button type="button" class="bouton suivi-action" data-action="marquer-paye" data-club="' + nom + '">Marquer payé</button>' +
@@ -335,10 +472,6 @@ function suiviActionsHtml(club, etat) {
   }
   if (etat.accepte || etat.dossierDisponible) {
     const dossierEnvoye = String(club.dossier_envoye || '').trim();
-    if (!etat.dossierDisponible) {
-      actions.unshift('<div class="suivi-rappel-equipes" role="note"><strong>Équipes à ajouter au tournoi</strong>' +
-        '<span>Dans Clubs invités, clique sur « Ajouter les équipes au tournoi » pour débloquer l’envoi du dossier final.</span></div>');
-    }
     actions.push('<button type="button" class="bouton suivi-action" data-action="envoyer-dossier" data-club="' + nom + '"' +
       (etat.dossierDisponible ? '' : ' disabled title="Ajoute d’abord les équipes au tournoi dans Clubs invités"') + '>' +
       (dossierEnvoye ? 'Renvoyer le dossier final' : 'Envoyer le dossier final') + '</button>' +
@@ -348,13 +481,168 @@ function suiviActionsHtml(club, etat) {
   return actions.length ? actions.join('') : '<span class="suivi-termine">À jour</span>';
 }
 
+/**
+ * Le rappel du BLOCAGE du dossier final. ⭐ Hors du dépliant d'actions, volontairement : c'est
+ * l'explication d'un bouton grisé. La cacher derrière un second clic, c'est laisser
+ * l'organisateur devant un dossier qu'il ne peut pas envoyer sans lui dire pourquoi.
+ */
+function suiviHtmlRappelEquipes(etat) {
+  if (!etat.accepte || etat.dossierDisponible) return '';
+  return '<div class="suivi-rappel-equipes" role="note"><strong>Équipes à ajouter au tournoi</strong>' +
+    '<span>Dans Clubs invités, clique sur « Ajouter les équipes au tournoi » pour débloquer l’envoi du dossier final.</span></div>';
+}
+
+/** La fiche complète d'un club : réponse, commande chiffrée, paiement, puis les actions. */
+function suiviHtmlFiche(club) {
+  if (!club) {
+    return '<p class="cv-fiche-vide" data-role="fiche-vide">Choisissez un club dans le tableau pour ' +
+      'voir sa réponse, sa commande et son paiement.</p>';
+  }
+  const etat = suiviClubEtat(club);
+  const nom = String(club.club_nom || 'Club sans nom');
+  const effectifs = suiviClubEffectifs(club);
+  const effectifsTexte = etat.accepte
+    ? [effectifs.joueurs + ' joueur' + (effectifs.joueurs > 1 ? 's' : ''),
+       effectifs.educateurs + ' éducateur' + (effectifs.educateurs > 1 ? 's' : '')].join(' · ')
+    : (String(club.club_contact_email || '').trim() || 'Aucun email');
+  const paiement = suiviEtatPaiement(etat);
+  const notePaiement = etat.paye
+    ? 'Paiement enregistré' + (club.date_paiement ? ' le ' + suiviDate(club.date_paiement) : '') + '.'
+    : (etat.paiementAttendu ? 'Aucune preuve de paiement enregistrée.'
+      : (etat.accepte ? 'Rien à régler pour ce club.'
+        : (etat.decline ? 'Le club ne participe pas.' : 'Le club n’a pas encore répondu.')));
+  const boutonsPaiement = etat.paiementAttendu
+    ? '<div class="cv-fiche-actions">' +
+      '<button type="button" class="bouton suivi-action" data-action="marquer-paye" data-club="' + echapper(nom) + '">Marquer payé</button>' +
+      '<button type="button" class="bouton bouton-doux suivi-action" data-action="relance-paiement" data-club="' + echapper(nom) + '">Relancer le paiement</button>' +
+      '</div>'
+    : '';
+  const resteAFaire = suiviActionsHtml(club, etat, { sansPaiement: true });
+  return '<div class="cv-fiche-entete">' +
+      '<span class="cv-fiche-avatar" aria-hidden="true">' + echapper(suiviInitiales(nom)) + '</span>' +
+      '<div class="cv-fiche-titre"><h3 id="cv-fiche-nom" tabindex="-1">' + echapper(nom) + '</h3>' +
+        '<small>' + echapper(effectifsTexte) + '</small></div>' +
+      '<button type="button" class="cv-fiche-fermer bouton-lien" data-action="fermer-fiche" ' +
+        'aria-label="Fermer la fiche de ' + echapper(nom) + '">×</button>' +
+    '</div>' +
+    '<section class="cv-fiche-section"><h4>Réponse</h4>' + suiviBadgeReponse(club, etat) + '</section>' +
+    '<section class="cv-fiche-section"><h4>Commandes</h4>' + suiviHtmlLignesCommande(etat) + '</section>' +
+    '<section class="cv-fiche-section"><h4>Paiement <span class="suivi-badge est-' + paiement.cle + '">' +
+      echapper(paiement.libelle) + '</span></h4>' +
+      '<p class="cv-fiche-note">' + echapper(notePaiement) + '</p>' + boutonsPaiement + '</section>' +
+    suiviHtmlRappelEquipes(etat) +
+    '<section class="cv-fiche-section cv-fiche-suite"><h4>Actions</h4>' +
+      '<button type="button" class="bouton-lien cv-fiche-plus" data-action="fiche-complete" ' +
+        'aria-expanded="' + (suiviFicheDepliee ? 'true' : 'false') + '" aria-controls="cv-fiche-reste">' +
+        (suiviFicheDepliee ? 'Replier la fiche' : 'Ouvrir la fiche complète') + '</button>' +
+      '<div class="suivi-club-actions" id="cv-fiche-reste"' + (suiviFicheDepliee ? '' : ' hidden') + '>' +
+        resteAFaire + '</div>' +
+    '</section>';
+}
+
+/** Peint la SEULE fiche latérale. Appelée à chaque sélection : le tableau n'est pas retouché. */
+function afficherFicheClub() {
+  const fiche = document.getElementById('cv-fiche-club');
+  if (!fiche) return;
+  const club = (clubsInvitesCourants || []).find(function (c) {
+    return memeTexteSouple(c.club_nom, suiviClubSelectionne);
+  });
+  if (!club) suiviClubSelectionne = '';
+  fiche.innerHTML = suiviHtmlFiche(club || null);
+  fiche.classList.toggle('est-vide', !club);
+}
+
+/** Sélectionne un club : bascule le repère des lignes et repeint la fiche. Aucune requête. */
+function suiviSelectionnerClub(nom) {
+  const change = !memeTexteSouple(nom, suiviClubSelectionne);
+  suiviClubSelectionne = String(nom || '');
+  if (change) suiviFicheDepliee = false;
+  document.querySelectorAll('#liste-suivi-clubs .suivi-club-ligne').forEach(function (ligne) {
+    const actif = memeTexteSouple(ligne.getAttribute('data-club'), suiviClubSelectionne);
+    ligne.classList.toggle('est-selectionne', actif);
+    const bouton = ligne.querySelector('.suivi-ouvrir');
+    if (bouton) bouton.setAttribute('aria-expanded', actif ? 'true' : 'false');
+  });
+  afficherFicheClub();
+  const titre = document.getElementById('cv-fiche-nom');
+  if (titre && typeof titre.focus === 'function') titre.focus();
+}
+
+/** Les compteurs de tête. Cliquables : ce sont les mêmes filtres que la barre d'onglets. */
+function suiviHtmlResume(compte) {
+  return [
+    ['Réponses attendues', compte.attente, 'attente'], ['Participants', compte.oui, 'oui'],
+    ['Ne participent pas', compte.non, 'non'], ['Paiements attendus', compte.paiement, 'paiement']
+  ].map(function (x) {
+    // ⚠️ `aria-label` OBLIGATOIRE : sans lui, le nom accessible colle le chiffre au libellé
+    //    (« 1Réponses attendues »), les deux nœuds étant collés dans le HTML.
+    return '<button type="button" class="suivi-indicateur ' + (suiviClubsFiltre === x[2] ? 'est-actif' : '') +
+      '" data-filtre="' + x[2] + '" aria-pressed="' + (suiviClubsFiltre === x[2] ? 'true' : 'false') +
+      '" aria-label="' + x[1] + ' ' + echapper(x[0].toLocaleLowerCase('fr')) + '">' +
+      '<strong>' + x[1] + '</strong><span>' + x[0] + '</span></button>';
+  }).join('');
+}
+
+/** La barre de filtres. Chaque onglet porte son compte : on sait avant de cliquer. */
+function suiviHtmlFiltres(compte) {
+  return [
+    ['tous', 'Tous', compte.tous], ['attente', 'À relancer', compte.attente],
+    ['oui', 'Oui', compte.oui], ['non', 'Non', compte.non], ['paiement', 'Paiements', compte.paiement]
+  ].map(function (x) {
+    const actif = suiviClubsFiltre === x[0];
+    return '<button type="button" class="suivi-filtre ' + (actif ? 'est-actif' : '') +
+      '" data-filtre="' + x[0] + '" aria-pressed="' + (actif ? 'true' : 'false') +
+      '" aria-label="' + echapper(x[1]) + ' — ' + x[2] + ' club' + (x[2] > 1 ? 's' : '') + '">' + x[1] +
+      '<span class="suivi-filtre-compte">' + x[2] + '</span></button>';
+  }).join('');
+}
+
+/** Le tableau : une ligne par club, un état par colonne, et « Ouvrir » vers la fiche. */
+function suiviHtmlTableau(affiches) {
+  const colonnes = ['Club', 'Réponse', 'Repas', 'Goûters', 'Montant', 'Paiement', 'Action'];
+  return '<div class="suivi-clubs-table" role="table" aria-label="Suivi des clubs">' +
+    '<div class="suivi-clubs-entete" role="row">' +
+      colonnes.map(function (c) { return '<span role="columnheader">' + c + '</span>'; }).join('') +
+    '</div>' +
+    affiches.map(function (club) {
+      const e = suiviClubEtat(club);
+      const nom = String(club.club_nom || 'Club sans nom');
+      const repas = suiviQuantitePrestation('repas', e);
+      const gouter = suiviQuantitePrestation('gouter', e);
+      const paiement = suiviEtatPaiement(e);
+      const montant = e.accepte && e.commande.total > 0 ? suiviEuros(e.commande.total) : '—';
+      const choisi = memeTexteSouple(nom, suiviClubSelectionne);
+      return '<article class="suivi-club-ligne club-etat-' + e.inscription + (choisi ? ' est-selectionne' : '') +
+          '" data-club="' + echapper(nom) + '" role="row">' +
+        '<div class="suivi-club-identite" role="cell">' +
+          '<span class="suivi-avatar" aria-hidden="true">' + echapper(suiviInitiales(nom)) + '</span>' +
+          '<span class="suivi-club-nom"><strong>' + echapper(nom) + '</strong>' +
+            '<span class="suivi-badge etat-' + e.inscription + '">' + LIBELLES_ETAT_CLUB[e.inscription] + '</span>' +
+          '</span></div>' +
+        '<div class="suivi-cellule" role="cell" data-label="Réponse">' + suiviPastilleReponse(e) + '</div>' +
+        '<div class="suivi-cellule suivi-nombre" role="cell" data-label="Repas" title="' + echapper(repas.titre) + '">' +
+          echapper(repas.texte) + '</div>' +
+        '<div class="suivi-cellule suivi-nombre" role="cell" data-label="Goûters" title="' + echapper(gouter.titre) + '">' +
+          echapper(gouter.texte) + '</div>' +
+        '<div class="suivi-cellule suivi-nombre" role="cell" data-label="Montant">' + echapper(montant) + '</div>' +
+        '<div class="suivi-cellule" role="cell" data-label="Paiement">' +
+          '<span class="suivi-badge est-' + paiement.cle + '">' + echapper(paiement.libelle) + '</span></div>' +
+        '<div class="suivi-cellule suivi-club-ouvrir" role="cell" data-label="Action">' +
+          '<button type="button" class="bouton-lien suivi-ouvrir" data-action="ouvrir-fiche" data-club="' + echapper(nom) +
+            '" aria-label="Ouvrir la fiche de ' + echapper(nom) +
+            '" aria-controls="cv-fiche-club" aria-expanded="' + (choisi ? 'true' : 'false') + '">Ouvrir' +
+            '<span class="suivi-chevron" aria-hidden="true">›</span></button></div>' +
+      '</article>';
+    }).join('') + '</div>';
+}
+
 function afficherSuiviClubs() {
   const resume = document.getElementById('suivi-clubs-resume');
   const filtres = document.getElementById('suivi-clubs-filtres');
   const liste = document.getElementById('liste-suivi-clubs');
   if (!resume || !filtres || !liste) return;
   const clubs = (clubsInvitesCourants || []).slice();
-  const compte = { attente: 0, oui: 0, non: 0, paiement: 0 };
+  const compte = { tous: clubs.length, attente: 0, oui: 0, non: 0, paiement: 0 };
   clubs.forEach(function (club) {
     const e = suiviClubEtat(club);
     if (e.attente) compte.attente++;
@@ -362,41 +650,23 @@ function afficherSuiviClubs() {
     if (e.decline) compte.non++;
     if (e.paiementAttendu) compte.paiement++;
   });
-  resume.innerHTML = [
-    ['Réponses attendues', compte.attente, 'attente'], ['Participent', compte.oui, 'oui'],
-    ['Ne participent pas', compte.non, 'non'], ['Paiements attendus', compte.paiement, 'paiement']
-  ].map(function (x) {
-    return '<button type="button" class="suivi-indicateur ' + (suiviClubsFiltre === x[2] ? 'est-actif' : '') +
-      '" data-filtre="' + x[2] + '"><strong>' + x[1] + '</strong><span>' + x[0] + '</span></button>';
-  }).join('');
-  filtres.innerHTML = [
-    ['tous', 'Tous'], ['attente', 'À relancer'], ['oui', 'Oui'], ['non', 'Non'], ['paiement', 'Paiements']
-  ].map(function (x) {
-    return '<button type="button" class="suivi-filtre ' + (suiviClubsFiltre === x[0] ? 'est-actif' : '') +
-      '" data-filtre="' + x[0] + '">' + x[1] + '</button>';
-  }).join('');
+  resume.innerHTML = suiviHtmlResume(compte);
+  filtres.innerHTML = suiviHtmlFiltres(compte);
 
   const affiches = clubs.filter(function (club) { return suiviCorrespondFiltre(suiviClubEtat(club)); })
     .sort(function (a, b) {
       return suiviRangClub(a) - suiviRangClub(b) || String(a.club_nom || '').localeCompare(String(b.club_nom || ''), 'fr');
     });
-  if (!affiches.length) {
-    liste.innerHTML = '<p class="vide">Aucun club dans ce filtre.</p>';
-    return;
+  // La fiche suit la liste : un club sorti du filtre ne doit pas rester ouvert à côté d'un
+  // tableau qui ne le montre plus.
+  if (suiviClubSelectionne && !affiches.some(function (c) { return memeTexteSouple(c.club_nom, suiviClubSelectionne); })) {
+    suiviClubSelectionne = '';
+    suiviFicheDepliee = false;
   }
-  liste.innerHTML = '<div class="suivi-clubs-entete"><span>Club</span><span>Réponse</span><span>Repas</span><span>Goûter</span><span>Paiement</span><span>Action</span></div>' +
-    affiches.map(function (club) {
-      const e = suiviClubEtat(club);
-      return '<article class="suivi-club-ligne club-etat-' + e.inscription + '" data-club="' + echapper(club.club_nom || '') + '">' +
-        '<div class="suivi-club-identite"><strong>' + echapper(club.club_nom || 'Club sans nom') + '</strong>' +
-        '<small>' + echapper(club.club_contact_email || 'Aucun email') + '</small>' +
-        '<span class="suivi-badge etat-' + e.inscription + '">' + LIBELLES_ETAT_CLUB[e.inscription] + '</span></div>' +
-        '<div class="suivi-cellule" data-label="Réponse">' + suiviBadgeReponse(club, e) + '</div>' +
-        '<div class="suivi-cellule" data-label="Repas"><span>' + echapper(suiviLibellePrestation('repas', e)) + '</span></div>' +
-        '<div class="suivi-cellule" data-label="Goûter"><span>' + echapper(suiviLibellePrestation('gouter', e)) + '</span></div>' +
-        '<div class="suivi-cellule" data-label="Paiement">' + suiviPaiementHtml(club, e) + '</div>' +
-        '<div class="suivi-club-actions"><details name="detail-club"><summary>Ouvrir</summary><div class="cv-detail-club"><button type="button" class="bouton-lien cv-fermer-club" aria-label="Fermer la fiche du club">Fermer ×</button><h3>' + echapper(club.club_nom || 'Club') + '</h3><p>' + echapper(club.club_contact_email || 'Aucun email') + '</p>' + suiviPaiementHtml(club, e) + suiviActionsHtml(club, e) + '</div></details></div></article>';
-    }).join('');
+  liste.innerHTML = affiches.length
+    ? suiviHtmlTableau(affiches)
+    : '<p class="vide">Aucun club dans ce filtre.</p>';
+  afficherFicheClub();
   if(typeof actualiserRecherchesCiel==='function')actualiserRecherchesCiel();
 }
 
@@ -468,11 +738,32 @@ document.addEventListener('click', function (event) {
     afficherSuiviClubs();
     return;
   }
-  const bouton = event.target.closest('#liste-suivi-clubs [data-action][data-club]');
+  // Fermer la fiche et la déplier ne portent pas de club : elles agissent sur la sélection.
+  const fiche = event.target.closest('#cv-fiche-club [data-action]');
+  if (fiche) {
+    const geste = fiche.getAttribute('data-action');
+    if (geste === 'fermer-fiche') {
+      const ligne = document.querySelector('#liste-suivi-clubs .suivi-club-ligne.est-selectionne .suivi-ouvrir');
+      suiviSelectionnerClub('');
+      if (ligne && typeof ligne.focus === 'function') ligne.focus(); // le focus revient d'où il venait
+      return;
+    }
+    if (geste === 'fiche-complete') {
+      suiviFicheDepliee = !suiviFicheDepliee;
+      afficherFicheClub();
+      const plus = document.querySelector('#cv-fiche-club .cv-fiche-plus');
+      if (plus && typeof plus.focus === 'function') plus.focus();
+      return;
+    }
+  }
+  // ⭐ Les actions vivent dans les DEUX zones : le tableau (repli sans panneau latéral) et la
+  //   fiche. Un seul contrat `data-action` + `data-club`, un seul aiguillage.
+  const bouton = event.target.closest('#liste-suivi-clubs [data-action][data-club], #cv-fiche-club [data-action][data-club]');
   if (!bouton || bouton.disabled) return;
   const nom = bouton.getAttribute('data-club');
   const action = bouton.getAttribute('data-action');
-  if (action === 'relance-reponse') envoyerInvitationClubUI(nom, { relance: true });
+  if (action === 'ouvrir-fiche') suiviSelectionnerClub(nom);
+  else if (action === 'relance-reponse') envoyerInvitationClubUI(nom, { relance: true });
   else if (action === 'relance-paiement') suiviRelancerPaiement(nom);
   else if (action === 'renvoyer-confirmation') suiviRenvoyerConfirmation(nom);
   else if (action === 'marquer-paye') suiviMarquerPaiement(nom, true);

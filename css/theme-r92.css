@@ -1028,3 +1028,171 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
   .theme-clair .cv-invitation-cartes > .carte:first-child,
   .theme-clair .cv-dossier-cartes > .carte:first-child { border-top-left-radius:16px; }
 }
+
+/* ============================================================================
+   BARRES D'OUTILS, TABLEAUX ET FICHE LATÉRALE — écrans « Suivi des clubs » et « Équipes »
+   ============================================================================
+   Un écran de travail = une barre d'outils (filtrer, chercher, agir) puis un TABLEAU de
+   valeurs comparables. Les cartes sont réservées aux écrans où chaque élément porte son
+   propre formulaire — « Inviter un club ». Ici on compare des clubs et des équipes entre eux :
+   l'alignement en colonnes est ce qui rend la comparaison possible.
+   ⭐ Sous 1180 px (suivi) / 900 px (équipes), le MÊME balisage s'empile en fiches étiquetées
+   grâce aux `data-label` : tableau sur grand écran, cartes sur petit, un seul rendu.
+   ========================================================================== */
+
+/* Réservé aux lecteurs d'écran : un texte qui explique un bouton sans encombrer la barre. */
+.cv-sr { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+
+.cv-barre-outils { display:flex; flex-wrap:wrap; align-items:flex-end; justify-content:space-between; gap:12px; margin:0 0 4px; }
+.cv-barre-droite { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-left:auto; }
+.cv-barre-droite .cv-recherche { margin:0; }
+/* Dans une barre d'outils, le libellé visible volerait la place aux filtres : c'est le
+   placeholder qui nomme le champ, et le libellé reste lu par les lecteurs d'écran. */
+.cv-barre-droite .cv-recherche-libelle { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
+.cv-barre-droite .cv-recherche input { min-width:200px; }
+.cv-barre-droite .suivi-pdf-actions { margin:0; }
+.theme-clair .cv-note-tri { margin:0 0 12px; color:var(--cv-secondaire); font-size:13px; }
+
+/* Le compte porté par un onglet : on sait ce qu'on va trouver avant de cliquer. */
+.theme-clair .cv-onglet-compte,
+.theme-clair .suivi-filtre-compte { display:inline-flex; align-items:center; justify-content:center; min-width:24px; margin-left:8px; padding:1px 7px; border-radius:999px; background:#e3edf6; color:var(--cv-secondaire); font-size:12px; font-weight:700; }
+.theme-clair .cv-onglet.est-actif .cv-onglet-compte,
+.theme-clair .suivi-filtre.est-actif .suivi-filtre-compte { background:var(--cv-selection); color:var(--cv-action); }
+
+/* ------------------------------------------------------------------ Suivi des clubs */
+.cv-suivi { display:grid; grid-template-columns:minmax(0,1fr); gap:20px; align-items:start; }
+.theme-clair #bloc-suivi-clubs { min-width:0; }
+.theme-clair .suivi-clubs-filtres { margin:0; }
+.theme-clair .suivi-clubs-table { border:1px solid var(--cv-bordure); border-radius:12px; overflow:hidden; background:#fff; }
+.theme-clair .suivi-clubs-entete { padding:12px; background:#f7fafd; border-bottom:1px solid var(--cv-bordure); color:var(--cv-secondaire); font-size:12px; font-weight:650; letter-spacing:0; }
+.theme-clair .suivi-clubs-entete,
+.theme-clair .suivi-club-ligne { grid-template-columns:minmax(170px,1.5fr) minmax(84px,.8fr) minmax(58px,.5fr) minmax(58px,.5fr) minmax(80px,.7fr) minmax(100px,.9fr) minmax(80px,.7fr); gap:8px; align-items:center; }
+.theme-clair .suivi-club-ligne { margin:0; padding:12px; border-radius:0; border-width:0 0 1px 4px; border-bottom-style:solid; border-bottom-color:var(--cv-bordure); }
+.theme-clair .suivi-clubs-table .suivi-club-ligne:last-child { border-bottom-width:0; }
+.theme-clair .suivi-club-ligne:hover { background:#f9fcfe; }
+/* La ligne choisie se voit sans que la couleur porte l'information seule : le bouton
+   « Ouvrir » de cette ligne passe aussi à aria-expanded="true". */
+.theme-clair .suivi-club-ligne.est-selectionne { background:#e9f4fd; box-shadow:inset 0 0 0 1px #9dcdeb; }
+.theme-clair .suivi-club-identite { flex-direction:row; align-items:center; gap:10px; }
+.theme-clair .suivi-club-nom { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.theme-clair .suivi-club-nom strong { font-size:14px; font-weight:650; }
+.theme-clair .suivi-avatar { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; width:36px; height:36px; border-radius:999px; background:var(--cv-selection); color:var(--cv-action); font-size:12px; font-weight:700; }
+.theme-clair .suivi-nombre { align-items:flex-start; font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+.theme-clair .suivi-cellule .suivi-badge { font-size:12px; }
+.theme-clair .suivi-club-ouvrir { align-items:stretch; }
+.theme-clair .suivi-ouvrir { display:inline-flex; align-items:center; gap:6px; min-height:36px; padding:7px 10px; border:1px solid transparent; border-radius:8px; background:transparent; color:var(--cv-action); font-size:13px; font-weight:600; }
+.theme-clair .suivi-ouvrir:hover { background:var(--cv-selection); border-color:var(--cv-bordure); }
+.theme-clair .suivi-chevron { font-size:16px; line-height:1; }
+
+/* La fiche du club choisi. `est-vide` = aucun club sélectionné : elle n'occupe la colonne
+   que sur les écrans qui en ont la place, et disparaît partout ailleurs. */
+.theme-clair .cv-fiche-club { display:flex; flex-direction:column; gap:18px; padding:20px; }
+.theme-clair .cv-fiche-entete { display:flex; align-items:flex-start; gap:12px; }
+.theme-clair .cv-fiche-avatar { display:inline-flex; align-items:center; justify-content:center; flex:0 0 auto; width:44px; height:44px; border-radius:999px; background:var(--cv-selection); color:var(--cv-action); font-size:14px; font-weight:700; }
+.theme-clair .cv-fiche-titre { min-width:0; }
+.theme-clair .cv-fiche-titre h3 { margin:0; font-size:17px; overflow-wrap:anywhere; }
+.theme-clair .cv-fiche-titre small { color:var(--cv-secondaire); font-size:13px; }
+.theme-clair .cv-fiche-fermer { margin-left:auto; min-height:32px; padding:2px 10px; border:1px solid var(--cv-bordure); border-radius:8px; font-size:18px; line-height:1; }
+.theme-clair .cv-fiche-section { display:flex; flex-direction:column; gap:8px; align-items:flex-start; padding-top:16px; border-top:1px solid var(--cv-bordure); }
+.theme-clair .cv-fiche-entete + .cv-fiche-section { padding-top:0; border-top:0; }
+.theme-clair .cv-fiche-section h4 { display:flex; align-items:center; gap:10px; margin:0; font-size:14px; font-weight:650; letter-spacing:-.01em; }
+.theme-clair .cv-fiche-section small { color:var(--cv-secondaire); font-size:12px; }
+.theme-clair .cv-fiche-note { margin:0; color:var(--cv-secondaire); font-size:13px; }
+.theme-clair .cv-fiche-vide { margin:0; color:var(--cv-secondaire); font-size:13px; line-height:1.6; }
+.theme-clair .cv-fiche-commande { display:flex; flex-direction:column; gap:8px; width:100%; margin:0; }
+.theme-clair .cv-fiche-ligne { display:flex; align-items:baseline; justify-content:space-between; gap:12px; font-size:13px; }
+.theme-clair .cv-fiche-ligne dt { margin:0; color:var(--cv-texte); }
+.theme-clair .cv-fiche-ligne dd { margin:0; font-weight:650; font-variant-numeric:tabular-nums; white-space:nowrap; }
+.theme-clair .cv-fiche-detail { color:var(--cv-secondaire); }
+.theme-clair .cv-fiche-total { padding-top:8px; border-top:1px solid var(--cv-bordure); font-size:14px; }
+.theme-clair .cv-fiche-total dt { font-weight:650; }
+.theme-clair .cv-fiche-total dd { font-size:17px; }
+.theme-clair .cv-fiche-actions { display:flex; flex-wrap:wrap; gap:8px; width:100%; }
+.theme-clair .cv-fiche-actions .bouton { flex:1 1 140px; }
+.theme-clair .cv-fiche-plus { min-height:36px; padding:6px 0; border:0; background:transparent; text-decoration:underline; }
+.theme-clair .cv-fiche-suite .suivi-club-actions { width:100%; gap:8px; }
+.theme-clair .cv-fiche-club .suivi-rappel-equipes { margin:0; }
+
+/* Trois régimes, dictés par la largeur dont SEPT colonnes ont besoin :
+   ① ≥1380px : le tableau et la fiche côte à côte, comme la maquette ;
+   ② 1180→1379px : le tableau tient encore ses sept colonnes mais plus la fiche à côté — elle
+     devient un tiroir à droite, plutôt que d'écraser les colonnes ;
+   ③ <1180px : les lignes sont DÉJÀ empilées en fiches étiquetées (styles.css) ; un tiroir
+     viendrait recouvrir un tableau qui n'a plus besoin de largeur, alors la fiche reprend sa
+     place dans le flux, sous le tableau — et le focus l'y amène à l'ouverture. */
+@media (min-width:1380px) {
+  .cv-suivi { grid-template-columns:minmax(0,1fr) 330px; }
+}
+@media (min-width:1180px) and (max-width:1379px) {
+  .theme-clair .cv-fiche-club:not(.est-vide) { position:fixed; right:24px; top:96px; bottom:24px; width:340px; max-width:calc(100vw - 48px); overflow-y:auto; z-index:40; box-shadow:var(--cv-ombre); }
+}
+@media (max-width:1379px) {
+  .theme-clair .cv-fiche-club.est-vide { display:none; }
+}
+/* Dans le flux, la fiche ne s'étire pas sur toute la largeur : ses lignes « libellé … montant »
+   deviendraient illisibles, l'œil perdant le lien entre les deux bouts. */
+@media (max-width:1179px) {
+  .theme-clair .cv-fiche-club { max-width:560px; }
+}
+@media (max-width:1180px) {
+  .theme-clair .suivi-clubs-entete { display:none; }
+  .theme-clair .suivi-club-ligne { grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; border-bottom-width:1px; }
+  .theme-clair .suivi-club-identite { grid-column:1 / -1; }
+  .theme-clair .suivi-club-ouvrir { grid-column:1 / -1; align-items:flex-start; }
+}
+/* Deux colonnes tenues jusqu'au téléphone : « Repas 22 » et « Goûters 18 » sont assez courts
+   pour cohabiter, et une seule colonne allongeait chaque club sur sept lignes. */
+@media (max-width:640px) {
+  .theme-clair .suivi-club-ligne { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:360px) {
+  .theme-clair .suivi-club-ligne { grid-template-columns:1fr; }
+}
+
+/* ------------------------------------------------------------------------ Équipes */
+.theme-clair .cv-filtre-club select { min-height:44px; }
+.theme-clair .cv-ajout { border:0; }
+.theme-clair .cv-ajout > summary { display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 16px; border:1px solid var(--cv-action); border-radius:10px; background:var(--cv-action); color:#fff; font-size:14px; font-weight:600; list-style:none; cursor:pointer; }
+.theme-clair .cv-ajout > summary::-webkit-details-marker { display:none; }
+.theme-clair .cv-ajout > summary:hover { background:#104873; }
+.theme-clair .cv-ajout[open] { display:block; width:100%; }
+.theme-clair .cv-ajout[open] > summary { margin-bottom:12px; }
+.theme-clair .cv-ajout .form-equipe { flex-wrap:wrap; gap:10px; }
+.theme-clair .cv-ajout .note-generation { margin:12px 0 0; }
+
+.theme-clair .cv-table { border:1px solid var(--cv-bordure); border-radius:12px; overflow:hidden; background:#fff; }
+.theme-clair .cv-table-entete,
+.theme-clair .cv-table .equipe-item { display:grid; grid-template-columns:minmax(160px,1.6fr) minmax(120px,1.2fr) minmax(90px,.8fr) minmax(70px,.6fr) minmax(90px,.7fr) minmax(110px,.9fr); gap:12px; align-items:center; }
+.theme-clair .cv-table-entete { padding:12px; background:#f7fafd; border-bottom:1px solid var(--cv-bordure); color:var(--cv-secondaire); font-size:12px; font-weight:650; }
+.theme-clair .cv-table .equipe-item { margin:0; padding:12px; background:#fff; border:0; border-bottom:1px solid var(--cv-bordure); border-radius:0; }
+.theme-clair .cv-table .equipe-item:last-child { border-bottom:0; }
+.theme-clair .cv-table .equipe-item:hover { background:#f9fcfe; }
+.theme-clair .cv-table .equipe-item .nom { display:flex; flex-direction:column; align-items:flex-start; gap:4px; min-width:0; font-size:14px; font-weight:650; overflow-wrap:anywhere; }
+.theme-clair .cv-table-doux { color:var(--cv-secondaire); font-size:14px; overflow-wrap:anywhere; }
+.theme-clair .cv-table-nombre { font-size:14px; font-weight:600; font-variant-numeric:tabular-nums; }
+.theme-clair .cv-table-vide { color:var(--cv-secondaire); font-weight:400; }
+.theme-clair .cv-table .equipe-actions { justify-content:flex-end; gap:8px; }
+.theme-clair .cv-table .bouton-modif { display:inline-flex; align-items:center; gap:6px; min-height:36px; padding:7px 10px; font-size:13px; }
+.theme-clair .cv-modif-libelle { font-weight:600; }
+.theme-clair .cv-table-outils { display:flex; justify-content:flex-end; margin:0 0 12px; }
+
+/* L'édition en ligne remplace les six cellules par ses champs : elle reprend une mise en page
+   libre, sinon les champs iraient se ranger dans les colonnes du tableau. */
+.theme-clair .cv-table .equipe-item.en-edition { display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--cv-selection); }
+.theme-clair .cv-table .equipe-item.en-edition .equipe-note-edition { flex:1 0 100%; color:var(--cv-attention); font-size:13px; }
+
+@media (max-width:900px) {
+  .theme-clair .cv-table-entete { display:none; }
+  .theme-clair .cv-table .equipe-item { grid-template-columns:repeat(2,minmax(0,1fr)); align-items:start; }
+  .theme-clair .cv-table .equipe-item .nom { grid-column:1 / -1; }
+  .theme-clair .cv-table .equipe-actions { grid-column:1 / -1; justify-content:flex-start; }
+  .theme-clair .cv-table .equipe-item [data-label]:not(.nom)::before { content:attr(data-label) " "; display:block; color:var(--cv-secondaire); font-size:11px; font-weight:700; }
+}
+@media (max-width:640px) {
+  .cv-barre-outils,.cv-barre-droite { display:block; }
+  .cv-barre-droite > * { margin-top:10px; }
+  .theme-clair .cv-ajout > summary,.theme-clair .cv-filtre-club select { width:100%; justify-content:center; }
+}
+@media (max-width:360px) {
+  .theme-clair .cv-table .equipe-item { grid-template-columns:1fr; }
+}
