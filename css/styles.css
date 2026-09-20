@@ -1,3 +1,4 @@
+@import url("tokens.css");
 /* ==========================================================================
    TOURNOI R92 — Feuille de style commune à toutes les pages
    Charte : fond marine, bleu ciel, accent bleu vif, texte blanc cassé.
@@ -9,13 +10,13 @@
        On les réutilise partout via "var(--nom)". Pour changer une couleur
        sur tout le site, on ne modifie qu'ici. --- */
 :root {
-  --marine:        #0B2138;  /* fond principal */
-  --marine-fonce:  #031024;  /* fond plus sombre (dégradé, cartes) */
-  --bleu-ciel:     #B8D8F8;  /* textes secondaires, labels */
-  --accent:        #2E8FE0;  /* boutons, éléments importants */
-  --texte:         #F2F6FB;  /* texte courant */
+  --marine:        #ffffff;  /* fond principal */
+  --marine-fonce:  #f4f7fa;  /* fond plus sombre (dégradé, cartes) */
+  --bleu-ciel:     var(--cv-secondaire);  /* textes secondaires, labels */
+  --accent:        var(--cv-action);  /* boutons, éléments importants */
+  --texte:         var(--cv-texte);  /* texte courant */
 
-  --rayon:         12px;      /* arrondi des cartes */
+  --rayon:         16px;      /* arrondi des cartes */
   --espace:        16px;      /* espacement de base */
 }
 
@@ -48,7 +49,7 @@
   gap: 10px 14px;
   margin: 0 0 16px;
 }
-.suivi-pdf-actions small { color: #748198; }
+.suivi-pdf-actions small { color: var(--cv-secondaire); }
 .suivi-filtre {
   border: 1px solid #d7e0eb;
   border-radius: 999px;
@@ -68,11 +69,11 @@
   align-items: center;
 }
 .suivi-clubs-entete {
-  color: #748198;
+  color: var(--cv-secondaire);
   padding: 0 14px 8px;
   font-size: .76rem;
   font-weight: 700;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: .035em;
 }
 .suivi-club-ligne {
@@ -88,7 +89,7 @@
 .suivi-club-identite strong { overflow-wrap: anywhere; }
 .suivi-club-identite small,
 .suivi-cellule small,
-.suivi-club-actions small { color: #748198; font-size: .75rem; overflow-wrap: anywhere; }
+.suivi-club-actions small { color: var(--cv-secondaire); font-size: .75rem; overflow-wrap: anywhere; }
 .suivi-cellule small.suivi-confirmation-a-renvoyer { color: #9a5b08; font-weight: 700; }
 .suivi-badge {
   display: inline-flex;
@@ -110,7 +111,7 @@
 .suivi-club-actions .bouton { width: 100%; padding: 8px 10px; font-size: .8rem; }
 .suivi-termine { color: #397355; font-size: .82rem; font-weight: 700; }
 .suivi-club-ligne.club-etat-a-enregistrer { border-left: 4px solid #e5a33c; }
-.suivi-club-ligne.club-etat-equipes-ajoutees { border-left: 4px solid #2e8fe0; }
+.suivi-club-ligne.club-etat-equipes-ajoutees { border-left: 4px solid var(--cv-action); }
 .suivi-club-ligne.club-etat-attente { border-left: 4px solid #9b7fd4; }
 .suivi-club-ligne.club-etat-decline { border-left: 4px solid #e07878; }
 .suivi-badge.etat-a-enregistrer { color: #80520b; background: #fff3d6; }
@@ -133,7 +134,7 @@
   .suivi-clubs-entete { display: none; }
   .suivi-club-ligne { grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; }
   .suivi-club-identite { grid-column: 1 / -1; }
-  .suivi-cellule::before { content: attr(data-label); color: #7b8798; font-size: .68rem; font-weight: 700; text-transform: uppercase; }
+  .suivi-cellule::before { content: attr(data-label); color: #7b8798; font-size: .68rem; font-weight: 700; text-transform: none; }
   .suivi-club-actions { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; }
   .suivi-club-actions .bouton { width: auto; }
 }
@@ -160,9 +161,9 @@
 [hidden] { display: none !important; }
 
 body {
-  font-family: 'Barlow', system-ui, sans-serif;   /* texte courant */
+  font-family: var(--cv-font);   /* texte courant */
   color: var(--texte);
-  background: linear-gradient(160deg, var(--marine) 0%, var(--marine-fonce) 100%);
+  background: var(--cv-fond);
   min-height: 100vh;
   line-height: 1.5;
   padding: var(--espace);
@@ -170,7 +171,7 @@ body {
 
 /* --- Titres : Bebas Neue (grosse typo d'affichage) --- */
 h1, h2, h3 {
-  font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   letter-spacing: 0.5px;
   line-height: 1.1;
 }
@@ -189,8 +190,8 @@ h1, h2, h3 {
 }
 
 .entete .sous-titre {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 2px;
   color: var(--accent);
   font-size: 1rem;
@@ -201,8 +202,8 @@ h1, h2, h3 {
    Cartes (blocs d'information)
    ========================================================================== */
 .carte {
-  background: rgba(255, 255, 255, 0.05);        /* léger voile clair sur le marine */
-  border: 1px solid rgba(184, 216, 248, 0.15);  /* fin liseré bleu ciel */
+  background: var(--cv-surface);        /* léger voile clair sur le marine */
+  border: 1px solid var(--cv-bordure);  /* fin liseré bleu ciel */
   border-radius: var(--rayon);
   padding: var(--espace);
   margin-bottom: var(--espace);
@@ -212,7 +213,7 @@ h1, h2, h3 {
   font-size: 1.5rem;
   color: var(--bleu-ciel);
   margin-bottom: 12px;
-  border-bottom: 1px solid rgba(184, 216, 248, 0.15);
+  border-bottom: 1px solid var(--cv-bordure);
   padding-bottom: 8px;
 }
 
@@ -233,7 +234,7 @@ h1, h2, h3 {
 
 .categorie .badge {
   display: inline-block;
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1.6rem;
   background: var(--accent);
   color: #fff;
@@ -260,8 +261,8 @@ h1, h2, h3 {
 }
 .reglage .r-libelle {
   display: block;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   font-size: 0.75rem;
   letter-spacing: 0.5px;
   color: var(--bleu-ciel);
@@ -269,12 +270,12 @@ h1, h2, h3 {
 /* Champ modifiable d'une catégorie (input ou select) */
 .r-input {
   width: 100%;
-  background: rgba(11, 33, 56, 0.8);
+  background: var(--cv-surface);
   color: var(--texte);
-  border: 1px solid rgba(184, 216, 248, 0.25);
+  border: 1px solid var(--cv-bordure);
   border-radius: 6px;
   padding: 7px 8px;
-  font-family: 'Barlow', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1.05rem;
 }
 select.r-input { cursor: pointer; }
@@ -283,12 +284,12 @@ select.r-input { cursor: pointer; }
 .bloc-format {
   margin-top: 14px;
   padding-top: 12px;
-  border-top: 1px dashed rgba(184, 216, 248, 0.25);
+  border-top: 1px dashed var(--cv-bordure);
 }
 .format-libelle {
   display: block;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   font-size: 0.8rem;
   letter-spacing: 0.5px;
   color: var(--bleu-ciel);
@@ -299,8 +300,8 @@ select.r-input { cursor: pointer; }
   display: flex;
   gap: 10px;
   align-items: flex-start;
-  background: rgba(3, 16, 36, 0.4);
-  border: 1px solid rgba(184, 216, 248, 0.25);
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-bordure);
   border-radius: 10px;
   padding: 10px 12px;
   cursor: pointer;
@@ -313,7 +314,7 @@ select.r-input { cursor: pointer; }
 }
 .format-carte .f-corps { display: flex; flex-direction: column; gap: 3px; }
 .format-carte .f-titre {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 600; font-size: 1.05rem;
   color: var(--texte);
 }
@@ -330,13 +331,13 @@ select.r-input { cursor: pointer; }
    ⚠️ Le thème clair est traité dans theme-r92.css, qui est chargée APRÈS celle-ci et repeint les
    cartes en navy — un titre sombre y serait illisible. Les deux feuilles vont ensemble. */
 .format-carte.est-hors-cadre { border-color: rgba(224, 158, 46, 0.55); }
-.format-carte.est-hors-cadre .f-titre { color: #ffe6b0; }
+.format-carte.est-hors-cadre .f-titre { color: var(--cv-attention); }
 
 /* Encart de rappel, affiché tant qu'une catégorie retient un format hors cadre EDR. */
 .format-interdit-edr {
   margin: 0 0 10px;
   font-size: 0.9rem; line-height: 1.4;
-  color: #ffe6b0;
+  color: var(--cv-attention);
   background: rgba(224, 158, 46, 0.16);
   border-radius: 8px; padding: 8px 10px;
 }
@@ -366,28 +367,28 @@ select.r-input { cursor: pointer; }
 
 /* Surcharge thème clair (admin) */
 .theme-clair .bloc-format { border-top-color: #e6edf5; }
-.theme-clair .format-libelle { color: #8a97a6; }
+.theme-clair .format-libelle { color: var(--cv-secondaire); }
 .theme-clair .format-carte { background: #F5F9FD; border-color: #e6edf5; }
-.theme-clair .format-carte .f-titre { color: #0C1C2E; }
+.theme-clair .format-carte .f-titre { color: var(--cv-texte); }
 .theme-clair .format-carte .f-desc { color: #55636f; }
 .theme-clair .format-carte.est-choisi { background: rgba(46, 143, 224, 0.10); border-color: var(--accent); }
-.theme-clair .f-aide { color: #8a97a6; }
-.theme-clair .format-recap { color: #0C1C2E; }
+.theme-clair .f-aide { color: var(--cv-secondaire); }
+.theme-clair .format-recap { color: var(--cv-texte); }
 
 /* -------- Contexte U14 (Super Challenge de France) — session 13 (déclaratif) --------
    Réutilise le langage visuel des cartes de format. .bloc-contexte est rendu AVANT .bloc-format ;
    en contexte SCF, on masque .bloc-format (sans objet) et on révèle le panneau .bloc-scf. */
-.bloc-contexte { margin-top: 14px; padding-top: 12px; border-top: 1px dashed rgba(184, 216, 248, 0.25); }
+.bloc-contexte { margin-top: 14px; padding-top: 12px; border-top: 1px dashed var(--cv-bordure); }
 .ctx-cartes { display: grid; gap: 8px; }
 .ctx-carte {
   display: flex; gap: 10px; align-items: flex-start;
-  background: rgba(3, 16, 36, 0.4);
-  border: 1px solid rgba(184, 216, 248, 0.25);
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-bordure);
   border-radius: 10px; padding: 10px 12px; cursor: pointer;
 }
 .ctx-carte input { margin-top: 3px; accent-color: var(--accent); width: 18px; height: 18px; cursor: pointer; flex: none; }
 .ctx-carte .f-corps { display: flex; flex-direction: column; gap: 3px; }
-.ctx-carte .f-titre { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; font-size: 1.05rem; color: var(--texte); }
+.ctx-carte .f-titre { font-family: var(--cv-font); font-weight: 600; font-size: 1.05rem; color: var(--texte); }
 .ctx-carte .f-desc { font-size: 0.9rem; line-height: 1.35; color: var(--bleu-ciel); }
 .ctx-carte.est-choisi { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: rgba(46, 143, 224, 0.12); }
 
@@ -402,7 +403,7 @@ select.r-input { cursor: pointer; }
 /* Deux notes phase-dépendantes : une seule visible selon data-phase (comme les récaps). */
 .scf-note { display: none; border-radius: 8px; padding: 8px 10px; }
 .scf-note.n-P2 { color: var(--texte); background: rgba(46, 143, 224, 0.10); }
-.scf-note.n-P3 { color: #ffe6b0; background: rgba(224, 158, 46, 0.16); }
+.scf-note.n-P3 { color: var(--cv-attention); background: rgba(224, 158, 46, 0.16); }
 .bloc-scf[data-phase="P2"] .scf-note.n-P2,
 .bloc-scf[data-phase="P3"] .scf-note.n-P3 { display: block; }
 .scf-phases { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px; }
@@ -418,12 +419,12 @@ select.r-input { cursor: pointer; }
 /* Surcharge thème clair (admin) */
 .theme-clair .bloc-contexte { border-top-color: #e6edf5; }
 .theme-clair .ctx-carte { background: #F5F9FD; border-color: #e6edf5; }
-.theme-clair .ctx-carte .f-titre { color: #0C1C2E; }
+.theme-clair .ctx-carte .f-titre { color: var(--cv-texte); }
 .theme-clair .ctx-carte .f-desc { color: #55636f; }
 .theme-clair .ctx-carte.est-choisi { background: rgba(46, 143, 224, 0.10); border-color: var(--accent); }
-.theme-clair .scf-forme, .theme-clair .scf-recap { color: #0C1C2E; }
-.theme-clair .scf-phase-choix { color: #0C1C2E; }
-.theme-clair .scf-note.n-P2 { color: #0C1C2E; background: rgba(46, 143, 224, 0.10); }
+.theme-clair .scf-forme, .theme-clair .scf-recap { color: var(--cv-texte); }
+.theme-clair .scf-phase-choix { color: var(--cv-texte); }
+.theme-clair .scf-note.n-P2 { color: var(--cv-texte); background: rgba(46, 143, 224, 0.10); }
 .theme-clair .scf-note.n-P3 { color: #8a5a0c; background: #fdf4e3; }
 
 /* Arbitre désigné (Super Challenge) : petite étiquette discrète sur les matchs. */
@@ -433,7 +434,7 @@ select.r-input { cursor: pointer; }
 /* -------- Pause méridienne échelonnée (réglage global, carte Horaires) -------- */
 .ech-toggle { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; color: var(--texte); font-weight: 600; }
 .ech-toggle input { width: 18px; height: 18px; accent-color: var(--accent); cursor: pointer; flex: none; }
-.theme-clair .ech-toggle { color: #0C1C2E; }
+.theme-clair .ech-toggle { color: var(--cv-texte); }
 /* Label « — début » (pause classique) vs « à partir de » (échelonnée) ; durée et fin selon data-ech. */
 .bloc-pause-dej .lbl-pause-dej-ech { display: none; }
 .bloc-pause-dej[data-ech="oui"] .lbl-pause-dej-fixe { display: none; }
@@ -447,15 +448,15 @@ select.r-input { cursor: pointer; }
 .bloc-terrains {
   margin-bottom: 14px;
   padding-bottom: 12px;
-  border-bottom: 1px dashed rgba(184, 216, 248, 0.25);
+  border-bottom: 1px dashed var(--cv-bordure);
 }
 .terr-mode { display: inline-flex; gap: 6px; margin-bottom: 8px; }
 .terr-choix {
   display: inline-flex; align-items: center; gap: 6px;
-  background: rgba(3, 16, 36, 0.4);
-  border: 1px solid rgba(184, 216, 248, 0.25);
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-bordure);
   border-radius: 8px; padding: 6px 12px; cursor: pointer;
-  font-family: 'Barlow Condensed', sans-serif; font-size: 1rem; color: var(--texte);
+  font-family: var(--cv-font); font-size: 1rem; color: var(--texte);
 }
 .terr-choix input { accent-color: var(--accent); width: 16px; height: 16px; cursor: pointer; }
 /* Révélation selon le mode (data-terrains sur le bloc). */
@@ -472,12 +473,12 @@ select.r-input { cursor: pointer; }
 .terr-conseil {
   font-size: 0.9rem; line-height: 1.35; border-radius: 8px; padding: 7px 10px;
 }
-.terr-conseil.ko   { color: #ffd7d0; background: rgba(224, 76, 46, 0.16); }
-.terr-conseil.warn { color: #ffe6b0; background: rgba(224, 158, 46, 0.16); }
-.terr-conseil.ok   { color: #c7f0d2; background: rgba(46, 200, 120, 0.14); }
+.terr-conseil.ko   { color: var(--cv-danger); background: rgba(224, 76, 46, 0.16); }
+.terr-conseil.warn { color: var(--cv-attention); background: rgba(224, 158, 46, 0.16); }
+.terr-conseil.ok   { color: var(--cv-succes); background: rgba(46, 200, 120, 0.14); }
 
 .theme-clair .bloc-terrains { border-bottom-color: #e6edf5; }
-.theme-clair .terr-choix { background: #F5F9FD; border-color: #e6edf5; color: #0C1C2E; }
+.theme-clair .terr-choix { background: #F5F9FD; border-color: #e6edf5; color: var(--cv-texte); }
 .theme-clair .terr-auto-info { color: #55636f; }
 .theme-clair .terr-conseil.ko   { color: #8a1c0c; background: #fdece9; }
 .theme-clair .terr-conseil.warn { color: #8a5a0c; background: #fdf4e3; }
@@ -489,8 +490,8 @@ select.r-input { cursor: pointer; }
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   color: var(--bleu-ciel);
   font-size: 0.95rem;
@@ -513,29 +514,29 @@ select.r-input { cursor: pointer; }
   align-items: center;
   gap: 12px;
   padding: 9px 0;
-  border-bottom: 1px solid rgba(184, 216, 248, 0.08);
+  border-bottom: 1px solid var(--cv-bordure);
 }
 .champ-reglage label {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   color: var(--bleu-ciel);
   font-size: 0.95rem;
 }
 .champ-reglage input {
-  background: rgba(3, 16, 36, 0.6);
+  background: var(--cv-surface);
   color: var(--texte);
-  border: 1px solid rgba(184, 216, 248, 0.25);
+  border: 1px solid var(--cv-bordure);
   border-radius: 8px;
   padding: 8px 10px;
-  font-family: 'Barlow', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1.1rem;
   width: 130px;
   text-align: center;
 }
 /* Rend l'icône du sélecteur d'heure visible sur fond sombre */
 .champ-reglage input[type="time"]::-webkit-calendar-picker-indicator {
-  filter: invert(1) opacity(0.6);
+  filter: none;
   cursor: pointer;
 }
 
@@ -561,9 +562,9 @@ select.r-input { cursor: pointer; }
   gap: 10px;
   padding: 10px 12px;
   margin-top: 8px;
-  border: 1px solid rgba(184, 216, 248, 0.2);
+  border: 1px solid var(--cv-bordure);
   border-radius: 9px;
-  background: rgba(3, 16, 36, 0.42);
+  background: var(--cv-surface);
 }
 .piece-jointe-dossier:first-child { margin-top: 0; }
 .piece-jointe-icone { color: var(--accent, #7cc0ec); font-size: 1.05rem; }
@@ -605,8 +606,8 @@ select.r-input { cursor: pointer; }
   align-items: center;
   gap: 5px;
   cursor: pointer;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   font-size: 0.8rem;
   color: var(--bleu-ciel);
 }
@@ -637,10 +638,10 @@ select.r-input { cursor: pointer; }
   flex: 1 1 150px;
   padding: 10px 12px;
   border-radius: 8px;
-  border: 1px solid rgba(184, 216, 248, 0.25);
-  background: rgba(3, 16, 36, 0.5);
+  border: 1px solid var(--cv-bordure);
+  background: var(--cv-surface);
   color: var(--texte);
-  font-family: 'Barlow', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1rem;
 }
 .form-equipe input::placeholder { color: #7f92a8; }
@@ -649,7 +650,7 @@ select.r-input { cursor: pointer; }
    normalisée à l'enregistrement (voir admin.js). */
 #champ-nom,
 #champ-club-nom, #champ-club-contact, #champ-club-prenom,
-.club-edit-nom, .club-edit-contact, .club-edit-prenom { text-transform: uppercase; }
+.club-edit-nom, .club-edit-contact, .club-edit-prenom { text-transform: none; }
 #champ-club-email, .club-edit-email { text-transform: lowercase; }
 
 /* Bouton générique (accent) */
@@ -660,8 +661,8 @@ select.r-input { cursor: pointer; }
   cursor: pointer;
   padding: 10px 18px;
   border-radius: 8px;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   font-weight: 600;
   font-size: 1rem;
@@ -695,9 +696,9 @@ select.r-input { cursor: pointer; }
 /* `pre-line` : les messages d'état peuvent tenir sur plusieurs lignes (ce qui est enregistré,
    puis ce qui n'a pas pu être relu). Sans ça, `textContent` les collerait en un seul paragraphe
    et la distinction « acquis » / « à vérifier » se perdrait à la lecture. */
-.message-form { min-height: 1.3em; font-family: 'Barlow Condensed', sans-serif; white-space: pre-line; }
+.message-form { min-height: 1.3em; font-family: var(--cv-font); white-space: pre-line; }
 .message-form.ok { color: #9fe0a0; }
-.message-form.ko { color: #ffb4b4; }
+.message-form.ko { color: var(--cv-danger); }
 
 /* Reprise CIBLÉE d'une lecture (CORR-BLOCAGE-LECTURES-ADMIN-DR) : masquée tant que tout va bien,
    elle n'apparaît que lorsqu'un enregistrement est acquis sans que l'écran ait pu suivre. */
@@ -730,7 +731,7 @@ select.r-input { cursor: pointer; }
   gap: 8px;
 }
 .groupe-categorie .cat-mini {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 0.9rem;
   color: #7f92a8;
 }
@@ -745,7 +746,7 @@ select.r-input { cursor: pointer; }
   justify-content: space-between;
   align-items: center;
   gap: 10px;
-  background: rgba(3, 16, 36, 0.4);
+  background: var(--cv-surface);
   border-radius: 8px;
   padding: 8px 12px;
   margin-bottom: 6px;
@@ -762,16 +763,16 @@ select.r-input { cursor: pointer; }
 .champ-edit-nom,
 .champ-edit-joueurs,
 .champ-edit-educateurs {
-  background: rgba(3, 16, 36, 0.6);
+  background: var(--cv-surface);
   border: 1px solid rgba(120, 180, 255, 0.4);
   color: #eaf2ff;
   border-radius: 6px;
   padding: 5px 9px;
-  font-family: inherit;
+  font-family: var(--cv-font);
   font-size: 0.95rem;
 }
 /* Propre au nom : il prend la place restante et s'affiche en MAJUSCULES. */
-.champ-edit-nom { flex: 1; min-width: 0; text-transform: uppercase; }
+.champ-edit-nom { flex: 1; min-width: 0; text-transform: none; }
 
 /* ---- Effectifs déclarés par équipe (joueurs / éducateurs) ---- */
 /* Ces champs héritent de la boîte commune (formulaire d'ajout ou ligne en édition) : ici on ne
@@ -784,7 +785,7 @@ select.r-input { cursor: pointer; }
 /* Badge « 12 joueurs · 2 éducs » à côté du nom. */
 .equipe-effectifs {
   margin-right: auto;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: .85rem;
   opacity: .7;
   white-space: nowrap;
@@ -805,12 +806,12 @@ select.r-input { cursor: pointer; }
   border-radius: 6px;
   cursor: pointer;
   padding: 4px 10px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 0.85rem;
 }
 .bouton-suppr {
   border: 1px solid rgba(255, 120, 120, 0.4);
-  color: #ffb4b4;
+  color: var(--cv-danger);
 }
 .bouton-suppr:hover { background: rgba(255, 80, 80, 0.15); }
 .bouton-modif {
@@ -861,7 +862,7 @@ button .ic { margin-right: 0.45em; }
 
 /* Badge d'avancement « X/Y saisis » à côté d'une catégorie / phase du planning admin. */
 .avancement {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 0.8rem;
   font-weight: 600;
   letter-spacing: 0.5px;
@@ -877,9 +878,9 @@ button .ic { margin-right: 0.45em; }
   border: 1px solid rgba(159, 224, 160, 0.5);
 }
 .avc-partiel {
-  background: rgba(184, 216, 248, 0.12);
+  background: var(--cv-bordure);
   color: var(--bleu-ciel);
-  border: 1px solid rgba(184, 216, 248, 0.35);
+  border: 1px solid var(--cv-bordure);
 }
 
 /* ==========================================================================
@@ -900,12 +901,12 @@ button .ic { margin-right: 0.45em; }
   display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap;
 }
 .edit-equilibre {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 0.85rem; font-weight: 600;
   padding: 1px 8px; border-radius: 999px;
 }
 .edit-equilibre.ok { color: #9fe0a0; background: rgba(159, 224, 160, 0.14); border: 1px solid rgba(159, 224, 160, 0.4); }
-.edit-equilibre.ko { color: #ffd9a8; background: rgba(255, 170, 80, 0.12); border: 1px solid rgba(255, 180, 100, 0.4); }
+.edit-equilibre.ko { color: var(--cv-attention); background: rgba(255, 170, 80, 0.12); border: 1px solid rgba(255, 180, 100, 0.4); }
 
 /* Grille de poules côte à côte (empile sur mobile) */
 .edit-poules-grille {
@@ -915,26 +916,26 @@ button .ic { margin-right: 0.45em; }
   margin-top: 8px;
 }
 .edit-poule {
-  background: rgba(3, 16, 36, 0.45);
-  border: 1px solid rgba(184, 216, 248, 0.15);
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-bordure);
   border-radius: 8px;
   padding: 8px 10px;
 }
 .edit-poule-titre {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase; letter-spacing: 0.5px;
+  font-family: var(--cv-font);
+  text-transform: none; letter-spacing: 0.5px;
   color: var(--bleu-ciel); font-weight: 600; margin-bottom: 6px;
 }
 .edit-equipe {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  background: rgba(11, 33, 56, 0.7);
+  background: var(--cv-surface);
   border-radius: 6px; padding: 5px 8px; margin-bottom: 5px;
   font-size: 0.95rem;
 }
 .edit-x {
   flex: 0 0 auto;
   border: 1px solid rgba(255, 120, 120, 0.45);
-  color: #ffb4b4; background: transparent;
+  color: var(--cv-danger); background: transparent;
   border-radius: 6px; cursor: pointer; padding: 1px 8px; font-size: 0.9rem; line-height: 1.3;
 }
 .edit-x:hover { background: rgba(255, 80, 80, 0.15); }
@@ -947,9 +948,9 @@ button .ic { margin-right: 0.45em; }
   border-radius: 8px; padding: 8px 10px;
 }
 .edit-bench-titre {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase; letter-spacing: 0.5px;
-  color: #ffd9a8; font-weight: 600; margin-bottom: 6px;
+  font-family: var(--cv-font);
+  text-transform: none; letter-spacing: 0.5px;
+  color: var(--cv-attention); font-weight: 600; margin-bottom: 6px;
 }
 .edit-equipe-bench { flex-wrap: wrap; }
 .edit-cibles { display: inline-flex; gap: 6px; flex-wrap: wrap; }
@@ -957,12 +958,12 @@ button .ic { margin-right: 0.45em; }
   border: 1px solid rgba(120, 180, 255, 0.45);
   color: #bcd6ff; background: transparent;
   border-radius: 6px; cursor: pointer; padding: 3px 9px;
-  font-family: 'Barlow Condensed', sans-serif; font-size: 0.85rem;
+  font-family: var(--cv-font); font-size: 0.85rem;
 }
 .edit-vers:hover { background: rgba(80, 150, 255, 0.15); }
 
 .poule-compo {
-  background: rgba(3, 16, 36, 0.4);
+  background: var(--cv-surface);
   border-radius: 8px;
   padding: 8px 12px;
   margin-bottom: 6px;
@@ -981,12 +982,12 @@ button .ic { margin-right: 0.45em; }
 .table-planning td {
   text-align: left;
   padding: 8px 10px;
-  border-bottom: 1px solid rgba(184, 216, 248, 0.12);
+  border-bottom: 1px solid var(--cv-bordure);
   white-space: nowrap;
 }
 .table-planning th {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   color: var(--bleu-ciel);
   font-size: 0.85rem;
@@ -1004,24 +1005,24 @@ button .ic { margin-right: 0.45em; }
   border-radius: var(--rayon);
   padding: 12px 14px;
 }
-.arb-titre { color: #ffd9a8; font-size: 0.95rem; margin-bottom: 8px; }
+.arb-titre { color: var(--cv-attention); font-size: 0.95rem; margin-bottom: 8px; }
 .arb-note { color: var(--bleu-ciel); font-size: 0.85rem; }
 .arb-liste { list-style: none; display: flex; flex-direction: column; gap: 6px; }
 .arb-item {
   width: 100%;
   text-align: left;
   cursor: pointer;
-  background: rgba(3, 16, 36, 0.5);
+  background: var(--cv-surface);
   color: var(--texte);
-  border: 1px solid rgba(184, 216, 248, 0.2);
+  border: 1px solid var(--cv-bordure);
   border-radius: 8px;
   padding: 9px 12px;
-  font-family: 'Barlow', sans-serif;
+  font-family: var(--cv-font);
   font-size: 0.95rem;
 }
 .arb-item:hover { border-color: var(--accent); background: rgba(46, 143, 224, 0.15); }
 .arb-item.tient { border-color: rgba(120, 220, 130, 0.5); }
-.arb-item .arb-fin { color: var(--bleu-ciel); font-family: 'Barlow Condensed', sans-serif; }
+.arb-item .arb-fin { color: var(--bleu-ciel); font-family: var(--cv-font); }
 .arb-item:disabled { opacity: 0.5; cursor: default; }
 
 /* ==========================================================================
@@ -1031,11 +1032,11 @@ button .ic { margin-right: 0.45em; }
   text-align: center;
   padding: var(--espace);
   color: var(--bleu-ciel);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1.1rem;
 }
 .message.erreur {
-  color: #ffb4b4;
+  color: var(--cv-danger);
   background: rgba(255, 80, 80, 0.1);
   border-radius: var(--rayon);
 }
@@ -1047,7 +1048,7 @@ button .ic { margin-right: 0.45em; }
   body { padding: calc(var(--espace) * 2); }
 
   /* On centre le contenu et on limite la largeur pour le confort de lecture */
-  .conteneur { max-width: 900px; margin: 0 auto; }
+  .conteneur { max-width: none; margin: 0 auto; }
 
   .entete h1 { font-size: 3.2rem; }
 
@@ -1062,7 +1063,7 @@ button .ic { margin-right: 0.45em; }
    La page admin est la seule à avoir une grille dans <main> (id="reglages" présent).
    ========================================================================== */
 @media (min-width: 1024px) {
-  .conteneur:has(#reglages) { max-width: 1320px; }
+  .conteneur:has(#reglages) { max-width: none; }
 
   main:has(#reglages) {
     display: grid;
@@ -1099,8 +1100,8 @@ button .ic { margin-right: 0.45em; }
    Saisie des scores (page saisie.html)
    ========================================================================== */
 .match {
-  background: rgba(3, 16, 36, 0.5);
-  border: 1px solid rgba(184, 216, 248, 0.15);
+  background: var(--cv-surface);
+  border: 1px solid var(--cv-bordure);
   border-radius: var(--rayon);
   padding: 12px 14px;
   margin-bottom: 12px;
@@ -1113,7 +1114,7 @@ button .ic { margin-right: 0.45em; }
 
 .match-meta {
   color: var(--bleu-ciel);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 0.95rem;
   margin-bottom: 8px;
 }
@@ -1163,7 +1164,7 @@ button .ic { margin-right: 0.45em; }
 /* Match de Coupe « en attente » (équipes pas encore connues) : verrouillé, atténué. */
 .match-attente {
   border-style: dashed;
-  border-color: rgba(184, 216, 248, 0.3);
+  border-color: var(--cv-bordure);
   opacity: 0.85;
 }
 .bandeau-attente {
@@ -1212,13 +1213,13 @@ button .ic { margin-right: 0.45em; }
   align-items: center;
   gap: 8px 14px;
   padding: 8px 0 2px;
-  border-top: 1px dashed rgba(184, 216, 248, 0.2);
+  border-top: 1px dashed var(--cv-bordure);
   margin-top: 4px;
 }
 .departage-lib {
   width: 100%;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   font-size: 0.78rem;
   letter-spacing: 0.5px;
   color: var(--bleu-ciel);
@@ -1243,7 +1244,7 @@ button .ic { margin-right: 0.45em; }
   gap: 10px;
 }
 .det-equipe {
-  border: 1px solid rgba(184, 216, 248, 0.18);
+  border: 1px solid var(--cv-bordure);
   border-radius: 10px;
   padding: 10px;
   display: flex;
@@ -1259,7 +1260,7 @@ button .ic { margin-right: 0.45em; }
 .det-equipe-tete .eq { font-weight: 700; }
 /* Le total en points : affiché EN GRAND, calculé, jamais saisi. */
 .det-total {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1.7rem;
   font-weight: 700;
   line-height: 1;
@@ -1277,8 +1278,8 @@ button .ic { margin-right: 0.45em; }
   width: 44px;
   height: 44px;
   border-radius: 10px;
-  border: 1px solid rgba(184, 216, 248, 0.35);
-  background: rgba(184, 216, 248, 0.08);
+  border: 1px solid var(--cv-bordure);
+  background: var(--cv-bordure);
   color: var(--texte, #eaf2fb);
   font-size: 1.5rem;
   font-weight: 700;
@@ -1286,7 +1287,7 @@ button .ic { margin-right: 0.45em; }
   cursor: pointer;
   touch-action: manipulation;
 }
-.det-pas:active { background: rgba(184, 216, 248, 0.2); }
+.det-pas:active { background: var(--cv-bordure); }
 .det-pas:disabled { opacity: 0.4; cursor: not-allowed; }
 .det-input {
   width: 48px;
@@ -1299,8 +1300,8 @@ button .ic { margin-right: 0.45em; }
 .det-autres { margin-top: 2px; }
 .det-autres > summary {
   cursor: pointer;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   font-size: 0.8rem;
   letter-spacing: 0.5px;
   color: var(--bleu-ciel);
@@ -1351,16 +1352,16 @@ button .ic { margin-right: 0.45em; }
   flex-wrap: wrap;
   margin-bottom: 10px;
 }
-.live-maj { color: var(--bleu-ciel); font-family: 'Barlow Condensed', sans-serif; font-size: 0.9rem; }
+.live-maj { color: var(--bleu-ciel); font-family: var(--cv-font); font-size: 0.9rem; }
 /* Rafraîchissement RATÉ : l'horodatage cède la place à un avertissement. L'écran garde ses
    données — mais il ne prétend plus qu'elles sont à jour (CORR-BLOCAGE-LECTURES-ADMIN-DR). */
-.live-maj-echec { color: #ffb4b4; }
+.live-maj-echec { color: var(--cv-danger); }
 
 /* Libellé de champ (ex. filtre catégorie de la page saisie). */
 .mp-label {
   display: block;
   color: var(--bleu-ciel);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   margin-bottom: 6px;
 }
 /* Ligne « adversaire · résultat » d'un match (page perfs). */
@@ -1373,19 +1374,19 @@ button .ic { margin-right: 0.45em; }
   margin-top: 6px;
 }
 .mp-adv { font-weight: 600; font-size: 1.05rem; }
-.mp-resultat { font-family: 'Barlow Condensed', sans-serif; font-weight: 600; }
+.mp-resultat { font-family: var(--cv-font); font-weight: 600; }
 .mp-resultat.gagne { color: #9fe0a0; }
-.mp-resultat.perd  { color: #ffb4b4; }
+.mp-resultat.perd  { color: var(--cv-danger); }
 .mp-resultat.nul   { color: var(--bleu-ciel); }
 
 /* Sous-titre de phase dans le planning admin (Matin / Après-midi) */
 .planning-phase {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 600;
   color: var(--texte);
   margin: 16px 0 6px;
   padding-bottom: 4px;
-  border-bottom: 1px solid rgba(184, 216, 248, 0.2);
+  border-bottom: 1px solid var(--cv-bordure);
 }
 
 /* ==========================================================================
@@ -1413,7 +1414,7 @@ button .ic { margin-right: 0.45em; }
 .phase-accordeon[open] .phase-sommaire::before { transform: rotate(90deg); }
 .phase-sommaire:hover { color: var(--accent); }
 .phase-resume {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 400;
   font-size: 0.85rem;
   color: var(--bleu-ciel);
@@ -1422,7 +1423,7 @@ button .ic { margin-right: 0.45em; }
 
 /* ==========================================================================
    PAGE PERFS DU CLUB (interne) — couleurs V/N/D reprises du planning :
-   vert #9fe0a0 (victoire), rouge #ffb4b4 (défaite), bleu ciel (nul).
+   vert #9fe0a0 (victoire), rouge var(--cv-danger) (défaite), bleu ciel (nul).
    ========================================================================== */
 
 /* Filtre catégorie (page saisie : « Catégorie à saisir »). */
@@ -1562,7 +1563,7 @@ button .ic { margin-right: 0.45em; }
   border-radius: var(--rayon);
   padding: 8px 14px;
   margin-bottom: var(--espace);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 0.95rem;
 }
 .barre-connexion.connecte {
@@ -1573,7 +1574,7 @@ button .ic { margin-right: 0.45em; }
 .barre-connexion.deconnecte {
   border: 1px solid rgba(255, 180, 100, 0.45);
   background: rgba(255, 170, 80, 0.1);
-  color: #ffd9a8;
+  color: var(--cv-attention);
 }
 /* Regroupe les boutons de la barre (Changer de clé + Verrouiller) */
 .barre-actions { display: inline-flex; gap: 8px; flex-wrap: wrap; }
@@ -1586,8 +1587,8 @@ button .ic { margin-right: 0.45em; }
   border-radius: 8px;
   padding: 4px 12px;
   cursor: pointer;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   font-size: 0.85rem;
 }
@@ -1613,8 +1614,8 @@ button .ic { margin-right: 0.45em; }
   margin-bottom: 10px;
 }
 .tb-titre {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   font-size: 0.9rem;
   color: var(--bleu-ciel);
@@ -1629,19 +1630,19 @@ button .ic { margin-right: 0.45em; }
   display: flex;
   flex-direction: column;
   gap: 2px;
-  background: rgba(3, 16, 36, 0.35);
+  background: var(--cv-surface);
   border-radius: 8px;
   padding: 8px 10px;
 }
 .tb-val {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1.5rem;
   line-height: 1.1;
   color: var(--texte);
 }
 .tb-lib {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   font-size: 0.75rem;
   color: var(--bleu-ciel);
@@ -1662,11 +1663,11 @@ details.carte > summary {
   cursor: pointer;
   list-style: none;                /* enlève le marqueur natif (Firefox) */
   user-select: none;
-  font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   letter-spacing: 0.5px;
   font-size: 1.5rem;
   color: var(--bleu-ciel);
-  border-bottom: 1px solid rgba(184, 216, 248, 0.15);
+  border-bottom: 1px solid var(--cv-bordure);
   padding-bottom: 8px;
   margin-bottom: 12px;
 }
@@ -1692,18 +1693,18 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
 .apercu-affiche { margin: 4px 0 12px; }
 .apercu-affiche img {
   max-width: 220px; width: 100%; height: auto; display: block;
-  border-radius: 10px; border: 1px solid rgba(184, 216, 248, 0.25);
+  border-radius: 10px; border: 1px solid var(--cv-bordure);
 }
 
 /* Onglets « Ce tournoi » / « Saison » */
 .perfs-onglets { display: flex; gap: 8px; margin-bottom: 14px; }
 .onglet {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 600;
   font-size: 1rem;
   color: var(--bleu-ciel);
   background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(184, 216, 248, 0.2);
+  border: 1px solid var(--cv-bordure);
   border-radius: var(--rayon);
   padding: 8px 16px;
   cursor: pointer;
@@ -1719,18 +1720,18 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
   margin-bottom: 18px;
 }
 .perfs-global-titre {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 600;
   color: var(--bleu-ciel);
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.5px;
   font-size: 0.9rem;
 }
 .perfs-chiffres { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; align-items: baseline; }
-.pc { font-family: 'Bebas Neue', sans-serif; font-size: 1.4rem; }
+.pc { font-family: var(--cv-font); font-size: 1.4rem; }
 .pc-v { color: #9fe0a0; }
 .pc-n { color: var(--bleu-ciel); }
-.pc-d { color: #ffb4b4; }
+.pc-d { color: var(--cv-danger); }
 .pc-pct { margin-left: auto; color: var(--texte); font-size: 1.2rem; }
 .perfs-moment-global { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
 .perfs-moment { color: var(--bleu-ciel); font-size: 0.95rem; }
@@ -1738,7 +1739,7 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
 
 /* Titre d'une catégorie (U8, U10, …) */
 .perfs-cat {
-  font-family: 'Bebas Neue', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1.5rem;
   color: var(--accent);
   margin: 22px 0 8px;
@@ -1747,14 +1748,14 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
 
 /* Carte d'une équipe du club */
 .perfs-equipe {
-  border: 1px solid rgba(184, 216, 248, 0.15);
+  border: 1px solid var(--cv-bordure);
   border-radius: var(--rayon);
   padding: 12px 14px;
   margin-bottom: 14px;
   background: rgba(255, 255, 255, 0.02);
 }
 .perfs-equipe-nom {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 600;
   font-size: 1.15rem;
   color: var(--texte);
@@ -1764,15 +1765,15 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
 /* Ligne de bilan chiffré */
 .perfs-bilan { display: flex; flex-wrap: wrap; gap: 12px; margin: 10px 0 4px; }
 .perfs-stat { display: flex; flex-direction: column; align-items: center; min-width: 34px; }
-.perfs-stat-val { font-family: 'Bebas Neue', sans-serif; font-size: 1.3rem; line-height: 1; color: var(--texte); }
+.perfs-stat-val { font-family: var(--cv-font); font-size: 1.3rem; line-height: 1; color: var(--texte); }
 .perfs-stat-val.gagne { color: #9fe0a0; }
-.perfs-stat-val.perd  { color: #ffb4b4; }
+.perfs-stat-val.perd  { color: var(--cv-danger); }
 .perfs-stat-val.nul   { color: var(--bleu-ciel); }
-.perfs-stat-lib { font-size: 0.7rem; color: #7f92a8; text-transform: uppercase; letter-spacing: 0.5px; }
+.perfs-stat-lib { font-size: 0.7rem; color: #7f92a8; text-transform: none; letter-spacing: 0.5px; }
 
 /* Sous-titre dans une carte équipe (« À quel moment », « Contre qui ») */
 .perfs-sous-titre {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 600;
   color: var(--bleu-ciel);
   margin: 14px 0 6px;
@@ -1788,13 +1789,13 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
 }
 .frise-puce.gagne { background: rgba(159, 224, 160, 0.16); border: 1px solid rgba(159, 224, 160, 0.5); }
 .frise-puce.perd  { background: rgba(255, 180, 180, 0.16); border: 1px solid rgba(255, 180, 180, 0.5); }
-.frise-puce.nul   { background: rgba(184, 216, 248, 0.16); border: 1px solid rgba(184, 216, 248, 0.5); }
+.frise-puce.nul   { background: var(--cv-bordure); border: 1px solid var(--cv-bordure); }
 .frise-heure { font-size: 0.72rem; color: var(--bleu-ciel); }
-.frise-issue { font-family: 'Bebas Neue', sans-serif; font-size: 1.2rem; line-height: 1; }
+.frise-issue { font-family: var(--cv-font); font-size: 1.2rem; line-height: 1; }
 .frise-puce.gagne .frise-issue { color: #9fe0a0; }
-.frise-puce.perd  .frise-issue { color: #ffb4b4; }
+.frise-puce.perd  .frise-issue { color: var(--cv-danger); }
 .frise-puce.nul   .frise-issue { color: var(--bleu-ciel); }
-.frise-lien { flex: 0 0 auto; width: 14px; height: 2px; background: rgba(184, 216, 248, 0.25); }
+.frise-lien { flex: 0 0 auto; width: 14px; height: 2px; background: var(--cv-bordure); }
 
 /* ==========================================================================
    THÈME CLAIR — page admin, aligné sur la PAGE PUBLIQUE du tournoi.
@@ -1805,17 +1806,17 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
    ========================================================================== */
 body.theme-clair {
   background: #ffffff;
-  color: #3B4A63;                 /* texte courant : gris-bleu (comme la page publique) */
+  color: var(--cv-secondaire);                 /* texte courant : gris-bleu (comme la page publique) */
   /* On remappe deux variables : les couleurs posées via var(...) — y compris en style
      inline (titres du planning) — deviennent alors lisibles sur fond clair. */
-  --texte: #0C1C2E;               /* texte fort (valeurs, champs) → navy */
+  --texte: var(--cv-texte);               /* texte fort (valeurs, champs) → navy */
   --bleu-ciel: #33608f;           /* labels / sous-titres → bleu foncé lisible */
 }
 
 /* ---- En-tête : bandeau navy dégradé + fine barre bleue (comme le bandeau public) ---- */
 .theme-clair .entete {
   position: relative;
-  background: linear-gradient(135deg, #16304a, #0C1C2E);
+  background: linear-gradient(135deg, #16304a, var(--cv-texte));
   border-radius: var(--rayon);
   padding: 20px 16px 24px;
   margin-bottom: var(--espace);
@@ -1834,8 +1835,8 @@ body.theme-clair {
   border: 1px solid #e6edf5;
   box-shadow: 0 1px 3px rgba(12, 28, 46, 0.06);
 }
-.theme-clair .carte h2 { color: #0C1C2E; border-bottom-color: #e6edf5; }
-.theme-clair #zone-categories > h2 { color: #0C1C2E; }
+.theme-clair .carte h2 { color: var(--cv-texte); border-bottom-color: #e6edf5; }
+.theme-clair #zone-categories > h2 { color: var(--cv-texte); }
 .theme-clair .categorie { border-left-color: var(--accent); }
 
 /* ---- Champs de saisie : blancs, texte navy, bord clair, focus bleu ---- */
@@ -1849,7 +1850,7 @@ body.theme-clair {
 .theme-clair .champ-edit-joueurs,
 .theme-clair .champ-edit-educateurs {
   background: #ffffff;
-  color: #0C1C2E;
+  color: var(--cv-texte);
   border: 1px solid #e6edf5;
 }
 .theme-clair .r-input:focus,
@@ -1872,7 +1873,7 @@ body.theme-clair {
 .theme-clair .tb-stat { background: #ffffff; }
 .theme-clair .tb-lib,
 .theme-clair .live-maj,
-.theme-clair .cat-mini { color: #8a97a6; }
+.theme-clair .cat-mini { color: var(--cv-secondaire); }
 
 /* ---- Boutons secondaires (contour) contrastés sur blanc ---- */
 .theme-clair .bouton-suppr,
@@ -1883,7 +1884,7 @@ body.theme-clair {
 .theme-clair .edit-vers { color: var(--accent); border-color: rgba(46, 143, 224, 0.4); }
 .theme-clair .bouton-modif:hover,
 .theme-clair .edit-vers:hover { background: rgba(46, 143, 224, 0.08); }
-.theme-clair .bouton-lien { color: #0C1C2E; border-color: #d4dee9; }
+.theme-clair .bouton-lien { color: var(--cv-texte); border-color: #d4dee9; }
 .theme-clair .bouton-lien:hover { background: rgba(12, 28, 46, 0.05); }
 
 /* ---- Barre de connexion : panneaux clairs, texte contrasté ---- */
@@ -1895,10 +1896,10 @@ body.theme-clair {
 }
 
 /* ---- Planning : titres + tableaux clairs ---- */
-.theme-clair .planning-phase { color: #0C1C2E; border-bottom-color: #e6edf5; }
+.theme-clair .planning-phase { color: var(--cv-texte); border-bottom-color: #e6edf5; }
 .theme-clair .table-planning th { color: var(--accent); }
 .theme-clair .table-planning td { border-bottom-color: #e6edf5; }
-.theme-clair .table-planning .vs { color: #8a97a6; }
+.theme-clair .table-planning .vs { color: var(--cv-secondaire); }
 
 /* ---- Éditeur manuel des poules : clair ---- */
 .theme-clair .edit-poules { background: #F5F9FD; border-color: rgba(46, 143, 224, 0.3); }
@@ -1906,18 +1907,18 @@ body.theme-clair {
 .theme-clair .edit-equipe { background: #F5F9FD; }
 
 /* ---- Assistant d'arbitrage : pistes claires ---- */
-.theme-clair .arb-item { background: #ffffff; color: #0C1C2E; border-color: #e6edf5; }
-.theme-clair .arb-item .arb-fin { color: #8a97a6; }
+.theme-clair .arb-item { background: #ffffff; color: var(--cv-texte); border-color: #e6edf5; }
+.theme-clair .arb-item .arb-fin { color: var(--cv-secondaire); }
 
 /* ---- Zone de danger : carte blanche à liseré rouge ---- */
 .theme-clair details.carte-danger { border-color: rgba(192, 57, 43, 0.4); border-left-color: #c0392b; }
 .theme-clair details.carte-danger > summary { color: #c0392b; }
-.theme-clair .liste-danger { color: #3B4A63; }
+.theme-clair .liste-danger { color: var(--cv-secondaire); }
 
 /* ---- Messages / états vides ---- */
-.theme-clair .message { color: #8a97a6; }
+.theme-clair .message { color: var(--cv-secondaire); }
 .theme-clair .message.erreur { color: #b3261e; background: rgba(179, 38, 30, 0.08); border-radius: var(--rayon); }
-.theme-clair .vide { color: #8a97a6; }
+.theme-clair .vide { color: var(--cv-secondaire); }
 .theme-clair .apercu-affiche img { border-color: #e6edf5; }
 
 /* ---- Repère visuel dans l'en-tête navy ----
@@ -1933,7 +1934,7 @@ body.theme-clair {
 /* ==========================================================================
    TERRAINS PHYSIQUES & RÉPARTITION (carte admin #bloc-terrains)
    ========================================================================== */
-.terr-titre { margin: 18px 0 8px; font-family: 'Barlow Condensed', sans-serif;
+.terr-titre { margin: 18px 0 8px; font-family: var(--cv-font);
   font-size: 1.05rem; letter-spacing: .3px; }
 
 /* Une ligne = un grand terrain (nom, type, L × W, supprimer). */
@@ -1966,7 +1967,7 @@ body.theme-clair {
 
 /* Tableau de capacité (défile horizontalement sur mobile). */
 .tab-capacite-wrap { overflow-x: auto; margin-top: 6px; }
-.tab-capacite { border-collapse: collapse; width: 100%; font-family: 'Barlow Condensed', sans-serif; }
+.tab-capacite { border-collapse: collapse; width: 100%; font-family: var(--cv-font); }
 .tab-capacite th, .tab-capacite td {
   border: 1px solid rgba(255,255,255,.14); padding: 7px 10px; text-align: center; white-space: nowrap;
 }
@@ -1979,14 +1980,14 @@ body.theme-clair {
 .theme-clair #bloc-terrains input[type="text"],
 .theme-clair #bloc-terrains input[type="number"],
 .theme-clair #bloc-terrains select {
-  border-color: #d6e0ec; background: #ffffff; color: #0C1C2E;
+  border-color: #d6e0ec; background: #ffffff; color: var(--cv-texte);
 }
-.theme-clair .terr-titre { color: #0C1C2E; }
+.theme-clair .terr-titre { color: var(--cv-texte); }
 .theme-clair .terr-suppr { color: #c0392b; }
 .theme-clair .terr-suppr:hover { background: rgba(192,57,43,.1); }
 .theme-clair .tab-capacite th, .theme-clair .tab-capacite td { border-color: #e6edf5; }
 .theme-clair .tab-capacite thead th { color: var(--accent); background: #F5F9FD; }
-.theme-clair .tab-capacite .cap-nom { color: #0C1C2E; }
+.theme-clair .tab-capacite .cap-nom { color: var(--cv-texte); }
 
 /* ---- Répartition automatique : résumé + carte SVG ---- */
 .repart-resume { list-style: none; padding: 0; margin: 10px 0; }
@@ -2003,19 +2004,19 @@ body.theme-clair {
 /* En-but : espace réel DERRIÈRE la ligne de but (la longueur déclarée va d'une ligne de poteaux
    à l'autre). Pas de jeu dedans, mais la table de marque peut s'y poser. */
 .carte-enbut { fill: #dbe7d8; stroke: #9bb3a6; stroke-width: 1; stroke-dasharray: 3 3; }
-.carte-titre { font: 600 12px 'Barlow Condensed', sans-serif; fill: #0C1C2E; }
-.carte-tuile { font: 700 12px 'Barlow Condensed', sans-serif; text-anchor: middle; }
+.carte-titre { font: 600 12px Inter, sans-serif; fill: var(--cv-texte); }
+.carte-tuile { font: 700 12px Inter, sans-serif; text-anchor: middle; }
 .carte-table { fill: #b0b8c2; stroke: #7a8794; stroke-width: 1; }
-.carte-tm { font: 700 8px 'Barlow Condensed', sans-serif; fill: #2b3440; text-anchor: middle; }
+.carte-tm { font: 700 8px Inter, sans-serif; fill: #2b3440; text-anchor: middle; }
 
 /* Nom du grand terrain sur la carte (bien visible) + menu emplacement */
-.carte-nomterrain { font-weight: 700; font-size: 13px; fill: #0C1C2E; }
+.carte-nomterrain { font-weight: 700; font-size: 13px; fill: var(--cv-texte); }
 .terrain-ligne .tp-pos { flex: 0 0 auto; max-width: 150px; }
 
 /* ---- Ajustement manuel de la répartition (glisser-déposer) ---- */
 .carte-tuile-g { cursor: grab; }
 .carte-tuile-g:hover rect { stroke-width: 2.5; }
-.carte-terrain.est-cible { stroke: #2E8FE0; stroke-width: 3; }
+.carte-terrain.est-cible { stroke: var(--cv-action); stroke-width: 3; }
 .repart-tray {
   display: flex; flex-wrap: wrap; gap: 8px; padding: 10px; margin: 8px 0 12px;
   border: 1.5px dashed rgba(46, 143, 224, .55); border-radius: var(--rayon);
@@ -2024,13 +2025,13 @@ body.theme-clair {
   display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
   border: 1.5px solid; border-radius: 999px; cursor: grab; user-select: none;
   -webkit-user-select: none; touch-action: none;
-  font-family: 'Barlow Condensed', sans-serif; background: rgba(255,255,255,.06);
+  font-family: var(--cv-font); background: rgba(255,255,255,.06);
 }
 .theme-clair .repart-chip { background: #ffffff; }
 .repart-ghost {
   position: fixed; z-index: 10000; pointer-events: none;
   transform: translate(-50%, -50%); opacity: .85; margin: 0;
-  background: #ffffff; color: #0C1C2E;
+  background: #ffffff; color: var(--cv-texte);
 }
 /* Bouton ⟳ de la pastille : pivote le mini-terrain (longueur ↔ largeur). */
 .repart-chip-pivot {
@@ -2045,14 +2046,14 @@ body.theme-clair {
   position: fixed; z-index: 10000; pointer-events: none;
   border-radius: 3px; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center;
-  font: 700 11px 'Barlow Condensed', sans-serif;
+  font: 700 11px Inter, sans-serif;
 }
 .repart-apercu.est-ok      { border: 2px solid #1e9e5a; background: rgba(30, 158, 90, .28);  color: #0b4d2b; }
 .repart-apercu.est-refuse  { border: 2px solid #c0392b; background: rgba(192, 57, 43, .28);  color: #7d1f16; }
 /* Hors terrain : simple étiquette suiveuse (pas d'emplacement à montrer). */
 .repart-apercu.est-libre {
   transform: translate(-50%, -50%); padding: 5px 10px; border-radius: 999px;
-  background: #ffffff; color: #0C1C2E; border: 1.5px solid rgba(12, 28, 46, .35);
+  background: #ffffff; color: var(--cv-texte); border: 1.5px solid rgba(12, 28, 46, .35);
 }
 
 /* Champ « Table des marques » (longueur × largeur) dans la carte terrains */
@@ -2076,9 +2077,9 @@ body.theme-clair {
   gap: 10px; flex-wrap: wrap; margin-bottom: 10px;
 }
 .ea-titre {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase; letter-spacing: 0.5px;
-  font-size: 0.95rem; color: #0C1C2E;
+  font-family: var(--cv-font);
+  text-transform: none; letter-spacing: 0.5px;
+  font-size: 0.95rem; color: var(--cv-texte);
 }
 .ea-legende { font-size: 0.78rem; color: #6b7c93; }
 
@@ -2092,7 +2093,7 @@ body.theme-clair {
 .ea-lien-etape {
   border: 1px solid currentColor; background: #fff; color: #8a5a1a;
   border-radius: 999px; padding: 2px 9px; margin: 2px 2px 0 0; cursor: pointer;
-  font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  font-family: var(--cv-font); text-transform: none;
   letter-spacing: 0.3px; font-size: 0.8rem; font-weight: 600;
 }
 .ea-lien-etape:hover { background: #fdeede; }
@@ -2113,13 +2114,13 @@ body.theme-clair {
 .ea-etape:active { transform: translateY(1px); }
 .ea-etape:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .ea-pastille { font-size: 1rem; line-height: 1; }
-.ea-nom { font-weight: 600; color: #0C1C2E; font-size: 0.9rem; }
+.ea-nom { font-weight: 600; color: var(--cv-texte); font-size: 0.9rem; }
 .ea-detail { font-size: 0.78rem; color: #6b7c93; }
 
 /* Liseré (et léger fond) selon l'état de l'étape */
 .ea-fait     { border-left-color: #2f9e5f; }
 .ea-arefaire { border-left-color: #e08a2e; background: #fff8ef; }
-.ea-attente  { border-left-color: #2E8FE0; }
+.ea-attente  { border-left-color: var(--cv-action); }
 .ea-afaire   { border-left-color: #cbd6e4; }
 
 /* Thermomètre de la journée : début → pause → heure de fin prévue */
@@ -2172,7 +2173,7 @@ body.theme-clair {
 .asst-step:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .asst-step-num { font-size: 0.95rem; line-height: 1; }
 .asst-step-nom {
-  font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  font-family: var(--cv-font); text-transform: none;
   letter-spacing: 0.4px; font-size: 0.82rem; font-weight: 600;
 }
 .asst-step.est-faite { color: #2f9e5f; border-color: #bfe6cf; background: #f1faf4; }
@@ -2214,7 +2215,7 @@ body.theme-clair {
 }
 .asst-nav { min-width: 130px; }
 .asst-compteur {
-  font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  font-family: var(--cv-font); text-transform: none;
   letter-spacing: 0.4px; font-size: 0.9rem; color: #33608f; text-align: center; flex: 1;
 }
 
@@ -2258,7 +2259,7 @@ a.bouton { display: inline-block; text-decoration: none; }
   list-style: none;
   margin: 10px 0;
   padding: 10px 12px;
-  background: rgba(3, 16, 36, 0.4);
+  background: var(--cv-surface);
   border-radius: 8px;
 }
 .dossier-etat li { padding: 2px 0; }
@@ -2284,7 +2285,7 @@ a.bouton { display: inline-block; text-decoration: none; }
 .club-invite-item { border-left: 4px solid rgba(120, 180, 255, 0.5); }
 .club-invite-item.club-etat-a-enregistrer { border-left-color: #e5a33c; }
 .club-invite-item.club-etat-attente       { border-left-color: #9b7fd4; }
-.club-invite-item.club-etat-equipes-ajoutees { border-left-color: #2E8FE0; }
+.club-invite-item.club-etat-equipes-ajoutees { border-left-color: var(--cv-action); }
 .club-invite-item.club-etat-decline       { border-left-color: #e07878; }
 /* Badge d'état assorti au liseré (pastille discrète, lisible sur fond navy). */
 .club-etat-badge {
@@ -2309,7 +2310,7 @@ a.bouton { display: inline-block; text-decoration: none; }
   overflow-wrap: anywhere;
 }
 .statut-club {
-  background: rgba(3, 16, 36, 0.6);
+  background: var(--cv-surface);
   border: 1px solid rgba(120, 180, 255, 0.4);
   color: #eaf2ff;
   border-radius: 6px;
@@ -2348,7 +2349,7 @@ a.bouton { display: inline-block; text-decoration: none; }
 .club-en-edition .equipe-actions { align-items: flex-start; }
 .club-edit-champs { display: flex; flex-direction: column; gap: 6px; flex: 1 1 220px; min-width: 0; }
 .club-edit-champs input {
-  background: rgba(3, 16, 36, 0.6);
+  background: var(--cv-surface);
   border: 1px solid rgba(120, 180, 255, 0.4);
   color: #eaf2ff;
   border-radius: 6px;
@@ -2368,8 +2369,8 @@ a.bouton { display: inline-block; text-decoration: none; }
 }
 .club-reponse-titre {
   margin: 0 0 4px;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.4px;
   font-size: 0.8rem;
   color: #8fe0a8;
@@ -2381,13 +2382,13 @@ a.bouton { display: inline-block; text-decoration: none; }
   flex: 1 1 100%;
   margin-top: 8px;
   padding: 10px 12px;
-  background: rgba(3, 16, 36, 0.45);
+  background: var(--cv-surface);
   border: 1px solid rgba(120, 180, 255, 0.25);
   border-radius: 8px;
 }
 .club-panneau-titre {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   font-size: 0.85rem;
   color: var(--bleu-ciel, #b8d8f8);
@@ -2403,7 +2404,7 @@ a.bouton { display: inline-block; text-decoration: none; }
   font-size: 0.82rem;
 }
 .club-prenom-champ input {
-  background: rgba(3, 16, 36, 0.6);
+  background: var(--cv-surface);
   border: 1px solid rgba(120, 180, 255, 0.4);
   color: #eaf2ff;
   border-radius: 6px;
@@ -2415,29 +2416,29 @@ a.bouton { display: inline-block; text-decoration: none; }
 /* Aperçu email (Phase 2) — fenêtre modale d'envoi du dossier complet. */
 .eml-overlay {
   position: fixed; inset: 0; z-index: 9998;
-  background: rgba(3, 16, 36, 0.72);
+  background: var(--cv-surface);
   display: flex; align-items: center; justify-content: center; padding: 16px;
 }
 .eml-carte {
-  background: linear-gradient(160deg, #0B2138, #031024);
-  color: #F2F6FB;
-  border: 1px solid rgba(184, 216, 248, 0.25);
+  background: var(--cv-surface);
+  color: var(--cv-texte);
+  border: 1px solid var(--cv-bordure);
   border-radius: 12px;
   padding: 18px;
   max-width: 560px; width: 100%;
   max-height: 90vh; overflow-y: auto;
   box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
-  font-family: 'Barlow', system-ui, sans-serif;
+  font-family: var(--cv-font);
 }
-.eml-titre { margin: 0 0 12px; font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.6px; color: #b8d8f8; }
+.eml-titre { margin: 0 0 12px; font-family: var(--cv-font); text-transform: none; letter-spacing: 0.6px; color: #b8d8f8; }
 .eml-champ { display: flex; flex-direction: column; gap: 4px; margin-bottom: 12px; font-size: 0.85rem; }
 .eml-champ input, .eml-champ textarea {
-  background: rgba(11, 33, 56, 0.8);
-  color: #F2F6FB;
-  border: 1px solid rgba(184, 216, 248, 0.35);
+  background: var(--cv-surface);
+  color: var(--cv-texte);
+  border: 1px solid var(--cv-bordure);
   border-radius: 8px;
   padding: 9px 11px;
-  font: 1rem 'Barlow', sans-serif;
+  font: 1rem Inter, sans-serif;
   box-sizing: border-box;
 }
 .eml-champ input[readonly] { opacity: 0.75; cursor: default; }
@@ -2478,7 +2479,7 @@ a.bouton { display: inline-block; text-decoration: none; }
 
 /* Aperçu de l'email d'invitation (Phase 1) — objet + message ÉDITABLES. */
 .apercu-email {
-  background: rgba(3, 16, 36, 0.55);
+  background: var(--cv-surface);
   border: 1px solid rgba(120, 180, 255, 0.28);
   border-radius: 10px;
   padding: 12px 14px;
@@ -2488,8 +2489,8 @@ a.bouton { display: inline-block; text-decoration: none; }
 .ae-label {
   display: block;
   margin-bottom: 4px;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   font-size: 0.8rem;
   color: var(--bleu-ciel, #b8d8f8);
@@ -2526,10 +2527,10 @@ a.bouton { display: inline-block; text-decoration: none; }
 .ffr-note { margin: 4px 0 0; font-size: 0.8rem; opacity: 0.8; }
 
 /* Thème sombre (défaut) */
-.ffr-neutre { color: var(--bleu-ciel); background: rgba(184, 216, 248, 0.10); }
-.ffr-vert   { color: #c7f0d2; background: rgba(46, 200, 120, 0.14); }
-.ffr-orange { color: #ffe6b0; background: rgba(224, 158, 46, 0.16); }
-.ffr-rouge  { color: #ffd7d0; background: rgba(224, 76, 46, 0.16); }
+.ffr-neutre { color: var(--bleu-ciel); background: var(--cv-bordure); }
+.ffr-vert   { color: var(--cv-succes); background: rgba(46, 200, 120, 0.14); }
+.ffr-orange { color: var(--cv-attention); background: rgba(224, 158, 46, 0.16); }
+.ffr-rouge  { color: var(--cv-danger); background: rgba(224, 76, 46, 0.16); }
 
 /* Forme FFR attendue (dans une carte catégorie) */
 .ffr-forme {
@@ -2548,24 +2549,24 @@ a.bouton { display: inline-block; text-decoration: none; }
   border-radius: 999px;
   white-space: nowrap;
 }
-.ffr-tag-rouge  { color: #ffd7d0; background: rgba(224, 76, 46, 0.22); }
-.ffr-tag-orange { color: #ffe6b0; background: rgba(224, 158, 46, 0.22); }
-.ffr-alerte-eff { color: #ffe6b0; font-size: 0.78rem; }
+.ffr-tag-rouge  { color: var(--cv-danger); background: rgba(224, 76, 46, 0.22); }
+.ffr-tag-orange { color: var(--cv-attention); background: rgba(224, 158, 46, 0.22); }
+.ffr-alerte-eff { color: var(--cv-attention); font-size: 0.78rem; }
 
 /* Prescriptions FFR par catégorie (session 5) : détail sous le verdict. */
 .ffr-detail { font-size: 0.85rem; }
-.ffr-detail-cat { margin-top: 8px; padding-top: 6px; border-top: 1px dashed rgba(184, 216, 248, 0.20); }
+.ffr-detail-cat { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--cv-bordure); }
 .ffr-detail-titre { display: inline-block; font-weight: 600; margin-bottom: 2px; color: var(--bleu-ciel); }
 .ffr-ligne { margin: 2px 0; line-height: 1.35; }
 .ffr-ligne-label { opacity: 0.8; }
 .ffr-note-inline { font-size: 0.78rem; opacity: 0.7; font-weight: 400; } /* précision « borne haute » (session 8) */
 .ffr-ligne-val strong { color: inherit; }
-.ffr-attendu { color: #ffe6b0; font-size: 0.8rem; }
+.ffr-attendu { color: var(--cv-attention); font-size: 0.8rem; }
 /* Bouton « Appliquer les valeurs FFR » (session 6) : discret, une catégorie à la fois. */
 .ffr-appliquer {
   display: inline-block; margin: 6px 6px 2px 0; padding: 5px 12px;
   font-size: 0.8rem; font-weight: 600; cursor: pointer;
-  color: #ffe6b0; background: rgba(224, 158, 46, 0.16);
+  color: var(--cv-attention); background: rgba(224, 158, 46, 0.16);
   border: 1px solid rgba(224, 158, 46, 0.5); border-radius: 8px;
 }
 .ffr-appliquer:hover { background: rgba(224, 158, 46, 0.28); }
@@ -2578,7 +2579,7 @@ a.bouton { display: inline-block; text-decoration: none; }
 .date-finder { margin: 6px 0 12px; }
 .date-finder-panneau {
   margin-top: 8px; padding: 12px 14px; border-radius: 12px;
-  border: 1px solid rgba(184, 216, 248, 0.20); background: rgba(184, 216, 248, 0.05);
+  border: 1px solid var(--cv-bordure); background: var(--cv-bordure);
 }
 .date-finder-aide { margin: 0 0 10px; font-size: 0.82rem; color: var(--bleu-ciel); opacity: 0.9; }
 .date-finder-controles { display: flex; flex-wrap: wrap; gap: 10px; align-items: end; }
@@ -2588,14 +2589,14 @@ a.bouton { display: inline-block; text-decoration: none; }
 .df-jour {
   display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px;
   padding: 8px 12px; border-radius: 10px;
-  border: 1px solid rgba(184, 216, 248, 0.18); background: rgba(184, 216, 248, 0.04);
+  border: 1px solid var(--cv-bordure); background: var(--cv-bordure);
 }
 .df-jour.df-compatible { border-left: 4px solid #4bbf7b; }
 .df-jour.df-vigilance  { border-left: 4px solid #e09e2e; }
 .df-date { font-weight: 600; text-transform: capitalize; }
 .df-tag { font-size: 0.78rem; opacity: 0.9; }
-.df-vigilance .df-tag { color: #ffe6b0; }
-.df-raison { flex-basis: 100%; font-size: 0.76rem; color: #ffe6b0; opacity: 0.9; }
+.df-vigilance .df-tag { color: var(--cv-attention); }
+.df-raison { flex-basis: 100%; font-size: 0.76rem; color: var(--cv-attention); opacity: 0.9; }
 .df-appliquer {
   margin-left: auto; padding: 4px 12px; font-size: 0.8rem; font-weight: 600; cursor: pointer;
   color: #dff3ff; background: rgba(94, 160, 232, 0.22);
@@ -2614,7 +2615,7 @@ a.bouton { display: inline-block; text-decoration: none; }
 .theme-clair .ffr-appliquer { color: #8a5a0c; background: #fdf4e3; border-color: #e6c98a; }
 
 /* ── Demande d'autorisation de tournoi (session 7) ── */
-.autorisation-groupe { border: 1px solid rgba(184, 216, 248, 0.22); border-radius: 10px; padding: 8px 12px 12px; margin: 10px 0; }
+.autorisation-groupe { border: 1px solid var(--cv-bordure); border-radius: 10px; padding: 8px 12px 12px; margin: 10px 0; }
 /* Champ lié à une question Oui/Non répondue « non » : grisé + non éditable (le champ .r-input
    porte aussi `disabled`, qui bloque la saisie ; l'opacité grise le libellé et le contrôle). */
 .autorisation-saisie .reglage.est-grise { opacity: 0.45; }
@@ -2624,8 +2625,8 @@ a.bouton { display: inline-block; text-decoration: none; }
 .autorisation-prefill-note { display: block; margin-top: 3px; font-size: 0.74rem; color: var(--bleu-ciel); opacity: 0.85; }
 .theme-clair .autorisation-prefill-note { color: #1c4e80; }
 .autorisation-groupe legend { padding: 0 6px; font-weight: 600; color: var(--bleu-ciel); font-size: 0.9rem; }
-.autorisation-rappel { font-size: 0.85rem; background: rgba(184, 216, 248, 0.10); border-radius: 8px; padding: 8px 10px; }
-.autorisation-memo { margin: 10px 0; font-size: 0.85rem; border-left: 3px solid rgba(184, 216, 248, 0.4); padding: 4px 0 4px 12px; }
+.autorisation-rappel { font-size: 0.85rem; background: var(--cv-bordure); border-radius: 8px; padding: 8px 10px; }
+.autorisation-memo { margin: 10px 0; font-size: 0.85rem; border-left: 3px solid var(--cv-bordure); padding: 4px 0 4px 12px; }
 .autorisation-memo ul { margin: 4px 0; padding-left: 18px; }
 .autorisation-memo-note { opacity: 0.8; font-size: 0.8rem; }
 .autorisation-feuille-report h3 { font-size: 1.05rem; margin: 14px 0 8px; }
@@ -2635,10 +2636,10 @@ a.bouton { display: inline-block; text-decoration: none; }
 .autorisation-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 .autorisation-table th { text-align: left; font-weight: 500; padding: 4px 8px; width: 55%; vertical-align: top; }
 .autorisation-table td { padding: 4px 8px; vertical-align: top; }
-.autorisation-table tr { border-bottom: 1px solid rgba(184, 216, 248, 0.12); }
-.autorisation-table .autorisation-etat { text-align: right; font-size: 0.72rem; text-transform: uppercase; opacity: 0.7; white-space: nowrap; }
-.autorisation-table tr.ffr-orange th, .autorisation-table tr.ffr-orange td { color: #ffe6b0; }
-.autorisation-table tr.ffr-orange em { color: #ffe6b0; font-style: italic; }
+.autorisation-table tr { border-bottom: 1px solid var(--cv-bordure); }
+.autorisation-table .autorisation-etat { text-align: right; font-size: 0.72rem; text-transform: none; opacity: 0.7; white-space: nowrap; }
+.autorisation-table tr.ffr-orange th, .autorisation-table tr.ffr-orange td { color: var(--cv-attention); }
+.autorisation-table tr.ffr-orange em { color: var(--cv-attention); font-style: italic; }
 .autorisation-pied { font-size: 0.8rem; opacity: 0.85; margin-top: 12px; }
 .theme-clair .autorisation-table tr.ffr-orange th, .theme-clair .autorisation-table tr.ffr-orange td { color: #8a5a0c; }
 
@@ -2668,8 +2669,8 @@ a.bouton { display: inline-block; text-decoration: none; }
    FEUILLE DE FIN DE JOURNÉE (carte admin #bloc-feuille-jour)
    ========================================================================== */
 .feuille-jour-titre { margin: 4px 0 2px; font-size: 1.05rem; }
-.feuille-jour-bilan { margin: 0 0 10px; opacity: .7; font-family: 'Barlow Condensed', sans-serif; }
-.tab-feuille-jour { border-collapse: collapse; width: 100%; font-family: 'Barlow Condensed', sans-serif; }
+.feuille-jour-bilan { margin: 0 0 10px; opacity: .7; font-family: var(--cv-font); }
+.tab-feuille-jour { border-collapse: collapse; width: 100%; font-family: var(--cv-font); }
 .tab-feuille-jour th, .tab-feuille-jour td {
   border-bottom: 1px solid rgba(255,255,255,.12); padding: 6px 10px; text-align: left; white-space: nowrap;
 }
@@ -2716,7 +2717,7 @@ body.admin-chargement .ecran-chargement {
 }
 
 .ecran-chargement-titre {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1.3rem;
   color: var(--bleu-ciel);
 }
@@ -2728,6 +2729,6 @@ body.admin-chargement .ecran-chargement {
 
 /* Menu mobile : chaque rubrique reste disponible sans parcourir le fil horizontal. */
 .asst-rubrique { display: flex; flex-direction: column; gap: 6px; width: 100%; font-weight: 600; }
-.asst-rubrique select { width: 100%; min-height: 44px; padding: 10px 12px; font: inherit; border: 1px solid #d3e1f0; border-radius: 10px; background: #fff; color: #0e2340; }
+.asst-rubrique select { width: 100%; min-height: 44px; padding: 10px 12px; font: inherit; border: 1px solid #d3e1f0; border-radius: 10px; background: #fff; color: var(--cv-texte); }
 .asst-stepper { max-width: 100%; }
 .asst-step { flex-shrink: 0; min-height: 44px; }

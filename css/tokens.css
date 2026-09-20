@@ -1,0 +1,41 @@
+/* Ciel & Verre — source commune des couleurs, de la typographie et des états. */
+@font-face { font-family: Inter; src: url('../assets/fonts/InterVariable.woff2') format('woff2'); font-style: normal; font-weight: 100 900; font-display: swap; }
+:root {
+  color-scheme: light;
+  --cv-font: Inter, ui-sans-serif, system-ui, sans-serif;
+  --cv-fond: #f4f7fa;
+  --cv-surface: #fff;
+  --cv-texte: #102a43;
+  --cv-secondaire: #526477;
+  --cv-action: #155b91;
+  --cv-selection: #eaf3fb;
+  --cv-bordure: #dbe5ee;
+  --cv-succes: #16704a;
+  --cv-attention: #8a5400;
+  --cv-danger: #b42318;
+  --cv-rayon: 16px;
+  --cv-controle: 10px;
+  --cv-ombre: 0 8px 24px rgb(16 42 67 / 8%);
+}
+html { font-family: var(--cv-font); }
+body { font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; }
+button, a, input, select, textarea, summary { touch-action: manipulation; }
+button, summary, input[type=checkbox], input[type=radio] { cursor: pointer; }
+:focus-visible { outline: 3px solid var(--cv-action); outline-offset: 3px; }
+input[type=checkbox], input[type=radio] { accent-color: var(--cv-action); }
+button:disabled { cursor: not-allowed; }
+[hidden] { display: none !important; }
+.cv-verre { background: #fff; border: 1px solid var(--cv-bordure); box-shadow: var(--cv-ombre); }
+@supports (backdrop-filter: blur(16px)) {
+  .cv-verre { background: rgb(255 255 255 / 92%); backdrop-filter: blur(18px); }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .cv-verre { background: #fff; backdrop-filter: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
+}
+@media print {
+  .cv-verre { background: #fff; backdrop-filter: none; box-shadow: none; }
+}

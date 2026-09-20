@@ -177,7 +177,7 @@ function svgEcr(nom) {
 
 /** Vrai si l'écran est assez grand pour la barre latérale (sinon : assistant). */
 function ecransSontAdaptes() {
-  return window.matchMedia && window.matchMedia('(min-width: 1024px)').matches;
+  return !!window.matchMedia;
 }
 
 /** Vrai si le mode écrans est actuellement affiché (utilisé par assistant.js). */
@@ -202,11 +202,13 @@ function construireEcrans() {
   nav.setAttribute('aria-label', "Étapes de l'administration");
   let h = '<div class="ecr-marque">' +
             '<img class="ecr-logo" src="assets/logo-tournoi.svg" alt="" onerror="this.style.display=\'none\'">' +
-            '<span class="ecr-marque-titre">Administration</span>' +
-            '<span class="ecr-marque-sous">Le tournoi</span>' +
+            '<span class="ecr-marque-titre">MaxiLou</span>' +
+            '<span class="ecr-marque-sous">Démo Racing</span>' +
           '</div>' +
           '<ul class="ecr-liste">';
+  const groupes = { infos: 'Préparer', terrains: 'Organiser', sponsors: 'Diffuser', apresmidi: 'Jour J' };
   ECRANS_DEF.forEach(function (e) {
+    if (groupes[e.id]) h += '<li class="ecr-groupe">' + groupes[e.id] + '</li>';
     h += '<li><button type="button" class="ecr-onglet' + (e.danger ? ' est-danger' : '') +
          '" data-ecran="' + e.id + '">' +
            '<span class="ecr-icone">' + svgEcr(e.icone) + '</span>' +
@@ -233,6 +235,7 @@ function construireEcrans() {
     zone.appendChild(ecran);
   });
   main.appendChild(zone);
+  construireCadreCiel(main, zone);
 
   // --- Écouteurs -----------------------------------------------------------
   nav.querySelector('.ecr-liste').addEventListener('click', function (evenement) {
@@ -323,6 +326,9 @@ function ecransActiver(id, opt) {
       btn.removeAttribute('aria-current');
     }
   });
+  const titreCiel = document.getElementById('cv-titre-page');
+  if (titreCiel) titreCiel.textContent = ECRANS_DEF[idx].titre;
+  fermerMenuCiel();
   ecransMajPastilles();
   // ⭐ ARRIVÉE SUR UNE ÉTAPE — point de passage UNIQUE, partagé avec `allerA` (assistant.js) :
   //   il porte À LA FOIS le chargement différé des lectures de l'écran et le rattrapage
@@ -376,4 +382,37 @@ function ecransMajPastilles() {
     else              { pastille.classList.add('est-fait');     pastille.textContent = '✓'; }
   });
 
+}
+
+/** Cadre commun, sans clone de formulaire ni nouvel appel API. */
+function construireCadreCiel(main, zone) {
+  const entete = document.createElement('header');
+  entete.className = 'cv-entete cv-verre';
+  entete.innerHTML = '<button type="button" class="cv-menu bouton-lien" aria-controls="ecr-nav" aria-expanded="false">Menu</button>' +
+    '<div class="cv-identite"><strong id="cv-nom-tournoi"></strong><span>Administration du tournoi</span></div>' +
+    '<a class="cv-public" href="tournoi.html" target="_blank" rel="noopener">Voir le tournoi ↗</a>' +
+    '<details class="cv-session"><summary>Session</summary></details>';
+  const connexion = document.getElementById('barre-connexion');
+  if (connexion) entete.querySelector('details').appendChild(connexion);
+  main.insertBefore(entete, main.firstChild);
+  const titre = document.createElement('h1'); titre.id='cv-titre-page'; titre.className='cv-titre-page'; titre.tabIndex=-1;
+  main.insertBefore(titre, zone);
+  const synthese = document.createElement('details'); synthese.className='cv-synthese';
+  synthese.innerHTML='<summary>État du tournoi et avancement</summary>';
+  ['tableau-bord','etat-avancement'].forEach(id=>{const el=document.getElementById(id);if(el)synthese.appendChild(el);});
+  main.insertBefore(synthese, zone);
+  const menu=entete.querySelector('.cv-menu');
+  menu.addEventListener('click',()=>{const ouvert=menu.getAttribute('aria-expanded')!=='true';menu.setAttribute('aria-expanded',String(ouvert));document.body.classList.toggle('cv-menu-ouvert',ouvert);if(ouvert)document.querySelector('.ecr-onglet.est-actif').focus();});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('cv-menu-ouvert')){fermerMenuCiel();menu.focus();}});
+  document.addEventListener('click',e=>{if(!e.target.closest('#ecr-nav,.cv-menu'))fermerMenuCiel();});
+  const infos=document.getElementById('ecran-infos'); if(infos){infos.classList.add('cv-infos');infos.prepend(document.getElementById('bloc-infos-tournoi'));}
+  actualiserCadreCiel();
+}
+function fermerMenuCiel() {
+  document.body.classList.remove('cv-menu-ouvert');
+  const menu=document.querySelector('.cv-menu');if(menu)menu.setAttribute('aria-expanded','false');
+}
+function actualiserCadreCiel() {
+  const nom=document.getElementById('cv-nom-tournoi');
+  if(nom)nom.textContent=configCourante.global.tournoi_nom||'Démo Racing';
 }

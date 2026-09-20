@@ -16,11 +16,11 @@
    ========================================================= */
 
 html {
-  --navy:       #0C1C2E;
+  --navy:       var(--cv-texte);
   --ciel:       #B8D8F8;
-  --bleu-vif:   #2E8FE0;
+  --bleu-vif:   var(--cv-action);
   --blanc:      #FFFFFF;
-  --gris-texte: #3B4A63;
+  --gris-texte: var(--cv-secondaire);
   --bordure:    #e6edf5;
   --ombre:      0 1px 3px rgba(12, 28, 46, 0.06);
 }
@@ -28,12 +28,12 @@ html {
 /* --- Briques communes --- */
 .sp-mention {
   display: block;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 0.72rem;
   font-weight: 700;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: #8a97a6;
+  text-transform: none;
+  color: var(--cv-secondaire);
 }
 .sp-accroche {
   display: block;
@@ -77,7 +77,7 @@ html {
   padding: 6px 12px;
   border-radius: 6px;
   color: #fff;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 800;
   font-size: 0.95rem;
   letter-spacing: 0.03em;
@@ -273,7 +273,7 @@ a.sp-plein-visuel:hover { text-decoration: none; }
   box-shadow: 0 18px 40px rgba(0, 0, 0, 0.45);
 }
 .sp-plein-marque {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 800;
   font-size: 1.9rem;
   line-height: 1.1;
@@ -282,7 +282,7 @@ a.sp-plein-visuel:hover { text-decoration: none; }
 .sp-plein-accroche { font-size: 0.95rem; opacity: 0.92; line-height: 1.4; }
 .sp-plein-cta {
   margin-top: 4px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   font-size: 0.95rem;
   border: 1px solid rgba(255, 255, 255, 0.6);
@@ -299,7 +299,7 @@ a.sp-plein-visuel:hover { text-decoration: none; }
 .sp-plein-jauge i { display: block; height: 100%; width: 0; background: #7db8ec; }
 /* Bouton « Passer » : jamais caché, jamais minuscule (44 px de cible tactile). */
 .sp-plein-passer {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   font-size: 1rem;
   min-height: 44px;
@@ -317,12 +317,12 @@ a.sp-plein-visuel:hover { text-decoration: none; }
 .sp-mur { margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--bordure); }
 .sp-mur-titre {
   text-align: center;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   font-size: 0.8rem;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: #8a97a6;
+  text-transform: none;
+  color: var(--cv-secondaire);
   margin-bottom: 14px;
 }
 /* Grille centrée et auto-ajustée : elle rend aussi bien avec 3 partenaires qu'avec 12,
@@ -369,15 +369,15 @@ a.sp-mur-case:hover { border-color: var(--bleu-vif); transform: translateY(-1px)
   justify-content: center;
 }
 .sp-demo-titre {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   font-size: 0.78rem;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--ciel);
 }
 .sp-demo button {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   font-size: 0.85rem;
   color: var(--navy);
@@ -424,11 +424,11 @@ body.sp-reperes .sp-mur { outline: 2px dashed #e9b53e; outline-offset: 3px; }
 }
 .sp-dossier-titre {
   margin: 0 0 10px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 0.78rem;
   font-weight: 600;
   letter-spacing: 0.12em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--d-gris, #5b6570);
 }
 .sp-dossier-logos {
@@ -476,12 +476,12 @@ body.sp-reperes .sp-mur { outline: 2px dashed #e9b53e; outline-offset: 3px; }
   flex-wrap: wrap;      /* filet : sur un écran étroit, le texte passe sous le logo */
 }
 .sp-dossier .sp-bloc-texte   { font-size: 0.82rem; color: var(--d-gris, #5b6570); }
-.sp-dossier .sp-bloc-texte strong { display: block; color: var(--d-navy, #0C1C2E); }
+.sp-dossier .sp-bloc-texte strong { display: block; color: var(--d-navy, var(--cv-texte)); }
 .sp-dossier .sp-mention {
   display: block;
   font-size: 0.68rem;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+  text-transform: none;
 }
 .sp-dossier .sp-logo-texte {
   display: inline-grid;
@@ -489,7 +489,7 @@ body.sp-reperes .sp-mur { outline: 2px dashed #e9b53e; outline-offset: 3px; }
   padding: 8px 14px;
   border-radius: 6px;
   color: #fff;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   font-size: 0.95rem;
   line-height: 1.15;

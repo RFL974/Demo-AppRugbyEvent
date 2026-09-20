@@ -54,6 +54,7 @@ ids.forEach(function (id) {
 
 const ouvertures = [];
 const documentFaux = {
+  body: { classList: classes() },
   getElementById(id) {
     if (id === 'ecrans') return {};
     if (id.startsWith('ecran-')) return ecrans[id.slice(6)] || null;

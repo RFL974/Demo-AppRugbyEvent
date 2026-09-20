@@ -1,12 +1,13 @@
+@import url("tokens.css");
 /* ============================================================================
    DOSSIER CLUB — style « document » : fond blanc, texte sombre, format A4.
-   Charte : navy #0C1C2E (titres, entête) + bleu vif #2E8FE0 (accents),
+   Charte : navy var(--cv-texte) (titres, entête) + bleu vif var(--cv-action) (accents),
    corps noir/gris sur blanc pour rester lisible à l'impression.
    ========================================================================== */
 
 :root {
-  --d-navy: #0C1C2E;
-  --d-bleu: #2E8FE0;
+  --d-navy: var(--cv-texte);
+  --d-bleu: var(--cv-action);
   --d-texte: #1a1f26;
   --d-gris: #5b6570;
   --d-filet: #dbe3ec;
@@ -18,7 +19,7 @@ body {
   margin: 0;
   background: #eef2f7;               /* gris doux autour de la « feuille » à l'écran */
   color: var(--d-texte);
-  font-family: 'Barlow', system-ui, sans-serif;
+  font-family: var(--cv-font);
   font-size: 15px;
   line-height: 1.5;
 }
@@ -44,8 +45,8 @@ body {
   color: #b8d8f8;
 }
 .barre-outils-titre {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.6px;
   font-size: 0.9rem;
   color: #b8d8f8;
@@ -57,7 +58,7 @@ body {
   color: #fff;
   border-radius: 999px;
   padding: 7px 16px;
-  font: 600 0.9rem 'Barlow', sans-serif;
+  font: 600 0.9rem Inter, sans-serif;
   text-decoration: none;
   cursor: pointer;
 }
@@ -97,8 +98,8 @@ body {
 .d-section { margin-top: 18px; }
 .d-section h2 {
   margin: 0 0 8px;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.8px;
   font-size: 1.05rem;
   color: var(--d-bleu);
@@ -135,7 +136,7 @@ body {
 .d-equipes li:last-child { border-bottom: none; }
 .d-eq-nom { font-weight: 700; color: var(--d-navy); }
 .d-eq-cat {
-  font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.6px;
+  font-family: var(--cv-font); text-transform: none; letter-spacing: 0.6px;
   font-size: 0.8rem; color: #fff; background: var(--d-bleu); border-radius: 999px; padding: 1px 9px;
 }
 .d-eq-detail { color: var(--d-gris); font-size: 0.9rem; }
@@ -146,17 +147,17 @@ body {
 /* Un bloc par catégorie : le club engagé en U8 et en U10 lit deux plannings, pas un mélange. */
 .d-pl-bloc + .d-pl-bloc { margin-top: 16px; }
 .d-pl-phase {
-  margin: 10px 0 2px; font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  margin: 10px 0 2px; font-family: var(--cv-font); text-transform: none;
   letter-spacing: 0.6px; font-size: 0.85rem; color: var(--d-gris);
 }
 .d-planning-titre {
-  margin: 14px 0 4px; font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase;
+  margin: 14px 0 4px; font-family: var(--cv-font); text-transform: none;
   letter-spacing: 0.8px; font-size: 0.95rem; color: var(--d-bleu);
 }
 .d-planning { width: 100%; border-collapse: collapse; margin: 4px 0 0; }
 .d-planning th {
   text-align: left; padding: 5px 8px; background: var(--d-navy); color: #fff;
-  font-family: 'Barlow Condensed', sans-serif; text-transform: uppercase; letter-spacing: 0.6px;
+  font-family: var(--cv-font); text-transform: none; letter-spacing: 0.6px;
   font-size: 0.82rem; font-weight: 600;
 }
 .d-planning td { padding: 5px 8px; border-bottom: 1px solid var(--d-filet); vertical-align: top; }
@@ -215,7 +216,7 @@ body {
   color: #fff;
   border-radius: 999px;
   padding: 8px 14px;
-  font: 600 0.85rem 'Barlow', sans-serif;
+  font: 600 0.85rem Inter, sans-serif;
   text-decoration: none;
   cursor: pointer;
 }
@@ -231,7 +232,7 @@ body {
   margin-top: 22px;
   padding-top: 10px;
   border-top: 1px solid var(--d-filet);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   letter-spacing: 0.6px;
   color: var(--d-navy);
 }
@@ -250,8 +251,8 @@ body {
 .inv-blason { display: block; width: 150px; height: auto; margin: 0 auto 12px; }
 .inv-surtitre {
   margin: 0;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 2px;
   font-size: 0.95rem;
   line-height: 1.5;
@@ -259,7 +260,7 @@ body {
 }
 .inv-titre {
   margin: 8px 0 2px;
-  font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 3.2rem;
   line-height: 1.05;
   letter-spacing: 1px;
@@ -277,8 +278,8 @@ body {
   background: var(--d-navy);
   color: #fff;
   border-radius: 999px;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 1px;
   font-size: 0.95rem;
 }
@@ -286,7 +287,7 @@ body {
 /* Typo française : seule la PREMIÈRE lettre de « dimanche 13 juin 2027 » prend la majuscule
    (::first-letter exige un élément de type bloc, d'où l'inline-block). */
 .inv-quand-date { display: inline-block; }
-.inv-quand-date::first-letter { text-transform: uppercase; }
+.inv-quand-date::first-letter { text-transform: none; }
 .inv-quand-sep { color: var(--d-bleu); }
 /* Filet d'accent sous l'en-tête : signe la charte sans alourdir. */
 .inv-hero::after {
@@ -348,7 +349,7 @@ body {
 }
 .inv-frise-heure {
   display: block;
-  font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1.5rem;
   color: var(--d-navy);
 }
@@ -378,7 +379,7 @@ body {
   print-color-adjust: exact;
 }
 .inv-carte-cat {
-  font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1.5rem;
   letter-spacing: 1px;
 }
@@ -386,9 +387,9 @@ body {
   padding: 4px 10px;
   background: var(--d-bleu);
   border-radius: 999px;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 600;
-  text-transform: uppercase;
+  text-transform: none;
   letter-spacing: 0.8px;
   font-size: 0.78rem;
   text-align: center;
@@ -426,14 +427,14 @@ body {
 }
 .inv-cta-titre {
   margin: 0;
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 1.2px;
   font-size: 0.95rem;
   color: #b8d8f8;
 }
 .inv-cta-date { margin: 4px 0 0; font-size: 1.15rem; }
-.inv-cta-date strong { font-family: 'Bebas Neue', 'Barlow Condensed', sans-serif; font-size: 1.5rem; letter-spacing: 0.5px; font-weight: 400; }
+.inv-cta-date strong { font-family: var(--cv-font); font-size: 1.5rem; letter-spacing: 0.5px; font-weight: 400; }
 /* Bouton « Répondre à l'invitation » (page ouverte depuis l'email : club reconnu). */
 .inv-cta-action { margin: 12px 0 0; }
 .inv-cta-bouton {
@@ -443,7 +444,7 @@ body {
   text-decoration: none;
   border-radius: 999px;
   padding: 12px 26px;
-  font: 600 1rem 'Barlow', sans-serif;
+  font: 600 1rem Inter, sans-serif;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -487,7 +488,7 @@ body {
   background: var(--d-navy);
   color: #fff;
   border-radius: 999px;
-  font: 600 0.85rem 'Barlow', sans-serif;
+  font: 600 0.85rem Inter, sans-serif;
   -webkit-print-color-adjust: exact;
   print-color-adjust: exact;
 }
@@ -496,7 +497,7 @@ body {
 .inv-pied { flex-wrap: wrap; gap: 10px 14px; }
 .inv-pied-nom { flex: 1 1 auto; }
 .inv-pied-liens { display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.inv-lien { color: var(--d-bleu); text-decoration: none; font-family: 'Barlow', sans-serif; letter-spacing: 0; }
+.inv-lien { color: var(--d-bleu); text-decoration: none; font-family: var(--cv-font); letter-spacing: 0; }
 .inv-lien:hover { text-decoration: underline; }
 
 /* ============================================================================
@@ -528,7 +529,7 @@ body {
   border: none;
   border-radius: 999px;
   padding: 12px 22px;
-  font: 600 1rem 'Barlow', sans-serif;
+  font: 600 1rem Inter, sans-serif;
   cursor: pointer;
 }
 .rep-btn-oui { background: var(--d-bleu); color: #fff; }
@@ -543,8 +544,8 @@ body {
 /* Formulaire « présents » */
 .rep-form { margin-top: 8px; }
 .rep-titre {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.8px;
   font-size: 1.05rem;
   color: var(--d-bleu);
@@ -620,14 +621,14 @@ body {
   margin-top: 20px; padding: 16px 18px; border-radius: 10px; color: #fff;
   background: linear-gradient(135deg, var(--d-navy), #1f5f94);
 }
-.rep-total-du h2 { margin: 0 0 8px; font: 600 1.15rem 'Barlow Condensed', sans-serif; text-transform: uppercase; }
+.rep-total-du h2 { margin: 0 0 8px; font: 600 1.15rem Inter, sans-serif; text-transform: none; }
 #rep-detail-paiement { display: grid; gap: 4px; font-size: 0.9rem; color: #e7f1fb; }
 .rep-total-du p { margin: 10px 0 0; font-size: 1.55rem; }
 .rep-recap {
   margin-top: 18px; padding: 18px 20px; background: #fff8e8;
   border: 2px solid #e4a33d; border-radius: 10px;
 }
-.rep-recap h2 { margin: 0 0 8px; color: var(--d-navy); font-family: 'Barlow Condensed', sans-serif; }
+.rep-recap h2 { margin: 0 0 8px; color: var(--d-navy); font-family: var(--cv-font); }
 .rep-recap ul { margin: 8px 0; padding-left: 22px; }
 .rep-recap-total { font-size: 1.1rem; color: var(--d-navy); }
 .rep-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 18px; }
@@ -641,7 +642,7 @@ body {
   border-left: 4px solid var(--d-bleu);
   border-radius: 0 8px 8px 0;
 }
-.rep-merci h2 { margin: 0 0 6px; color: var(--d-navy); font-family: 'Barlow Condensed', sans-serif; }
+.rep-merci h2 { margin: 0 0 6px; color: var(--d-navy); font-family: var(--cv-font); }
 .rep-merci p { margin: 0; }
 
 /* ----- Petits écrans (aperçu mobile) ---------------------------------------------- */

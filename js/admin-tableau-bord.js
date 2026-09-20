@@ -37,6 +37,7 @@ function svgEtatTuile(etat) {
  * Lit l'état gardé en mémoire (configCourante / equipesCourantes / matchsCourants).
  */
 function majTableauBord() {
+  if (typeof actualiserCadreCiel === 'function') actualiserCadreCiel();
   const elCat = document.getElementById('tb-categories');
   const elEq  = document.getElementById('tb-equipes');
   const elPl  = document.getElementById('tb-planning');

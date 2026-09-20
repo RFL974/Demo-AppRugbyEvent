@@ -1,3 +1,4 @@
+@import url("tokens.css");
 /* =========================================================
    LE TOURNOI — page publique
    ---------------------------------------------------------
@@ -12,12 +13,12 @@
    1. COULEURS DE LA MARQUE (identiques au site vitrine)
    --------------------------------------------------------- */
 :root {
-  --navy:        #0C1C2E;
+  --navy:        var(--cv-texte);
   --navy-clair:  #16304a;
   --ciel:        #B8D8F8;
-  --bleu-vif:    #2E8FE0;
+  --bleu-vif:    var(--cv-action);
   --blanc:       #FFFFFF;
-  --gris-texte:  #3B4A63;
+  --gris-texte:  var(--cv-secondaire);
   --surface-clair: #F5F9FD;
   --bordure:     #e6edf5;
   --ombre:       0 1px 3px rgba(12, 28, 46, 0.06);
@@ -26,7 +27,7 @@
   --vert:  #1a8a4a;   /* victoire */
   --rouge: #c0392b;   /* défaite  */
 
-  --largeur-max: 900px;
+  --largeur-max: none;
   --rayon: 14px;
 }
 
@@ -36,24 +37,14 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
 body {
-  font-family: 'Barlow', 'Segoe UI', system-ui, -apple-system, Arial, sans-serif;
+  font-family: var(--cv-font);
   color: var(--gris-texte);
-  background: var(--blanc);
+  background: var(--cv-fond);
   line-height: 1.6;
   overflow-wrap: break-word;
 }
 /* Grain très subtil sur toute la page (n'attrape aucun clic). Ressource LOCALE. */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: 9999;
-  pointer-events: none;
-  opacity: 0.04;
-  mix-blend-mode: soft-light;
-  background: url('../assets/grain.svg') repeat;
-  background-size: 200px 200px;
-}
+
 a { color: var(--bleu-vif); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
@@ -122,16 +113,16 @@ a:hover { text-decoration: underline; }
 }
 .bandeau-titre > .conteneur { position: relative; z-index: 1; }
 .sous-titre {
-  font-family: 'Barlow Condensed', 'Segoe UI', sans-serif;
+  font-family: var(--cv-font);
   color: #7db8ec;
   font-weight: 700;
   letter-spacing: 1.5px;
-  text-transform: uppercase;
+  text-transform: none;
   font-size: 0.95rem;
   margin-bottom: 8px;
 }
 .titre-page {
-  font-family: 'Barlow Condensed', 'Segoe UI', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 800;
   font-size: 2.2rem;
   letter-spacing: 0.5px;
@@ -166,7 +157,7 @@ a:hover { text-decoration: underline; }
 .btn, .bouton {
   display: inline-block;
   cursor: pointer;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   font-size: 1rem;
   border-radius: 8px;
@@ -189,7 +180,7 @@ a:hover { text-decoration: underline; }
    --------------------------------------------------------- */
 .r-input {
   width: 100%;
-  font-family: 'Barlow', sans-serif;
+  font-family: var(--cv-font);
   font-size: 1rem;
   color: var(--navy);
   background: var(--blanc);
@@ -201,7 +192,7 @@ a:hover { text-decoration: underline; }
 .mp-label {
   display: block;
   color: var(--navy);
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 600;
   letter-spacing: 0.3px;
   margin-bottom: 6px;
@@ -220,8 +211,8 @@ a:hover { text-decoration: underline; }
   margin-bottom: 14px;
 }
 .live-maj {
-  color: #8a97a6;
-  font-family: 'Barlow Condensed', sans-serif;
+  color: var(--cv-secondaire);
+  font-family: var(--cv-font);
   font-size: 0.9rem;
 }
 
@@ -256,7 +247,7 @@ a:hover { text-decoration: underline; }
   box-shadow: var(--ombre);
 }
 .podium-titre {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 800;
   font-size: 1.1rem;
   color: var(--navy);
@@ -297,7 +288,7 @@ a:hover { text-decoration: underline; }
 .onglets { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 18px; }
 .onglet {
   flex: 1 1 auto;
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   font-size: 1.02rem;
   color: var(--navy);
@@ -319,7 +310,7 @@ a:hover { text-decoration: underline; }
    11. SOUS-TITRES DE PHASE / SECTIONS INTERNES
    --------------------------------------------------------- */
 .planning-phase {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   font-size: 1.15rem;
   color: var(--navy);
@@ -328,20 +319,20 @@ a:hover { text-decoration: underline; }
   border-bottom: 2px solid var(--surface-clair);
 }
 .live-titre {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 800;
   font-size: 1.3rem;
   color: var(--navy);
   margin: 4px 0 10px;
 }
 .live-cat {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   color: var(--bleu-vif);
   font-size: 1.15rem;
   margin: 16px 0 4px;
 }
 .live-poule {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 600;
   color: var(--navy);
   margin: 10px 0 4px;
@@ -359,8 +350,8 @@ a:hover { text-decoration: underline; }
 }
 .match-termine { border-color: rgba(26, 138, 74, 0.35); }
 .match-meta {
-  color: #8a97a6;
-  font-family: 'Barlow Condensed', sans-serif;
+  color: var(--cv-secondaire);
+  font-family: var(--cv-font);
   font-size: 0.95rem;
   margin-bottom: 6px;
 }
@@ -372,11 +363,11 @@ a:hover { text-decoration: underline; }
   gap: 8px;
 }
 .mp-adv { font-weight: 700; font-size: 1.05rem; color: var(--navy); }
-.mp-resultat { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; }
+.mp-resultat { font-family: var(--cv-font); font-weight: 700; }
 .mp-resultat.gagne { color: var(--vert); }
 .mp-resultat.perd  { color: var(--rouge); }
 .mp-resultat.nul   { color: var(--bleu-vif); }
-.mp-avenir { color: #8a97a6; font-style: italic; }
+.mp-avenir { color: var(--cv-secondaire); font-style: italic; }
 
 /* ---------------------------------------------------------
    13. DERNIERS SCORES (scoreboard)
@@ -389,8 +380,8 @@ a:hover { text-decoration: underline; }
   margin-bottom: 8px;
 }
 .score-meta {
-  color: #8a97a6;
-  font-family: 'Barlow Condensed', sans-serif;
+  color: var(--cv-secondaire);
+  font-family: var(--cv-font);
   font-size: 0.85rem;
 }
 .score-corps {
@@ -405,7 +396,7 @@ a:hover { text-decoration: underline; }
 .score-corps > span:last-child  { text-align: left; }
 .score-corps .gagnant { font-weight: 700; color: var(--vert); }
 .score-chiffres {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   white-space: nowrap;
   text-align: center;
@@ -417,7 +408,7 @@ a:hover { text-decoration: underline; }
    13bis. ARBRE DE COUPE (bracket) + Plateau / Libre
    --------------------------------------------------------- */
 .bracket-titre {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 700;
   font-size: 1.1rem;
   color: var(--navy);
@@ -440,8 +431,8 @@ a:hover { text-decoration: underline; }
   min-width: 190px;
 }
 .bracket-col-titre {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   font-size: 0.8rem;
   color: var(--bleu-vif);
@@ -470,8 +461,8 @@ a:hover { text-decoration: underline; }
 .bracket-score { font-weight: 700; flex: none; font-variant-numeric: tabular-nums; }
 .bracket-gagnant { color: var(--vert); }
 .bracket-gagnant .bracket-nom { font-weight: 700; }
-.bracket-perdant { color: #8a97a6; }
-.bracket-attente { font-style: italic; color: #8a97a6; }
+.bracket-perdant { color: var(--cv-secondaire); }
+.bracket-attente { font-style: italic; color: var(--cv-secondaire); }
 .bracket-petite { margin-top: 14px; max-width: 230px; }
 
 /* Vainqueur / tête du classement général (croisé) */
@@ -509,8 +500,8 @@ tr.cl-vainqueur .col-equipe { font-weight: 700; color: var(--navy); }
   white-space: nowrap;
 }
 .table-planning th {
-  font-family: 'Barlow Condensed', sans-serif;
-  text-transform: uppercase;
+  font-family: var(--cv-font);
+  text-transform: none;
   letter-spacing: 0.5px;
   color: var(--bleu-vif);
   font-size: 0.85rem;
@@ -540,12 +531,12 @@ tr.cl-vainqueur .col-equipe { font-weight: 700; color: var(--navy); }
 /* ---------------------------------------------------------
    15. MESSAGES & ÉTAT VIDE
    --------------------------------------------------------- */
-.vide { color: #8a97a6; font-style: italic; }
+.vide { color: var(--cv-secondaire); font-style: italic; }
 .message {
   text-align: center;
   padding: 20px;
-  color: #8a97a6;
-  font-family: 'Barlow Condensed', sans-serif;
+  color: var(--cv-secondaire);
+  font-family: var(--cv-font);
   font-size: 1.1rem;
 }
 
@@ -555,7 +546,7 @@ tr.cl-vainqueur .col-equipe { font-weight: 700; color: var(--navy); }
 .avenir { text-align: center; padding: 40px 16px; }
 .avenir-emoji { font-size: 3.4rem; line-height: 1; }
 .avenir-titre {
-  font-family: 'Barlow Condensed', sans-serif;
+  font-family: var(--cv-font);
   font-weight: 800;
   font-size: 1.9rem;
   color: var(--navy);

@@ -26,7 +26,10 @@
  *  → Version : "Nouvelle version" → Déployer.
  *  Créer un "Nouveau déploiement" génèrerait une URL DIFFÉRENTE (à éviter).
  */
-const API_URL = "https://script.google.com/macros/s/AKfycbwMS0paW3sLB041XpaGzl8uBgbeleFmRHR6vF2iNwsoNU7GMQoFbwlUQIW6o1bchKzctQ/exec";
+// Le localhost reste fermé aux services distants, même avec un simple serveur statique.
+const ENVIRONNEMENT_LOCAL = typeof location !== 'undefined' &&
+  (['localhost', '127.0.0.1', '[::1]'].includes(location.hostname) || location.protocol === 'file:');
+const API_URL = ENVIRONNEMENT_LOCAL ? (location.protocol === 'file:' ? 'http://127.0.0.1:8137/__api' : location.origin + '/__api') : "https://script.google.com/macros/s/AKfycbwMS0paW3sLB041XpaGzl8uBgbeleFmRHR6vF2iNwsoNU7GMQoFbwlUQIW6o1bchKzctQ/exec";
 
 /**
  * URL du RELAIS CDN (Cloudflare Worker) — cache "edge" qui encaisse des milliers de

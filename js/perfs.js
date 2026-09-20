@@ -399,7 +399,7 @@ function blocBilan(titre, total, v, n, d, complement) {
       '<span class="pc pc-v">' + v + ' V</span>' +
       '<span class="pc pc-n">' + n + ' N</span>' +
       '<span class="pc pc-d">' + d + ' D</span>' +
-      '<span class="pc pc-pct">' + pct + '% de victoires</span>' +
+      '<span class="pc pc-pct">' + (total ? pct + '% de victoires' : '— · Aucun match joué') + '</span>' +
     '</div>' +
     (complement ? '<div class="perfs-moment-global">' + complement + '</div>' : '') +
   '</div>';
