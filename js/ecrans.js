@@ -336,6 +336,8 @@ function ecransActiver(id, opt) {
   });
   const titreCiel = document.getElementById('cv-titre-page');
   if (titreCiel) titreCiel.textContent = ECRANS_DEF[idx].titre;
+  const description=document.getElementById('cv-description-page');
+  if(description) description.textContent=DESCRIPTIONS_CIEL[id] || '';
   const menuEtaitOuvert = document.body.classList.contains("cv-menu-ouvert");
   fermerMenuCiel();
   if (menuEtaitOuvert && titreCiel) titreCiel.focus();
@@ -399,23 +401,26 @@ function construireCadreCiel(main, zone) {
   const entete = document.createElement('header');
   entete.className = 'cv-entete cv-verre';
   entete.innerHTML = '<button type="button" class="cv-menu bouton-lien" aria-controls="ecr-nav" aria-expanded="false">Menu</button>' +
-    '<div class="cv-identite"><strong id="cv-nom-tournoi"></strong><span>Administration du tournoi</span></div>' +
+    '<div class="cv-identite"><div class="cv-identite-ligne"><strong id="cv-nom-tournoi"></strong><span id="cv-publication-statut" class="cv-pastille"></span></div><span id="cv-meta-tournoi">Administration du tournoi</span></div>' +
     '<a class="cv-public" href="tournoi.html" target="_blank" rel="noopener">Voir le tournoi ↗</a>' +
-    '<details class="cv-session"><summary>Session</summary></details>';
+    '<details class="cv-session"><summary><span class="cv-avatar" aria-hidden="true">DR</span><span id="cv-session-libelle">Session</span></summary></details>';
   const connexion = document.getElementById('barre-connexion');
   if (connexion) entete.querySelector('details').appendChild(connexion);
   main.insertBefore(entete, main.firstChild);
   const titre = document.createElement('h1'); titre.id='cv-titre-page'; titre.className='cv-titre-page'; titre.tabIndex=-1;
   main.insertBefore(titre, zone);
+  const description=document.createElement('p'); description.id='cv-description-page';description.className='cv-description-page';main.insertBefore(description,zone);
   const synthese = document.createElement('details'); synthese.className='cv-synthese';
   synthese.innerHTML='<summary>État du tournoi et avancement</summary>';
   ['tableau-bord','etat-avancement'].forEach(id=>{const el=document.getElementById(id);if(el)synthese.appendChild(el);});
-  main.insertBefore(synthese, zone);
+  synthese.classList.add('cv-verre');
+  main.appendChild(synthese);
   const menu=entete.querySelector('.cv-menu');
   menu.addEventListener('click',()=>{const ouvert=menu.getAttribute('aria-expanded')!=='true';menu.setAttribute('aria-expanded',String(ouvert));document.body.classList.toggle('cv-menu-ouvert',ouvert);if(ouvert)document.querySelector('.ecr-onglet.est-actif').focus();});
   document.addEventListener('keydown',e=>{if(e.key==='Escape'&&document.body.classList.contains('cv-menu-ouvert')){fermerMenuCiel();menu.focus();}});
   document.addEventListener('click',e=>{if(!e.target.closest('#ecr-nav,.cv-menu'))fermerMenuCiel();});
   const infos=document.getElementById('ecran-infos'); if(infos){infos.classList.add('cv-infos');infos.prepend(document.getElementById('bloc-infos-tournoi'));}
+  preparerOutilsCiel();
   actualiserCadreCiel();
 }
 function fermerMenuCiel() {
@@ -424,5 +429,65 @@ function fermerMenuCiel() {
 }
 function actualiserCadreCiel() {
   const nom=document.getElementById('cv-nom-tournoi');
-  if(nom)nom.textContent=configCourante.global.tournoi_nom||'Démo Racing';
+  const g=configCourante.global || {};
+  if(nom)nom.textContent=g.tournoi_nom||'Démo Racing';
+  const meta=document.getElementById('cv-meta-tournoi');
+  if(meta)meta.textContent=[g.tournoi_date ? formaterDateFr(g.tournoi_date) : '',g.tournoi_lieu].filter(Boolean).join(' · ') || 'Administration du tournoi';
+  const statut=document.getElementById('cv-publication-statut');
+  if(statut){statut.textContent=estPublie()?'✓ Publié':'Non publié';statut.className='cv-pastille '+(estPublie()?'cv-succes':'cv-neutre');statut.hidden=!adminConnecte;}
+  const session=document.querySelector('.cv-session');
+  if(session){session.open=!adminConnecte;document.getElementById('cv-session-libelle').textContent=adminConnecte?'Démo Racing':'Se connecter';}
+  document.body.classList.toggle('cv-sans-session',!adminConnecte);
+
+}
+
+const DESCRIPTIONS_CIEL = {
+ infos:'Renseignez les informations générales de votre tournoi.',
+ horaires:'Définissez les temps forts de la journée et visualisez leur enchaînement.',
+ categories:'Comparez les catégories et adaptez leurs réglages de jeu.',
+ clubs:'Retrouvez vos contacts et préparez les invitations aux clubs.',
+ suivi:'Une vue claire des réponses, des commandes et des paiements.',
+ equipes:'Gérez les équipes participantes et leurs effectifs.',
+ terrains:'Déclarez les grands terrains et prévisualisez la répartition des mini-terrains.',
+ poules:'Consultez les rencontres par horaire et par terrain.',
+ autorisation:'Préparez les informations et les documents nécessaires à votre demande.',
+ sponsors:'Gérez les partenaires, leurs emplacements et leurs résultats.',
+ publication:'Pilotez la visibilité du tournoi et l’accès à la table de marque.',
+ apresmidi:'Vérifiez les scores du matin avant de générer les rencontres de l’après-midi.',
+ feuillejour:'Retrouvez les matchs et les résultats de la journée.',
+ reinitialisation:'Préparez une nouvelle édition en conservant les données permanentes du club.'
+};
+/** Déplace les contrôles d’origine : les événements et identifiants restent identiques. */
+function preparerOutilsCiel() {
+ const infos=document.getElementById('ecran-infos');
+ const form=document.getElementById('form-infos-tournoi');
+ if(infos && form && !document.getElementById('cv-affiche-carte')){
+   const affiche=document.createElement('section');affiche.id='cv-affiche-carte';affiche.className='carte';
+   affiche.innerHTML='<h2>Affiche du tournoi</h2><p class="note-generation">L’image utilisée dans les invitations et les dossiers clubs.</p>';
+   const fichier=form.querySelector('input[type=file]');
+   fichier.setAttribute('form','form-infos-tournoi');
+   affiche.appendChild(fichier.closest('label'));
+   affiche.appendChild(document.getElementById('apercu-affiche'));infos.appendChild(affiche);
+   const actions=form.querySelector('.ligne-action');actions.className='cv-actions-enregistrer cv-verre';infos.appendChild(actions);
+   document.getElementById('bouton-enregistrer-infos').textContent='Enregistrer les informations';
+   document.getElementById('bouton-enregistrer-cadre').hidden=true;
+   document.getElementById('bouton-valider-categories').hidden=true;
+   document.getElementById('bloc-cadre-tournoi').querySelector('.note-generation').textContent='La date et la zone permettent de vérifier le calendrier et les prescriptions FFR.';
+   document.getElementById('aide-choix-categories').textContent='Choisissez les catégories accueillies au tournoi.';
+ }
+ const generation=document.getElementById('bloc-generation');
+ if(generation && !document.getElementById('cv-outils-planning')){
+   const outils=document.createElement('details');outils.id='cv-outils-planning';outils.className='cv-options';
+   outils.innerHTML='<summary>Génération et options avancées<span>Recalculer les horaires, régénérer les poules, scores de démonstration</span></summary>';
+   const planning=document.getElementById('affichage-planning');
+   Array.from(generation.children).forEach(el=>{if(el!==planning && el.id!=='bouton-modifier-poules' && el.id!=='edition-poules')outils.appendChild(el);});
+   generation.prepend(outils);
+ }
+ const bloc=document.getElementById('bloc-equipes');
+ if(bloc && !document.getElementById('cv-outils-equipes')){
+   const outils=document.createElement('details');outils.id='cv-outils-equipes';outils.className='cv-options';
+   outils.innerHTML='<summary>Outils et paramètres des équipes<span>Jeu de démonstration et identification de votre club</span></summary>';
+   ['chargement-equipes-demo','form-perfs-club'].forEach(id=>{const el=document.getElementById(id);if(el)outils.appendChild(el);});
+   bloc.appendChild(outils);
+ }
 }

@@ -5,11 +5,11 @@
  --r92-ligne:var(--cv-bordure); --r92-champ-bg:#fff; --r92-champ-bd:#ccdbe8; --r92-txt-doux:var(--cv-secondaire);
  --accent:var(--cv-action); --texte:var(--cv-texte); --bleu-ciel:var(--cv-secondaire);
 }
-body.theme-clair { color:var(--cv-texte); background:var(--cv-fond); padding:24px 32px; }
+body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px; }
 .theme-clair h1,.theme-clair h2,.theme-clair h3,.theme-clair summary { letter-spacing:-.025em; font-weight:650; }
 .theme-clair h2 { font-size:20px; line-height:1.3; color:var(--cv-texte); border:0; margin:0 0 16px; }
 .theme-clair h3 { font-size:16px; }
-.theme-clair .carte { background:#fff; border:1px solid var(--cv-bordure); border-radius:16px; padding:24px; box-shadow:0 2px 4px rgb(16 42 67 / 2%); }
+.theme-clair .carte { background:#fff; border:1px solid var(--cv-bordure); border-radius:16px; padding:24px; box-shadow:none; }
 .theme-clair .note-generation { color:var(--cv-secondaire); font-size:14px; line-height:1.6; max-width:75ch; margin-bottom:20px; }
 .theme-clair .bouton { background:var(--cv-action); color:#fff; border:1px solid var(--cv-action); border-radius:10px; min-height:44px; padding:10px 16px; box-shadow:none; font-weight:600; font-size:14px; }
 .theme-clair .bouton:hover { background:#104873; transform:none; }
@@ -18,7 +18,7 @@ body.theme-clair { color:var(--cv-texte); background:var(--cv-fond); padding:24p
 .theme-clair .bouton-danger { background:var(--cv-danger); border-color:var(--cv-danger); }
 .theme-clair .bouton-suppr { color:var(--cv-danger); background:#fff; border:1px solid #ecc4c1; border-radius:10px; padding:8px 12px; min-height:40px; }
 .theme-clair .r-input,.theme-clair .champ-reglage input,.theme-clair .form-equipe input,.theme-clair .form-equipe select,.theme-clair .champ-edit-nom,.theme-clair .champ-edit-joueurs,.theme-clair .champ-edit-educateurs,.theme-clair #bloc-terrains input:not([type=checkbox]):not([type=radio]),.theme-clair #bloc-terrains select { background:#fff; color:var(--cv-texte); border:1px solid #ccdbe8; border-radius:10px; padding:10px 12px; min-height:44px; font-size:14px; }
-.theme-clair .r-libelle,.theme-clair .champ-reglage label { color:var(--cv-secondaire); font-size:14px; letter-spacing:0; }
+.theme-clair .r-libelle,.theme-clair .champ-reglage label { color:#294766; font-weight:550; font-size:14px; letter-spacing:0; }
 .theme-clair .r-input:focus,.theme-clair .champ-reglage input:focus { outline:2px solid var(--cv-action); outline-offset:2px; }
 .theme-clair .ligne-action { gap:12px; padding-top:16px; border-top:1px solid var(--cv-bordure); }
 .theme-clair .grille-reglages { gap:16px; }
@@ -55,21 +55,25 @@ body.theme-clair { color:var(--cv-texte); background:var(--cv-fond); padding:24p
 .cv-categorie-detail .form-categorie { border:0; margin:0; }
 .cv-infos { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr); gap:24px; align-items:start; }
 .cv-infos > * { min-width:0; }
-.cv-infos #bloc-infos-tournoi { grid-column:1; grid-row:1 / 3; }
-.cv-infos #bloc-cadre-tournoi,.cv-infos #bloc-choix-categories { grid-column:2; }
+.cv-infos #bloc-infos-tournoi { grid-column:1; grid-row:1; }
+.cv-infos #bloc-choix-categories { grid-column:1; grid-row:2; }
+.cv-infos #bloc-cadre-tournoi { grid-column:2; grid-row:1; }
+.cv-infos #cv-affiche-carte { grid-column:2; grid-row:2; }
+.cv-infos .cv-actions-enregistrer { grid-column:1/-1; margin-top:0; }
+
 .cv-infos .carte { margin:0; }
 #form-infos-tournoi { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 #form-infos-tournoi > :not(:nth-child(1)):not(:nth-child(2)) { grid-column:1/-1; }
 #form-infos-tournoi > .ligne-action { margin-top:0; }
-.cv-horaires { display:grid; grid-template-columns:minmax(320px,1fr) minmax(0,1.3fr); gap:24px; align-items:start; }
+.cv-horaires { display:grid; grid-template-columns:minmax(280px,.85fr) minmax(0,1.4fr); gap:24px; align-items:start; }
 .cv-horaires-resume { position:sticky; top:104px; }
 .cv-horaires-resume dl { display:grid; grid-template-columns:1fr auto; gap:16px; margin:20px 0; }
 .cv-horaires-resume dd { font-weight:700; }
 .suivi-club-ligne { border-radius:0; border-width:0 0 1px; margin:0; padding:12px; }
 .suivi-club-actions details { width:100%; }
 .suivi-club-actions summary { color:var(--cv-action); cursor:pointer; padding:8px; }
-.cv-terrains { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; align-items:start; }
-.cv-terrains-plan { background:var(--cv-fond); border-radius:12px; padding:20px; min-height:300px; }
+.cv-terrains { display:grid; grid-template-columns:minmax(300px,.75fr) minmax(0,1.4fr); gap:24px; align-items:start; }
+.cv-terrains-plan { background:#f2f8fc; border-radius:12px; padding:20px; min-height:300px; }
 .suivi-cellule[data-label="Paiement"] > small:nth-of-type(n+2) { display:none; }
 .cv-detail-club { padding:20px; background:#fff; border:1px solid var(--cv-bordure); border-radius:12px; display:flex; flex-direction:column; gap:12px; }
 .suivi-club-actions details[open] { position:relative; }
@@ -88,7 +92,7 @@ body.theme-clair { color:var(--cv-texte); background:var(--cv-fond); padding:24p
 @media (max-width:1199px) { .cv-terrains,.cv-publication { grid-template-columns:1fr; } .theme-clair .suivi-club-ligne { grid-template-columns:repeat(2,minmax(0,1fr)); } }
 @media (max-width:640px) { .theme-clair .suivi-club-ligne { grid-template-columns:1fr; } }
 @media (max-width:900px) { .theme-clair #bloc-sponsors-liste:has(#form-sponsor:not([hidden])) { display:block; } .suivi-club-actions details[open] .cv-detail-club { position:static; width:auto; box-shadow:none; max-height:none; } }
-@media (max-width:1099px) { body.theme-clair { padding:20px; } .cv-infos,.cv-horaires { grid-template-columns:1fr; } .cv-infos #bloc-infos-tournoi,.cv-infos #bloc-cadre-tournoi,.cv-infos #bloc-choix-categories { grid-column:auto; grid-row:auto; } .cv-horaires-resume { position:static; } }
+@media (max-width:1099px) { body.theme-clair { padding:20px; } .cv-infos,.cv-horaires { grid-template-columns:1fr; } .cv-infos #bloc-infos-tournoi,.cv-infos #bloc-cadre-tournoi,.cv-infos #bloc-choix-categories,.cv-infos #cv-affiche-carte { grid-column:auto; grid-row:auto; } .cv-horaires-resume { position:static; } }
 @media (max-width:767px) { body.theme-clair { padding:12px; } .theme-clair .carte { padding:18px; } #form-infos-tournoi { grid-template-columns:1fr; } .theme-clair .grille-reglages { grid-template-columns:1fr; } }
 /* --------------------------------------------------------------------------
    ÉCRAN « PARTENAIRES » (sponsors)
@@ -673,3 +677,73 @@ body.theme-clair { color:var(--cv-texte); background:var(--cv-fond); padding:24p
   border-top: 1px solid var(--r92-ligne);
   line-height: 1.55;
 }
+
+/* Réglages progressifs et résumé chronologique (aucun flou sur les données). */
+.cv-options { border:1px solid var(--cv-bordure); border-radius:12px; margin:16px 0; padding:0 18px; background:#fff; }
+.cv-options > summary { padding:16px 0; color:var(--cv-action); font-size:14px; cursor:pointer; }
+.cv-options > summary span { display:block; color:var(--cv-secondaire); font-weight:400; font-size:12px; margin:4px 0 0 16px; }
+.cv-options[open] { padding-bottom:16px; }
+.cv-options .note-generation { margin:12px 0; }
+.cv-actions-enregistrer { position:sticky; bottom:16px; z-index:20; padding:14px 18px; border-radius:12px; display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:24px; }
+.cv-actions-enregistrer .bouton { margin-left:auto; }
+.cv-actions-enregistrer .message-form { margin:0; }
+.cv-horaires .cv-actions-enregistrer { grid-column:1/-1; }
+.cv-horaires-resume { min-height:380px; }
+.cv-frise { display:grid; grid-template-columns:repeat(var(--etapes,5),minmax(0,1fr)); padding:40px 0 28px; list-style:none; margin:0; }
+.cv-frise li { position:relative; padding:28px 8px 0; font-size:12px; }
+.cv-frise li::before { content:''; position:absolute; width:14px; height:14px; top:0; left:8px; border-radius:50%; background:#126cb2; box-shadow:0 0 0 4px #e6f2fc; z-index:1; }
+.cv-frise li::after { content:''; position:absolute; height:2px; top:6px; left:15px; right:-8px; background:#8bc6ef; }
+.cv-frise li:last-child::after { display:none; }
+.cv-frise strong { display:block; font-size:15px; color:var(--cv-texte); margin-bottom:7px; }
+.cv-frise span { display:block; color:var(--cv-secondaire); line-height:1.5; }
+.cv-information { background:#e9f5ff; border:1px solid #cce6fa; border-radius:10px; padding:16px; color:#285679; font-size:13px; line-height:1.6; }
+.cv-information strong { display:block; color:var(--cv-action); margin-bottom:4px; }
+.cv-fin-journee { display:flex; justify-content:space-between; align-items:center; gap:16px; padding:18px 0; margin-top:8px; border-top:1px solid var(--cv-bordure); font-size:13px; }
+.cv-fin-journee strong { font-size:24px; }
+.cv-terrain-detail { margin-bottom:8px; border:1px solid var(--cv-bordure); border-radius:10px; background:#fff; padding:0 14px; }
+.cv-terrain-detail > summary { padding:14px 0; color:var(--cv-texte); cursor:pointer; font-size:14px; }
+.cv-terrain-detail > summary small { display:block; margin-left:15px; color:var(--cv-secondaire); font-size:12px; font-weight:400; }
+.cv-terrain-detail[open] { border-color:#91c9ee; background:#f6fbff; padding-bottom:14px; }
+.theme-clair .cv-terrain-detail .terrain-ligne { display:grid; grid-template-columns:1fr 1fr; gap:12px; background:transparent; border:0; padding:0; }
+.cv-terrain-detail label { display:flex; flex-direction:column; gap:5px; color:var(--cv-secondaire); font-size:12px; min-width:0; }
+.cv-terrain-detail .tp-nom,.cv-terrain-detail input,.cv-terrain-detail select { width:100%; min-width:0; }
+.cv-terrain-detail label:first-child { grid-column:1/-1; }
+.theme-clair .cv-terrain-detail .terr-suppr { color:var(--cv-danger); font-size:13px; border:1px solid #efc8c5; background:#fff; padding:8px; border-radius:8px; }
+.cv-terrain-vide { border:1px dashed #bdd5e7; border-radius:12px; min-height:250px; display:grid; place-content:center; text-align:center; padding:32px; margin-top:20px; color:var(--cv-secondaire); }
+.theme-clair .equipe-item { background:#fff; border:0; border-bottom:1px solid var(--cv-bordure); border-radius:0; padding:14px 12px; }
+.cv-menu-actions { position:relative; }
+.cv-menu-actions > summary { color:var(--cv-secondaire); list-style:none; padding:8px 12px; cursor:pointer; border:1px solid var(--cv-bordure); border-radius:8px; }
+.cv-menu-actions[open] > .bouton-suppr { position:absolute; right:0; top:40px; z-index:5; white-space:nowrap; background:#fff; box-shadow:var(--cv-ombre); }
+.theme-clair .suivi-clubs-resume { gap:0; border:1px solid var(--cv-bordure); border-radius:12px; overflow:hidden; }
+.theme-clair .suivi-indicateur { border:0; border-right:1px solid var(--cv-bordure); border-radius:0; background:#fff; }
+.theme-clair .suivi-indicateur.est-actif { background:#e5f4ff; box-shadow:inset 0 -3px #155b91; }
+.theme-clair .suivi-filtre { border-radius:8px; min-height:40px; }
+.theme-clair .suivi-filtre.est-actif { color:var(--cv-action); background:#dff2ff; border-color:#b9def5; }
+.theme-clair .club-etat-badge.etat-attente { color:#8a5400; background:#fff3d6; }
+.theme-clair .club-etat-badge.etat-equipes-ajoutees { color:#155b91; background:#eaf3fb; }
+.theme-clair .club-etat-badge.etat-a-enregistrer { color:#8a5400; background:#fff3d6; }
+.theme-clair .club-etat-badge.etat-decline { color:#b42318; background:#fdece9; }
+@media(max-width:1099px){.cv-horaires{grid-template-columns:1fr;}.cv-terrains{grid-template-columns:1fr;}.cv-horaires-resume{min-height:0;}}
+@media(max-width:767px){.cv-frise{grid-template-columns:1fr; padding:12px 0;}.cv-frise li{padding:0 0 24px 32px;}.cv-frise li::before{left:4px;top:4px;}.cv-frise li::after{left:10px;top:14px;bottom:0;width:2px;height:auto;right:auto;}.cv-actions-enregistrer{bottom:8px;flex-wrap:wrap;}.cv-actions-enregistrer .bouton{width:100%;}.cv-horaires .carte{padding:18px;}}
+@media print{.cv-actions-enregistrer,.cv-options > summary{display:none!important;}.cv-options{border:0;}.cv-horaires-resume{position:static;}.cv-terrains{display:block;}}
+
+/* Planning par terrain : les contrôles de génération restent indépendants de la consultation. */
+.cv-filtres-planning { display:flex; flex-wrap:wrap; gap:16px; align-items:end; margin:16px 0; padding:14px; background:#f3f9fd; border:1px solid var(--cv-bordure); border-radius:10px; }
+.cv-filtres-planning label { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--cv-secondaire); }
+.cv-filtres-planning select { padding:10px 12px; min-height:42px; border:1px solid #ccdbe8; background:#fff; color:var(--cv-texte); border-radius:8px; font-size:14px; }
+.cv-information-lecture { margin-left:auto; color:var(--cv-secondaire); font-size:12px; padding-bottom:10px; }
+.cv-planning-scroll { max-height:640px; overflow:auto; border:1px solid var(--cv-bordure); border-radius:10px; }
+.theme-clair .cv-planning-grille { width:100%; border-collapse:separate; border-spacing:0; }
+.theme-clair .cv-planning-grille thead th { position:sticky; top:0; z-index:2; background:#eaf4fc; padding:16px; }
+.theme-clair .cv-planning-grille th:first-child { position:sticky; left:0; z-index:1; background:#f4f9fd; width:80px; }
+.theme-clair .cv-planning-grille thead th:first-child { z-index:3; }
+.theme-clair .cv-planning-grille td { min-width:190px; vertical-align:top; border-left:1px solid var(--cv-bordure); }
+.cv-rencontre { display:flex; flex-direction:column; gap:4px; font-size:13px; padding:4px; }
+.cv-rencontre .cv-pastille { align-self:start; margin-bottom:7px; }
+.cv-rencontre .vs { font-size:11px; }
+.cv-rencontre small { color:var(--cv-secondaire); margin-top:6px; }
+.cv-compositions-poules { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
+.cv-compositions-poules .poule-compo { padding:14px; border:1px solid var(--cv-bordure); border-radius:10px; background:#f6fbff; font-size:13px; line-height:1.8; }
+.cv-compositions-poules .poule-compo strong { display:block; color:var(--cv-action); }
+@media(max-width:767px){.cv-information-lecture{margin-left:0;}.cv-filtres-planning label{width:100%;}.cv-planning-scroll{max-height:65vh;}}
+@media print{.cv-filtres-planning{display:none;}.cv-planning-scroll{max-height:none;overflow:visible;}.theme-clair .cv-planning-grille th{position:static!important;}}

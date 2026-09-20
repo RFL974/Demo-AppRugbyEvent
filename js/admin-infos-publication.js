@@ -191,8 +191,18 @@ async function onEnregistrerInfos() {
   const message = document.getElementById('message-infos-tournoi');
   const bouton = document.getElementById('bouton-enregistrer-infos');
   await avecBoutonOccupe(bouton, message, async function () {
+    // Une action visuelle commune, avec les confirmations et la réconciliation des
+    // catégories existantes conservées. Ne poursuivre que si leur état est confirmé.
+    const informations = Object.assign({}, lireInfosTournoi(), lireCadreTournoi());
+    if (typeof choixCategoriesAValider === 'function' && choixCategoriesAValider()) {
+      await onValiderChoixCategories({ preventDefault: function () {} });
+      if (choixCategoriesAValider()) {
+        afficherMessage(message, 'Les catégories restent à valider. Consulte le message sous leur sélection ; les informations n’ont pas été envoyées.', 'ko');
+        return;
+      }
+    }
     afficherMessage(message, 'Enregistrement des infos…', 'ok');
-    await ecrireAdmin('enregistrerInfosTournoi', lireInfosTournoi());
+    await ecrireAdmin('enregistrerInfosTournoi', informations);
     if (afficheDataURI) {
       afficherMessage(message, "Envoi de l'affiche…", 'ok');
       await ecrireAdmin('enregistrerAffiche', { affiche: afficheDataURI });
@@ -201,6 +211,7 @@ async function onEnregistrerInfos() {
     configCourante = await lireConfigAdmin();
     majInfosTournoi();
     majDossier(); // le dossier club reflète les nouvelles infos
+    majTableauBord();
     document.getElementById('form-infos-tournoi').tournoi_affiche.value = ''; // vide le champ fichier
     afficherMessage(message, '✅ Infos enregistrées.', 'ok');
   });

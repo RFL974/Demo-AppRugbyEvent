@@ -413,6 +413,13 @@ function afficherArbitrages(res) {
   });
   html += '</ul></div>';
   zone.innerHTML = html;
+  zone.onchange=function(e){
+    if(!e.target.id.startsWith('cv-filtre-planning-'))return;
+    const cat=document.getElementById('cv-filtre-planning-categorie').value;
+    const phase=document.getElementById('cv-filtre-planning-phase').value;
+    zone.querySelectorAll('.cv-planning-categorie').forEach(el=>{el.hidden=!!cat && el.dataset.categorie!==cat;});
+    zone.querySelectorAll('.cv-planning-phase').forEach(el=>{el.hidden=!!phase && el.dataset.phase!==phase;});
+  };
 }
 
 /** Clic sur une piste d'arbitrage : applique le réglage puis régénère. */
@@ -478,19 +485,21 @@ function afficherPlanning(poules, matchs) {
     liste = liste.slice().sort(function (a, b) {
       return String(a.heure_debut).localeCompare(String(b.heure_debut));
     });
-    let h = '<div class="table-scroll"><table class="table-planning">' +
-            '<thead><tr><th>Heure</th><th>Ter.</th><th>' + enteteCol + '</th><th>Match</th></tr></thead><tbody>';
-    liste.forEach(function (m) {
-      const arb = libelleArbitreScf(m, nom);
-      const arbHtml = arb ? ' <span class="arbitre-tag">🧑‍⚖️ ' + echapper(arb) + '</span>' : '';
-      h += '<tr>' +
-             '<td>' + echapper(m.heure_debut) + '</td>' +
-             '<td>' + echapper(String(m.terrain)) + '</td>' +
-             '<td>' + echapper(mapPoule ? mapPoule(m) : String(m.poule)) + '</td>' +
-             '<td>' + echapper(nom(m.equipe_A)) + ' <span class="vs">vs</span> ' + echapper(nom(m.equipe_B)) + arbHtml + '</td>' +
-           '</tr>';
+    const terrains=Array.from(new Set(liste.map(m=>String(m.terrain)))).sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
+    const heures=Array.from(new Set(liste.map(m=>String(m.heure_debut)))).sort();
+    let h='<div class="table-scroll cv-planning-scroll"><table class="table-planning cv-planning-grille"><thead><tr><th scope="col">Heure</th>' +
+      terrains.map(t=>'<th scope="col">Terrain '+echapper(t)+'</th>').join('')+'</tr></thead><tbody>';
+    heures.forEach(heure=>{
+      h+='<tr><th scope="row">'+echapper(heure)+'</th>';
+      terrains.forEach(terrain=>{
+        const rencontres=liste.filter(m=>String(m.heure_debut)===heure && String(m.terrain)===terrain);
+        h+='<td>'+rencontres.map(m=>{
+          const arb=libelleArbitreScf(m,nom);
+          return '<div class="cv-rencontre"><span class="cv-pastille cv-neutre">'+echapper(enteteCol+' '+(mapPoule?mapPoule(m):String(m.poule)))+'</span><strong>'+echapper(nom(m.equipe_A))+'</strong><span class="vs">contre</span><strong>'+echapper(nom(m.equipe_B))+'</strong>'+(arb?'<small>Arbitre : '+echapper(arb)+'</small>':'')+'</div>';
+        }).join('')+(rencontres.length?'':'<span class="cv-case-libre">—</span>')+'</td>';
+      });h+='</tr>';
     });
-    return h + '</tbody></table></div>';
+    return h+'</tbody></table></div>';
   }
 
   // Liste ordonnée des catégories concernées.
@@ -498,7 +507,7 @@ function afficherPlanning(poules, matchs) {
   poules.forEach(function (p) { if (cats.indexOf(p.categorie) < 0) cats.push(p.categorie); });
   matchs.forEach(function (m) { if (cats.indexOf(m.categorie) < 0) cats.push(m.categorie); });
 
-  let html = '';
+  let html = '<div class="cv-filtres-planning"><label>Catégorie<select id="cv-filtre-planning-categorie"><option value="">Toutes les catégories</option>'+cats.map(cat=>'<option>'+echapper(cat)+'</option>').join('')+'</select></label><label>Moment de la journée<select id="cv-filtre-planning-phase"><option value="">Toute la journée</option><option value="matin">Matin</option><option value="aprem">Après-midi</option></select></label><span class="cv-information-lecture">Consultation · scores sur la table de marque</span></div>';
   cats.forEach(function (cat) {
     // Matchs de la catégorie, séparés matin (poules) / après-midi (classement croisé).
     const ms = matchs.filter(function (m) { return m.categorie === cat; });
@@ -510,13 +519,14 @@ function afficherPlanning(poules, matchs) {
     const saisisMatin = matin.filter(function (m) { return estTermine(m.statut); }).length;
     const saisisAprem = aprem.filter(function (m) { return estTermine(m.statut); }).length;
 
-    html += '<h3 style="color:var(--bleu-ciel);margin:20px 0 8px;">' + echapper(cat) +
+    html += '<section class="cv-planning-categorie" data-categorie="'+echapper(cat)+'"><h3 style="color:var(--bleu-ciel);margin:20px 0 8px;">' + echapper(cat) +
             badgeAvancement(saisisTotal, ms.length) + '</h3>';
 
     // Objet catégorie (pour le vocabulaire Super Challenge) ; null si introuvable → libellés par défaut.
     const catObj = (configCourante.categories || []).find(function (c) { return c.categorie === cat; });
     const estScfCat = ctxScf(catObj).estScf;
 
+    html += '<div class="cv-compositions-poules">';
     // Composition des poules de la catégorie (« Triangulaire/Quadrangulaire A » en SCF, sinon « Poule A »).
     poules.filter(function (p) { return p.categorie === cat; }).forEach(function (p) {
       const membres = equipesCourantes
@@ -528,22 +538,24 @@ function afficherPlanning(poules, matchs) {
               (membres.join(', ') || '—') + '</div>';
     });
 
+    html += '</div>';
     if (matin.length) {
-      html += '<div class="planning-phase">' + (phaseLabelScf(catObj, false) || '🌅 Matin — poules') +
+      html += '<div class="cv-planning-phase" data-phase="matin"><div class="planning-phase">' + (phaseLabelScf(catObj, false) || '🌅 Matin — poules') +
               badgeAvancement(saisisMatin, matin.length) + '</div>';
-      html += tableMatchs(matin, estScfCat ? 'Groupe' : 'Poule');
+      html += tableMatchs(matin, estScfCat ? 'Groupe' : 'Poule')+'</div>';
     }
     if (aprem.length) {
       // Vocabulaire « Poule haute / basse » si la catégorie est en POULES_NIVEAU (repli : Niveau N1).
       const estPn = !estScfCat && catObj && formatApresMidiDe(catObj) === 'POULES_NIVEAU';
       const nbNiv = estPn ? nbPoulesNiveauCat(aprem, cat) : 0;
-      html += '<div class="planning-phase">' + (phaseLabelScf(catObj, true) ||
+      html += '<div class="cv-planning-phase" data-phase="aprem"><div class="planning-phase">' + (phaseLabelScf(catObj, true) ||
               (estPn ? '🏉 Après-midi — poules de niveau' : '🏉 Après-midi — classement croisé')) +
               badgeAvancement(saisisAprem, aprem.length) + '</div>';
       html += tableMatchs(aprem, estScfCat ? 'Poule' : (estPn ? 'Poule' : 'Niveau'),
                           estScfCat ? function (m) { return pouleEFG(m.poule); }
-                          : (estPn ? function (m) { return libellePouleNiveau(catObj, m.poule, nbNiv) || m.poule; } : null));
+                          : (estPn ? function (m) { return libellePouleNiveau(catObj, m.poule, nbNiv) || m.poule; } : null))+'</div>';
     }
+    html+='</section>';
   });
 
   zone.innerHTML = html;

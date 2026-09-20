@@ -41,62 +41,50 @@ function injecterReglages(global, categories) {
  * Les heures utilisent le champ natif <input type="time"> (rouleau sur mobile).
  */
 function afficherHoraires(global) {
-  function val(cle, def) {
-    return (global && global[cle] != null && global[cle] !== '')
-      ? echapper(String(global[cle])) : (def || '');
-  }
-  // Heure de fin automatique par défaut (sauf si explicitement 'non').
-  var auto = String((global && global.heure_fin_auto) || 'oui').toLowerCase() !== 'non';
+  function val(cle, def) {return (global && global[cle] != null && global[cle] !== '') ? echapper(String(global[cle])) : (def || '');}
+  const auto=String((global && global.heure_fin_auto) || 'oui').toLowerCase() !== 'non';
+  return '<div class="cv-horaires"><section class="carte"><h2>Horaires principaux</h2>' +
+    '<form id="form-horaires" class="form-reglages">' +
+    champHeure('heure_rdv','Accueil des équipes',val('heure_rdv')) +
+    champHeure('heure_debut','Début des matchs',val('heure_debut')) +
+    blocPauseDejeuner(global,val) +
+    champNombre('marge_fin_communiquee_min','Clôture après le dernier match (min)',val('marge_fin_communiquee_min','75'),'Retour aux vestiaires et remise des trophées.') +
+    '<details class="cv-options"><summary>Options avancées<span>Battement, fin des matchs et horaire communiqué</span></summary>' +
+    champNombre('battement_terrain_min','Battement entre deux matchs sur un terrain (min)',val('battement_terrain_min','5')) +
+    '<div class="champ-reglage"><label for="h-heure_fin">Fin des matchs</label><span class="fin-groupe">' +
+    '<label class="mini-toggle"><input type="checkbox" id="h-heure_fin_auto" name="heure_fin_auto"'+(auto?' checked':'')+'> Calcul automatique</label>' +
+    '<input type="time" id="h-heure_fin" name="heure_fin" value="'+val('heure_fin')+'"'+(auto?' disabled':'')+'></span></div>' +
+    champHeure('heure_fin_communiquee','Fin de journée communiquée aux clubs',val('heure_fin_communiquee'),'Laisser vide pour suivre la fin du dernier match, avec la durée de clôture.') +
+    '</details></form></section><aside class="carte cv-horaires-resume"><h2>Aperçu de la journée</h2>' +
+    '<p class="note-generation">Les temps forts calculés depuis vos horaires et le planning enregistré.</p>' +
+    '<div id="cv-frise-horaires">'+friseHorairesCiel(global,typeof matchsCourants==='undefined'?[]:matchsCourants)+'</div></aside>' +
+    '<div class="cv-actions-enregistrer cv-verre"><span id="message-horaires" class="message-form" role="status"></span><button type="submit" form="form-horaires" class="bouton">Enregistrer les horaires</button></div></div>';
+}
 
-  // Carte simple (non repliable : chaque étape a désormais son propre écran,
-  // plier n'avait plus de raison d'être).
-  return (
-    '<div class="cv-horaires"><section class="carte">' +
-      '<h2>Horaires de la journée</h2>' +
-      '<form id="form-horaires" class="form-reglages">' +
-        champHeure('heure_debut', 'Heure de début des matchs', val('heure_debut')) +
-        // Heure de RDV (accueil des équipes) : pré-remplie à début − 1h15 quand on saisit
-        // l'heure de début (voir onReglagesChange), mais toujours modifiable à la main.
-        champHeure('heure_rdv', 'Heure de RDV des équipes', val('heure_rdv')) +
-        // Heure de fin + case "auto"
-        '<div class="champ-reglage">' +
-          '<label for="h-heure_fin">Heure de fin des matchs</label>' +
-          '<span class="fin-groupe">' +
-            '<label class="mini-toggle"><input type="checkbox" id="h-heure_fin_auto" name="heure_fin_auto"' +
-              (auto ? ' checked' : '') + '> auto</label>' +
-            '<input type="time" id="h-heure_fin" name="heure_fin" value="' + val('heure_fin') + '"' +
-              (auto ? ' disabled' : '') + '>' +
-          '</span>' +
-        '</div>' +
-        // Ordre : battement → pause déjeuner → marge → heure de fin COMMUNIQUÉE (placée en DERNIER,
-        // car elle résume les réglages ci-dessus). Les renvois « ci-dessus / ci-dessous » des aides
-        // suivent cet ordre.
-        champNombre('battement_terrain_min', 'Battement terrain entre les matchs (min)', val('battement_terrain_min', '5')) +
-        blocPauseDejeuner(global, val) +
-        // Marge réglable du mode automatique (défaut 75 min = 1h15) : couvre le retour
-        // aux vestiaires puis la cérémonie de remise des trophées — l'événement se
-        // termine à l'issue de la remise. La main reste totale à l'organisateur.
-        champNombre('marge_fin_communiquee_min', 'Marge après le dernier match (min)', val('marge_fin_communiquee_min', '75'),
-                    'Retour aux vestiaires + remise des trophées : l\'événement se termine à la fin de la remise. '
-                    + 'Fin annoncée = dernier match + cette marge (si l\'heure ci-dessous est vide).') +
-        // Heure de fin COMMUNIQUÉE (dossier club), EN DERNIER. VIDE = automatique : le dossier
-        // affiche « fin du dernier match + marge » et suit chaque régénération du planning.
-        // Une valeur saisie ici prime et ne bouge plus.
-        champHeure('heure_fin_communiquee', 'Heure de fin communiquée aux clubs', val('heure_fin_communiquee'),
-                   'Vide = auto : fin du dernier match + la marge ci-dessus (suit le planning).') +
-        '<div class="ligne-action">' +
-          '<button type="submit" class="bouton">Enregistrer les horaires</button>' +
-          '<span id="message-horaires" class="message-form"></span>' +
-        '</div>' +
-      '</form>' +
-    '</section><aside class="carte cv-horaires-resume"><h2>Repères de la journée</h2>' +
-      '<p class="note-generation">Horaires enregistrés. La pause et la fin suivent les réglages du tournoi.</p><dl>' +
-      '<dt>Accueil des équipes</dt><dd data-horaire="heure_rdv">' + val('heure_rdv', '—') + '</dd>' +
-      '<dt>Premiers matchs</dt><dd data-horaire="heure_debut">' + val('heure_debut', '—') + '</dd>' +
-      '<dt>Début de la pause déjeuner</dt><dd data-horaire="pause_dejeuner_debut">' + val('pause_dejeuner_debut', '—') + '</dd>' +
-      '<dt>Fin des matchs</dt><dd data-horaire="heure_fin">' + val('heure_fin', '—') + '</dd>' +
-      '</dl><p class="note-generation">La fin communiquée aux clubs inclut la marge prévue après le dernier match.</p></aside></div>'
-  );
+/** Projection de lecture : aucune modification des heures du générateur. */
+function reperesHorairesCiel(g,matchs) {
+  g=g||{};
+  const echelonnee=String(g.pause_echelonnee).toLowerCase()==='oui';
+  const fins=(matchs||[]).map(m=>String(m.heure_fin||'')).filter(h=>/^\d{2}:\d{2}$/.test(h)).sort();
+  const fin=fins.length?fins[fins.length-1]:'';
+  const ajouter=(h,n)=>{const m=/^(\d{1,2}):(\d{2})$/.exec(h||'');if(!m || !Number.isFinite(Number(n)))return '';const t=(Number(m[1])*60+Number(m[2])+Number(n))%1440;return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');};
+  const reprise=echelonnee?g.pause_echelonnee_fin:ajouter(g.pause_dejeuner_debut,g.pause_dejeuner_duree_min);
+  const marge=g.marge_fin_communiquee_min!=='' && g.marge_fin_communiquee_min!=null?g.marge_fin_communiquee_min:75;
+  return {etapes:[['Accueil des équipes',g.heure_rdv],['Premiers matchs',g.heure_debut],
+    [echelonnee?'Pause échelonnée à partir de':'Pause déjeuner',g.pause_dejeuner_debut],
+    [echelonnee?'Dernier retour de pause':'Reprise',reprise],['Dernier match planifié',fin]],
+    finCommuniquee:g.heure_fin_communiquee||ajouter(fin,marge),echelonnee,fin};
+}
+function friseHorairesCiel(g,matchs) {
+  const r=reperesHorairesCiel(g,matchs);
+  // Les heures absentes restent explicites. La frise est une suite de repères, pas un axe à l’échelle.
+  return '<ol class="cv-frise">'+r.etapes.map(e=>'<li><strong>'+echapper(e[1]||'—')+'</strong><span>'+e[0]+'</span></li>').join('')+'</ol>' +
+    '<div class="cv-fin-journee"><span>Fin de journée annoncée aux clubs</span><strong>'+echapper(r.finCommuniquee||'—')+'</strong></div>' +
+    '<div class="cv-information"><strong>Horaires calculés depuis le planning</strong>'+ (r.fin?'La fin affichée correspond au dernier match actuellement planifié. Elle évoluera si vous générez de nouvelles rencontres.':'Générez le planning pour connaître la fin des matchs et la fin de journée.') +
+    (r.echelonnee?' Les équipes prennent leur pause à tour de rôle.':'')+'</div>';
+}
+function actualiserFriseHorairesCiel() {
+ const el=document.getElementById('cv-frise-horaires');if(el)el.innerHTML=friseHorairesCiel(configCourante.global,matchsCourants);
 }
 
 /**
@@ -111,13 +99,13 @@ function blocPauseDejeuner(global, val) {
   var finEch = val('pause_echelonnee_fin');
   return (
     '<div class="bloc-pause-dej" data-ech="' + (ech ? 'oui' : 'non') + '">' +
-      '<div class="champ-reglage">' +
+      '<details class="cv-options"><summary>Options de pause<span>Pause méridienne échelonnée</span></summary><div class="champ-reglage">' +
         '<label class="ech-toggle"><input type="checkbox" id="h-pause_echelonnee" name="pause_echelonnee"' +
           (ech ? ' checked' : '') + '> Pause méridienne échelonnée (repos ≥ 60 min garanti)</label>' +
         '<span class="f-aide">Quand les <b>terrains sont peu nombreux</b> : chaque catégorie (≥ 4 équipes) ' +
           'joue en un round-robin et les équipes se <b>relaient</b> pour la pause déjeuner (jamais une équipe ' +
           'reposée contre une équipe épuisée). Remplace la pause déjeuner unique et le format d\'après-midi.</span>' +
-      '</div>' +
+      '</div></details>' +
       // Pause déjeuner début (label dynamique « — début » / « à partir de »).
       '<div class="champ-reglage">' +
         '<label for="h-pause_dejeuner_debut"><span class="lbl-pause-dej-fixe">Pause déjeuner — début</span>' +
@@ -198,14 +186,12 @@ async function onEnregistrerHoraires(evenement) {
     return;
   }
 
-  const bouton = form.querySelector('button');
+  const bouton = document.querySelector('[form="form-horaires"]') || form.querySelector('button');
   await avecBoutonOccupe(bouton, message, async function () {
     await ecrireAdmin('enregistrerHoraires', data);
     // On met à jour la config gardée en mémoire.
     configCourante.global = Object.assign({}, configCourante.global, data);
-    document.querySelectorAll('[data-horaire]').forEach(function (repere) {
-      repere.textContent = data[repere.getAttribute('data-horaire')] || '—';
-    });
+    actualiserFriseHorairesCiel();
     // Valeurs désormais ENREGISTRÉES → l'assistant reprend sa photo de référence.
     if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
     majEtatAvancement(); // le fil « Où en suis-je ? » suit les horaires

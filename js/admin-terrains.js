@@ -186,7 +186,7 @@ function injecterTerrains() {
   const plan = planTerrainsActuel();
   const cats = categoriesPresentes();
 
-  let h = '<h2>🗺️ Terrains &amp; répartition</h2>';
+  let h = '<h2>Terrains &amp; répartition</h2>';
   h += '<p class="note-generation">Déclare tes <strong>grands terrains</strong> réels et la ' +
        '<strong>taille de chaque catégorie</strong>. L\'appli calcule combien de mini-terrains ' +
        'y tiennent (couloirs de circulation compris).</p>';
@@ -196,6 +196,7 @@ function injecterTerrains() {
   plan.terrains.forEach(function (t, i) { h += ligneTerrainPhysique(t, i); });
   h += '</div>';
   h += '<button type="button" class="bouton-lien" id="bouton-ajouter-terrain">+ Ajouter un grand terrain</button>';
+  h += '<details class="cv-options"><summary>Options avancées<span>Circulation, table de marque, dimensions et capacités</span></summary>';
   h += '<p class="note-generation">📏 La <strong>longueur</strong> se mesure d\'une <strong>ligne de ' +
        'poteaux à l\'autre</strong> : l\'<strong>en-but</strong> ne compte pas dedans. Indique sa ' +
        '<strong>profondeur derrière chaque ligne de but</strong> (colonne « en-but ») : les ' +
@@ -230,6 +231,7 @@ function injecterTerrains() {
   h += '<h3 class="terr-titre">Capacité : mini-terrains par grand terrain</h3>';
   h += '<div id="tableau-capacite">' + tableauCapaciteHTML(plan.terrains, plan.dims, plan.couloir, cats) + '</div>';
 
+  h += '</details>';
   h += '<div class="ligne-action" style="margin-top:14px">' +
          '<button type="button" class="bouton" id="bouton-enregistrer-terrains">Enregistrer les terrains</button>' +
          '<span id="message-terrains" class="message-form"></span>' +
@@ -241,7 +243,7 @@ function injecterTerrains() {
        'd\'équipes</strong>, en gardant chaque catégorie groupée et en réservant la table des marques. ' +
        'Prévisualise la carte, puis applique.</p>';
   h += '<button type="button" class="bouton" id="bouton-repartir">' + svgIcone('terrain') + 'Répartir les terrains</button>';
-  h += '<div id="repartition-resultat"></div></section></div>';
+  h += '<div id="repartition-resultat"><div class="cv-terrain-vide"><strong>Aperçu de la répartition</strong><p>Calculez la répartition pour voir les mini-terrains sur le plan.<br>Vous pourrez l’ajuster avant de l’appliquer.</p></div></div></section></div>';
 
   zone.innerHTML = h;
 
@@ -252,34 +254,15 @@ function injecterTerrains() {
 
 /** Une ligne « grand terrain » (nom, type, longueur × largeur, supprimer). */
 function ligneTerrainPhysique(t, i) {
-  const type = (t.type === 'foot') ? 'foot' : 'rugby';
-  const opt = function (v, lib, sel) { return '<option value="' + v + '"' + (sel ? ' selected' : '') + '>' + lib + '</option>'; };
-  const nature = String(t.nature || '');
-  return '<div class="terrain-ligne" data-i="' + i + '">' +
-    '<input class="tp-nom" type="text" value="' + echapper(String(t.nom || '')) + '" placeholder="Nom" aria-label="Nom du terrain">' +
-    '<select class="tp-nature" aria-label="Nature du terrain (surface de jeu)">' +
-      opt('', '— Nature —', nature === '') +
-      NATURES_TERRAIN.map(function (n) { return opt(echapper(n), echapper(n), nature === n); }).join('') +
-    '</select>' +
-    '<select class="tp-type" aria-label="Type de terrain">' +
-      opt('rugby', '🏉 Rugby', type === 'rugby') + opt('foot', '⚽ Foot', type === 'foot') +
-    '</select>' +
-    '<input class="tp-l" type="number" min="0" step="1" value="' + echapper(String(t.L || '')) + '" aria-label="Longueur (m)">' +
-    '<span class="terr-x">×</span>' +
-    '<input class="tp-w" type="number" min="0" step="1" value="' + echapper(String(t.W || '')) + '" aria-label="Largeur (m)">' +
-    '<span class="terr-unite">m</span>' +
-    '<span class="terr-enbut-lib">en-but</span>' +
-    '<input class="tp-enbut" type="number" min="0" step="1" placeholder="0" value="' + echapper(String(t.enBut || '')) +
-      '" aria-label="Profondeur de l\'en-but derrière chaque ligne de but (m)" ' +
-      'title="Profondeur de l\'en-but derrière CHAQUE ligne de but (m) — la longueur est mesurée d\'une ligne de poteaux à l\'autre">' +
-    '<span class="terr-unite">m</span>' +
-    '<select class="tp-pos" aria-label="Emplacement sur le plan">' +
-      EMPLACEMENTS.map(function (e) {
-        return '<option value="' + e.v + '"' + ((t.pos || '') === e.v ? ' selected' : '') + '>' + e.l + '</option>';
-      }).join('') +
-    '</select>' +
-    '<button type="button" class="terr-suppr" aria-label="Supprimer ce terrain">✕</button>' +
-    '</div>';
+  const opt=(v,lib,sel)=>'<option value="'+echapper(v)+'"'+(sel?' selected':'')+'>'+echapper(lib)+'</option>';
+  const input=(cls,label,val,type)=>'<label>'+label+'<input class="'+cls+'" type="'+(type||'number')+'"'+(type==='text'?'':' min="0" step="1"')+' value="'+echapper(String(val==null?'':val))+'" aria-label="'+label+'"></label>';
+  return '<details class="cv-terrain-detail" name="terrain-physique"'+(i===0?' open':'')+'><summary>'+echapper(t.nom||'Nouveau terrain')+'<small>'+(t.type==='foot'?'Football':'Rugby')+' · '+echapper(String(t.L||'—'))+' × '+echapper(String(t.W||'—'))+' m</small></summary>' +
+    '<div class="terrain-ligne" data-i="'+i+'">'+input('tp-nom','Nom du terrain',t.nom,'text') +
+    '<label>Sport<select class="tp-type" aria-label="Type de terrain">'+opt('rugby','Rugby',t.type!=='foot')+opt('foot','Football',t.type==='foot')+'</select></label>' +
+    '<label>Surface<select class="tp-nature" aria-label="Nature du terrain (surface de jeu)">'+opt('','À préciser',!t.nature)+NATURES_TERRAIN.map(n=>opt(n,n,n===t.nature)).join('')+'</select></label>' +
+    input('tp-l','Longueur (m)',t.L)+input('tp-w','Largeur (m)',t.W)+input('tp-enbut','Profondeur de l’en-but (m)',t.enBut||0) +
+    '<label>Emplacement<select class="tp-pos" aria-label="Emplacement sur le plan">'+EMPLACEMENTS.map(e=>opt(e.v,e.l,(t.pos||'')===e.v)).join('')+'</select></label>' +
+    '<button type="button" class="terr-suppr" aria-label="Supprimer ce terrain">Supprimer ce terrain</button></div></details>';
 }
 
 /** Une ligne « taille de catégorie » (nom, terrain entier ?, longueur × largeur). */
@@ -393,7 +376,7 @@ function onZoneTerrainsClick(evenement) {
   if (evenement.target.id === 'bouton-valider-placement') { onValiderPlacement(); return; }
   if (evenement.target.id === 'bouton-ajouter-terrain') { ajouterTerrainPhysique(); return; }
   const suppr = evenement.target.closest('.terr-suppr');
-  if (suppr) { suppr.closest('.terrain-ligne').remove(); recalculerCapacite(); return; }
+  if (suppr) { suppr.closest('.cv-terrain-detail').remove(); recalculerCapacite(); return; }
   if (evenement.target.id === 'bouton-enregistrer-terrains') { onEnregistrerPlanTerrains(); return; }
   if (evenement.target.id === 'bouton-repartir') { onRepartir(); return; }
   if (evenement.target.id === 'bouton-appliquer-repartition') { onAppliquerRepartition(); return; }

@@ -162,8 +162,8 @@ function afficherEquipes(equipes) {
           '<div class="equipe-actions">' +
             '<button class="bouton-modif bouton-icone" title="Modifier" aria-label="Modifier" ' +
                     'data-id="' + eq.id_equipe + '" data-nom="' + echapper(eq.nom_equipe) + '">' + svgIcone('crayon') + '</button>' +
-            '<button class="bouton-suppr bouton-icone" title="Supprimer" aria-label="Supprimer" ' +
-                    'data-id="' + eq.id_equipe + '" data-nom="' + echapper(eq.nom_equipe) + '">' + svgIcone('corbeille') + '</button>' +
+            '<details class="cv-menu-actions"><summary aria-label="Autres actions pour '+echapper(eq.nom_equipe)+'">•••</summary><button class="bouton-suppr bouton-icone" title="Supprimer" aria-label="Supprimer" ' +
+                    'data-id="' + eq.id_equipe + '" data-nom="' + echapper(eq.nom_equipe) + '">' + svgIcone('corbeille') + ' Supprimer</button></details>' +
           '</div>' +
         '</div>';
     });
