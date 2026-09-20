@@ -56,14 +56,11 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
 .cv-infos { display:grid; grid-template-columns:minmax(0,1.45fr) minmax(300px,1fr); gap:24px; align-items:start; }
 .cv-infos > * { min-width:0; }
 .cv-infos #bloc-infos-tournoi { grid-column:1; grid-row:1; }
-.cv-infos #bloc-choix-categories { grid-column:1; grid-row:2; }
 .cv-infos #bloc-cadre-tournoi { grid-column:2; grid-row:1; }
-.cv-infos #cv-affiche-carte { grid-column:2; grid-row:2; }
-.cv-infos .cv-actions-enregistrer { grid-column:1/-1; margin-top:0; }
+.cv-infos .cv-actions-enregistrer { grid-column:1/-1; grid-row:2; margin-top:0; }
 
 .cv-infos .carte { margin:0; }
-#form-infos-tournoi { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
-#form-infos-tournoi > :not(:nth-child(1)):not(:nth-child(2)) { grid-column:1/-1; }
+#form-infos-tournoi { display:grid; grid-template-columns:1fr; gap:16px; }
 #form-infos-tournoi > .ligne-action { margin-top:0; }
 .cv-horaires { display:grid; grid-template-columns:minmax(280px,.85fr) minmax(0,1.4fr); gap:24px; align-items:start; }
 .cv-horaires-resume { position:sticky; top:104px; }
@@ -788,3 +785,70 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
  .cv-autorisation-apercu .autorisation-table { font-size:12px; }
 }
 @media screen and (max-width:1000px) { .cv-autorisation-grid { grid-template-columns:1fr; } .cv-autorisation-apercu { position:static; } }
+
+/* --------------------------------------------------------------------------
+   ÉCRAN « INFOS DU TOURNOI » — deux cartes seulement.
+   À gauche l'identité du tournoi (nom, lieu, adresse, CATÉGORIES, description) :
+   le formulaire des catégories est le bloc d'origine, simplement déplacé par
+   ecrans.js. À droite « Date & vérification » : la date, la zone, puis le
+   verdict FFR — vert quand tout va bien, dépliable dès qu'il y a une alerte.
+   -------------------------------------------------------------------------- */
+.cv-infos #bloc-infos-tournoi { display:flex; flex-direction:column; gap:16px; }
+.cv-infos #bloc-infos-tournoi > h2 { margin:0; }
+.cv-infos #bloc-infos-tournoi > label.reglage { padding:0; }
+
+/* Les catégories : une ligne de champ comme les autres, pas une carte à part. */
+.cv-champ-categories { display:flex; flex-direction:column; gap:8px; }
+.theme-clair .cv-champ-categories #form-choix-categories { margin:0; gap:8px 18px; align-items:center; }
+.cv-champ-categories #conservation-choix-categories { display:none; } /* redit au bon moment par #message-choix-categories */
+.cv-champ-categories #message-choix-categories { flex:1 0 100%; margin:0; font-size:13px; }
+.theme-clair .cv-champ-categories .choix-categories { gap:4px 18px; }
+.theme-clair .cv-champ-categories .choix-categories label { border:0; border-radius:8px; min-width:0; padding:8px 2px; gap:8px; font-size:14px; color:var(--cv-texte); }
+.theme-clair .cv-champ-categories .choix-categories label:has(:checked) { background:none; font-weight:600; }
+.theme-clair .cv-champ-categories .choix-categories label:has(:focus-visible) { outline:3px solid var(--cv-action); outline-offset:2px; }
+
+/* Carte « Date & vérification » : un empilement régulier, sans trait résiduel. */
+.cv-infos #form-cadre-tournoi { display:flex; flex-direction:column; gap:16px; }
+.cv-infos #form-cadre-tournoi > label.reglage { padding:0; }
+.cv-infos .date-finder { margin:0; }
+.cv-infos #bloc-conformite-ffr { display:flex; flex-direction:column; gap:12px; margin:0; }
+.cv-infos #form-cadre-tournoi > .ligne-action { border-top:0; padding-top:0; }
+.cv-infos #message-cadre-tournoi:empty { display:none; }
+
+/* Encarts de la zone de vérification : verdict, prescriptions, « À savoir ». */
+.ffr-statut, .ffr-panneau { border-radius:12px; font-size:13px; line-height:1.55; }
+/* Le <summary> garde son display natif (le forcer en flex l'empêche d'ouvrir son <details>
+   sur WebKit) : c'est .ffr-tete, à l'intérieur, qui porte la mise en page. */
+.ffr-statut-depliable > summary, .ffr-panneau > summary { cursor:pointer; list-style:none; }
+.ffr-statut-depliable > summary::-webkit-details-marker, .ffr-panneau > summary::-webkit-details-marker { display:none; }
+.ffr-tete { display:flex; align-items:center; gap:12px; padding:14px 16px; }
+.ffr-statut:not(.ffr-statut-depliable) .ffr-tete { align-items:flex-start; }
+.ffr-statut-pastille { flex:0 0 auto; width:22px; height:22px; margin-top:1px; border-radius:50%; background:currentColor; display:inline-flex; align-items:center; justify-content:center; }
+.ffr-statut-pastille svg.ic { width:14px; height:14px; color:#fff; stroke-width:2.6; }
+.ffr-statut-texte { display:flex; flex-direction:column; gap:3px; min-width:0; }
+.ffr-statut-texte strong { font-weight:650; }
+.ffr-statut-texte > span { color:var(--cv-secondaire); }
+.ffr-statut-texte .bouton { align-self:flex-start; margin-top:8px; }
+.ffr-chevron { flex:0 0 auto; margin-left:auto; width:8px; height:8px; border-right:2px solid currentColor; border-bottom:2px solid currentColor; transform:rotate(-45deg); }
+details[open] > summary .ffr-chevron { transform:rotate(45deg); }
+.ffr-statut-corps { margin:0 16px; padding:12px 0 14px; border-top:1px solid rgb(16 42 67 / 12%); color:var(--cv-texte); }
+.ffr-statut-corps .ffr-sous-titre { margin:10px 0 4px; font-weight:600; }
+.ffr-statut-corps > .ffr-sous-titre:first-child { margin-top:0; }
+.ffr-statut-corps ul { margin:0; padding-left:20px; }
+.ffr-statut-corps li { margin:3px 0; }
+.theme-clair .ffr-statut.ffr-vert { border:1px solid #bfe3d0; }
+.theme-clair .ffr-statut.ffr-orange { border:1px solid #f0d79d; }
+.theme-clair .ffr-statut.ffr-rouge { border:1px solid #f3c7bf; }
+.theme-clair .ffr-statut.ffr-neutre { border:1px solid #d6e4f2; }
+.theme-clair .ffr-panneau { color:#33608f; background:#eef4fb; border:1px solid #d6e4f2; }
+.theme-clair .ffr-panneau .ffr-detail { margin:0 16px; padding:12px 0 14px; border-top:1px solid #d6e4f2; color:var(--cv-texte); }
+.cv-ffr-asavoir { display:flex; align-items:flex-start; gap:12px; }
+.cv-ffr-asavoir .ffr-statut-pastille { color:#3d82c4; }
+.cv-ffr-asavoir .cv-information-texte { min-width:0; }
+/* L'affiche vit dans la carte « Informations générales » : un champ, pas une section. */
+.cv-champ-affiche { display:flex; flex-direction:column; gap:12px; }
+.cv-champ-affiche > label.reglage { padding:0; gap:4px; }
+.cv-aide-champ { display:block; color:var(--cv-secondaire); font-size:13px; line-height:1.5; margin-bottom:4px; }
+.theme-clair .cv-champ-affiche .zone-depot { min-height:120px; }
+.cv-champ-affiche .apercu-affiche { margin:0; }
+@media (max-width:1099px) { .cv-infos #bloc-infos-tournoi { grid-row:auto; } .cv-infos .cv-actions-enregistrer { grid-row:auto; } }

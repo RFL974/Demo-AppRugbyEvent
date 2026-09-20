@@ -458,6 +458,55 @@ const DESCRIPTIONS_CIEL = {
  feuillejour:'Retrouvez les matchs et les résultats de la journée.',
  reinitialisation:'Préparez une nouvelle édition en conservant les données permanentes du club.'
 };
+/**
+ * UNE SEULE carte « Informations générales » : l'identité du tournoi PUIS les catégories
+ * accueillies. Le formulaire des catégories est DÉPLACÉ tel quel (ses écouteurs de soumission
+ * et de changement, posés sur le <form> lui-même par admin.js, sont donc conservés), et la
+ * description le suit : rattachée à #form-infos-tournoi par l'attribut `form`, exactement comme
+ * le champ de l'affiche ci-dessus, elle reste lue par lireInfosTournoi().
+ */
+function regrouperInfosGenerales(form) {
+ const carte=document.getElementById('bloc-infos-tournoi');
+ const bloc=document.getElementById('bloc-choix-categories');
+ const formCategories=document.getElementById('form-choix-categories');
+ const description=form.querySelector('[name="tournoi_description"]');
+ if(!carte||!bloc||!formCategories||!description)return;
+ const champ=document.createElement('div');champ.className='cv-champ-categories';
+ champ.innerHTML='<span class="r-libelle" id="cv-libelle-categories">Catégories proposées</span>';
+ formCategories.setAttribute('aria-labelledby','cv-libelle-categories');
+ champ.appendChild(formCategories);
+ carte.appendChild(champ);
+ description.setAttribute('form','form-infos-tournoi');
+ const ligne=description.closest('label');
+ ligne.querySelector('.r-libelle').textContent='Description (optionnelle)';
+ carte.appendChild(ligne);
+ bloc.hidden=true; // vidé de son formulaire : on garde la section (et ses ancres) hors de l'œil
+ const note=carte.querySelector('.note-generation');if(note)note.remove(); // les libellés des champs suffisent
+}
+
+/**
+ * Carte « Date & vérification » : la date et la zone, puis le verdict FFR. L'encart « À savoir »
+ * est STATIQUE (il explique le contrôle, il ne le rend pas) : il vit donc dans la carte, pas dans
+ * #bloc-conformite-ffr dont le contenu est réécrit à chaque vérification.
+ */
+function preparerDateVerification() {
+ const carte=document.getElementById('bloc-cadre-tournoi');
+ if(!carte||carte.querySelector('.cv-ffr-asavoir'))return;
+ carte.querySelector('h2').textContent='Date & vérification';
+ const note=carte.querySelector('.note-generation');if(note)note.remove();
+ const date=carte.querySelector('[name="tournoi_date"]');
+ const libelle=date&&date.closest('label').querySelector('.r-libelle');
+ if(libelle)libelle.textContent='Date du tournoi';
+ const asavoir=document.createElement('div');
+ asavoir.className='cv-information cv-ffr-asavoir';
+ asavoir.innerHTML='<span class="ffr-statut-pastille" aria-hidden="true">'+svgIcone('info')+'</span>'+
+   '<span class="cv-information-texte"><strong>À savoir</strong>Les dates sont vérifiées automatiquement avec le '+
+   'calendrier FFR (zones de vacances, jours de vigilance, prescriptions par catégorie). Le contrôle reste '+
+   'informatif : la date peut être enregistrée malgré une alerte.</span>';
+ const zone=document.getElementById('bloc-conformite-ffr');
+ if(zone)zone.after(asavoir);else carte.appendChild(asavoir);
+}
+
 /** Déplace les contrôles d’origine : les événements et identifiants restent identiques. */
 function preparerOutilsCiel() {
  [['liste-equipes','.equipe-item','Rechercher une équipe'],['liste-suivi-clubs','.suivi-club-ligne','Rechercher un club']].forEach(function(def){
@@ -480,18 +529,24 @@ function preparerOutilsCiel() {
  const infos=document.getElementById('ecran-infos');
  const form=document.getElementById('form-infos-tournoi');
  if(infos && form && !document.getElementById('cv-affiche-carte')){
-   const affiche=document.createElement('section');affiche.id='cv-affiche-carte';affiche.className='carte';
-   affiche.innerHTML='<h2>Affiche du tournoi</h2><p class="note-generation">L’image utilisée dans les invitations et les dossiers clubs.</p>';
+   // L'affiche n'est pas une carte à part : c'est un champ de l'identité du tournoi. On la
+   // prépare ici, on la pose dans la carte APRÈS la description (voir regrouperInfosGenerales).
    const fichier=form.querySelector('input[type=file]');
    fichier.setAttribute('form','form-infos-tournoi');
-   affiche.appendChild(fichier.closest('label'));
-   affiche.appendChild(document.getElementById('apercu-affiche'));infos.appendChild(affiche);
+   const affiche=document.createElement('div');affiche.id='cv-affiche-carte';affiche.className='cv-champ-affiche';
+   const ligneAffiche=fichier.closest('label');
+   const libelleAffiche=ligneAffiche.querySelector('.r-libelle');
+   libelleAffiche.textContent='Affiche du tournoi';
+   libelleAffiche.insertAdjacentHTML('afterend','<span class="cv-aide-champ">L’image utilisée dans les invitations et les dossiers clubs.</span>');
+   affiche.appendChild(ligneAffiche);
+   affiche.appendChild(document.getElementById('apercu-affiche'));
    const actions=form.querySelector('.ligne-action');actions.className='cv-actions-enregistrer cv-verre';infos.appendChild(actions);
    document.getElementById('bouton-enregistrer-infos').textContent='Enregistrer les informations';
    document.getElementById('bouton-enregistrer-cadre').hidden=true;
    document.getElementById('bouton-valider-categories').hidden=true;
-   document.getElementById('bloc-cadre-tournoi').querySelector('.note-generation').textContent='La date et la zone permettent de vérifier le calendrier et les prescriptions FFR.';
-   document.getElementById('aide-choix-categories').textContent='Choisissez les catégories accueillies au tournoi.';
+   regrouperInfosGenerales(form);
+   document.getElementById('bloc-infos-tournoi').appendChild(affiche);
+   preparerDateVerification();
  }
  const generation=document.getElementById('bloc-generation');
  if(generation && !document.getElementById('cv-outils-planning')){

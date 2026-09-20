@@ -64,8 +64,8 @@ async function chargerRefFFR() {
 }
 
 function messageRepriseFFR(texte) {
-  return '<div class="ffr-bloc ffr-neutre">' + echapper(texte) +
-    ' Aucun verdict de conformité. <button type="button" class="bouton secondaire" data-action="reessayer-ffr">Réessayer le contrôle FFR</button></div>';
+  return statutNeutreFFR('Vérification indisponible', texte + ' Aucun verdict de conformité.',
+    '<button type="button" class="bouton secondaire" data-action="reessayer-ffr">Réessayer le contrôle FFR</button>');
 }
 
 function onReessayerControleFFR(e) {
@@ -130,8 +130,8 @@ function invaliderConformiteFFRAffichee() {
   dernierResConformite = null;
   const zone = document.getElementById('bloc-conformite-ffr');
   if (zone) {
-    zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Conformité FFR à recalculer — ' +
-      'renseigne la date et les catégories du nouveau tournoi.</div>';
+    zone.innerHTML = statutNeutreFFR('Conformité FFR à recalculer',
+      'Renseigne la date et les catégories du nouveau tournoi.');
   }
 }
 
@@ -144,7 +144,8 @@ async function majConformiteFFR() {
   dernierResConformite = null;
   const categories = categoriesPresentesNoms();
   if ((typeof choixCategoriesAValider === 'function' && choixCategoriesAValider()) || !categories.length) {
-    zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Choisis et valide les catégories avant de vérifier la date du tournoi.</div>';
+    zone.innerHTML = statutNeutreFFR('Catégories à valider',
+      'Choisis et valide les catégories avant de vérifier la date du tournoi.');
     return;
   }
   // Écouteur délégué posé UNE fois sur le conteneur (son innerHTML est remplacé à chaque calcul,
@@ -152,7 +153,7 @@ async function majConformiteFFR() {
   if (!zone._ffrAppliquerWired) { zone.addEventListener('click', onClicAppliquerFFR); zone._ffrAppliquerWired = true; }
   if (!zone._ffrRepriseWired) { zone.addEventListener('click', onReessayerControleFFR); zone._ffrRepriseWired = true; }
 
-  zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Chargement du référentiel FFR…</div>';
+  zone.innerHTML = statutNeutreFFR('Vérification en cours', 'Chargement du référentiel FFR…');
   await chargerRefFFR(); // dispo du référentiel + formes pour les cartes
   if (generation !== conformiteFFRGeneration) return;
 
@@ -168,13 +169,13 @@ async function majConformiteFFR() {
 
   const dateISO = dateTournoiCourante();
   if (!dateISO) {
-    zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Renseigne la date du tournoi pour ' +
-      'vérifier la conformité avec le calendrier FFR.</div>';
+    zone.innerHTML = statutNeutreFFR('Date à renseigner',
+      'Renseigne la date du tournoi pour vérifier la conformité avec le calendrier FFR.');
     majFormesCategories();
     return;
   }
 
-  zone.innerHTML = '<div class="ffr-bloc ffr-neutre">Vérification de la conformité FFR…</div>';
+  zone.innerHTML = statutNeutreFFR('Vérification en cours', 'Contrôle du calendrier FFR…');
   let res;
   try {
     res = await apiGet('getConformiteFFR', {
@@ -197,50 +198,94 @@ async function majConformiteFFR() {
   majFormesCategories();
 }
 
+/** Pastille ronde + glyphe blanc (le cercle est fourni par le CSS, l'icône n'est que le glyphe). */
+function pastilleFFR(nom) {
+  const svg = (typeof svgIcone === 'function') ? svgIcone(nom) : '';
+  return '<span class="ffr-statut-pastille" aria-hidden="true">' + svg + '</span>';
+}
+
+/** Ligne neutre de la zone de vérification : même gabarit que les verdicts, ton gris.
+ *  `suffixe` accueille le HTML d'une action (le bouton de reprise après panne). */
+function statutNeutreFFR(titre, sousTitre, suffixe) {
+  return '<div class="ffr-statut ffr-neutre"><span class="ffr-tete">' + pastilleFFR('info') +
+    '<span class="ffr-statut-texte"><strong>' + echapper(titre) + '</strong>' +
+    (sousTitre ? '<span>' + echapper(sousTitre) + '</span>' : '') +
+    (suffixe || '') + '</span></span></div>';
+}
+
+/**
+ * Encart de verdict. Sans détail à lire (cas vert / neutre) c'est une simple ligne ; dès qu'il y a
+ * un conflit, un point de vigilance ou un trou de couverture, c'est un <details> que l'organisateur
+ * déplie pour voir les dates et les motifs. Le corps est du HTML déjà échappé par l'appelant.
+ */
+function statutFFR(ton, titre, sousTitre, corps) {
+  const tete = pastilleFFR(ton === 'vert' ? 'coche' : 'info') +
+    '<span class="ffr-statut-texte"><strong>' + echapper(titre) + '</strong>' +
+    (sousTitre ? '<span>' + echapper(sousTitre) + '</span>' : '') + '</span>';
+  // ⚠️ Le contenu d'un <summary> est enveloppé : un <summary> mis en display:flex cesse
+  // d'ouvrir son <details> au clic sur WebKit. La mise en page vit donc dans .ffr-tete.
+  if (!corps) return '<div class="ffr-statut ffr-' + ton + '"><span class="ffr-tete">' + tete + '</span></div>';
+  return '<details class="ffr-statut ffr-statut-depliable ffr-' + ton + '">' +
+    '<summary><span class="ffr-tete">' + tete + '<span class="ffr-chevron" aria-hidden="true"></span></span></summary>' +
+    '<div class="ffr-statut-corps">' + corps + '</div></details>';
+}
+
 /** Construit le HTML du bloc à partir du résultat de verifierConformiteFFR. */
 function rendreConformiteFFR(res) {
   if (!res || res.refDisponible === false) {
-    return '<div class="ffr-bloc ffr-neutre">Référentiel FFR non chargé — ' +
-      'aucun contrôle de conformité n\'est appliqué.</div>';
+    return statutNeutreFFR('Vérification indisponible',
+      'Référentiel FFR non chargé — aucun contrôle de conformité n’est appliqué.');
   }
   const mill = (refFFRCache && refFFRCache.millesime) ? refFFRCache.millesime : '2026-2027';
-  let html = '';
 
-  // COUVERTURE — si la date du tournoi est hors de la saison couverte par le référentiel, on
-  // affiche un bandeau ORANGE explicite AVANT tout le reste. Rien n'a pu être comparé : le vert
-  // « aucun conflit » est alors formellement interdit (voir la garde plus bas).
+  // COUVERTURE — si la date du tournoi est hors de la saison couverte par le référentiel, rien n'a
+  // pu être comparé : le vert « aucun conflit » est alors formellement interdit (garde plus bas).
   const horsCouverture = !!(res.couverture && res.couverture.couverte === false);
+  const bloquants = res.bloquants || [];
+  // Points de vigilance métier — on EXCLUT l'avertissement de couverture, porté par son propre
+  // paragraphe, pour ne pas le montrer deux fois.
+  const averts = (res.avertissements || []).filter(function (a) { return !(a && a.couverture); });
+
+  // Le corps dépliable rassemble TOUT ce qui mérite lecture, du plus grave au moins grave. Les
+  // intertitres n'apparaissent QUE s'il y a plusieurs natures d'alerte : sur une seule, l'en-tête
+  // de l'encart le dit déjà, et le répéter n'apprend rien.
+  const natures = (bloquants.length ? 1 : 0) + (averts.length ? 1 : 0) + (horsCouverture ? 1 : 0);
+  const intertitre = function (texte) {
+    return natures > 1 ? '<p class="ffr-sous-titre">' + texte + '</p>' : '';
+  };
+  let corps = '';
+  if (bloquants.length) {
+    corps += intertitre('⛔ ' + bloquants.length + ' conflit(s) avec le calendrier FFR ' + echapper(mill)) +
+      '<ul>' + bloquants.map(ligneConflitFFR).join('') + '</ul>';
+  }
+  if (averts.length) {
+    corps += intertitre('⚠️ ' + averts.length + ' point(s) de vigilance') +
+      '<ul>' + averts.map(ligneConflitFFR).join('') + '</ul>';
+  }
   if (horsCouverture) {
-    html += '<div class="ffr-bloc ffr-orange"><strong>⚠️ ' +
-      echapper(messageCouvertureFFR(res)) + '</strong></div>';
+    corps += intertitre('⚠️ Hors période couverte') +
+      '<p class="ffr-motif">' + echapper(messageCouvertureFFR(res)) + '</p>';
+  }
+  if (corps) {
+    corps += '<p class="ffr-note">Contrôle informatif : l’organisateur reste décideur — ' +
+      'la date peut être enregistrée malgré une alerte.</p>';
   }
 
-  if (res.bloquants && res.bloquants.length) {
-    html += '<div class="ffr-bloc ffr-rouge"><strong>⛔ ' + res.bloquants.length +
-      ' conflit(s) avec le calendrier FFR ' + echapper(mill) + '</strong><ul>' +
-      res.bloquants.map(ligneConflitFFR).join('') + '</ul></div>';
-  }
-  // Points de vigilance métier — on EXCLUT l'avertissement de couverture (déjà affiché en bandeau
-  // ci-dessus) pour ne pas le montrer deux fois.
-  const averts = (res.avertissements || []).filter(function (a) { return !(a && a.couverture); });
-  if (averts.length) {
-    html += '<div class="ffr-bloc ffr-orange"><strong>⚠️ ' + averts.length +
-      ' point(s) de vigilance</strong><ul>' +
-      averts.map(ligneConflitFFR).join('') + '</ul></div>';
-  }
-  // GARDE : le bandeau vert ne peut apparaître QUE si la couverture est confirmée. On ne se
-  // repose pas sur « la liste d'avertissements est vide » : on teste explicitement horsCouverture.
-  if (!html && !horsCouverture) {
-    html = '<div class="ffr-bloc ffr-vert">✅ Aucun conflit détecté avec le calendrier FFR ' +
-      echapper(mill) + '.</div>';
+  let html;
+  if (bloquants.length) {
+    html = statutFFR('rouge', bloquants.length + ' conflit(s) avec le calendrier FFR',
+      'Voir les dates concernées', corps);
+  } else if (averts.length) {
+    html = statutFFR('orange', averts.length + ' point(s) de vigilance', 'Voir le détail', corps);
+  } else if (horsCouverture) {
+    html = statutFFR('orange', 'Vérification partielle',
+      'La date sort de la période couverte par le calendrier FFR.', corps);
+  } else {
+    html = statutFFR('vert', 'Calendrier vérifié',
+      'Aucun conflit détecté avec le calendrier FFR ' + mill + '.', '');
   }
   // Prescriptions FFR par catégorie (terrain / effectif / temps / ballon / carton), sous le verdict.
-  html += rendreDetailFFR(res);
-
-  html += '<p class="ffr-note">Contrôle informatif : l\'organisateur reste décideur — ' +
-    'la date peut être enregistrée malgré une alerte. Les valeurs FFR sont PROPOSÉES ; un ' +
-    'signalement orange marque un réglage hors du cadre, il ne l\'interdit pas.</p>';
-  return html;
+  return html + rendreDetailFFR(res);
 }
 
 /* --------------------------------------------------------------------------
@@ -292,7 +337,10 @@ function rendreDetailFFR(res) {
   const cats = categoriesPresentesNoms().filter(function (c) { return regles[c] || temps[c]; });
   if (!cats.length) return '';
   const dims = dimensionsCategoriesFFR();
-  let html = '<div class="ffr-bloc ffr-neutre ffr-detail"><strong>📋 Prescriptions FFR par catégorie</strong>';
+  // Replié par défaut : la carte reste lisible d'un coup d'œil, le détail est à un clic.
+  let html = '<details class="ffr-panneau"><summary><span class="ffr-tete">' + pastilleFFR('info') +
+    '<span class="ffr-statut-texte"><strong>Consulter les prescriptions FFR</strong></span>' +
+    '<span class="ffr-chevron" aria-hidden="true"></span></span></summary><div class="ffr-detail">';
   cats.forEach(function (cat) {
     const cfg = categorieConfigFFR(cat);
     html += '<div class="ffr-detail-cat"><span class="ffr-detail-titre">' + echapper(cat) + '</span>' +
@@ -301,7 +349,8 @@ function rendreDetailFFR(res) {
       boutonsAppliquerFFR(cat, regles[cat] || [], temps[cat], cfg, dims[cat]) +
       '</div>';
   });
-  return html + '</div>';
+  return html + '<p class="ffr-note">Les valeurs FFR sont PROPOSÉES : un signalement orange marque ' +
+    'un réglage hors du cadre, il ne l’interdit pas.</p></div></details>';
 }
 
 /** Terrain / effectif / ballon / carton, à partir des règles jointes (souvent une seule). */

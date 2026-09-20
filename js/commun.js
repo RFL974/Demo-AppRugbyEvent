@@ -327,6 +327,7 @@ var ICONES_UI = {
   plus:         '<path d="M12 5v14M5 12h14"></path>',
   croix:        '<path d="M6 6l12 12M18 6L6 18"></path>',
   coche:        '<path d="M5 12.5l4.5 4.5L19 7"></path>',
+  info:         '<path d="M12 6.8v6.5M12 16.4v1"></path>',
   horloge:      '<circle cx="12" cy="12" r="8"></circle><path d="M12 7.5V12l3 2"></path>',
   ballon:       '<ellipse cx="12" cy="12" rx="5" ry="8" transform="rotate(45 12 12)"></ellipse><path d="M9 9l6 6M10.5 7.5l6 6M7.5 10.5l6 6"></path>',
   balai:        '<path d="M14 4l6 6M13 5l-7 7 5 5 7-7M6 12l-2 6 6-2"></path>',

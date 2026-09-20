@@ -51,10 +51,12 @@ function onChangerChoixCategories() {
   choixCategoriesModifie = true;
   if (typeof invaliderConformiteFFRAffichee === 'function') invaliderConformiteFFRAffichee();
   const retirees = categoriesRetireesChoix(configCourante, selectionChoixCategories());
+  // Le geste qui applique le choix est « Enregistrer les informations » : c'est lui qu'on nomme
+  // (le bouton « Valider » ne reste visible que dans le repli sans JavaScript).
   afficherMessageChoixCategories(document.getElementById('message-choix-categories'), retirees.length
-    ? 'À la validation, ' + retirees.map(function (c) { return c.categorie; }).join(', ') +
+    ? 'À l’enregistrement, ' + retirees.map(function (c) { return c.categorie; }).join(', ') +
       ' et leurs réglages seront supprimés après confirmation. Les équipes et les matchs seront conservés.'
-    : 'Valide ce choix pour actualiser les catégories et le contrôle de date.', '');
+    : 'Enregistre les informations pour appliquer ce choix et relancer le contrôle de date.', '');
 }
 
 function selectionChoixCategories() {
