@@ -236,6 +236,7 @@ function suiviClubEtat(club) {
   const paye = accepte && commande.total > 0 && memeTexteSouple(club.paiement_statut, 'Payé');
   return {
     accepte: accepte, decline: decline, attente: !accepte && !decline,
+    inscription: etatClubInvite(club), dossierDisponible: dossierFinalDisponible(club),
     commande: commande, paye: paye,
     paiementAttendu: accepte && commande.total > 0 && !paye,
     confirmationAttendue: (accepte || decline) && !String(club.confirmation_reponse_envoyee || '').trim()
@@ -311,13 +312,13 @@ function suiviPaiementHtml(club, etat) {
 
 function suiviActionsHtml(club, etat) {
   const nom = echapper(String(club.club_nom || ''));
+  const actions = [];
   if (etat.attente) {
     const libelle = club.invitation_envoyee ? 'Relancer la réponse' : 'Envoyer l’invitation';
-    return '<button type="button" class="bouton bouton-doux suivi-action" data-action="relance-reponse" data-club="' +
+    actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="relance-reponse" data-club="' +
       nom + '">' + libelle + '</button>' +
-      (club.derniere_relance_reponse ? '<small>Dernière relance : ' + echapper(suiviDate(club.derniere_relance_reponse)) + '</small>' : '');
+      (club.derniere_relance_reponse ? '<small>Dernière relance : ' + echapper(suiviDate(club.derniere_relance_reponse)) + '</small>' : ''));
   }
-  const actions = [];
   if (etat.confirmationAttendue) {
     actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="renvoyer-confirmation" data-club="' +
       nom + '">Renvoyer la confirmation</button>');
@@ -332,14 +333,17 @@ function suiviActionsHtml(club, etat) {
     actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="marquer-a-payer" data-club="' +
       nom + '">Corriger le paiement</button>');
   }
-  if (etat.accepte) {
+  if (etat.accepte || etat.dossierDisponible) {
     const dossierEnvoye = String(club.dossier_envoye || '').trim();
-    const categories = String(club.categories_engagees || '').trim();
+    if (!etat.dossierDisponible) {
+      actions.unshift('<div class="suivi-rappel-equipes" role="note"><strong>Équipes à ajouter au tournoi</strong>' +
+        '<span>Dans Clubs invités, clique sur « Ajouter les équipes au tournoi » pour débloquer l’envoi du dossier final.</span></div>');
+    }
     actions.push('<button type="button" class="bouton suivi-action" data-action="envoyer-dossier" data-club="' + nom + '"' +
-      (categories ? '' : ' disabled title="Renseigne les catégories engagées dans Clubs invités"') + '>' +
+      (etat.dossierDisponible ? '' : ' disabled title="Ajoute d’abord les équipes au tournoi dans Clubs invités"') + '>' +
       (dossierEnvoye ? 'Renvoyer le dossier final' : 'Envoyer le dossier final') + '</button>' +
       (dossierEnvoye ? '<small>Dossier envoyé le ' + echapper(suiviDate(dossierEnvoye)) + '</small>'
-        : '<small>' + (categories ? 'Dossier non envoyé' : 'Catégories engagées à renseigner') + '</small>'));
+        : '<small>' + (etat.dossierDisponible ? 'Dossier non envoyé' : 'Dossier bloqué : équipes à ajouter') + '</small>'));
   }
   return actions.length ? actions.join('') : '<span class="suivi-termine">À jour</span>';
 }
@@ -383,9 +387,10 @@ function afficherSuiviClubs() {
   liste.innerHTML = '<div class="suivi-clubs-entete"><span>Club</span><span>Réponse</span><span>Repas</span><span>Goûter</span><span>Paiement</span><span>Action</span></div>' +
     affiches.map(function (club) {
       const e = suiviClubEtat(club);
-      return '<article class="suivi-club-ligne">' +
+      return '<article class="suivi-club-ligne club-etat-' + e.inscription + '" data-club="' + echapper(club.club_nom || '') + '">' +
         '<div class="suivi-club-identite"><strong>' + echapper(club.club_nom || 'Club sans nom') + '</strong>' +
-        '<small>' + echapper(club.club_contact_email || 'Aucun email') + '</small></div>' +
+        '<small>' + echapper(club.club_contact_email || 'Aucun email') + '</small>' +
+        '<span class="suivi-badge etat-' + e.inscription + '">' + LIBELLES_ETAT_CLUB[e.inscription] + '</span></div>' +
         '<div class="suivi-cellule" data-label="Réponse">' + suiviBadgeReponse(club, e) + '</div>' +
         '<div class="suivi-cellule" data-label="Repas"><span>' + echapper(suiviLibellePrestation('repas', e)) + '</span></div>' +
         '<div class="suivi-cellule" data-label="Goûter"><span>' + echapper(suiviLibellePrestation('gouter', e)) + '</span></div>' +

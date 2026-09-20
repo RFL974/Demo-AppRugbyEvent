@@ -1245,6 +1245,7 @@ async function rechargerEtRendre(opt) {
   //   rendu (planning, matchs) ne dépend pas de ce registre et suit son cours.
   const equipesFraiches = (jeton === null) || jetonEquipesValide(jeton);
   if (equipesFraiches) equipesCourantes = data.equipes;
+  if (equipesFraiches && typeof actualiserEtatClubsDepuisEquipes === 'function') actualiserEtatClubsDepuisEquipes();
   matchsCourants = data.matchs || [];
   if (cfg) configCourante = cfg;
 

@@ -48,6 +48,7 @@ async function principal() {
     envoyerInvitationClubUI: async () => {}
   });
   vm.runInContext(lire('js/vendor/pdf-lib.min.js'), contexte, { filename: 'js/vendor/pdf-lib.min.js' });
+  vm.runInContext(lire('js/admin-invitations.js'), contexte, { filename: 'js/admin-invitations.js' });
   vm.runInContext(lire('js/admin-suivi-clubs.js'), contexte, { filename: 'js/admin-suivi-clubs.js' });
 
   const commande = { inscription: { sous_total: '40' },

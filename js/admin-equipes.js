@@ -425,6 +425,7 @@ function integrerEquipeAjoutee(equipe) {
   });
   equipesCourantes.push(equipe);
   afficherEquipes(equipesCourantes);
+  if (typeof actualiserEtatClubsDepuisEquipes === 'function') actualiserEtatClubsDepuisEquipes();
   majTableauBord();
   masquerRepriseEquipes();
   return true;
@@ -876,6 +877,7 @@ async function rechargerEquipes(options) {
       document.querySelector('#liste-equipes .equipe-item.en-edition')) return false;
   equipesCourantes = equipes;
   afficherEquipes(equipes);
+  if (typeof actualiserEtatClubsDepuisEquipes === 'function') actualiserEtatClubsDepuisEquipes();
   majTableauBord(); // le nombre d'équipes a changé
   return true;
 }

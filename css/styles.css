@@ -109,6 +109,25 @@
 .suivi-club-actions { align-items: stretch; }
 .suivi-club-actions .bouton { width: 100%; padding: 8px 10px; font-size: .8rem; }
 .suivi-termine { color: #397355; font-size: .82rem; font-weight: 700; }
+.suivi-club-ligne.club-etat-a-enregistrer { border-left: 4px solid #e5a33c; }
+.suivi-club-ligne.club-etat-equipes-ajoutees { border-left: 4px solid #2e8fe0; }
+.suivi-club-ligne.club-etat-attente { border-left: 4px solid #9b7fd4; }
+.suivi-club-ligne.club-etat-decline { border-left: 4px solid #e07878; }
+.suivi-badge.etat-a-enregistrer { color: #80520b; background: #fff3d6; }
+.suivi-badge.etat-equipes-ajoutees { color: #17558b; background: #e5f2ff; }
+.suivi-badge.etat-attente { color: #654895; background: #f0eafa; }
+.suivi-badge.etat-decline { color: #8c2931; background: #fdebed; }
+.suivi-rappel-equipes {
+  display: flex; flex-direction: column; gap: 6px; width: 100%;
+  padding: 12px; border: 1px solid #e5a33c; border-radius: 10px;
+  background: #fff3d6; color: #704709; font-size: .82rem; line-height: 1.45;
+}
+.suivi-rappel-equipes strong { color: #704709; }
+.suivi-club-actions .suivi-action[disabled],
+.theme-clair .suivi-club-actions .suivi-action[disabled] {
+  background: #526071; border-color: #6b7787; color: #e0e4ea;
+  opacity: 1; cursor: not-allowed; box-shadow: none; transform: none;
+}
 
 @media (max-width: 1180px) {
   .suivi-clubs-entete { display: none; }

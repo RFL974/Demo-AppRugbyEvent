@@ -1337,24 +1337,58 @@ async function chargerClubsInvites() {
   }
 }
 
-/**
- * ÉTAT d'une carte club — pilote le liseré, le badge et le tri en pile (décisions Romain) :
- *  - 'a-enregistrer' (orange) : Accepté, sélection PAS (ou PLUS) enregistrée — le club a répondu
- *    ou modifié sa réponse (repondreInvitation efface la marque), action requise ;
- *  - 'attente'       (violet) : pas encore de réponse (Invité) ;
- *  - 'equipes-ajoutees' (bleu) : ajout des équipes confirmé par le serveur ;
- *    l'envoi du dossier est suivi séparément dans « Suivi des clubs » ;
- *  - 'decline'       (rouge)  : invitation déclinée.
- * Colonne selection_enregistree absente (vieux Sheet) ⇒ orange : défaut PRUDENT, la carte
- * réclame une relecture plutôt que de se dire à jour.
+/** Équipes réellement présentes dans le tournoi, y compris les ajouts manuels/anciens.
+ * Noms attendus : « CLUB » ou « CLUB-N ». Le nom exact d'un autre club est prioritaire.
  */
-function etatClubInvite(club) {
-  if (memeTexteSouple(club.statut, 'Décliné')) return 'decline';
-  if (estAccepte(club.statut)) {
-    if (!String(club.selection_enregistree || '').trim()) return 'a-enregistrer';
-    return 'equipes-ajoutees';
+function equipesDuClubInvite(club) {
+  const nom = String((club && club.club_nom) || '').trim();
+  if (!nom) return [];
+  function normaliser(v) {
+    return String(v || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
   }
-  return 'attente';
+  const cle = normaliser(nom);
+  const autres = (typeof clubsInvitesCourants !== 'undefined' ? clubsInvitesCourants : [])
+    .map(function (c) { return normaliser(c.club_nom); }).filter(function (n) { return n !== cle; });
+  return (typeof equipesCourantes !== 'undefined' ? equipesCourantes || [] : []).filter(function (e) {
+    const ne = normaliser(e.nom_equipe);
+    if (autres.indexOf(ne) !== -1) return false;
+    return ne === cle || (ne.indexOf(cle + '-') === 0 && /^\d+$/.test(ne.slice(cle.length + 1)));
+  });
+}
+
+/** État commun aux invitations et au suivi : la liste Équipes fait foi, pas une date historique. */
+function etatClubInvite(club) {
+  if (equipesDuClubInvite(club).length) return 'equipes-ajoutees';
+  if (memeTexteSouple(club.statut, 'Décliné')) return 'decline';
+  return estAccepte(club.statut) ? 'a-enregistrer' : 'attente';
+}
+
+function dossierFinalDisponible(club) {
+  return etatClubInvite(club) === 'equipes-ajoutees';
+}
+
+/** Catégories enregistrées, ou celles des équipes présentes pour les anciens ajouts manuels. */
+function categoriesDuClubInvite(club) {
+  const enregistrees = parseCatsEngagees(club && club.categories_engagees);
+  if (enregistrees.length) return enregistrees;
+  return Array.from(new Set(equipesDuClubInvite(club).map(function (e) {
+    return String(e.categorie || '').trim().toUpperCase();
+  }).filter(Boolean)));
+}
+
+/** Actualise les états après ajout/retrait/renommage, sans effacer les champs en cours de saisie. */
+function actualiserEtatClubsDepuisEquipes() {
+  const cartes = document.querySelectorAll('#liste-clubs-invites .club-invite-item[data-club]');
+  Array.prototype.forEach.call(cartes, function (carte) {
+    const club = clubsInvitesCourants.find(function (c) { return memeTexteSouple(c.club_nom, carte.getAttribute('data-club')); });
+    if (!club) return;
+    const etat = etatClubInvite(club);
+    Object.keys(LIBELLES_ETAT_CLUB).forEach(function (cle) { carte.classList.toggle('club-etat-' + cle, cle === etat); });
+    const badge = carte.querySelector('.club-etat-badge');
+    if (badge) { badge.className = 'club-etat-badge etat-' + etat; badge.textContent = LIBELLES_ETAT_CLUB[etat]; }
+    actualiserBoutonEquipesClub(carte.querySelector('.club-panneau'));
+  });
+  if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
 }
 
 /** Libellés humains des états (badge de la carte — jamais la couleur seule). */
@@ -1383,10 +1417,9 @@ function parseCatsEngagees(brut) {
 function panneauAccepteClub(club, nom) {
   const cats = (configCourante.categories || []).filter(estPresente)
     .slice().sort(function (a, b) { return comparerCategorie(a.categorie, b.categorie); });
-  const engBrut = String(club.categories_engagees || '').trim();
-  const eng = parseCatsEngagees(engBrut);
+  const eng = categoriesDuClubInvite(club);
   const toutParDefaut = eng.length === 0; // rien encore enregistré → tout coché
-  const ajoutees = !!String(club.selection_enregistree || '').trim();
+  const ajoutees = dossierFinalDisponible(club);
   const cases = cats.map(function (c) {
     const val = String(c.categorie || '');
     const coche = toutParDefaut || eng.indexOf(val.toUpperCase()) !== -1;
@@ -1394,7 +1427,10 @@ function panneauAccepteClub(club, nom) {
       (coche ? ' checked' : '') + '> ' + echapper(val) + '</label>';
   }).join('');
 
-  return '<div class="club-panneau" data-club="' + echapper(nom) + '">' +
+  const initiales = cats.filter(function (c) { return toutParDefaut || eng.indexOf(String(c.categorie).toUpperCase()) !== -1; })
+    .map(function (c) { return c.categorie; }).join(',');
+  return '<div class="club-panneau" data-club="' + echapper(nom) + '" data-categories-initiales="' + echapper(initiales) +
+    '" data-prenom-initial="' + echapper(String(club.club_contact_prenom || '')) + '">' +
     resumeReponseClub(club) +
     '<p class="club-panneau-titre">Catégories engagées par le club</p>' +
     (cats.length
@@ -1724,11 +1760,13 @@ function actualiserBoutonEquipesClub(panneau) {
   if (!club || !bouton || bouton.getAttribute('aria-busy') === 'true') return;
   const cochees = Array.prototype.slice.call(panneau.querySelectorAll('.club-cat-case:checked'))
     .map(function (c) { return String(c.value).trim().toUpperCase(); }).sort();
-  const enregistrees = parseCatsEngagees(club.categories_engagees).sort();
+  const initiales = panneau.getAttribute('data-categories-initiales');
+  const enregistrees = (initiales === null ? categoriesDuClubInvite(club) : parseCatsEngagees(initiales)).sort();
   const prenom = panneau.querySelector('.club-prenom-input');
+  const prenomInitial = panneau.getAttribute('data-prenom-initial');
   const identique = JSON.stringify(cochees) === JSON.stringify(enregistrees) &&
-    (!prenom || prenom.value.trim() === String(club.club_contact_prenom || '').trim());
-  bouton.disabled = !!String(club.selection_enregistree || '').trim() && identique;
+    (!prenom || prenom.value.trim() === String(prenomInitial === null ? club.club_contact_prenom || '' : prenomInitial).trim());
+  bouton.disabled = dossierFinalDisponible(club) && identique;
   bouton.title = bouton.disabled ? 'Les équipes ont déjà été ajoutées au tournoi' : '';
 }
 
@@ -1750,11 +1788,8 @@ async function enregistrerCatsClub(bouton) {
   const texte = bouton.textContent;
   bouton.textContent = 'Enregistrement…';
   try {
-    // UN SEUL appel : le serveur enregistre la sélection, SYNCHRONISE les équipes (ajouts +
-    // retraits prudents), puis ne pose la marque « sélection enregistrée » (liseré BLEU) qu'en
-    // cas de succès complet. Un échec laisse donc la carte ORANGE — l'état affiché est prouvé,
-    // jamais deviné (correctif de revue : deux appels séparés pouvaient laisser une carte bleue
-    // alors que les équipes n'étaient pas synchronisées).
+    // Le serveur enregistre la sélection et synchronise les équipes. La relecture de la liste
+    // Équipes ci-dessous détermine ensuite l'état des deux cartes.
     let res = await ecrireAdmin('enregistrerCategoriesEngagees', {
       club_nom: nom, categories_engagees: cats, club_contact_prenom: prenom
     });
@@ -1776,8 +1811,7 @@ async function enregistrerCatsClub(bouton) {
       club.categories_engagees = cats;
       club.club_contact_prenom = prenom;
       club.alerte_ecart = (res && res.alerte) || '';
-      // Marque telle que RENVOYÉE par le serveur (aucun repli optimiste : un backend qui ne la
-      // renvoie pas laisse la carte orange plutôt que d'annoncer un ajout non prouvé).
+      // Trace historique conservée ; elle ne détermine plus la couleur de la carte.
       club.selection_enregistree = (res && res.selection_enregistree) || '';
     }
 
@@ -1789,13 +1823,13 @@ async function enregistrerCatsClub(bouton) {
     if (res && res.alerte) txtEquipes += ' ⚠️ ' + res.alerte;
     // Recharge la liste des équipes + le tableau de bord (l'étape « Équipes » de la barre
     // latérale se met à jour tout de suite, sans rafraîchir la page).
-    if ((creees.length || supprimees.length) && typeof rechargerEquipes === 'function') {
+    if (typeof rechargerEquipes === 'function') {
       try { await rechargerEquipes(); } catch (e) { /* best-effort */ }
     }
 
     afficherClubsInvites();
     if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
-    const confirme = !!(res && String(res.selection_enregistree || '').trim());
+    const confirme = !!club && dossierFinalDisponible(club);
     afficherMessage(message, (!confirme
       ? '⚠️ « ' + nom + ' » — ajout des équipes non confirmé. Réessaie ou recharge les clubs.'
       : cochees.length
@@ -1832,9 +1866,9 @@ async function genererDossierFinal(nom) {
   const club = clubsInvitesCourants.find(function (c) { return memeTexteSouple(c.club_nom, nom); });
   if (!club) return;
 
-  if (!estAccepte(club.statut) || !String(club.categories_engagees || '').trim()) {
+  if (!dossierFinalDisponible(club)) {
     afficherMessage(document.getElementById('message-suivi-clubs'),
-      'Le club doit avoir accepté et ses catégories engagées doivent être renseignées avant l’envoi du dossier.', 'ko');
+      'Ajoute d’abord les équipes au tournoi dans Clubs invités pour débloquer l’envoi du dossier final.', 'ko');
     return;
   }
 
@@ -1991,7 +2025,7 @@ function emailHtmlDossier(g, club, imgSrc, salutationHtml, intro, lienDossier) {
   const lien = lienDossier ? echapper(lienDossier) : '';
 
   // Les catégories du club : les mêmes cartes que l'invitation, limitées à ses ENGAGÉES.
-  const engagees = parseCatsEngagees(club && club.categories_engagees);
+  const engagees = categoriesDuClubInvite(club);
   const toutes = catsInvitationTriees();
   const cats = engagees.length
     ? toutes.filter(function (c) { return engagees.indexOf(String(c.categorie).trim().toUpperCase()) !== -1; })
@@ -2125,7 +2159,7 @@ function emailHtmlDossier(g, club, imgSrc, salutationHtml, intro, lienDossier) {
 function emailTexteDossier(g, club, salutationTexte, intro, lienDossier) {
   const L = [];
   const nom = String(g.tournoi_nom || '').trim() || 'Le tournoi';
-  const engagees = parseCatsEngagees(club && club.categories_engagees);
+  const engagees = categoriesDuClubInvite(club);
   const toutes = catsInvitationTriees();
   const cats = engagees.length
     ? toutes.filter(function (c) { return engagees.indexOf(String(c.categorie).trim().toUpperCase()) !== -1; })
@@ -2294,6 +2328,11 @@ function ouvrirApercuEmail(club, lien, lienRenouvele) {
     const intro = champIntro.value;
     msg.className = 'eml-msg';
     if (!sujet) { msg.className = 'eml-msg ko'; msg.textContent = '⚠️ L\'objet est vide.'; return; }
+    if (!dossierFinalDisponible(club)) {
+      msg.className = 'eml-msg ko';
+      msg.textContent = 'Ajoute d’abord les équipes au tournoi dans Clubs invités pour débloquer l’envoi du dossier final.';
+      return;
+    }
 
     boutonEnvoi.disabled = true;
     const texte = boutonEnvoi.textContent;

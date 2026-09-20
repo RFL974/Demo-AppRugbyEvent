@@ -12,7 +12,7 @@ const c = vm.createContext({console,URL,URLSearchParams,setTimeout,
  document:{getElementById:id=>dom[id]||null,querySelector:()=>null,querySelectorAll:()=>[],addEventListener:(type,fn)=>{if(type==='click')clicks.push(fn)}}
 });
 for(const f of ['commun','admin','admin-infos-publication','admin-invitations','admin-suivi-clubs']) vm.runInContext(fs.readFileSync(path.join(root,'js',f+'.js'),'utf8'),c);
-vm.runInContext(`configCourante={global:{},categories:[{categorie:'U10',presente:'oui'}]}; clubsInvitesCourants=[
+vm.runInContext(`equipesCourantes=[{id_equipe:'e1',nom_equipe:'Accepté',categorie:'U10'}]; configCourante={global:{},categories:[{categorie:'U10',presente:'oui'}]}; clubsInvitesCourants=[
  {club_nom:'Nouveau',statut:'Invité',club_contact_email:'club@example.invalid'},
  {club_nom:'Déjà invité',statut:'Invité',club_contact_email:'club@example.invalid',invitation_envoyee:'2026-09-20'},
  {club_nom:'Sans email',statut:'Invité'},
@@ -37,7 +37,7 @@ clubs[3].dossier_envoye='2026-09-20';
 dossier=c.suiviActionsHtml(clubs[3],c.suiviClubEtat(clubs[3]));
 assert(dossier.includes('Renvoyer le dossier final')&&dossier.includes('20/09/2026'));
 const noCats={...clubs[3],categories_engagees:''};
-assert(/data-action="envoyer-dossier"[^>]*disabled/.test(c.suiviActionsHtml(noCats,c.suiviClubEtat(noCats))));
+assert(!/data-action="envoyer-dossier"[^>]*disabled/.test(c.suiviActionsHtml(noCats,c.suiviClubEtat(noCats))));
 c.dialogConfirmer=async()=>true;c.dialogAlerter=async text=>alerts.push(text);
 c.afficherMessage=(el,text)=>{if(el)el.textContent=text;};
 c.sujetInvitationCourant=()=> 'Invitation test';c.htmlModeleInvitation=()=>'<p>Test</p>';c.texteModeleInvitation=()=> 'Test';
