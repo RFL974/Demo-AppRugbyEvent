@@ -29,13 +29,16 @@
 
 /* Grands terrains réels par défaut (mesurés sur la vue satellite — modifiables).
    pos = emplacement sur le plan du site (grille 3×3), pour dessiner la carte « comme sur le site ».
-   enBut = profondeur de l'EN-BUT derrière CHAQUE ligne de but (m) : la longueur L est mesurée
-   d'une ligne de poteaux à l'autre, l'en-but s'ajoute de part et d'autre. 0 = non déclaré. */
+   code = code court qui NOMME les mini-terrains posés dessus (« MUN » → MUN-1, MUN-2…). Il vient
+   de la fiche du terrain : c'est lui qu'on lit sur le planning, à la table de marque et sur la
+   page publique. ⛔ L'ancien champ `enBut` du grand terrain a disparu : l'en-but est désormais
+   une donnée de CATÉGORIE (voir DIMENSIONS_CATEGORIE_DEFAUT et `gabaritCategorie`), parce que les
+   cotes FFR d'une catégorie sont données SANS en-but. */
 const TERRAINS_PHYSIQUES_DEFAUT = [
-  { nom: 'Rugby 1', type: 'rugby', L: 115, W: 70, pos: 'CG', enBut: 0 },
-  { nom: 'Rugby 2', type: 'rugby', L: 110, W: 68, pos: 'BG', enBut: 0 },
-  { nom: 'Foot 1',  type: 'foot',  L: 105, W: 68, pos: 'HC', enBut: 0 },
-  { nom: 'Foot 2',  type: 'foot',  L: 100, W: 65, pos: 'CD', enBut: 0 }
+  { nom: 'Rugby 1', type: 'rugby', code: 'RUG1', L: 115, W: 70, pos: 'CG' },
+  { nom: 'Rugby 2', type: 'rugby', code: 'RUG2', L: 110, W: 68, pos: 'BG' },
+  { nom: 'Foot 1',  type: 'foot',  code: 'FOO1', L: 105, W: 68, pos: 'HC' },
+  { nom: 'Foot 2',  type: 'foot',  code: 'FOO2', L: 100, W: 65, pos: 'CD' }
 ];
 
 /* Natures de terrain (surface de jeu). Mêmes libellés que la case « Type de terrain » du
@@ -51,8 +54,10 @@ const EMPLACEMENTS = [
   { v: 'BG', l: '↙ Bas-gauche' },     { v: 'BC', l: '↓ Bas-centre' },   { v: 'BD', l: '↘ Bas-droite' }
 ];
 
-/* Taille de terrain par défaut selon la catégorie (m).
-   plein:true = un match occupe un GRAND terrain entier (cas U14). */
+/* Taille de terrain par défaut selon la catégorie (m) : la SURFACE DE JEU, d'une ligne de but à
+   l'autre — exactement comme la FFR la publie, donc SANS en-but.
+   plein:true = un match occupe un GRAND terrain entier (cas U14).
+   ⛔ Aucun en-but par défaut : il est propre au tournoi, l'organisateur le déclare. Rien de deviné. */
 const DIMENSIONS_CATEGORIE_DEFAUT = {
   U8:  { l: 30, w: 20 },
   U10: { l: 40, w: 30 },
@@ -157,6 +162,13 @@ function planTerrainsActuel() {
     const d = TERRAINS_PHYSIQUES_DEFAUT.find(function (x) { return x.nom.toLowerCase() === String(t.nom || '').toLowerCase(); });
     return d ? Object.assign({}, t, { pos: d.pos }) : t;
   });
+  // ⭐ Les positions libres enregistrées réamorcent la mémoire du module : sans cela, rouvrir
+  //    l'écran replacerait tous les terrains sur l'ancienne grille.
+  terrains.forEach(function (t) {
+    if (t && t.code && Number.isFinite(parseFloat(t.x)) && Number.isFinite(parseFloat(t.y))) {
+      positionsTerrains[t.code] = { x: parseFloat(t.x), y: parseFloat(t.y) };
+    }
+  });
   let dims = {};
   try { if (g.dimensions_categories) dims = JSON.parse(g.dimensions_categories); } catch (e) {}
   const couloir = (g.couloir_terrain_m != null && g.couloir_terrain_m !== '')
@@ -179,6 +191,47 @@ function dimensionCategorie(dims, nom) {
   return { l: '', w: '' };
 }
 
+/** Profondeur d'en-but déclarée pour une catégorie (m, derrière CHAQUE ligne de but). 0 = aucune. */
+function enButCategorie(d) {
+  const v = parseFloat((d || {}).enBut);
+  return v > 0 ? v : 0;
+}
+
+/**
+ * GABARIT AU SOL d'un mini-terrain : ce qu'il occupe RÉELLEMENT sur le grand terrain.
+ *
+ * ⭐ POURQUOI CETTE FONCTION EXISTE. Les cotes d'une catégorie (U10 : 40 × 30) sont celles de la
+ * SURFACE DE JEU, d'une ligne de but à l'autre — c'est ainsi que la FFR les publie. L'en-but
+ * s'ajoute DERRIÈRE CHAQUE ligne de but : un U10 avec 5 m d'en-but occupe 50 × 30 au sol. Poser
+ * les mini-terrains sur leurs cotes de jeu les collait donc les uns aux autres en-but compris.
+ * ⛔ L'en-but s'ajoute sur l'axe de la LONGUEUR uniquement : c'est l'axe des poteaux.
+ *
+ * `l`/`w` = le gabarit au sol (ce que le packing manipule) ; `lJeu` et `eb` gardent la trace de
+ * la surface de jeu et de l'en-but, pour pouvoir les dessiner séparément.
+ * @return {{plein:true}|{l:number,w:number,lJeu:number,eb:number}}
+ */
+function gabaritCategorie(d) {
+  if (!d) return null;
+  if (d.plein) return { plein: true };
+  const lJeu = parseFloat(d.l) || 0;
+  const w = parseFloat(d.w) || 0;
+  const eb = enButCategorie(d);
+  if (!(lJeu > 0 && w > 0)) return { l: lJeu, w: w, lJeu: lJeu, eb: eb };
+  return { l: lJeu + 2 * eb, w: w, lJeu: lJeu, eb: eb };
+}
+
+/**
+ * Marque un mini-terrain avec l'en-but de sa catégorie et l'AXE sur lequel il s'ajoute.
+ * Le packing pose la tuile dans un sens OU dans l'autre : on retrouve l'axe en comparant la
+ * dimension posée au gabarit. Sans cette trace, le dessin ne saurait pas de quel côté hachurer.
+ */
+function marquerEnBut(tile, gab) {
+  const eb = (gab && gab.eb > 0 && !gab.plein) ? gab.eb : 0;
+  tile.eb = eb;
+  tile.ebAxe = eb > 0 ? (Math.abs(tile.w - gab.l) < 0.01 ? 'x' : 'y') : '';
+  return tile;
+}
+
 /** Injecte la carte « Terrains & répartition » dans #zone-terrains. */
 function injecterTerrains() {
   const zone = document.getElementById('zone-terrains');
@@ -197,12 +250,12 @@ function injecterTerrains() {
   h += '</div>';
   h += '<button type="button" class="bouton-lien" id="bouton-ajouter-terrain">+ Ajouter un grand terrain</button>';
   h += '<details class="cv-options"><summary>Options avancées<span>Circulation, table de marque, dimensions et capacités</span></summary>';
-  h += '<p class="note-generation">📏 La <strong>longueur</strong> se mesure d\'une <strong>ligne de ' +
-       'poteaux à l\'autre</strong> : l\'<strong>en-but</strong> ne compte pas dedans. Indique sa ' +
-       '<strong>profondeur derrière chaque ligne de but</strong> (colonne « en-but ») : les ' +
-       'mini-terrains restent entre les deux lignes, mais la <strong>table de marque</strong> peut ' +
-       's\'y installer quand la surface de jeu est pleine. Laisse <strong>0</strong> si le terrain ' +
-       'n\'a pas d\'en-but utilisable.</p>';
+  h += '<p class="note-generation">📏 Les cotes d\'une catégorie sont celles de la <strong>surface ' +
+       'de jeu</strong>, d\'une ligne de but à l\'autre — c\'est ainsi que la FFR les publie, ' +
+       '<strong>sans l\'en-but</strong>. Indique la <strong>profondeur d\'en-but derrière chaque ' +
+       'ligne de but</strong> : elle s\'ajoute de part et d\'autre, et c\'est ce ' +
+       '<strong>gabarit au sol</strong> que l\'appli utilise pour poser les mini-terrains. ' +
+       'Laisse <strong>vide</strong> si tu ne veux pas en réserver.</p>';
 
   h += '<div class="champ-reglage" style="margin-top:14px">' +
          '<label for="couloir-terrain">Couloir de circulation entre les terrains (m)</label>' +
@@ -256,27 +309,39 @@ function injecterTerrains() {
 function ligneTerrainPhysique(t, i) {
   const opt=(v,lib,sel)=>'<option value="'+echapper(v)+'"'+(sel?' selected':'')+'>'+echapper(lib)+'</option>';
   const input=(cls,label,val,type)=>'<label>'+label+'<input class="'+cls+'" type="'+(type||'number')+'"'+(type==='text'?'':' min="0" step="1"')+' value="'+echapper(String(val==null?'':val))+'" aria-label="'+label+'"></label>';
-  return '<details class="cv-terrain-detail" name="terrain-physique"'+(i===0?' open':'')+'><summary>'+echapper(t.nom||'Nouveau terrain')+'<small>'+(t.type==='foot'?'Football':'Rugby')+' · '+echapper(String(t.L||'—'))+' × '+echapper(String(t.W||'—'))+' m</small></summary>' +
+  const code=String(t.code||codeTerrainAuto(t.nom,i));
+  return '<details class="cv-terrain-detail" name="terrain-physique"'+(i===0?' open':'')+'><summary>'+echapper(t.nom||'Nouveau terrain')+'<small><span class="terr-code">'+echapper(code)+'</span>'+(t.type==='foot'?'Football':'Rugby')+' · '+echapper(String(t.L||'—'))+' × '+echapper(String(t.W||'—'))+' m</small></summary>' +
     '<div class="terrain-ligne" data-i="'+i+'">'+input('tp-nom','Nom du terrain',t.nom,'text') +
     '<label>Sport<select class="tp-type" aria-label="Type de terrain">'+opt('rugby','Rugby',t.type!=='foot')+opt('foot','Football',t.type==='foot')+'</select></label>' +
     '<label>Surface<select class="tp-nature" aria-label="Nature du terrain (surface de jeu)">'+opt('','À préciser',!t.nature)+NATURES_TERRAIN.map(n=>opt(n,n,n===t.nature)).join('')+'</select></label>' +
-    input('tp-l','Longueur (m)',t.L)+input('tp-w','Largeur (m)',t.W)+input('tp-enbut','Profondeur de l’en-but (m)',t.enBut||0) +
-    '<label>Emplacement<select class="tp-pos" aria-label="Emplacement sur le plan">'+EMPLACEMENTS.map(e=>opt(e.v,e.l,(t.pos||'')===e.v)).join('')+'</select></label>' +
+    input('tp-l','Longueur (m)',t.L)+input('tp-w','Largeur (m)',t.W) +
+    '<label>Code court<input class="tp-code" type="text" maxlength="6" value="'+echapper(String(t.code||codeTerrainAuto(t.nom,i)))+'" aria-label="Code court du terrain" placeholder="'+echapper(codeTerrainAuto(t.nom,i))+'"><span class="terr-aide">nomme les mini-terrains : '+echapper(String(t.code||codeTerrainAuto(t.nom,i)))+'-1, '+echapper(String(t.code||codeTerrainAuto(t.nom,i)))+'-2…</span></label>' +
+    '<label>Orientation (°)<input class="tp-rot" type="number" min="0" max="359" step="1" value="'+echapper(String(angleTerrain(t)))+'" aria-label="Orientation du terrain sur le plan, en degrés"><span class="terr-aide">0 = horizontal. Se règle aussi à la poignée ⟲ sur le plan.</span></label>' +
+    // ⛔ L'ancien emplacement de la grille 3×3 n'est plus une saisie, mais il est CONSERVÉ : il
+    //    sert de repli pour placer un terrain qui n'a pas encore de position sur le plan.
+    '<input type="hidden" class="tp-pos" value="'+echapper(String(t.pos||''))+'">' +
     '<button type="button" class="terr-suppr" aria-label="Supprimer ce terrain">Supprimer ce terrain</button></div></details>';
 }
 
-/** Une ligne « taille de catégorie » (nom, terrain entier ?, longueur × largeur). */
+/** Une ligne « taille de catégorie » : surface de JEU, en-but, et le gabarit au sol qui en découle. */
 function ligneDimensionCategorie(nom, d) {
   const plein = !!d.plein;
+  const gab = gabaritCategorie(d);
+  const auSol = (!plein && gab && gab.l > 0 && gab.w > 0)
+    ? '<span class="dim-ausol" data-role="ausol-' + echapper(nom) + '">au sol : ' + gab.l + ' × ' + gab.w + ' m</span>'
+    : '<span class="dim-ausol" data-role="ausol-' + echapper(nom) + '"></span>';
   return '<div class="dim-ligne" data-cat="' + echapper(nom) + '">' +
     '<span class="dim-nom">' + echapper(nom) + '</span>' +
     '<label class="mini-toggle"><input type="checkbox" class="dim-plein"' + (plein ? ' checked' : '') + '> terrain entier</label>' +
     '<span class="dim-taille"' + (plein ? ' hidden' : '') + '>' +
-      '<input class="dim-l" type="number" min="0" step="1" value="' + echapper(String(plein ? '' : (d.l || ''))) + '" aria-label="Longueur (m)">' +
+      '<input class="dim-l" type="number" min="0" step="1" value="' + echapper(String(plein ? '' : (d.l || ''))) + '" aria-label="Longueur de la surface de jeu (m)">' +
       '<span class="terr-x">×</span>' +
       '<input class="dim-w" type="number" min="0" step="1" value="' + echapper(String(plein ? '' : (d.w || ''))) + '" aria-label="Largeur (m)">' +
       '<span class="terr-unite">m</span>' +
-    '</span>' +
+      '<span class="terr-plus">+ en-but</span>' +
+      '<input class="dim-enbut" type="number" min="0" step="1" value="' + echapper(String(plein ? '' : (enButCategorie(d) || ''))) + '" aria-label="Profondeur de l’en-but de ' + echapper(nom) + ' (m), derrière chaque ligne de but">' +
+      '<span class="terr-unite">m</span>' +
+    '</span>' + auSol +
     '</div>';
 }
 
@@ -284,7 +349,11 @@ function ligneDimensionCategorie(nom, d) {
 function tableauCapaciteHTML(terrains, dims, couloir, cats) {
   if (!cats || cats.length === 0) return '<p class="vide">Ajoute des catégories pour voir la capacité.</p>';
   let head = '<tr><th>Grand terrain</th>';
-  cats.forEach(function (c) { head += '<th>' + echapper(c) + '</th>'; });
+  cats.forEach(function (c) {
+    const g = gabaritCategorie(dimensionCategorie(dims, c));
+    const auSol = (g && !g.plein && g.l > 0 && g.w > 0) ? ' <span class="cap-dim">' + g.l + '×' + g.w + ' au sol</span>' : '';
+    head += '<th>' + echapper(c) + auSol + '</th>';
+  });
   head += '</tr>';
   let body = '';
   terrains.forEach(function (t) {
@@ -293,7 +362,9 @@ function tableauCapaciteHTML(terrains, dims, couloir, cats) {
     cats.forEach(function (c) {
       const d = dimensionCategorie(dims, c);
       const dimOk = d && (d.plein || (d.l > 0 && d.w > 0));
-      const cap = dimOk ? capaciteTerrain({ L: +t.L, W: +t.W }, d, couloir) : '—';
+      // ⭐ Sur le GABARIT AU SOL (en-but compris) : sinon la capacité annoncée serait celle de
+      //   mini-terrains collés les uns aux autres en-but compris — plus que ce qui tient.
+      const cap = dimOk ? capaciteTerrain({ L: +t.L, W: +t.W }, gabaritCategorie(d), couloir) : '—';
       body += '<td>' + cap + (d && d.plein ? ' <span class="cap-plein">(entier)</span>' : '') + '</td>';
     });
     body += '</tr>';
@@ -312,9 +383,11 @@ function lireTerrainsDuFormulaire() {
       type: row.querySelector('.tp-type').value,
       L:    parseFloat(row.querySelector('.tp-l').value) || 0,
       W:    parseFloat(row.querySelector('.tp-w').value) || 0,
-      // Profondeur de l'en-but derrière CHAQUE ligne de but : espace réel du grand terrain qui
-      // n'est PAS compté dans L (mesurée d'une ligne de poteaux à l'autre). 0 = non déclaré.
-      enBut: parseFloat((row.querySelector('.tp-enbut') || {}).value) || 0,
+      // Code court : il NOMME les mini-terrains posés dessus. Vide → déduit du nom à l'usage.
+      code: String(((row.querySelector('.tp-code') || {}).value || '')).trim().toUpperCase(),
+      // Orientation sur le plan, en degrés. La fiche est la source enregistrée : la poignée ⟲
+      // écrit dans ce champ, elle ne tient pas une valeur à part.
+      rot:  parseFloat((row.querySelector('.tp-rot') || {}).value) || 0,
       pos:  (row.querySelector('.tp-pos') || {}).value || ''
     });
   });
@@ -328,7 +401,9 @@ function lireDimensionsDuFormulaire() {
     else {
       out[cat] = {
         l: parseFloat(row.querySelector('.dim-l').value) || 0,
-        w: parseFloat(row.querySelector('.dim-w').value) || 0
+        w: parseFloat(row.querySelector('.dim-w').value) || 0,
+        // En-but de la catégorie, derrière CHAQUE ligne de but. 0 / vide = aucun déclaré.
+        enBut: parseFloat((row.querySelector('.dim-enbut') || {}).value) || 0
       };
     }
   });
@@ -350,6 +425,28 @@ function recalculerCapacite() {
   if (!cible) return;
   cible.innerHTML = tableauCapaciteHTML(
     lireTerrainsDuFormulaire(), lireDimensionsDuFormulaire(), lireCouloir(), categoriesPresentes());
+  rafraichirIndicesTerrains();
+}
+
+/**
+ * Remet à jour les deux repères qui SUIVENT la saisie sans être recalculés par le tableau :
+ * le gabarit au sol de chaque catégorie, et le rappel « MUN-1, MUN-2… » sous le code court.
+ * ⛔ Ils vivent dans des lignes que le rendu ne réécrit pas : sans cet appel, l'organisateur
+ *    verrait un gabarit d'avant sa dernière frappe.
+ */
+function rafraichirIndicesTerrains() {
+  const dims = lireDimensionsDuFormulaire();
+  Object.keys(dims).forEach(function (cat) {
+    const cible = document.querySelector('[data-role="ausol-' + (window.CSS && CSS.escape ? CSS.escape(cat) : cat) + '"]');
+    if (!cible) return;
+    const g = gabaritCategorie(dims[cat]);
+    cible.textContent = (g && !g.plein && g.l > 0 && g.w > 0) ? 'au sol : ' + g.l + ' × ' + g.w + ' m' : '';
+  });
+  const codes = construireCodes(lireTerrainsDuFormulaire());
+  document.querySelectorAll('#liste-terrains-physiques .terrain-ligne').forEach(function (row, i) {
+    const aide = row.querySelector('.terr-aide');
+    if (aide) aide.textContent = 'nomme les mini-terrains : ' + codes[i] + '-1, ' + codes[i] + '-2…';
+  });
 }
 
 /* --- Écouteurs délégués posés sur #zone-terrains (voir initAdmin) --- */
@@ -387,7 +484,8 @@ function ajouterTerrainPhysique() {
   if (!liste) return;
   const i = liste.querySelectorAll('.terrain-ligne').length;
   liste.insertAdjacentHTML('beforeend',
-    ligneTerrainPhysique({ nom: 'Terrain ' + (i + 1), type: 'rugby', L: 100, W: 68, pos: '' }, i));
+    ligneTerrainPhysique({ nom: 'Terrain ' + (i + 1), type: 'rugby', L: 100, W: 68, pos: '',
+      code: 'T' + (i + 1) }, i));
   recalculerCapacite();
 }
 
@@ -395,7 +493,12 @@ function ajouterTerrainPhysique() {
 async function onEnregistrerPlanTerrains() {
   const message = document.getElementById('message-terrains');
   const bouton = document.getElementById('bouton-enregistrer-terrains');
-  const terrains = lireTerrainsDuFormulaire();
+  const terrains = lireTerrainsDuFormulaire().map(function (t) {
+    // La position sur le plan ne se saisit pas : elle vient du glisser. On la joint ici pour
+    // qu'elle soit enregistrée avec le reste, sinon le plan retomberait sur la grille au rechargement.
+    const p = positionsTerrains[t.code];
+    return p ? Object.assign({}, t, { x: p.x, y: p.y }) : t;
+  });
   const dims = lireDimensionsDuFormulaire();
   const couloir = lireCouloir();
   const tm = lireTailleTM();
@@ -455,19 +558,43 @@ function equipesParCategorie() {
   return map;
 }
 
-/** Préfixe court et unique pour nommer les mini-terrains (« Rugby 1 » → « R1 »). */
-function prefixeTerrain(nom, i) {
-  const s = String(nom || '').trim();
-  const lettre = (s.toUpperCase().match(/[A-Z]/) || ['T'])[0];
-  const num = (s.match(/(\d+)\s*$/) || [])[1] || String(i + 1);
-  return lettre + num;
+/* Mots qui ne distinguent pas un terrain d'un autre : ils ne peuvent pas former son code. */
+const MOTS_VIDES_TERRAIN = ['TERRAIN', 'STADE', 'COMPLEXE', 'PLATEAU', 'LE', 'LA', 'LES', 'DU',
+  'DE', 'DES', 'D', 'L', 'AU', 'AUX', 'SUR', 'ET', 'EN'];
+
+/**
+ * Code court PROPOSÉ pour un terrain, déduit de son nom de fiche.
+ *
+ * ⛔ CE QUI NE MARCHAIT PAS AVANT. L'ancien `prefixeTerrain` prenait la PREMIÈRE lettre du nom
+ * plus son chiffre final — un schéma taillé pour les noms par défaut « Rugby 1 / Foot 2 ». Dès
+ * que l'organisateur nomme ses terrains pour de vrai, « Terrain Municipal », « Terrain du
+ * Racing » et « Terrain de foot de l'entrée » donnaient tous T1, T2, T3 : le nom de la fiche
+ * disparaissait complètement des mini-terrains.
+ *
+ * ⭐ LA RÈGLE RETENUE : le DERNIER mot distinctif, sur trois lettres, plus le chiffre final s'il
+ * y en a un. C'est le mot qui nomme vraiment le terrain, « Terrain » et les articles n'étant
+ * jamais distinctifs. « Terrain du Racing » → RAC, « Terrain de foot de l'entrée » → ENT,
+ * « Rugby 1 » → RUG1. Ce n'est qu'une PROPOSITION : le champ reste modifiable dans la fiche.
+ */
+function codeTerrainAuto(nom, i) {
+  const brut = String(nom || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase();
+  const mots = brut.split(/[^A-Z0-9]+/).filter(Boolean);
+  const suffixe = mots.length && /^\d+$/.test(mots[mots.length - 1]) ? mots[mots.length - 1] : '';
+  const lettres = mots.filter(function (m) {
+    return /[A-Z]/.test(m) && MOTS_VIDES_TERRAIN.indexOf(m) === -1;
+  });
+  if (!lettres.length) return 'T' + (Number(i) + 1);
+  return lettres[lettres.length - 1].slice(0, 3) + suffixe;
 }
-function construirePrefixes(fields) {
+
+/** Codes RETENUS, un par terrain : celui de la fiche s'il est saisi, sinon la proposition.
+ *  Deux terrains ne peuvent pas porter le même : un suffixe numérique les sépare. */
+function construireCodes(fields) {
   const vus = {};
   return fields.map(function (f, i) {
-    let p = prefixeTerrain(f.nom, i);
-    if (vus[p]) { let k = 2; while (vus[p + k]) k++; p = p + k; }
-    vus[p] = true; return p;
+    let c = String((f && f.code) || '').trim().toUpperCase() || codeTerrainAuto(f && f.nom, i);
+    if (vus[c]) { let k = 2; while (vus[c + k]) k++; c = c + k; }
+    vus[c] = true; return c;
   });
 }
 
@@ -513,11 +640,25 @@ function positionTableMarques(g, m, zoneL, zoneW, tmL, tmW, ox, oy, tX, tY, spli
   return { x: ox + x, y: oy + y, w: tmL, h: tmW, split: !!split };
 }
 
-/** Profondeur DÉCLARÉE de l'en-but d'un grand terrain (m, derrière CHAQUE ligne de but).
- *  Rien de deviné : 0 tant que l'utilisateur ne l'a pas mesurée. */
-function profondeurEnBut(field) {
-  const v = parseFloat((field || {}).enBut);
-  return v > 0 ? v : 0;
+/**
+ * Profondeur d'en-but utilisable derrière la ligne de but d'un GRAND terrain (m).
+ *
+ * ⭐ DÉDUITE, plus saisie : elle vaut le plus grand en-but des catégories effectivement posées
+ * sur ce terrain. L'organisateur déclare l'en-but par CATÉGORIE (c'est la donnée qui manquait au
+ * gabarit des mini-terrains) ; ce terrain-là en réserve donc au moins autant derrière sa propre
+ * ligne de but. Aucune saisie en double.
+ * ⚠️ APPROXIMATION ASSUMÉE, et c'est sa limite : l'en-but d'une catégorie est celui de son
+ * mini-terrain, qui vit DANS la surface de jeu du grand terrain. Rien ne garantit qu'il reste
+ * autant d'espace au-delà des poteaux du grand terrain. Elle ne sert qu'à décider où poser la
+ * TABLE DE MARQUE quand la surface de jeu est pleine — jamais à placer un mini-terrain.
+ * @param {{zones:Array}} fp le grand terrain POSÉ (pas le field brut : il faut ses mini-terrains)
+ */
+function profondeurEnBut(fp) {
+  let max = 0;
+  ((fp || {}).zones || []).forEach(function (z) {
+    (z.tiles || []).forEach(function (t) { const e = parseFloat(t.eb) || 0; if (e > max) max = e; });
+  });
+  return max;
 }
 
 /**
@@ -530,8 +671,9 @@ function profondeurEnBut(field) {
  * au fond de la bande (côté ligne de ballon mort), du côté le plus proche du point visé.
  * @return {?{x,y,w,h,enBut:boolean}} coordonnées dans le repère du terrain (x<0 ou x>L), ou null.
  */
-function placerDansEnBut(field, tmL, tmW, cx, cy) {
-  const e = profondeurEnBut(field);
+function placerDansEnBut(fp, tmL, tmW, cx, cy) {
+  const field = (fp || {}).field || {};
+  const e = profondeurEnBut(fp);
   if (!(e > 0) || tmL <= 0 || tmW <= 0) return null;
   let best = null, bestD = Infinity;
   [[tmL, tmW], [tmW, tmL]].forEach(function (o) {
@@ -645,12 +787,12 @@ function construireFilesAttribution(plein, normaux) {
 
 /** Pose une catégorie SEULE sur un grand terrain : packing des mini-terrains
  *  (numérotés via ctx.numero) + table des marques dans le couloir central. */
-function poserTerrainSolo(ctx, f, prefix, cat, estPlein) {
+function poserTerrainSolo(ctx, f, code, cat, estPlein) {
   if (estPlein) {                                       // U14 : le match occupe tout le terrain
     ctx.numero++; const id = String(ctx.numero);
     ctx.parCategorie[cat.name].push(id);
-    return { field: f, prefix: prefix, mode: 'plein', zones: [{ cat: cat.name, color: ctx.couleur[cat.name],
-      tiles: [{ id: id, x: 0, y: 0, w: f.L, h: f.W, label: cat.name + ' · ' + id }],
+    return { field: f, code: code, mode: 'plein', zones: [{ cat: cat.name, color: ctx.couleur[cat.name],
+      tiles: [marquerEnBut({ id: id, x: 0, y: 0, w: f.L, h: f.W, label: cat.name + ' · ' + id }, cat.tile)],
       table: { x: Math.max(0, f.L / 2 - ctx.tmL / 2), y: Math.max(0, f.W - ctx.tmW), w: ctx.tmL, h: ctx.tmW, split: false } }] };
   }
   const rects = packerZone(0, 0, f.L, f.W, cat.tile, ctx.m); // packing à orientations mixtes
@@ -659,20 +801,20 @@ function poserTerrainSolo(ctx, f, prefix, cat, estPlein) {
   rects.forEach(function (r) {
     if (ctx.parCategorie[cat.name].length >= ctx.budget[cat.name]) return; // plafond équipes atteint
     ctx.numero++; const id = String(ctx.numero);
-    tiles.push({ id: id, x: r.x, y: r.y, w: r.w, h: r.h, label: id });
+    tiles.push(marquerEnBut({ id: id, x: r.x, y: r.y, w: r.w, h: r.h, label: id }, cat.tile));
     ctx.parCategorie[cat.name].push(id);
   });
   // Table des marques : petite zone posée dans le couloir central (grille de référence).
   const gRef = grille(f.L, f.W, cat.tile, ctx.m);
   const table = rects.length ? positionTableMarques(gRef, ctx.m, f.L, f.W, ctx.tmL, ctx.tmW, 0, 0, f.L / 2, f.W / 2, false) : null;
-  return { field: f, prefix: prefix, mode: 'solo', zones: [{ cat: cat.name, color: ctx.couleur[cat.name],
+  return { field: f, code: code, mode: 'solo', zones: [{ cat: cat.name, color: ctx.couleur[cat.name],
     tiles: tiles, table: table }] };
 }
 
 /** Pose DEUX catégories sur un grand terrain SCINDÉ en deux moitiés (coupe
  *  gauche/droite si le terrain est large, haut/bas sinon) : packing par moitié
  *  + une table des marques par moitié, côté séparation centrale. */
-function poserTerrainScinde(ctx, f, prefix, cA, cB) {
+function poserTerrainScinde(ctx, f, code, cA, cB) {
   const horizontal = f.L >= f.W;                        // terrain large → coupe gauche/droite
   const zones = [];
   function demi(cat, ox, oy, zL, zW, suff, cote) {
@@ -682,7 +824,7 @@ function poserTerrainScinde(ctx, f, prefix, cA, cB) {
     rects.forEach(function (r) {
       if (ctx.parCategorie[cat.name].length >= ctx.budget[cat.name]) return; // plafond équipes atteint
       ctx.numero++; const id = String(ctx.numero);
-      tiles.push({ id: id, x: r.x, y: r.y, w: r.w, h: r.h, label: id });
+      tiles.push(marquerEnBut({ id: id, x: r.x, y: r.y, w: r.w, h: r.h, label: id }, cat.tile));
       ctx.parCategorie[cat.name].push(id);
     });
     // Table des marques : petite zone posée côté séparation centrale (→ deux tables face à face).
@@ -701,7 +843,7 @@ function poserTerrainScinde(ctx, f, prefix, cA, cB) {
     demi(cA, 0, 0, f.L, hW, 'H', 'haut');
     demi(cB, 0, hW + ctx.m, f.L, hW, 'B', 'bas');
   }
-  return { field: f, prefix: prefix, mode: 'split', zones: zones };
+  return { field: f, code: code, mode: 'split', zones: zones };
 }
 
 /**
@@ -711,7 +853,7 @@ function poserTerrainScinde(ctx, f, prefix, cA, cB) {
  * le mieux (une catégorie à petits terrains profite d'un grand terrain).
  * @return fieldsPlan  la liste des grands terrains posés (pour la carte)
  */
-function attribuerGrandsTerrains(ctx, fields, prefixes, soloQueue, paires, F) {
+function attribuerGrandsTerrains(ctx, fields, codes, soloQueue, paires, F) {
   const fieldsPlan = [];
   const dispo = fields.map(function (f, i) { return i; }); // indices de grands terrains libres
 
@@ -719,7 +861,7 @@ function attribuerGrandsTerrains(ctx, fields, prefixes, soloQueue, paires, F) {
   soloQueue.filter(function (s) { return s.plein; }).forEach(function (s) {
     if (!dispo.length) return;
     const i = dispo.shift();
-    fieldsPlan.push(poserTerrainSolo(ctx, fields[i], prefixes[i], s.cat, true));
+    fieldsPlan.push(poserTerrainSolo(ctx, fields[i], codes[i], s.cat, true));
   });
 
   // Catégories normales : combien de terrains solo chacune (besoin), puis attribution GLOUTONNE
@@ -737,7 +879,7 @@ function attribuerGrandsTerrains(ctx, fields, prefixes, soloQueue, paires, F) {
   couples.forEach(function (c) {
     if (besoin[c.nom] > 0 && !prise[c.i]) {
       prise[c.i] = true; besoin[c.nom]--;
-      fieldsPlan.push(poserTerrainSolo(ctx, fields[c.i], prefixes[c.i], catParNom[c.nom], false));
+      fieldsPlan.push(poserTerrainSolo(ctx, fields[c.i], codes[c.i], catParNom[c.nom], false));
     }
   });
   const restants = dispo.filter(function (i) { return !prise[i]; });
@@ -747,7 +889,7 @@ function attribuerGrandsTerrains(ctx, fields, prefixes, soloQueue, paires, F) {
   paires.forEach(function (p) {
     if (r >= restants.length) return;
     const i = restants[r++];
-    fieldsPlan.push(poserTerrainScinde(ctx, fields[i], prefixes[i], p[0], p[1]));
+    fieldsPlan.push(poserTerrainScinde(ctx, fields[i], codes[i], p[0], p[1]));
   });
   if (soloQueue.length + paires.length > F) {
     ctx.avert.push('Pas assez de grands terrains : certaines catégories n’ont pas pu être placées.');
@@ -783,7 +925,7 @@ function mixerEnSecours(ctx, fieldsPlan, normaux) {
       const nouv = placerDansLibre(fp.field.L, fp.field.W, occ, pire.tile.l, pire.tile.w, ctx.m, 1);
       if (!nouv.length) continue;
       const r = nouv[0]; ctx.numero++; const id = String(ctx.numero);
-      const tuile = { id: id, x: r.x, y: r.y, w: r.w, h: r.h, label: id };
+      const tuile = marquerEnBut({ id: id, x: r.x, y: r.y, w: r.w, h: r.h, label: id }, cat.tile);
       ctx.parCategorie[pire.name].push(id);
       let zone = fp.zones.find(function (z) { return z.cat === pire.name; });
       if (zone) { zone.tiles.push(tuile); }
@@ -831,7 +973,7 @@ function allouerTerrains(fields, cats, m, tmL, tmW) {
     ctx.budget[c.name] = c.teams > 0 ? Math.max(1, Math.floor(c.teams / 2)) : Infinity;
   });
 
-  const prefixes = construirePrefixes(fields);
+  const codes = construireCodes(fields);
   const F = fields.length;
   const totalTeams = cats.reduce(function (s, c) { return s + Math.max(1, c.teams); }, 0);
   const plein = cats.filter(function (c) { return c.tile.plein; });
@@ -847,7 +989,7 @@ function allouerTerrains(fields, cats, m, tmL, tmW) {
   const files = construireFilesAttribution(plein, normaux);
 
   // 4) Attribution aux grands terrains physiques (SOLO d'abord, puis SCINDÉS).
-  const fieldsPlan = attribuerGrandsTerrains(ctx, fields, prefixes, files.soloQueue, files.paires, F);
+  const fieldsPlan = attribuerGrandsTerrains(ctx, fields, codes, files.soloQueue, files.paires, F);
 
   // 5) Mixage en secours si une catégorie reste nettement plus chargée que les autres.
   mixerEnSecours(ctx, fieldsPlan, normaux);
@@ -872,8 +1014,11 @@ function onRepartir() {
   const dims = lireDimensionsDuFormulaire();
   const m = lireCouloir();
   const teams = equipesParCategorie();
-  const cats = categoriesPresentes().map(function (n) { return { name: n, teams: teams[n] || 0, tile: dims[n] }; })
-    .filter(function (c) { return c.tile && (c.tile.plein || (c.tile.l > 0 && c.tile.w > 0)); });
+  // ⭐ `tile` est le GABARIT AU SOL (en-but compris), pas la surface de jeu : tout le moteur de
+  //   packing en aval manipule donc l'encombrement RÉEL des mini-terrains.
+  const cats = categoriesPresentes().map(function (n) {
+    return { name: n, teams: teams[n] || 0, tile: gabaritCategorie(dims[n]) };
+  }).filter(function (c) { return c.tile && (c.tile.plein || (c.tile.l > 0 && c.tile.w > 0)); });
 
   if (fields.length === 0) { cont.innerHTML = '<div class="repart-avert">⚠️ Déclare au moins un grand terrain valide.</div>'; return; }
   if (cats.length === 0) { cont.innerHTML = '<div class="repart-avert">⚠️ Aucune catégorie avec une taille de terrain valide.</div>'; return; }
@@ -882,10 +1027,10 @@ function onRepartir() {
   repartitionCalculee = allouerTerrains(fields, cats, m, tm.l, tm.w);
   // Grands terrains déclarés mais non retenus par l'attribution : dessinés VIDES sur la carte,
   // pour servir de cibles au glisser-déposer de l'ajustement manuel.
-  const prefixes = construirePrefixes(fields);
+  const codesVides = construireCodes(fields);
   fields.forEach(function (f, i) {
     const deja = repartitionCalculee.fieldsPlan.some(function (fp) { return fp.field === f; });
-    if (!deja) repartitionCalculee.fieldsPlan.push({ field: f, prefix: prefixes[i], mode: 'solo', zones: [] });
+    if (!deja) repartitionCalculee.fieldsPlan.push({ field: f, code: codesVides[i], mode: 'solo', zones: [] });
   });
   // Contexte de l'ajustement manuel (mêmes données que le calcul : dimensions, couloir, TM).
   repartitionCalculee.ctxManuel = { cats: cats, m: m, tmL: tm.l, tmW: tm.w };
@@ -894,6 +1039,10 @@ function onRepartir() {
   // déplace des mini-terrains, elles occuperaient de la place et empêcheraient des positions
   // pourtant légitimes (elles se recalculent de toute façon après chaque changement).
   retirerTablesMarques(repartitionCalculee);
+  // ⭐ Point de passage UNIQUE des identifiants : le calcul les a posés avec un compteur global,
+  //   la renumérotation leur donne leur nom définitif « CODE-n ». Sans cet appel, le premier
+  //   affichage montrerait des numéros et les suivants des codes.
+  renumeroterRepartition(repartitionCalculee);
   afficherRepartition(repartitionCalculee, cats);
 }
 
@@ -958,10 +1107,10 @@ function poserTablesMarques(res) {
     const place = placerPresDe(fp.field.L, fp.field.W, tuiles, tmL, tmW, m, cx, cy);
     if (place) { fp.table = { x: place.x, y: place.y, w: place.w, h: place.h }; return; }
     // Plus un mètre carré entre les deux lignes de but : on regarde DERRIÈRE, dans l'en-but.
-    const dansEnBut = placerDansEnBut(fp.field, tmL, tmW, cx, cy);
+    const dansEnBut = placerDansEnBut(fp, tmL, tmW, cx, cy);
     if (dansEnBut) { fp.table = dansEnBut; return; }
     manquantes.push(fp.field.nom);
-    if (!profondeurEnBut(fp.field)) sansEnBut.push(fp.field.nom);
+    if (!profondeurEnBut(fp)) sansEnBut.push(fp.field.nom);
   });
   res.tablesPosees = true;
   res.tablesManquantes = manquantes;
@@ -991,7 +1140,16 @@ function afficherRepartition(res, cats) {
     h += '<div class="repart-avert">' + res.avert.map(function (a) { return '⚠️ ' + echapper(a); }).join('<br>') + '</div>';
   }
 
-  h += '<div class="repart-carte-wrap">' + dessinerCarte(res) + '</div>';
+  h += '<div class="carte-outils">' +
+         '<span class="carte-outils-titre">Plan du site</span>' +
+         '<span class="carte-aide">Glissez la <strong>plaque de nom</strong> pour déplacer un terrain, la poignée <strong>⟲</strong> pour l’orienter (pas de 15°, libre avec Alt), le badge <strong>⟳</strong> d’un mini-terrain pour le faire pivoter sur place.</span>' +
+         '<span class="carte-zoom">' +
+           '<button type="button" class="bouton-icone" id="carte-zoom-moins" aria-label="Réduire le plan">−</button>' +
+           '<span id="carte-zoom-valeur">' + Math.round(carteZoom * 100) + ' %</span>' +
+           '<button type="button" class="bouton-icone" id="carte-zoom-plus" aria-label="Agrandir le plan">+</button>' +
+           '<button type="button" class="bouton-lien" id="carte-zoom-ajuste">Ajuster</button>' +
+         '</span></div>';
+  h += '<div class="repart-carte-wrap" id="repartition-carte">' + dessinerCarte(res) + '</div>';
 
   // Ajustement MANUEL : mini-terrains mis de côté (cliqués sur la carte), à reposer par
   // glisser-déposer À L'ENDROIT EXACT voulu, dans l'orientation voulue.
@@ -1054,9 +1212,10 @@ function afficherRepartition(res, cats) {
       h += '<div class="repart-avert">⚠️ Pas de place pour la table de marque : ' +
            echapper(res.tablesManquantes.join(', ')) + '. ' +
            (sans.length
-             ? 'Aucun <strong>en-but</strong> déclaré sur ' + echapper(sans.join(', ')) + ' : la ' +
-               'longueur est mesurée d\'une ligne de poteaux à l\'autre, indique la profondeur de ' +
-               'l\'en-but dans « Grands terrains disponibles » et la table s\'y posera. Sinon, libère '
+             ? 'Aucun <strong>en-but</strong> déclaré pour les catégories posées sur ' +
+               echapper(sans.join(', ')) + ' : renseigne la profondeur d\'en-but de la catégorie dans ' +
+               '« Options avancées » → « Taille de terrain par catégorie », et la table pourra s\'y ' +
+               'poser. Sinon, libère '
              : 'Même l\'en-but est trop peu profond : agrandis-le s\'il est sous-estimé, libère ') +
            'un peu d\'espace ou réduis la taille de la table.</div>';
     }
@@ -1067,6 +1226,17 @@ function afficherRepartition(res, cats) {
   // Glisser-déposer des mini-terrains mis de côté (pointerdown : souris ET tactile).
   const tray = document.getElementById('repart-tray');
   if (tray) tray.addEventListener('pointerdown', onChipPointerDown);
+  // ⭐ La carte étant réécrite en entier à chaque rendu, ses écouteurs se reposent ici — comme
+  //    ceux des pastilles juste au-dessus. Posés sur le CONTENEUR, ils survivent aux redessins
+  //    de la seule carte (`redessinerCarte`).
+  brancherPlanLibre();
+  const zoomBloc = document.querySelector('.carte-zoom');
+  if (zoomBloc) zoomBloc.addEventListener('click', function (ev) {
+    const b = ev.target.closest('button'); if (!b) return;
+    if (b.id === 'carte-zoom-moins') reglerZoomCarte(carteZoom / 1.25);
+    else if (b.id === 'carte-zoom-plus') reglerZoomCarte(carteZoom * 1.25);
+    else if (b.id === 'carte-zoom-ajuste') reglerZoomCarte(1);
+  });
 }
 
 /* ==========================================================================
@@ -1081,16 +1251,25 @@ function afficherRepartition(res, cats) {
    dans l'ordre des grands terrains : la numérotation reste cohérente.
    ========================================================================== */
 
-/** Renumérote TOUS les mini-terrains en séquence (ordre des grands terrains du plan),
- *  met à jour les étiquettes et reconstruit parCategorie. Idempotent. */
+/**
+ * Renomme TOUS les mini-terrains et reconstruit parCategorie. Idempotent.
+ *
+ * ⭐ L'identifiant porte le CODE COURT DU GRAND TERRAIN qui l'accueille, puis son rang sur ce
+ * terrain : MUN-1, MUN-2, RAC-1. C'est cet identifiant qui part dans le champ « Terrains » des
+ * catégories, donc dans la colonne `terrain` de chaque match : il se lit ensuite sur le planning,
+ * à la table de marque et sur la page publique. Un numéro seul ne disait pas OÙ l'on joue.
+ * ⛔ Le rang repart de 1 sur CHAQUE terrain : « MUN-3 » se situe sur le terrain MUN, sans avoir à
+ *    consulter une table de correspondance.
+ */
 function renumeroterRepartition(res) {
-  let n = 0;
   const par = {};
   Object.keys(res.parCategorie || {}).forEach(function (c) { par[c] = []; });
-  res.fieldsPlan.forEach(function (fp) {
+  res.fieldsPlan.forEach(function (fp, i) {
+    const code = String(fp.code || codeTerrainAuto((fp.field || {}).nom, i));
+    let rang = 0;
     fp.zones.forEach(function (z) {
       z.tiles.forEach(function (t) {
-        n++; t.id = String(n);
+        rang++; t.id = code + '-' + rang;
         t.label = (fp.mode === 'plein') ? (z.cat + ' · ' + t.id) : t.id;
         if (!par[z.cat]) par[z.cat] = [];
         par[z.cat].push(t.id);
@@ -1202,6 +1381,14 @@ function refusPlacement(fp, spot, m) {
     return 'le mini-terrain (' + Math.round(spot.w) + '×' + Math.round(spot.h) + ' m) ne tient pas sur ' +
            fp.field.nom + ' (' + fp.field.L + '×' + fp.field.W + ' m) — pivote-le ou change de terrain';
   }
+  // ⛔ ET IL DOIT ÊTRE DEDANS. Le dépôt à la souris passe par `positionExacte`, qui borne déjà
+  //    l'emplacement ; la rotation sur place, elle, calcule la nouvelle emprise autour du centre
+  //    et peut la faire déborder. Sans ce contrôle, un mini-terrain se retrouvait en x négatif,
+  //    c'est-à-dire hors du terrain, sans que rien ne le signale.
+  if (spot.x < -0.001 || spot.y < -0.001 ||
+      spot.x + spot.w > fp.field.L + 0.001 || spot.y + spot.h > fp.field.W + 0.001) {
+    return 'il sortirait du terrain';
+  }
   const occ = obstaclesDuTerrain(fp);
   for (let k = 0; k < occ.length; k++) {
     const o = occ[k];
@@ -1247,7 +1434,8 @@ function poserMiniTerrainSur(iField, iChip, xm, ym) {
       afficherMessage(message, '⚠️ ' + chip.cat + ' sur ' + fp.field.nom + ' : ' + refus + '.', 'ko');
       return false;
     }
-    const tuile = { id: '0', x: spot.x, y: spot.y, w: spot.w, h: spot.h, label: '' };
+    const tuile = marquerEnBut({ id: '0', x: spot.x, y: spot.y, w: spot.w, h: spot.h, label: '' },
+      tuileCategorieManuel(res, chip.cat));
     const zone = fp.zones.find(function (z) { return z.cat === chip.cat; });
     if (zone) zone.tiles.push(tuile);
     else {
@@ -1307,9 +1495,14 @@ function onChipPointerDown(evenement) {
   const donnees = res && (res.misDeCote || [])[iChip];
   if (!donnees) return;
 
+  // Étiquette suiveuse (hors carte) et aperçu DANS la carte. ⭐ L'aperçu est un rect SVG posé
+  // dans le groupe TOURNÉ du terrain visé : il hérite ainsi de son orientation, là où une boîte
+  // HTML serait restée horizontale au-dessus d'un terrain de biais.
   const apercu = document.createElement('div');
   apercu.className = 'repart-apercu';
   document.body.appendChild(apercu);
+  const fantome = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  fantome.setAttribute('class', 'carte-apercu');
   let dernierEv = evenement;
 
   function terrainSous(ev) {
@@ -1318,8 +1511,14 @@ function onChipPointerDown(evenement) {
   }
   function nettoyerCible() {
     document.querySelectorAll('.carte-terrain.est-cible').forEach(function (r) { r.classList.remove('est-cible'); });
+    if (fantome.parentNode) fantome.parentNode.removeChild(fantome);
   }
-  /** Emplacement visé (en mètres) sous le pointeur, ou null si on n'est pas sur un terrain. */
+  /**
+   * Emplacement visé (en mètres) sous le pointeur, ou null hors d'un terrain.
+   * ⭐ La conversion passe par la MATRICE du rect de référence, pas par sa boîte englobante :
+   * sous rotation, cette boîte est celle, alignée sur les axes de l'écran, qui ENTOURE le
+   * terrain tourné — elle plaçait le mini-terrain à côté dès le premier degré d'inclinaison.
+   */
   function vise(ev) {
     const g = terrainSous(ev);
     if (!g) return null;
@@ -1327,11 +1526,9 @@ function onChipPointerDown(evenement) {
     const fp = res.fieldsPlan[iField];
     const rect = g.querySelector('.carte-terrain');
     if (!fp || !rect) return null;
-    const r = rect.getBoundingClientRect();
-    if (!r.width || !r.height) return null;
-    const xm = (ev.clientX - r.left) / r.width * fp.field.L;
-    const ym = (ev.clientY - r.top) / r.height * fp.field.W;
-    return { g: g, iField: iField, fp: fp, r: r, xm: xm, ym: ym };
+    const m = metresSousPointeur(fp, rect, ev.clientX, ev.clientY);
+    if (!m) return null;
+    return { g: g, iField: iField, fp: fp, ppm: m.ppm, xm: m.xm, ym: m.ym };
   }
   function dessinerApercu(ev) {
     dernierEv = ev;
@@ -1350,15 +1547,18 @@ function onChipPointerDown(evenement) {
     if (rr) rr.classList.add('est-cible');
     const spot = positionExacte(v.fp, donnees, v.xm, v.ym);
     const refus = refusPlacement(v.fp, spot, res.ctxManuel.m);
-    // Mètres → pixels écran, dans le repère du grand terrain survolé.
-    const px = v.r.width / v.fp.field.L, py = v.r.height / v.fp.field.W;
-    apercu.className = 'repart-apercu ' + (refus ? 'est-refuse' : 'est-ok');
-    apercu.style.left = (v.r.left + spot.x * px) + 'px';
-    apercu.style.top = (v.r.top + spot.y * py) + 'px';
-    apercu.style.width = Math.max(2, spot.w * px) + 'px';
-    apercu.style.height = Math.max(2, spot.h * py) + 'px';
-    apercu.textContent = Math.round(spot.w) + '×' + Math.round(spot.h);
-    apercu.title = refus || '';
+    // L'aperçu vit dans le repère du terrain : mètres × échelle, et la rotation vient du groupe.
+    apercu.className = 'repart-apercu est-libre est-etiquette';
+    apercu.style.left = ev.clientX + 'px'; apercu.style.top = ev.clientY + 'px';
+    apercu.style.width = ''; apercu.style.height = '';
+    apercu.textContent = Math.round(spot.w) + '×' + Math.round(spot.h) + (refus ? ' — ' + refus : '');
+    fantome.setAttribute('x', (spot.x * v.ppm).toFixed(1));
+    fantome.setAttribute('y', (spot.y * v.ppm).toFixed(1));
+    fantome.setAttribute('width', Math.max(2, spot.w * v.ppm).toFixed(1));
+    fantome.setAttribute('height', Math.max(2, spot.h * v.ppm).toFixed(1));
+    fantome.setAttribute('data-refus', refus ? 'oui' : 'non');
+    const pivot = v.g.querySelector('.carte-pivot') || v.g;
+    if (fantome.parentNode !== pivot) pivot.appendChild(fantome);
   }
   function surTouche(ev) {
     if (ev.key !== 'r' && ev.key !== 'R') return;
@@ -1388,110 +1588,496 @@ function onChipPointerDown(evenement) {
 }
 
 /* Cellule (colonne, ligne) de chaque emplacement sur la grille 3×3 du plan. */
-const POS_GRILLE = { HG: [0, 0], HC: [1, 0], HD: [2, 0], CG: [0, 1], CC: [1, 1], CD: [2, 1], BG: [0, 2], BC: [1, 2], BD: [2, 2] };
+const POS_GRILLE = { HG: [0, 0], HC: [1, 0], HD: [2, 0], CG: [0, 1], CC: [1, 1], CD: [2, 1], BG: [0, 2], BC: [1, 2], BD: [2, 2] };/* ============================================================================
+ *  LA CARTE — un plan de site, pas une grille de cases
+ * ============================================================================
+ *  ⛔ CE QUI N'ALLAIT PAS. Le plan se dessinait à ~1,4 px/m dans des cellules de 165 px, plafonné
+ *  à 520 px par le CSS, et chaque terrain n'avait que NEUF positions possibles (une grille 3×3),
+ *  sans aucune orientation. Un site réel n'est jamais aligné sur une grille : celui de la démo a
+ *  ses terrains de biais, dont un à ~35°. Faute de rotation, l'organisateur en était réduit à
+ *  ÉCHANGER longueur et largeur pour simuler un quart de tour — ce qui fait déclarer « 68 m »
+ *  la longueur d'un terrain de rugby de 110 m.
+ *
+ *  ⭐ CE QUI EST FAIT ICI. Un repère de SITE en mètres : chaque terrain porte sa position `x`,`y`
+ *  et son angle `rot`, tous deux libres. La carte se dessine à l'échelle de la place disponible,
+ *  avec un zoom. Les terrains posés par l'ancienne grille 3×3 gardent leur arrangement au premier
+ *  affichage, puis deviennent déplaçables : rien à ressaisir.
+ *
+ *  ⛔ LE CONTRAT DU GLISSER-DÉPOSER, et il a changé de nature. Il ne tient plus à
+ *  `getBoundingClientRect()` : sous rotation, cette boîte est celle, alignée sur les axes, qui
+ *  ENTOURE le terrain tourné — elle donnait un point de dépôt faux dès le premier degré. La
+ *  conversion passe désormais par la matrice de l'élément (`getScreenCTM`), exacte pour
+ *  n'importe quelle transformation. Restent nécessaires :
+ *    · un groupe `g[data-terrain="i"]` par grand terrain ;
+ *    · UN rect `.carte-terrain` par groupe, à l'origine du repère tourné ;
+ *    · un groupe `g[data-tuile][data-field]` par mini-terrain.
+ * ========================================================================== */
 
-/** Dessine UN grand terrain (cadre + mini-terrains numérotés + table des marques) à (ox,oy).
- *  `iField` = index dans fieldsPlan : porté par le groupe (data-terrain) et par chaque
- *  mini-terrain (data-tuile) pour l'ajustement manuel (clic = mettre de côté, dépôt = poser). */
-function groupeTerrain(fp, ox, oy, ppm, iField) {
-  const fw = fp.field.L * ppm, fh = fp.field.W * ppm;
-  const catsF = fp.zones.map(function (z) { return z.cat; }).join(' / ');
-  let g = '<g transform="translate(' + ox.toFixed(1) + ',' + oy.toFixed(1) + ')" data-terrain="' + iField + '">';
-  g += '<text x="0" y="-7" class="carte-titre"><tspan class="carte-nomterrain">' + echapper(fp.field.nom) +
-       '</tspan>' + (catsF ? ' · ' + echapper(catsF) : '') + '</text>';
-  // En-but déclaré : bandes hachurées de part et d'autre du rectangle de jeu (elles ne reçoivent
-  // aucun mini-terrain, seulement la table de marque quand la surface de jeu est pleine).
-  const eb = profondeurEnBut(fp.field) * ppm;
-  if (eb > 0) {
-    ['-' + eb.toFixed(1), fw.toFixed(1)].forEach(function (x) {
-      g += '<rect x="' + x + '" y="0" width="' + eb.toFixed(1) + '" height="' + fh.toFixed(1) +
-           '" class="carte-enbut"><title>En-but (' + profondeurEnBut(fp.field) + ' m)</title></rect>';
-    });
-  }
-  g += '<rect x="0" y="0" width="' + fw.toFixed(1) + '" height="' + fh.toFixed(1) + '" class="carte-terrain"/>';
-  fp.zones.forEach(function (z) {
-    z.tiles.forEach(function (t) {
-      const x = t.x * ppm, yy = t.y * ppm, w = t.w * ppm, hh = t.h * ppm;
-      g += '<g class="carte-tuile-g" data-field="' + iField + '" data-tuile="' + echapper(String(t.id)) + '">' +
-           '<title>Cliquer pour mettre ce mini-terrain de côté</title>';
-      g += '<rect x="' + x.toFixed(1) + '" y="' + yy.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) +
-           '" rx="2" fill="' + z.color + '" fill-opacity="0.22" stroke="' + z.color + '" stroke-width="1"/>';
-      if (w > 18 && hh > 12)
-        g += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (yy + hh / 2 + 3).toFixed(1) + '" class="carte-tuile" fill="' + z.color + '">' + echapper(t.label) + '</text>';
-      g += '</g>';
-    });
-  });
-  // UNE SEULE table de marque, portée par le GRAND TERRAIN (plus par catégorie) : elle couvre
-  // tous les mini-terrains posés dessus, U8 et U10 mélangés.
-  if (fp.table) {
-    // taille minimale d'affichage (une TM de 4 m ≈ 6 px, sinon invisible) — centrée sur sa vraie position
-    const cxT = (fp.table.x + fp.table.w / 2) * ppm, cyT = (fp.table.y + fp.table.h / 2) * ppm;
-    const tw = Math.max(fp.table.w * ppm, 9), th = Math.max(fp.table.h * ppm, 9);
-    const tx = cxT - tw / 2, ty = cyT - th / 2;
-    g += '<rect x="' + tx.toFixed(1) + '" y="' + ty.toFixed(1) + '" width="' + tw.toFixed(1) + '" height="' + th.toFixed(1) + '" class="carte-table"><title>Table de marque du terrain' +
-         (fp.table.enBut ? ' (dans l\'en-but)' : '') +
-         (fp.table.horsTerrain ? ' (sur la touche, hors du terrain)' : '') + '</title></rect>';
-    if (tw > 18 && th > 11) g += '<text x="' + cxT.toFixed(1) + '" y="' + (cyT + 3).toFixed(1) + '" class="carte-tm">TM</text>';
-  }
-  g += '</g>';
-  return { g: g, w: fw, h: fh };
+/* Pelouse : une seule teinte pour les deux sports — ce sont les MARQUAGES qui distinguent un
+   terrain de rugby d'un terrain de football, pas la couleur de l'herbe. */
+const CARTE_HERBE = '#4a8a4e';
+const CARTE_HERBE_BANDE = '#529557';
+/* Herbe du MINI-terrain : plus sombre, et surtout OPAQUE. Un mini-terrain tracé sur un grand le
+   recouvre réellement — laisser voir au travers la ligne des 22 m ou le rond central du terrain
+   porteur donnait un empilement de traits qui n'existe pas sur le gazon. */
+const CARTE_HERBE_MINI = '#3f7a43';
+const CARTE_HERBE_MINI_BANDE = '#468249';
+const CARTE_LIGNE = '#ffffff';
+const CARTE_BANDE_M = 8;            // largeur d'une bande de tonte (m)
+const TERRAIN_ECART_DEFAUT = 25;    // m entre deux terrains repris de l'ancienne grille
+const CARTE_ZOOM_MIN = 0.5, CARTE_ZOOM_MAX = 4;
+
+/* Zoom du plan (1 = ajusté à la largeur disponible) et positions libres mémorisées par CODE.
+   ⛔ Portées par le module : la carte est redessinée à chaque ajustement, un repère posé dans le
+   DOM disparaîtrait avec elle et le terrain reviendrait à sa place d'origine sous les doigts. */
+let carteZoom = 1;
+let positionsTerrains = {};
+
+/** Angle d'un terrain, normalisé dans [0,360[. Tout ce qui n'est pas un nombre vaut 0. */
+function angleTerrain(f) {
+  const a = parseFloat((f || {}).rot);
+  return Number.isFinite(a) ? ((a % 360) + 360) % 360 : 0;
 }
 
-/** Dessine la carte SVG. Si des emplacements sont définis → plan « comme sur le site »
- *  (grille 3×3) ; sinon → pile verticale simple. */
+/** Les quatre coins d'un terrain dans le repère du site, rotation comprise (autour du centre). */
+function coinsTerrain(f) {
+  const a = angleTerrain(f) * Math.PI / 180;
+  const cx = (f.x || 0) + f.L / 2, cy = (f.y || 0) + f.W / 2;
+  const cos = Math.cos(a), sin = Math.sin(a);
+  return [[f.x || 0, f.y || 0], [(f.x || 0) + f.L, f.y || 0],
+          [(f.x || 0) + f.L, (f.y || 0) + f.W], [f.x || 0, (f.y || 0) + f.W]]
+    .map(function (p) {
+      const dx = p[0] - cx, dy = p[1] - cy;
+      return [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos];
+    });
+}
+
+/** Boîte englobante d'un terrain tourné, dans le repère du site. */
+function boiteTerrain(f) {
+  const c = coinsTerrain(f);
+  return { x0: Math.min.apply(null, c.map(function (p) { return p[0]; })),
+           y0: Math.min.apply(null, c.map(function (p) { return p[1]; })),
+           x1: Math.max.apply(null, c.map(function (p) { return p[0]; })),
+           y1: Math.max.apply(null, c.map(function (p) { return p[1]; })) };
+}
+
+/**
+ * Donne une position de site à tout terrain qui n'en a pas.
+ * ⭐ REPRISE SANS RESSAISIE : un terrain enregistré avant le plan libre n'a que son emplacement
+ * sur l'ancienne grille 3×3. On le convertit en mètres, une seule fois, en gardant l'arrangement
+ * — il apparaît là où l'organisateur l'attend, et devient déplaçable.
+ */
+function assurerPositionsTerrains(fields) {
+  const pas = Math.max.apply(null, fields.map(function (f) {
+    return Math.max(f.L || 0, f.W || 0);
+  }).concat([100])) + TERRAIN_ECART_DEFAUT;
+  const occ = {};
+  fields.forEach(function (f, i) {
+    const memo = positionsTerrains[f.code];
+    if (memo) { f.x = memo.x; f.y = memo.y; }
+    if (Number.isFinite(parseFloat(f.x)) && Number.isFinite(parseFloat(f.y))) {
+      f.x = parseFloat(f.x); f.y = parseFloat(f.y); return;
+    }
+    const p = POS_GRILLE[f.pos] || [1, 1];
+    let col = p[0]; const row = p[1];
+    let cle = col + ',' + row;
+    while (occ[cle]) { col++; cle = col + ',' + row; }
+    occ[cle] = true;
+    f.x = col * pas; f.y = row * pas;
+  });
+  return fields;
+}
+
+/** Les défs communes de la carte : hachure d'en-but et ombre portée des terrains. */
+function defsCarte() {
+  return '<defs>' +
+    '<pattern id="carte-hach" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
+      '<rect width="6" height="6" fill="#3d7542"/>' +
+      '<line x1="0" y1="0" x2="0" y2="6" stroke="#6aa86e" stroke-width="1.6"/></pattern>' +
+    '<filter id="carte-ombre" x="-8%" y="-8%" width="120%" height="125%">' +
+      '<feDropShadow dx="0" dy="2" stdDeviation="2.5" flood-color="#0b3d17" flood-opacity="0.28"/>' +
+    '</filter></defs>';
+}
+
+/** Marquages propres au sport, dans le repère du grand terrain (0,0 → fw,fh). */
+function marquagesTerrain(type, fw, fh) {
+  const L = CARTE_LIGNE;
+  let g = '<line x1="' + (fw / 2).toFixed(1) + '" y1="0" x2="' + (fw / 2).toFixed(1) + '" y2="' + fh.toFixed(1) +
+          '" stroke="' + L + '" stroke-width="1.4" stroke-opacity="0.75"/>';
+  if (type === 'foot') {
+    const r = Math.min(fw, fh) * 0.11;
+    g += '<circle cx="' + (fw / 2).toFixed(1) + '" cy="' + (fh / 2).toFixed(1) + '" r="' + r.toFixed(1) +
+         '" fill="none" stroke="' + L + '" stroke-width="1.2" stroke-opacity="0.7"/>';
+    const sw = fw * 0.16, sh = fh * 0.45;
+    [0, fw - sw].forEach(function (x) {
+      g += '<rect x="' + x.toFixed(1) + '" y="' + ((fh - sh) / 2).toFixed(1) + '" width="' + sw.toFixed(1) +
+           '" height="' + sh.toFixed(1) + '" fill="none" stroke="' + L + '" stroke-width="1.2" stroke-opacity="0.7"/>';
+    });
+  } else {
+    [fw * 0.22, fw * 0.78].forEach(function (x) {
+      g += '<line x1="' + x.toFixed(1) + '" y1="0" x2="' + x.toFixed(1) + '" y2="' + fh.toFixed(1) +
+           '" stroke="' + L + '" stroke-width="1.2" stroke-opacity="0.6" stroke-dasharray="5 4"/>';
+    });
+  }
+  return g;
+}
+
+/** Un mini-terrain : en-but hachuré, surface de jeu tracée, contour de catégorie, étiquette. */
+function tuileCarte(t, z, ppm, iField) {
+  const x = t.x * ppm, yy = t.y * ppm, w = t.w * ppm, hh = t.h * ppm;
+  const clipT = 'carte-clipt-' + iField + '-' + String(t.id).replace(/[^A-Za-z0-9_-]/g, '');
+  let g = '<g class="carte-tuile-g" data-field="' + iField + '" data-tuile="' + echapper(String(t.id)) + '">' +
+          '<title>Cliquer pour mettre ce mini-terrain de côté</title>';
+  // L'emprise entière, OPAQUE : elle masque les marquages du grand terrain en dessous.
+  g += '<clipPath id="' + clipT + '"><rect x="' + x.toFixed(1) + '" y="' + yy.toFixed(1) +
+       '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) + '" rx="2"/></clipPath>';
+  g += '<rect x="' + x.toFixed(1) + '" y="' + yy.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) +
+       '" rx="2" fill="' + CARTE_HERBE_MINI + '"/>';
+  // Sa propre tonte, dans son propre sens : le mini-terrain se lit comme un terrain à part.
+  g += '<g clip-path="url(#' + clipT + ')">';
+  const bandeT = Math.max(6, hh / 5);
+  for (let by = yy + bandeT; by < yy + hh; by += bandeT * 2) {
+    g += '<rect x="' + x.toFixed(1) + '" y="' + by.toFixed(1) + '" width="' + w.toFixed(1) +
+         '" height="' + Math.min(bandeT, yy + hh - by).toFixed(1) + '" fill="' + CARTE_HERBE_MINI_BANDE + '"/>';
+  }
+  g += '</g>';
+  const ebT = (parseFloat(t.eb) || 0) * ppm;
+  const surX = t.ebAxe === 'x';
+  if (ebT > 0.5) {
+    (surX ? [[x, yy, ebT, hh], [x + w - ebT, yy, ebT, hh]]
+          : [[x, yy, w, ebT], [x, yy + hh - ebT, w, ebT]]).forEach(function (b) {
+      g += '<rect x="' + b[0].toFixed(1) + '" y="' + b[1].toFixed(1) + '" width="' + b[2].toFixed(1) +
+           '" height="' + b[3].toFixed(1) + '" class="carte-enbut"><title>En-but ' + echapper(z.cat) +
+           ' (' + t.eb + ' m)</title></rect>';
+    });
+  }
+  const jx = ebT > 0.5 && surX ? x + ebT : x, jy = ebT > 0.5 && !surX ? yy + ebT : yy;
+  const jw = ebT > 0.5 && surX ? w - 2 * ebT : w, jh = ebT > 0.5 && !surX ? hh - 2 * ebT : hh;
+  // La surface de jeu : lignes blanches sur l'herbe du mini-terrain, sans voile de couleur —
+  // c'est le contour de catégorie et la pastille qui portent l'appartenance.
+  g += '<rect x="' + jx.toFixed(1) + '" y="' + jy.toFixed(1) + '" width="' + jw.toFixed(1) + '" height="' + jh.toFixed(1) +
+       '" fill="none" stroke="' + CARTE_LIGNE + '" stroke-width="1.4" stroke-opacity="0.92"/>';
+  if (jw > 26 && jh > 18) {
+    const mx = surX ? jx + jw / 2 : jx, my = surX ? jy : jy + jh / 2;
+    g += '<line x1="' + (surX ? mx : jx).toFixed(1) + '" y1="' + (surX ? jy : my).toFixed(1) +
+         '" x2="' + (surX ? mx : jx + jw).toFixed(1) + '" y2="' + (surX ? jy + jh : my).toFixed(1) +
+         '" stroke="' + CARTE_LIGNE + '" stroke-width="1" stroke-opacity="0.55"/>';
+  }
+  g += '<rect x="' + x.toFixed(1) + '" y="' + yy.toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) +
+       '" rx="2" fill="none" stroke="' + z.color + '" stroke-width="2.5" class="carte-tuile-cadre"/>';
+  if (w > 44 && hh > 26) {
+    const lab = String(t.label || t.id);
+    const avecCat = hh > 46 && lab.indexOf(z.cat) === -1;
+    const lw = Math.max(34, Math.max(lab.length, avecCat ? z.cat.length : 0) * 6.6 + 14);
+    const lh = avecCat ? 30 : 18;
+    g += '<rect x="' + (x + w / 2 - lw / 2).toFixed(1) + '" y="' + (yy + hh / 2 - lh / 2).toFixed(1) +
+         '" width="' + lw.toFixed(1) + '" height="' + lh + '" rx="' + (avecCat ? 8 : 9) + '" fill="' + z.color + '"/>' +
+         '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (yy + hh / 2 + (avecCat ? -1 : 4)).toFixed(1) +
+         '" class="carte-tuile">' + echapper(lab) + '</text>';
+    // ⛔ Jamais la couleur seule : la catégorie est ÉCRITE dès qu'il y a la place, sans quoi deux
+    //    catégories sur un même terrain ne se distingueraient que par la teinte du contour.
+    if (avecCat) {
+      g += '<text x="' + (x + w / 2).toFixed(1) + '" y="' + (yy + hh / 2 + 11).toFixed(1) +
+           '" class="carte-tuile-cat">' + echapper(z.cat) + '</text>';
+    }
+  }
+  g += '</g>';
+  // ⭐ Le bouton ⟳ vit HORS du groupe cliquable : dans le groupe, le clic mettrait le
+  //    mini-terrain de côté au lieu de le faire pivoter.
+  if (w > 40 && hh > 34) {
+    g += '<g class="carte-tuile-rot" data-rot-field="' + iField + '" data-rot-tuile="' + echapper(String(t.id)) + '">' +
+         '<title>Pivoter ce mini-terrain sur place</title>' +
+         '<circle cx="' + (x + w - 11).toFixed(1) + '" cy="' + (yy + 11).toFixed(1) + '" r="9"/>' +
+         '<text x="' + (x + w - 11).toFixed(1) + '" y="' + (yy + 15).toFixed(1) + '">⟳</text></g>';
+  }
+  return g;
+}
+
+/** Dessine UN grand terrain à sa position de site, tourné de son angle. */
+function groupeTerrain(fp, ppm, iField, ox, oy) {
+  const f = fp.field;
+  const fw = f.L * ppm, fh = f.W * ppm;
+  const rot = angleTerrain(f);
+  const catsF = fp.zones.map(function (z) { return z.cat; }).join(' / ');
+  const code = String(fp.code || '');
+  const clip = 'carte-clip-' + iField;
+
+  // La plaque se place au-dessus de la boîte ENGLOBANTE du terrain tourné, et ne tourne PAS :
+  // un nom de terrain à 35° ne se lit pas.
+  const b = boiteTerrain(f);
+  const px = (b.x0 - (f.x || 0)) * ppm, py = (b.y0 - (f.y || 0)) * ppm;
+
+  let g = '<g transform="translate(' + ox.toFixed(1) + ',' + oy.toFixed(1) + ')" data-terrain="' + iField + '">';
+
+  g += '<g class="carte-plaque" data-plaque="' + iField + '" transform="translate(' + px.toFixed(1) + ',' + py.toFixed(1) + ')">' +
+       '<title>Faire glisser pour déplacer ce terrain sur le plan</title>';
+  const largeurCode = Math.max(26, code.length * 7 + 12);
+  if (code) {
+    g += '<rect x="0" y="-21" width="' + largeurCode + '" height="16" rx="4" class="carte-code-fond"/>' +
+         '<text x="' + (largeurCode / 2).toFixed(1) + '" y="-9" class="carte-code">' + echapper(code) + '</text>';
+  }
+  g += '<text x="' + (code ? largeurCode + 7 : 0) + '" y="-9" class="carte-titre">' +
+       '<tspan class="carte-nomterrain">' + echapper(f.nom) + '</tspan>' +
+       '<tspan class="carte-metaterrain"> · ' + echapper(String(f.L)) + ' × ' + echapper(String(f.W)) + ' m' +
+       (rot ? ' · ' + Math.round(rot) + '°' : '') + (catsF ? ' · ' + echapper(catsF) : '') + '</tspan></text></g>';
+  // Poignée de rotation : posée au coin haut-droit de la boîte englobante, hors du terrain.
+  g += '<g class="carte-rot" data-rot="' + iField + '" transform="translate(' +
+       ((b.x1 - (f.x || 0)) * ppm + 12).toFixed(1) + ',' + (py + 4).toFixed(1) + ')">' +
+       '<title>Faire glisser pour orienter le terrain (pas de 15°, libre avec Alt)</title>' +
+       '<circle cx="0" cy="0" r="11"/><text x="0" y="4">⟲</text></g>';
+
+  g += '<g class="carte-pivot" transform="rotate(' + rot.toFixed(2) + ',' + (fw / 2).toFixed(1) + ',' + (fh / 2).toFixed(1) + ')">';
+  g += '<clipPath id="' + clip + '"><rect x="0" y="0" width="' + fw.toFixed(1) + '" height="' + fh.toFixed(1) + '" rx="3"/></clipPath>';
+  g += '<rect x="0" y="0" width="' + fw.toFixed(1) + '" height="' + fh.toFixed(1) + '" rx="3" fill="' + CARTE_HERBE +
+       '" filter="url(#carte-ombre)"/>';
+  g += '<g clip-path="url(#' + clip + ')">';
+  const bande = CARTE_BANDE_M * ppm;
+  for (let x = bande; x < fw; x += bande * 2) {
+    g += '<rect x="' + x.toFixed(1) + '" y="0" width="' + Math.min(bande, fw - x).toFixed(1) +
+         '" height="' + fh.toFixed(1) + '" fill="' + CARTE_HERBE_BANDE + '"/>';
+  }
+  g += marquagesTerrain(f.type, fw, fh) + '</g>';
+  // ⛔ LE RECT DE RÉFÉRENCE : à l'origine du repère tourné, c'est sa matrice que la conversion
+  //    écran → mètres inverse. Il reçoit aussi `.est-cible` au survol d'un dépôt.
+  g += '<rect x="0" y="0" width="' + fw.toFixed(1) + '" height="' + fh.toFixed(1) + '" rx="3" class="carte-terrain"/>';
+
+  fp.zones.forEach(function (z) {
+    z.tiles.forEach(function (t) { g += tuileCarte(t, z, ppm, iField); });
+  });
+
+  if (fp.table) {
+    const cxT = (fp.table.x + fp.table.w / 2) * ppm, cyT = (fp.table.y + fp.table.h / 2) * ppm;
+    const tw = Math.max(fp.table.w * ppm, 22), th = Math.max(fp.table.h * ppm, 16);
+    g += '<rect x="' + (cxT - tw / 2).toFixed(1) + '" y="' + (cyT - th / 2).toFixed(1) + '" width="' + tw.toFixed(1) +
+         '" height="' + th.toFixed(1) + '" rx="3" class="carte-table"><title>Table de marque du terrain' +
+         (fp.table.enBut ? ' (dans l\'en-but)' : '') +
+         (fp.table.horsTerrain ? ' (sur la touche, hors du terrain)' : '') + '</title></rect>';
+    if (tw > 20 && th > 12) g += '<text x="' + cxT.toFixed(1) + '" y="' + (cyT + 4).toFixed(1) + '" class="carte-tm">TM</text>';
+  }
+  g += '</g></g>';
+  return g;
+}
+
+/** Règle graduée : donne l'échelle du plan, sans laquelle un terrain n'est qu'un rectangle. */
+function echelleCarte(x, y, ppm) {
+  const metres = ppm * 50 < 60 ? 20 : 50;
+  const w = metres * ppm;
+  return '<g class="carte-echelle" transform="translate(' + x.toFixed(1) + ',' + y.toFixed(1) + ')">' +
+    '<line x1="0" y1="0" x2="' + w.toFixed(1) + '" y2="0"/>' +
+    '<line x1="0" y1="-4" x2="0" y2="4"/><line x1="' + w.toFixed(1) + '" y1="-4" x2="' + w.toFixed(1) + '" y2="4"/>' +
+    '<text x="' + (w + 7).toFixed(1) + '" y="4">' + metres + ' m</text></g>';
+}
+
+/**
+ * Dessine le plan du site. L'échelle s'ajuste à la place disponible ; `carteZoom` l'agrandit
+ * ensuite, le conteneur prenant le relais en défilement — c'est ce qui rend le zoom RÉEL :
+ * agrandir le viewBox seul n'aurait rien changé, le navigateur le ramenant à la largeur du bloc.
+ */
 function dessinerCarte(res) {
   const fps = res.fieldsPlan;
-  const pad = 10, titreH = 20;
-  const aPos = fps.some(function (fp) { return fp.field.pos && POS_GRILLE[fp.field.pos]; });
+  if (!fps.length) return '';
+  assurerPositionsTerrains(fps.map(function (fp) { return fp.field; }));
 
-  // Échelle : les bandes d'en-but débordent du rectangle de jeu (de part et d'autre) — elles
-  // comptent dans l'encombrement dessiné, sinon elles sortiraient de la carte.
-  const enButMax = Math.max.apply(null, fps.map(function (fp) { return profondeurEnBut(fp.field); }).concat([0]));
-  // Idem sous la ligne de touche : la table d'un terrain « plein » (U14) est posée DEHORS.
-  const debordBas = Math.max.apply(null, fps.map(function (fp) {
-    return fp.table ? Math.max(0, fp.table.y + fp.table.h - fp.field.W) : 0;
-  }).concat([0]));
+  const pad = 16, plaqueH = 30, echelleH = 30;
+  const boites = fps.map(function (fp) { return boiteTerrain(fp.field); });
+  const x0 = Math.min.apply(null, boites.map(function (b) { return b.x0; }));
+  const y0 = Math.min.apply(null, boites.map(function (b) { return b.y0; }));
+  const x1 = Math.max.apply(null, boites.map(function (b) { return b.x1; }));
+  const y1 = Math.max.apply(null, boites.map(function (b) { return b.y1; }));
+  const largeurSite = Math.max(1, x1 - x0), hauteurSite = Math.max(1, y1 - y0);
 
-  if (aPos) {
-    const maxDim = Math.max.apply(null, fps.map(function (fp) {
-      return Math.max(fp.field.L + 2 * profondeurEnBut(fp.field), fp.field.W);
-    }).concat([1]));
-    const cell = 165, gap = 14, ppm = (cell - 4) / maxDim;
-    const marge = enButMax * ppm;                          // place réservée à gauche pour l'en-but
-    const occ = {}; let maxCol = 0, maxRow = 0; const parts = [];
-    fps.forEach(function (fp, iField) {
-      const p = POS_GRILLE[fp.field.pos] || [1, 1];
-      let col = p[0]; const row = p[1];
-      let key = col + ',' + row;
-      while (occ[key]) { col++; key = col + ',' + row; }    // décale à droite si la cellule est prise
-      occ[key] = true;
-      maxCol = Math.max(maxCol, col); maxRow = Math.max(maxRow, row);
-      const ox = pad + marge + col * (cell + gap);
-      const oy = pad + titreH + row * (cell + titreH + gap);
-      parts.push(groupeTerrain(fp, ox, oy, ppm, iField).g);
-    });
-    const width = pad * 2 + 2 * marge + (maxCol + 1) * (cell + gap);
-    const height = pad * 2 + (maxRow + 1) * (cell + titreH + gap) + Math.max(0, debordBas * ppm - gap);
-    return '<svg viewBox="0 0 ' + width.toFixed(0) + ' ' + height.toFixed(0) + '" width="100%" class="carte-svg" ' +
-           'role="img" aria-label="Plan de répartition des terrains">' + parts.join('') + '</svg>';
-  }
+  // Place réellement disponible, mesurée dans la page : le zoom 1 remplit le bloc, ni plus ni moins.
+  const bloc = document.getElementById('repartition-carte') || document.getElementById('repartition-resultat');
+  const dispo = Math.max(320, ((bloc && bloc.clientWidth) || 1040) - 2 * pad - 40);
+  const ppm = dispo / largeurSite;
 
-  // Repli : pile verticale (aucun emplacement défini).
-  const maxL = Math.max.apply(null, fps.map(function (fp) {
-    return fp.field.L + 2 * profondeurEnBut(fp.field);
-  }).concat([1]));
-  const ppm = 460 / maxL;
-  const marge = enButMax * ppm;
-  let y0 = 0; const parts = [];
-  fps.forEach(function (fp, iField) {
-    const t = groupeTerrain(fp, pad + marge, y0 + titreH, ppm, iField);
-    parts.push(t.g);
-    // + le débord sous la touche (table d'un terrain « plein » posée dehors) : sans lui, la
-    // table chevaucherait le titre du terrain suivant.
-    y0 += titreH + t.h + 16 + debordBas * ppm;
+  const vw = largeurSite * ppm + 2 * pad + 40;
+  const vh = hauteurSite * ppm + 2 * pad + plaqueH + echelleH;
+  const parts = fps.map(function (fp, i) {
+    return groupeTerrain(fp, ppm, i,
+      pad + (fp.field.x - x0) * ppm, pad + plaqueH + (fp.field.y - y0) * ppm);
   });
-  return '<svg viewBox="0 0 ' + (460 + 2 * pad + 2 * marge).toFixed(0) + ' ' + (y0 + 6).toFixed(0) + '" width="100%" class="carte-svg" ' +
-         'role="img" aria-label="Carte de répartition des terrains">' + parts.join('') + '</svg>';
+  return '<svg viewBox="0 0 ' + vw.toFixed(0) + ' ' + vh.toFixed(0) + '" width="' + (vw * carteZoom).toFixed(0) +
+         '" height="' + (vh * carteZoom).toFixed(0) + '" class="carte-svg" data-ppm="' + ppm.toFixed(4) +
+         '" role="img" aria-label="Plan du site : terrains et mini-terrains">' +
+         defsCarte() + parts.join('') + echelleCarte(pad, vh - 14, ppm) + '</svg>';
+}
+
+/* ==========================================================================
+   PLAN LIBRE — déplacer, orienter, zoomer
+   --------------------------------------------------------------------------
+   Trois gestes, trois poignées distinctes, pour qu'aucun ne se déclenche par
+   surprise : la PLAQUE de nom déplace le terrain, la poignée ⟲ l'oriente, le
+   badge ⟳ d'un mini-terrain le fait pivoter sur place. Le corps du terrain
+   reste libre pour le dépôt des mini-terrains, et un clic sur un mini-terrain
+   continue de le mettre de côté.
+   ========================================================================== */
+
+/**
+ * Point écran → coordonnées LOCALES d'un élément SVG, rotation et échelle comprises.
+ * ⭐ C'est la brique qui remplace `getBoundingClientRect()` : cette boîte-là est alignée sur les
+ * axes de l'écran, donc fausse dès qu'un terrain est tourné. La matrice, elle, est exacte.
+ */
+function pointLocalSvg(el, clientX, clientY) {
+  const svg = el && (el.ownerSVGElement || (el.tagName === 'svg' ? el : null));
+  if (!svg || !svg.createSVGPoint || !el.getScreenCTM) return null;
+  const ctm = el.getScreenCTM();
+  if (!ctm) return null;
+  const pt = svg.createSVGPoint();
+  pt.x = clientX; pt.y = clientY;
+  return pt.matrixTransform(ctm.inverse());
+}
+
+/** Mètres sous le pointeur dans le repère d'un grand terrain, ou null hors de la carte. */
+function metresSousPointeur(fp, rect, clientX, clientY) {
+  const p = pointLocalSvg(rect, clientX, clientY);
+  if (!p) return null;
+  const fw = rect.width && rect.width.baseVal ? rect.width.baseVal.value : 0;
+  if (!(fw > 0) || !(fp.field.L > 0)) return null;
+  const ppm = fw / fp.field.L;
+  return { xm: p.x / ppm, ym: p.y / ppm, ppm: ppm };
+}
+
+/** Redessine la seule carte, sans toucher au reste du panneau (plus rapide, et sans clignotement). */
+function redessinerCarte() {
+  const bloc = document.getElementById('repartition-carte');
+  if (!bloc || !repartitionCalculee) return;
+  bloc.innerHTML = dessinerCarte(repartitionCalculee);
+}
+
+/** Déplacement d'un grand terrain par sa plaque de nom. */
+function demarrerDeplacementTerrain(evenement, iField) {
+  const res = repartitionCalculee;
+  const fp = res && res.fieldsPlan[iField];
+  const svg = evenement.target.closest('svg');
+  if (!fp || !svg) return;
+  evenement.preventDefault();
+  const ppm = parseFloat(svg.getAttribute('data-ppm')) || 1;
+  const depart = pointLocalSvg(svg, evenement.clientX, evenement.clientY);
+  if (!depart) return;
+  const x0 = fp.field.x, y0 = fp.field.y;
+  function bouger(ev) {
+    const p = pointLocalSvg(document.querySelector('#repartition-carte svg'), ev.clientX, ev.clientY);
+    if (!p) return;
+    fp.field.x = x0 + (p.x - depart.x) / ppm;
+    fp.field.y = y0 + (p.y - depart.y) / ppm;
+    positionsTerrains[fp.field.code] = { x: fp.field.x, y: fp.field.y };
+    redessinerCarte();
+  }
+  function finir() {
+    document.removeEventListener('pointermove', bouger);
+    document.removeEventListener('pointerup', finir);
+    document.removeEventListener('pointercancel', finir);
+  }
+  document.addEventListener('pointermove', bouger);
+  document.addEventListener('pointerup', finir);
+  document.addEventListener('pointercancel', finir);
+}
+
+/** Orientation d'un grand terrain par sa poignée ⟲ : pas de 15°, libre avec Alt. */
+function demarrerRotationTerrain(evenement, iField) {
+  const res = repartitionCalculee;
+  const fp = res && res.fieldsPlan[iField];
+  if (!fp) return;
+  evenement.preventDefault();
+  const svg = evenement.target.closest('svg');
+  const ppm = parseFloat(svg.getAttribute('data-ppm')) || 1;
+  const groupe = svg.querySelector('g[data-terrain="' + iField + '"]');
+  function centre() {
+    const m = groupe.getScreenCTM();
+    const p = svg.createSVGPoint();
+    p.x = fp.field.L / 2 * ppm; p.y = fp.field.W / 2 * ppm;
+    return p.matrixTransform(m);
+  }
+  const c = centre();
+  const angle0 = angleTerrain(fp.field);
+  const depart0 = Math.atan2(evenement.clientY - c.y, evenement.clientX - c.x) * 180 / Math.PI;
+  function bouger(ev) {
+    const a = Math.atan2(ev.clientY - c.y, ev.clientX - c.x) * 180 / Math.PI;
+    let angle = angle0 + (a - depart0);
+    if (!ev.altKey) angle = Math.round(angle / 15) * 15;   // aimanté, sauf si Alt
+    fp.field.rot = ((angle % 360) + 360) % 360;
+    const champ = document.querySelectorAll('#liste-terrains-physiques .tp-rot')[iField];
+    if (champ) champ.value = Math.round(fp.field.rot);      // la fiche reste la source enregistrée
+    redessinerCarte();
+  }
+  function finir() {
+    document.removeEventListener('pointermove', bouger);
+    document.removeEventListener('pointerup', finir);
+    document.removeEventListener('pointercancel', finir);
+  }
+  document.addEventListener('pointermove', bouger);
+  document.addEventListener('pointerup', finir);
+  document.addEventListener('pointercancel', finir);
+}
+
+/**
+ * Fait pivoter SUR PLACE un mini-terrain déjà posé : longueur et largeur s'échangent autour de
+ * son centre. ⛔ Refusé si la nouvelle emprise sort du terrain ou mord le couloir — le
+ * mini-terrain reste où il est, plutôt que d'être déplacé ailleurs sans le dire.
+ */
+function pivoterMiniTerrain(iField, id) {
+  const res = repartitionCalculee;
+  const fp = res && res.fieldsPlan[iField];
+  const message = document.getElementById('message-repartition');
+  if (!fp || !res.ctxManuel) return;
+  for (let zi = 0; zi < fp.zones.length; zi++) {
+    const z = fp.zones[zi];
+    const t = z.tiles.find(function (x) { return String(x.id) === String(id); });
+    if (!t) continue;
+    // Pivot autour du CENTRE, puis on ramène l'emprise dans le terrain : un quart de tour près
+    // d'un bord déborderait sinon, et le geste serait refusé alors qu'il suffisait de glisser.
+    const cx = t.x + t.w / 2, cy = t.y + t.h / 2;
+    const spot = { x: cx - t.h / 2, y: cy - t.w / 2, w: t.h, h: t.w };
+    spot.x = Math.max(0, Math.min(spot.x, fp.field.L - spot.w));
+    spot.y = Math.max(0, Math.min(spot.y, fp.field.W - spot.h));
+    // On compare aux autres occupants : la tuile elle-même ne doit pas se gêner.
+    const autres = { zones: fp.zones.map(function (zz) {
+      return { tiles: zz.tiles.filter(function (x) { return x !== t; }), table: zz.table };
+    }), table: fp.table, field: fp.field };
+    const refus = refusPlacement(autres, spot, res.ctxManuel.m);
+    if (refus) {
+      afficherMessage(message, '⚠️ ' + t.id + ' ne peut pas pivoter ici : ' + refus + '.', 'ko');
+      return;
+    }
+    t.x = spot.x; t.y = spot.y; t.w = spot.w; t.h = spot.h;
+    if (t.ebAxe) t.ebAxe = t.ebAxe === 'x' ? 'y' : 'x';
+    if (res.tablesPosees) retirerTablesMarques(res);
+    afficherRepartition(res, res.ctxManuel.cats);
+    return;
+  }
+}
+
+/** Zoom du plan : molette sur la carte, boutons, ou remise à l'ajusté. */
+function reglerZoomCarte(valeur) {
+  carteZoom = Math.min(CARTE_ZOOM_MAX, Math.max(CARTE_ZOOM_MIN, valeur));
+  redessinerCarte();
+  const etiquette = document.getElementById('carte-zoom-valeur');
+  if (etiquette) etiquette.textContent = Math.round(carteZoom * 100) + ' %';
+}
+
+/** Écouteurs du plan, reposés à chaque rendu du panneau (le bloc est réécrit en entier). */
+function brancherPlanLibre() {
+  const bloc = document.getElementById('repartition-carte');
+  if (!bloc) return;
+  bloc.addEventListener('pointerdown', function (ev) {
+    const plaque = ev.target.closest('[data-plaque]');
+    if (plaque) { demarrerDeplacementTerrain(ev, parseInt(plaque.getAttribute('data-plaque'), 10)); return; }
+    const rot = ev.target.closest('[data-rot]');
+    if (rot) { demarrerRotationTerrain(ev, parseInt(rot.getAttribute('data-rot'), 10)); return; }
+  });
+  bloc.addEventListener('click', function (ev) {
+    const rot = ev.target.closest('[data-rot-tuile]');
+    if (rot) {
+      ev.stopPropagation();   // sinon le clic mettrait aussi le mini-terrain de côté
+      pivoterMiniTerrain(parseInt(rot.getAttribute('data-rot-field'), 10), rot.getAttribute('data-rot-tuile'));
+    }
+  });
+  bloc.addEventListener('wheel', function (ev) {
+    if (!ev.ctrlKey && !ev.metaKey) return;   // la molette seule fait défiler la page, comme partout
+    ev.preventDefault();
+    reglerZoomCarte(carteZoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12));
+  }, { passive: false });
 }
 
 /** Applique la répartition : écrit le champ « Terrains » de chaque catégorie. */

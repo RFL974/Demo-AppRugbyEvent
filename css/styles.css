@@ -2008,7 +2008,7 @@ body.theme-clair {
   background: rgba(214, 141, 20, .14); color: #b26a00; line-height: 1.5;
 }
 .repart-carte-wrap { overflow-x: auto; margin: 10px 0; }
-.carte-svg { width: 100%; max-width: 520px; display: block; height: auto; }
+.carte-svg { width: 100%; display: block; height: auto; }
 .carte-terrain { fill: #eef4ec; stroke: #9bb3a6; stroke-width: 1.5; }
 /* En-but : espace réel DERRIÈRE la ligne de but (la longueur déclarée va d'une ligne de poteaux
    à l'autre). Pas de jeu dedans, mais la table de marque peut s'y poser. */

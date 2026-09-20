@@ -69,7 +69,11 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
 .suivi-club-ligne { border-radius:0; border-width:0 0 1px; margin:0; padding:12px; }
 .suivi-club-actions details { width:100%; }
 .suivi-club-actions summary { color:var(--cv-action); cursor:pointer; padding:8px; }
-.cv-terrains { display:grid; grid-template-columns:minmax(300px,.75fr) minmax(0,1.4fr); gap:24px; align-items:start; }
+/* ⭐ UNE SEULE COLONNE, délibérément. La carte partageait la largeur avec le formulaire : à
+   1440 px elle n'avait que 624 px, ce qui ramenait un plan dessiné à 2,9 px/m autour de 1,6 —
+   autant dire le rendu d'avant. Le plan est la pièce maîtresse de cet écran, il prend toute la
+   largeur ; les fiches de terrain, elles, sont des dépliants et n'en demandent pas tant. */
+.cv-terrains { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; align-items:start; }
 .cv-terrains-plan { background:#f2f8fc; border-radius:12px; padding:20px; min-height:300px; }
 .suivi-cellule[data-label="Paiement"] > small:nth-of-type(n+2) { display:none; }
 .cv-detail-club { padding:20px; background:#fff; border:1px solid var(--cv-bordure); border-radius:12px; display:flex; flex-direction:column; gap:12px; }
@@ -1196,3 +1200,81 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 @media (max-width:360px) {
   .theme-clair .cv-table .equipe-item { grid-template-columns:1fr; }
 }
+
+/* ============================================================================
+   TERRAINS — code court du terrain et en-but par catégorie
+   ============================================================================
+   Le code court NOMME les mini-terrains posés sur le terrain (MUN-1, MUN-2…) : il se lit sur
+   le planning et à la table de marque, donc il s'affiche aussi sur la fiche repliée.
+   L'en-but appartient à la CATÉGORIE (les cotes FFR sont données sans lui) et vit à côté de la
+   taille de jeu, suivi du gabarit au sol qui en découle — la valeur que le calcul utilise.
+   ========================================================================== */
+.theme-clair .cv-terrain-detail > summary small .terr-code { display:inline-block; margin-right:8px; padding:1px 7px; border-radius:4px; background:var(--cv-selection); color:var(--cv-action); font-weight:700; font-size:11px; letter-spacing:.03em; }
+.theme-clair .terrain-ligne .tp-code { text-transform:uppercase; letter-spacing:.06em; font-weight:650; }
+.theme-clair .terr-aide { color:var(--cv-secondaire); font-size:11px; line-height:1.4; }
+
+.theme-clair .dim-ligne { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--cv-bordure); }
+.theme-clair .dim-ligne:last-child { border-bottom:0; }
+.theme-clair .dim-nom { min-width:52px; font-weight:650; font-size:14px; }
+.theme-clair .dim-taille { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.theme-clair .dim-taille input { width:76px; min-height:40px; }
+.theme-clair .terr-plus { color:var(--cv-secondaire); font-size:12px; white-space:nowrap; }
+/* Le gabarit au sol est la valeur que le packing utilise : il se distingue des saisies. */
+.theme-clair .dim-ausol { margin-left:auto; padding:3px 10px; border-radius:999px; background:var(--cv-selection); color:var(--cv-action); font-size:12px; font-weight:650; font-variant-numeric:tabular-nums; }
+.theme-clair .dim-ausol:empty { display:none; }
+@media (max-width:640px) {
+  .theme-clair .dim-ausol { margin-left:0; }
+  .theme-clair .dim-taille input { width:68px; }
+}
+
+/* ============================================================================
+   TERRAINS — la carte de répartition
+   ============================================================================
+   Le plan se lit comme un plan : pelouse, lignes blanches, plaque de nom. Les couleurs de
+   l'herbe et des lignes sont PORTÉES PAR LE SVG (scène physique, elles ne s'inversent pas) ;
+   ne vivent ici que les éléments d'interface — titres, pastilles, table de marque, échelle.
+   ========================================================================== */
+.theme-clair .carte-terrain { fill:none; stroke:#ffffff; stroke-width:2; stroke-opacity:.9; }
+.theme-clair .carte-terrain.est-cible { stroke:var(--cv-action); stroke-width:3.5; stroke-opacity:1; }
+.theme-clair .carte-enbut { fill:url(#carte-hach); stroke:none; }
+.theme-clair .carte-titre { font:400 13px Inter,system-ui,sans-serif; fill:var(--cv-secondaire); }
+.theme-clair .carte-nomterrain { font-weight:650; font-size:14px; fill:var(--cv-texte); }
+.theme-clair .carte-metaterrain { font-weight:400; font-size:12px; fill:var(--cv-secondaire); }
+.theme-clair .carte-code-fond { fill:var(--cv-texte); }
+.theme-clair .carte-code { font:700 10px Inter,system-ui,sans-serif; fill:#fff; text-anchor:middle; letter-spacing:.06em; }
+.theme-clair .carte-tuile { font:700 11px Inter,system-ui,sans-serif; fill:#fff; text-anchor:middle; letter-spacing:.02em; }
+.theme-clair .carte-table { fill:#1f2933; stroke:#fff; stroke-width:1.2; stroke-opacity:.75; }
+.theme-clair .carte-tm { font:700 10px Inter,system-ui,sans-serif; fill:#fff; text-anchor:middle; }
+.theme-clair .carte-echelle line { stroke:var(--cv-secondaire); stroke-width:1; }
+.theme-clair .carte-echelle text { font:400 12px Inter,system-ui,sans-serif; fill:var(--cv-secondaire); }
+/* Le mini-terrain survolé s'épaissit : on sait ce qu'on va mettre de côté avant de cliquer. */
+.carte-tuile-g { cursor:grab; }
+.theme-clair .carte-tuile-g:hover .carte-tuile-cadre { stroke-width:3.5; }
+.theme-clair .carte-tuile-cat { font:700 9px Inter,system-ui,sans-serif; fill:#fff; fill-opacity:.85; text-anchor:middle; letter-spacing:.04em; }
+/* Le zoom donne au SVG une largeur EXPLICITE : le conteneur défile au-delà. Une largeur en %
+   aurait ramené le plan à la taille du bloc, et le zoom n'aurait rien fait. */
+.theme-clair .repart-carte-wrap { overflow:auto; max-height:78vh; border:1px solid var(--cv-bordure); border-radius:12px; background:#eef4ee; padding:6px; }
+.theme-clair .carte-svg { display:block; width:auto; max-width:none; height:auto; }
+.theme-clair .carte-outils { display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin:16px 0 10px; }
+.theme-clair .carte-outils-titre { font-size:15px; font-weight:650; }
+.theme-clair .carte-aide { flex:1 1 320px; min-width:0; color:var(--cv-secondaire); font-size:12px; line-height:1.5; }
+.theme-clair .carte-zoom { display:inline-flex; align-items:center; gap:6px; margin-left:auto; padding:4px; border:1px solid var(--cv-bordure); border-radius:10px; background:#fff; }
+.theme-clair .carte-zoom .bouton-icone { width:32px; height:32px; min-height:32px; display:inline-flex; align-items:center; justify-content:center; padding:0; border:1px solid var(--cv-bordure); border-radius:8px; background:#fff; color:var(--cv-action); font-size:16px; font-weight:700; }
+.theme-clair #carte-zoom-valeur { min-width:46px; text-align:center; font-size:12px; font-weight:650; font-variant-numeric:tabular-nums; }
+.theme-clair #carte-zoom-ajuste { min-height:32px; padding:4px 8px; font-size:12px; }
+
+/* Les trois poignées du plan libre. Chacune a son geste, aucune ne se déclenche par surprise. */
+.carte-plaque { cursor:grab; }
+.carte-plaque:active { cursor:grabbing; }
+.theme-clair .carte-rot circle { fill:#fff; stroke:var(--cv-action); stroke-width:1.5; }
+.theme-clair .carte-rot text { font:700 12px Inter,system-ui,sans-serif; fill:var(--cv-action); text-anchor:middle; }
+.carte-rot { cursor:grab; }
+.carte-rot:active { cursor:grabbing; }
+.theme-clair .carte-tuile-rot circle { fill:#fff; fill-opacity:.92; stroke:var(--cv-texte); stroke-width:1; }
+.theme-clair .carte-tuile-rot text { font:700 11px Inter,system-ui,sans-serif; fill:var(--cv-texte); text-anchor:middle; }
+.carte-tuile-rot { cursor:pointer; opacity:0; transition:opacity .12s; }
+.carte-tuile-g:hover + .carte-tuile-rot,.carte-tuile-rot:hover { opacity:1; }
+/* L'aperçu de dépôt vit dans le SVG : il hérite de l'orientation du terrain visé. */
+.theme-clair .carte-apercu { fill:#1d9e75; fill-opacity:.35; stroke:#0f6e56; stroke-width:2; }
+.theme-clair .carte-apercu[data-refus="oui"] { fill:#e24b4a; fill-opacity:.3; stroke:#a32d2d; }
+.theme-clair .repart-apercu.est-etiquette { transform:translate(14px,14px); }
