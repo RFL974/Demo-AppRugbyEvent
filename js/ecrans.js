@@ -445,7 +445,7 @@ function actualiserCadreCiel() {
 const DESCRIPTIONS_CIEL = {
  infos:'Renseignez les informations générales de votre tournoi.',
  horaires:'Définissez les temps forts de la journée et visualisez leur enchaînement.',
- categories:'Comparez les catégories et adaptez leurs réglages de jeu.',
+ categories:'Définissez les formats de jeu et paramètres pour chaque catégorie.',
  invitation:'Retrouvez vos contacts et préparez les invitations aux clubs.',
  'suivi-clubs':'Une vue claire des réponses, des commandes et des paiements.',
  equipes:'Gérez les équipes participantes et leurs effectifs.',

@@ -576,6 +576,7 @@ function majFormesCategories() {
       badge + alerteEffectifFFR(cat, eff);
   });
   majFormeChoixCategories(dateISO);
+  majReferencesFFRCategories();
   majBoutonNormeCategories();
 
   // Les contrôles injectés font désormais partie de l'état ENREGISTRÉ des cartes qui étaient
@@ -587,6 +588,78 @@ function majFormesCategories() {
     });
     if (typeof assistantMajVerrou === 'function') assistantMajVerrou();
   }
+}
+
+/* --------------------------------------------------------------------------
+   CARTE « RÉFÉRENCE FFR » posée à côté des paramètres d'une catégorie.
+   Elle ne montre QUE ce que le référentiel publie réellement : chaque ligne naît
+   d'une valeur présente, jamais d'un défaut. Sans référence certaine, la carte le
+   DIT — on ne remplit pas un tableau au jugé.
+   -------------------------------------------------------------------------- */
+
+/**
+ * Ligne de prescriptions retenue pour une catégorie, ou null si rien n'est certain.
+ * Même sélection que calculerNormeFFRCarte : profil explicite quand il existe, sinon la règle
+ * jointe par getConformiteFFR — et RIEN si plusieurs formes restent possibles (doctrine §1.12 :
+ * devant une ambiguïté, on ne tranche pas à la place de l'organisateur).
+ */
+function regleReferenceFFRCarte(cat) {
+  const profil = profilNormeFFRCarte(cat);
+  if (profil) {
+    if (!refFFRCache) return null;
+    const cleCat = normaliserCategorieFFR(cat);
+    return (refFFRCache.regles || []).filter(function (r) {
+      return normaliserCategorieFFR(r.categorie) === cleCat &&
+        String(r.forme_jeu || '').trim() === profil.forme_jeu &&
+        String(r.effectif || '').trim() === profil.effectif &&
+        String(r.joint_refffr_formes || '').trim().toUpperCase() === 'OUI';
+    })[0] || null;
+  }
+  const regles = (dernierResConformite && (dernierResConformite.regles || {})[cat]) || [];
+  return regles.length === 1 ? regles[0] : null;
+}
+
+/** Les lignes du tableau : une par valeur RÉELLEMENT publiée pour cette catégorie. */
+function lignesReferenceFFRCarte(r) {
+  const lignes = [];
+  if (r.terrain_longueur_m && r.terrain_largeur_m) {
+    lignes.push(['Dimension terrain', r.terrain_longueur_m + ' × ' + r.terrain_largeur_m + ' m']);
+  } else if (r.terrain_libelle) {
+    lignes.push(['Dimension terrain', r.terrain_libelle]);
+  }
+  if (r.ballon) lignes.push(['Ballon', r.ballon]);
+  if (r.effectif_terrain) lignes.push(['Effectif sur le terrain', r.effectif_terrain]);
+  // Le référentiel publie l'effectif MAXIMUM SUR LA FEUILLE de match (dont ceux sur le terrain) —
+  // ce n'est pas un nombre de remplaçants, et on ne le renomme donc pas ainsi.
+  if (r.effectif_max_feuille) lignes.push(['Effectif max sur la feuille', r.effectif_max_feuille]);
+  if (r.carton_jaune_min) lignes.push(['Carton jaune', r.carton_jaune_min + ' min']);
+  // `tir_au_but` n'est vrai que sur un « OUI » explicite : une colonne vide ne prouve pas une
+  // interdiction, on ne l'affiche donc QUE lorsqu'il est autorisé.
+  if (r.tir_au_but === true) lignes.push(['Tir au but', 'autorisé']);
+  return lignes;
+}
+
+/** Remplit le tableau « Référence FFR » de chaque carte catégorie affichée. */
+function majReferencesFFRCategories() {
+  document.querySelectorAll('.cv-cat-reference-table[data-cat]').forEach(function (el) {
+    const cat = el.getAttribute('data-cat');
+    const sous = document.querySelector('.cv-cat-reference-sous[data-cat="' + selCategorieFFR(cat) + '"]');
+    const r = regleReferenceFFRCarte(cat);
+    const lignes = r ? lignesReferenceFFRCarte(r) : [];
+    if (sous) {
+      const forme = r ? libelleFormeFFRCarte(r.forme_jeu, r.effectif) : '';
+      sous.textContent = forme ? cat + ' · ' + forme : cat;
+    }
+    if (!lignes.length) {
+      el.innerHTML = statutNeutreFFR('Référence FFR indisponible', !refFFRCache
+        ? 'Le référentiel FFR n’est pas chargé — renseigne la date du tournoi puis relance le contrôle.'
+        : 'Aucune prescription certaine pour « ' + cat + ' » à la date du tournoi.');
+      return;
+    }
+    el.innerHTML = '<table class="cv-cat-ref-table"><tbody>' + lignes.map(function (l) {
+      return '<tr><th scope="row">' + echapper(l[0]) + '</th><td>' + echapper(String(l[1])) + '</td></tr>';
+    }).join('') + '</tbody></table>';
+  });
 }
 
 /* --------------------------------------------------------------------------
@@ -739,7 +812,8 @@ function majBoutonNormeCategories() {
 
 /** Message local à la carte : aucune boîte de confirmation et surtout aucune écriture. */
 function messageNormeFFRCarte(form, texte, type) {
-  const zone = form && form.querySelector('.message-cat');
+  // data-role d'abord (il survit à afficherMessage, qui réécrit className), .message-cat ensuite.
+  const zone = form && (form.querySelector('[data-role="msg-cat"]') || form.querySelector('.message-cat'));
   if (!zone) return;
   if (typeof afficherMessage === 'function') afficherMessage(zone, texte, type);
   else { zone.textContent = texte; zone.className = 'message-form message-cat ' + type; }
@@ -752,9 +826,15 @@ function messageNormeFFRCarte(form, texte, type) {
  */
 function onClicAppliquerNormeFFRCarte(e) {
   const btn = e.target.closest('.ffr-appliquer');
-  const form = btn && btn.closest('form.form-categorie');
-  const cat = form && form.getAttribute('data-cat');
-  if (!btn || !form || !cat) return;
+  if (!btn) return;
+  // Le bouton est porté par la carte « Référence FFR », VOISINE du formulaire : faute de
+  // formulaire englobant, on le relie à sa catégorie par data-cat. Un bouton RENDU DANS un
+  // formulaire garde la priorité à celui-ci — c'est lui qui dit la catégorie qu'on remplit.
+  const formProche = btn.closest('form.form-categorie');
+  const cat = (formProche && formProche.getAttribute('data-cat')) || btn.getAttribute('data-cat');
+  const form = formProche ||
+    (cat && document.querySelector('form.form-categorie[data-cat="' + selCategorieFFR(cat) + '"]'));
+  if (!form || !cat) return;
 
   const calc = calculerNormeFFRCarte(cat, btn.getAttribute('data-variante') || '');
   if (!calc || calc.erreur) {

@@ -852,3 +852,63 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 .theme-clair .cv-champ-affiche .zone-depot { min-height:120px; }
 .cv-champ-affiche .apercu-affiche { margin:0; }
 @media (max-width:1099px) { .cv-infos #bloc-infos-tournoi { grid-row:auto; } .cv-infos .cv-actions-enregistrer { grid-row:auto; } }
+
+/* --------------------------------------------------------------------------
+   ÉCRAN « CATÉGORIES » — un onglet par catégorie (plus l'onglet de création).
+   L'onglet ouvert montre les paramètres de SA catégorie à gauche et la
+   référence FFR correspondante à droite.
+   -------------------------------------------------------------------------- */
+.cv-cat-onglets { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:-1px; position:relative; z-index:1; }
+.theme-clair .cv-cat-onglet { min-height:44px; padding:11px 22px; border:1px solid var(--cv-bordure); border-bottom-color:transparent; border-radius:12px 12px 0 0; background:#eef4fa; color:var(--cv-secondaire); font-size:14px; font-weight:600; }
+.theme-clair .cv-cat-onglet:hover { background:var(--cv-selection); color:var(--cv-action); }
+.theme-clair .cv-cat-onglet.est-actif { background:#fff; color:var(--cv-action); border-color:var(--cv-bordure); border-bottom-color:#fff; }
+.theme-clair .cv-cat-onglet-ajout { background:transparent; border-style:dashed; color:var(--cv-action); font-weight:550; }
+.theme-clair .cv-cat-onglet-ajout.est-actif { background:#fff; border-style:solid; }
+.cv-cat-onglet span[aria-hidden] { margin-right:6px; font-weight:700; }
+
+.cv-cat-panneau { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(300px,1fr); gap:24px; align-items:start; }
+.cv-cat-panneau > * { min-width:0; }
+.theme-clair .cv-cat-carte { margin:0; border-radius:0 16px 16px 16px; }
+.cv-cat-panneau > .cv-cat-reference { border-radius:16px; }
+.cv-cat-titre { margin:0 0 20px; font-size:18px; font-weight:650; letter-spacing:-.02em; color:var(--cv-texte); }
+.cv-cat-titre-note { font-weight:400; color:var(--cv-secondaire); }
+.cv-cat-section + .cv-cat-section, .cv-cat-section { border-top:1px solid var(--cv-bordure); margin-top:20px; padding-top:20px; }
+.cv-cat-section:first-of-type { border-top:0; margin-top:0; padding-top:0; }
+.cv-cat-section > h4 { margin:0; font-size:15px; font-weight:650; color:var(--cv-texte); }
+.theme-clair .cv-cat-section .grille-reglages { grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:12px; }
+.theme-clair #zone-categories .reglage { padding:0; }
+.theme-clair #zone-categories .f-aide { display:block; color:var(--cv-secondaire); font-size:12px; line-height:1.5; }
+.cv-cat-carte > .ligne-action { margin-top:20px; }
+/* « Terrains » est un sous-ensemble de l'Organisation : même graisse que le titre de section,
+   et de l'air au-dessus pour le détacher des champs qui le précèdent. */
+.theme-clair .cv-cat-section .bloc-terrains { margin-top:28px; padding-top:0; border-top:0; }
+.theme-clair .cv-cat-section .bloc-terrains > .format-libelle { margin-bottom:12px; font-size:15px; font-weight:650; letter-spacing:-.02em; color:var(--cv-texte); }
+
+/* Format d'après-midi : une liste déroulante, et l'explication du format RETENU en dessous. */
+.theme-clair .bloc-format { border-top:0; margin-top:12px; padding-top:0; }
+.format-choix { max-width:420px; }
+.format-desc { display:none; }
+.format-desc-zone:not(:empty) { margin-top:10px; }
+.theme-clair .format-desc { display:none; font-size:13px; line-height:1.6; color:var(--cv-secondaire); }
+.bloc-format[data-format="POULES_NIVEAU"] .d-POULES_NIVEAU,
+.bloc-format[data-format="CROISE"] .d-CROISE,
+.bloc-format[data-format="CROISE_DIAGONAL"] .d-CROISE_DIAGONAL,
+.bloc-format[data-format="LIBRE"] .d-LIBRE,
+.bloc-format[data-format="COUPE_PLATEAU"] .d-COUPE_PLATEAU { display:block; }
+
+/* Carte « Référence FFR » : un tableau de valeurs publiées, rien de plus. */
+.cv-cat-reference-sous { margin:-12px 0 16px; color:var(--cv-secondaire); font-size:13px; }
+.cv-cat-ref-table { width:100%; border-collapse:collapse; font-size:13px; }
+.cv-cat-ref-table th, .cv-cat-ref-table td { padding:11px 14px; text-align:left; border-bottom:1px solid var(--cv-bordure); }
+.cv-cat-ref-table th { font-weight:400; color:var(--cv-secondaire); }
+.cv-cat-ref-table td { font-weight:650; color:var(--cv-texte); text-align:right; white-space:nowrap; }
+.cv-cat-ref-table tbody tr:nth-child(odd) { background:#f7fafd; }
+.cv-cat-ref-table tbody tr:last-child th, .cv-cat-ref-table tbody tr:last-child td { border-bottom:0; }
+.cv-cat-reference .ffr-forme, .cv-cat-reference .ffr-appliquer-carte { margin-top:16px; font-size:13px; }
+.cv-cat-reference .ffr-appliquer { width:100%; justify-content:center; }
+.cv-cat-avertissement { display:flex; align-items:flex-start; gap:12px; margin-top:16px; }
+.cv-cat-avertissement .ffr-statut-pastille { color:#c07a16; }
+.cv-cat-apercu { margin-top:24px; }
+
+@media (max-width:1099px) { .cv-cat-panneau { grid-template-columns:1fr; } .theme-clair .cv-cat-carte { border-radius:16px; } }
+@media (max-width:767px) { .theme-clair .cv-cat-section .grille-reglages { grid-template-columns:1fr; } .cv-cat-onglets { gap:4px; } .theme-clair .cv-cat-onglet { padding:11px 14px; } }

@@ -13,24 +13,34 @@
 
 /* Champs modifiables d'une catégorie : clé (dans le Sheet), libellé, type de champ.
    NB : `terrains` n'est plus ici — il a son propre bloc (Auto / Manuel), voir blocTerrains(). */
+/* `groupe` range chaque champ sous une section de la carte de réglage (voir SECTIONS_CATEGORIE
+   et formulaireCategorie). L'ordre du tableau reste l'ordre d'affichage DANS sa section. */
 const CHAMPS_CATEGORIE = [
-  { cle: 'nb_poules',              label: 'Nombre de poules',          type: 'text', placeholder: 'Auto' },
   // Option vide « — » en tête : une catégorie neuve est VIERGE (aucune valeur devinée). Sans elle,
   // un select vide retomberait sur « 1 ». champCategorie affiche l'option vide comme « — ».
   // Vocabulaire FFR « période » (ex-« mi-temps ») : la clé Sheet reste `*_mi_temps*` (inchangée).
-  { cle: 'format_mi_temps',        label: 'Nombre de période',         type: 'select', options: ['', '1', '2'] },
-  { cle: 'duree_mi_temps_min',     label: 'Durée de la période (min)', type: 'number' },
-  { cle: 'pause_mi_temps_min',     label: 'Pause entre deux périodes (min)', type: 'number' },
-  { cle: 'recup_entre_matchs_min', label: 'Récup. entre matchs (min)', type: 'number' },
+  { cle: 'format_mi_temps',        label: 'Nombre de périodes',        type: 'select', options: ['', '1', '2'], groupe: 'temps' },
+  { cle: 'duree_mi_temps_min',     label: 'Durée d’une période (min)', type: 'number', groupe: 'temps' },
+  { cle: 'pause_mi_temps_min',     label: 'Pause entre deux périodes (min)', type: 'number', groupe: 'temps' },
+  { cle: 'recup_entre_matchs_min', label: 'Récupération entre matchs (min)', type: 'number', groupe: 'temps' },
   // Champs « dossier club » (facultatifs). `arbitrage_organisation` : qui arbitre — nom volontairement
   // distinct de l'« arbitrage » de l'assistant horaires (deux concepts différents). Le champ
   // `reglement` a été retiré de la carte (sa valeur stockée est PRÉSERVÉE à l'enregistrement).
-  { cle: 'effectif_min',           label: 'Effectif min (joueurs)',    type: 'number' },
-  { cle: 'effectif_max',           label: 'Effectif max (joueurs)',    type: 'number' },
-  { cle: 'arbitrage_organisation', label: 'Arbitrage (qui arbitre ?)', type: 'text', placeholder: 'Ex : éducateurs des clubs' },
+  { cle: 'effectif_min',           label: 'Effectif minimum (joueurs)', type: 'number', groupe: 'effectifs' },
+  { cle: 'effectif_max',           label: 'Effectif maximum (joueurs)', type: 'number', groupe: 'effectifs' },
+  { cle: 'nb_poules',              label: 'Nombre de poules',          type: 'text', placeholder: 'Auto', groupe: 'organisation' },
+  { cle: 'arbitrage_organisation', label: 'Arbitrage (qui arbitre ?)', type: 'text', placeholder: 'Ex : éducateurs des clubs', groupe: 'organisation' },
   // Phase 1 (invitation) : nombre max d'équipes par club dans cette catégorie. Vide = illimité
   // (affiché « Plusieurs équipes possibles par catégorie » sur l'invitation, jamais « 0 »).
-  { cle: 'max_equipes_par_club',   label: 'Max équipes par club',      type: 'number', placeholder: 'Vide = illimité' }
+  { cle: 'max_equipes_par_club',   label: 'Max équipes par club',      type: 'number', placeholder: 'Vide = illimité', groupe: 'organisation' }
+];
+
+/* Sections de la carte « Paramètres de la catégorie », dans l'ordre d'affichage. Le format
+   d'après-midi et les terrains ont leurs propres blocs, insérés par formulaireCategorie. */
+const SECTIONS_CATEGORIE = [
+  { cle: 'temps',        titre: 'Temps de jeu' },
+  { cle: 'effectifs',    titre: 'Effectifs' },
+  { cle: 'organisation', titre: 'Organisation' }
 ];
 
 /* Formats d'après-midi proposés (choisis AU PARAMÉTRAGE, avant le jour J), avec une
@@ -1021,6 +1031,8 @@ function brancherEcouteursAdmin() {
   document.addEventListener('click', onReglagesClick);
   document.addEventListener('change', onReglagesChange);
   document.addEventListener('input', onReglagesInput); // vérif. terrains manuels en direct
+  // Flèches / Début / Fin dans la barre d'onglets des catégories (navigation attendue d'un tablist).
+  document.addEventListener('keydown', onClavierOngletsCategories);
 
   // Zone terrains : écouteurs délégués (recalcul de capacité en direct + boutons).
   ecouter('zone-terrains', 'input', onZoneTerrainsInput);
@@ -1577,12 +1589,10 @@ async function onReinitialiser() {
  */
 function appliquerFormatApresMidi(bloc, cle) {
   bloc.setAttribute('data-format', cle);
-  bloc.querySelectorAll('.format-carte').forEach(function (carte) {
-    const radio = carte.querySelector('input[name="format_apresmidi"]');
-    if (!radio) return;
-    radio.checked = (radio.value === cle);
-    carte.classList.toggle('est-choisi', radio.value === cle);
-  });
+  // Menu déroulant : on RÉALIGNE la valeur affichée sur le format réellement appliqué — c'est ce
+  // qui permet de revenir en arrière quand la confirmation « hors cadre EDR » est refusée.
+  const select = bloc.querySelector('select[name="format_apresmidi"]');
+  if (select && select.value !== cle) select.value = cle;
 }
 
 /**
@@ -1693,12 +1703,19 @@ function onReglagesSubmit(evenement) {
  * Aiguille les clics de la zone réglages (boutons "Supprimer" de catégorie).
  */
 function onReglagesClick(evenement) {
+  // Onglet de catégorie (ou onglet « Ajouter une catégorie ») : simple changement d'affichage.
+  const onglet = evenement.target.closest('.cv-cat-onglet');
+  if (onglet && typeof activerOngletCategorie === 'function') {
+    activerOngletCategorie(onglet.getAttribute('data-cat-onglet'));
+    return;
+  }
   const bouton = evenement.target.closest('.bouton-suppr-cat');
   if (bouton) { onSupprimerCategorie(bouton); return; }
   // Bouton « Appliquer la norme FFR » d'une CARTE catégorie : remplit seulement le formulaire.
-  // Scopé à .form-categorie pour conserver séparément le bouton d'écriture explicite de l'écran
-  // Conformité, qui a son propre écouteur délégué sur #bloc-conformite-ffr.
-  if (evenement.target.closest('.form-categorie') && evenement.target.closest('.ffr-appliquer') &&
+  // Scopé à #zone-categories (le bouton vit désormais dans la carte « Référence FFR », à CÔTÉ du
+  // formulaire) pour conserver séparément le bouton d'écriture explicite de l'écran Conformité,
+  // qui a son propre écouteur délégué sur #bloc-conformite-ffr.
+  if (evenement.target.closest('#zone-categories') && evenement.target.closest('.ffr-appliquer') &&
       typeof onClicAppliquerNormeFFRCarte === 'function') {
     onClicAppliquerNormeFFRCarte(evenement);
   }

@@ -200,85 +200,211 @@ async function onEnregistrerHoraires(evenement) {
   });
 }
 
+/* Onglet de catégorie affiché. Mémorisé ENTRE deux rendus : la zone est réécrite en entier à
+   chaque relecture de la configuration, et retomber sur la première catégorie ferait perdre sa
+   place à l'organisateur au milieu d'un réglage. '' désigne l'onglet « Ajouter une catégorie ». */
+let ongletCategorieActif = null;
+
 /**
- * Affiche les catégories sous forme de FORMULAIRES modifiables (une carte par catégorie),
- * suivies d'un formulaire pour ajouter une nouvelle catégorie.
+ * Onglet à afficher pour ce rendu. Il garde celui d'avant tant qu'il existe encore.
+ *
+ * ⚠️ Un rendu TRANSITOIRE sans catégorie (relecture en cours, validation des catégories non
+ * confirmée) ne doit RIEN oublier : on renvoie l'onglet de création pour ce rendu-là sans
+ * toucher à la mémoire, sinon le rendu suivant retomberait sur la première catégorie et
+ * l'organisateur perdrait sa place au milieu d'un réglage.
+ */
+function choisirOngletCategorie(noms) {
+  if (ongletCategorieActif === '') return '';   // onglet de création : un choix explicite
+  if (!noms.length) return '';                  // rendu transitoire : on n'oublie pas pour autant
+  if (noms.indexOf(ongletCategorieActif) === -1) ongletCategorieActif = noms[0];
+  return ongletCategorieActif;
+}
+
+/** Un onglet de la barre. `nom` vide = l'onglet de création. */
+function ongletCategorie(nom, idPanneau, actif, libelle, classe) {
+  return '<button type="button" role="tab" class="cv-cat-onglet' + (classe ? ' ' + classe : '') +
+    (actif ? ' est-actif' : '') + '" data-cat-onglet="' + echapper(nom) + '"' +
+    ' aria-selected="' + (actif ? 'true' : 'false') + '" tabindex="' + (actif ? '0' : '-1') + '"' +
+    ' aria-controls="' + idPanneau + '">' + libelle + '</button>';
+}
+
+/**
+ * Affiche les catégories en ONGLETS : un onglet par catégorie, plus un onglet de création.
+ * L'onglet ouvert montre les paramètres de SA catégorie à gauche et sa référence FFR à droite.
+ * Les formulaires sont ceux d'avant (mêmes noms de champs, mêmes écouteurs délégués) : seule
+ * leur présentation change.
  */
 function afficherCategories(categories) {
-  // Formulaire d'ajout EN PREMIER (au-dessus de la liste) : c'est par lui qu'on
-  // commence, et il reste visible sans avoir à défiler sous toutes les cartes.
-  let html =
-    '<form id="form-ajout-categorie" class="carte">' +
-      '<h3 style="margin-bottom:10px;">Ajouter une catégorie</h3>' +
+  const cats = categories || [];
+  const noms = cats.map(function (c) { return String(c.categorie); });
+  const ouvert = choisirOngletCategorie(noms);
+
+  let onglets = '';
+  noms.forEach(function (nom, i) {
+    onglets += ongletCategorie(nom, 'cv-cat-panneau-' + i, nom === ouvert, echapper(nom));
+  });
+  onglets += ongletCategorie('', 'cv-cat-panneau-ajout', ouvert === '',
+    '<span aria-hidden="true">+</span> Ajouter une catégorie', 'cv-cat-onglet-ajout');
+
+  let panneaux = '';
+  cats.forEach(function (cat, i) {
+    const nom = String(cat.categorie);
+    panneaux += '<div class="cv-cat-panneau" id="cv-cat-panneau-' + i + '" role="tabpanel"' +
+      ' data-cat-panneau="' + echapper(nom) + '"' + (nom === ouvert ? '' : ' hidden') + '>' +
+        formulaireCategorie(cat) + carteReferenceFFR(cat) +
+      '</div>';
+  });
+  panneaux += '<div class="cv-cat-panneau" id="cv-cat-panneau-ajout" role="tabpanel"' +
+    ' data-cat-panneau=""' + (ouvert === '' ? '' : ' hidden') + '>' + formulaireAjoutCategorie() + '</div>';
+
+  return '<div class="cv-cat-onglets" role="tablist" aria-label="Catégories du tournoi">' + onglets + '</div>' +
+    panneaux + apercuCategories(cats);
+}
+
+/** Formulaire de création, dans son propre onglet (identifiants et champs inchangés). */
+function formulaireAjoutCategorie() {
+  return (
+    '<form id="form-ajout-categorie" class="carte cv-cat-carte">' +
+      '<h3 class="cv-cat-titre">Ajouter une catégorie</h3>' +
+      '<p class="note-generation">Les réglages sportifs naissent VIERGES : rien n’est deviné. ' +
+      'La référence FFR de la nouvelle catégorie s’affiche ensuite à côté de ses paramètres.</p>' +
       '<div class="form-equipe">' +
         '<input type="text" name="categorie" placeholder="Nom (ex : U16)" autocomplete="off" required>' +
         '<button type="submit" class="bouton">Ajouter</button>' +
       '</div>' +
       '<div class="message-form" data-role="msg-ajout-cat"></div>' +
-    '</form>';
+    '</form>'
+  );
+}
 
-  html += '<h2 style="margin:24px 0 12px;">Catégories</h2>';
-  if (categories && categories.length > 0) {
-    html += '<div class="table-scroll"><table class="cv-categories-comparaison"><caption>Vue d’ensemble des réglages enregistrés</caption><thead><tr><th>Catégorie</th><th>Effectif</th><th>Durée d’une période</th><th>Récupération</th><th>Terrains</th></tr></thead><tbody>' + categories.map(function (cat) {
-      return '<tr><th>' + echapper(cat.categorie) + '</th><td>' + echapper(String(cat.effectif_min || '—')) + ' à ' + echapper(String(cat.effectif_max || '—')) + '</td><td>' + echapper(String(cat.duree_mi_temps_min || '—')) + ' min</td><td>' + echapper(String(cat.recup_entre_matchs_min || '—')) + ' min</td><td>' + echapper(String(cat.terrains || 'Automatique')) + '</td></tr>';
-    }).join('') + '</tbody></table></div>';
-    categories.forEach(function (cat, index) {
-      html += '<details class="cv-categorie-detail"' + (index === 0 ? ' open' : '') + '><summary>Réglages ' + echapper(cat.categorie) + '</summary>' + formulaireCategorie(cat) + '</details>';
-    });
-  } else {
-    html += '<p class="vide">Aucune catégorie. Ajoute-en une ci-dessus.</p>';
-  }
+/** Vue d'ensemble des réglages enregistrés — repliée : les onglets montrent une catégorie à la fois. */
+function apercuCategories(cats) {
+  if (!cats.length) return '';
+  return '<details class="cv-options cv-cat-apercu"><summary>Vue d’ensemble<span>Comparer les réglages enregistrés de toutes les catégories</span></summary>' +
+    '<div class="table-scroll"><table class="cv-categories-comparaison">' +
+    '<thead><tr><th>Catégorie</th><th>Effectif</th><th>Durée d’une période</th><th>Récupération</th><th>Terrains</th></tr></thead><tbody>' +
+    cats.map(function (cat) {
+      return '<tr><th>' + echapper(cat.categorie) + '</th><td>' + echapper(String(cat.effectif_min || '—')) +
+        ' à ' + echapper(String(cat.effectif_max || '—')) + '</td><td>' +
+        echapper(String(cat.duree_mi_temps_min || '—')) + ' min</td><td>' +
+        echapper(String(cat.recup_entre_matchs_min || '—')) + ' min</td><td>' +
+        echapper(String(cat.terrains || 'Automatique')) + '</td></tr>';
+    }).join('') + '</tbody></table></div></details>';
+}
 
-  return html;
+/** Ouvre un onglet de catégorie ('' = onglet de création) sans rien re-rendre. */
+function activerOngletCategorie(nom) {
+  ongletCategorieActif = nom;   // la mémoire d'abord : c'est elle qui survit au prochain rendu
+  const zone = document.getElementById('zone-categories');
+  if (!zone) return;
+  zone.querySelectorAll('.cv-cat-onglet').forEach(function (b) {
+    const actif = b.getAttribute('data-cat-onglet') === nom;
+    b.classList.toggle('est-actif', actif);
+    b.setAttribute('aria-selected', actif ? 'true' : 'false');
+    b.tabIndex = actif ? 0 : -1;
+  });
+  zone.querySelectorAll('.cv-cat-panneau').forEach(function (p) {
+    p.hidden = p.getAttribute('data-cat-panneau') !== nom;
+  });
+}
+
+/** Flèches / Début / Fin dans la barre d'onglets : navigation attendue d'un groupe d'onglets. */
+function onClavierOngletsCategories(evenement) {
+  const onglet = evenement.target.closest && evenement.target.closest('.cv-cat-onglet');
+  if (!onglet) return;
+  const pas = { ArrowRight: 1, ArrowLeft: -1, Home: 'debut', End: 'fin' }[evenement.key];
+  if (pas === undefined) return;
+  const onglets = Array.from(onglet.parentNode.querySelectorAll('.cv-cat-onglet'));
+  const i = onglets.indexOf(onglet);
+  const cible = pas === 'debut' ? onglets[0]
+              : pas === 'fin'   ? onglets[onglets.length - 1]
+              : onglets[(i + pas + onglets.length) % onglets.length];
+  evenement.preventDefault();
+  activerOngletCategorie(cible.getAttribute('data-cat-onglet'));
+  cible.focus();
 }
 
 /**
- * Construit le formulaire modifiable d'une catégorie.
+ * Construit le formulaire modifiable d'une catégorie, rangé en sections.
  */
 function formulaireCategorie(cat) {
   const nom = cat.categorie || '?';
 
-  let champs = '';
-  CHAMPS_CATEGORIE.forEach(function (champ) {
-    const valeur = (cat[champ.cle] != null) ? String(cat[champ.cle]) : '';
-    champs += champCategorie(champ, valeur);
+  // Les champs, rangés par section (CHAMPS_CATEGORIE.groupe). Une section sans champ disparaît.
+  let sections = '';
+  SECTIONS_CATEGORIE.forEach(function (section) {
+    const champs = CHAMPS_CATEGORIE.filter(function (c) { return c.groupe === section.cle; })
+      .map(function (champ) {
+        return champCategorie(champ, (cat[champ.cle] != null) ? String(cat[champ.cle]) : '');
+      }).join('');
+    if (!champs) return;
+    let apres = '';
+    // L'alerte « hors cadre FFR » suit les champs de temps qu'elle commente.
+    if (section.cle === 'temps') apres = '<div class="ffr-alerte-temps" data-cat="' + echapper(nom) + '" hidden></div>';
+    // Les terrains sont un réglage d'organisation, avec leur propre bloc Auto / Manuel.
+    if (section.cle === 'organisation') apres = blocTerrains(cat);
+    sections += '<section class="cv-cat-section"><h4>' + echapper(section.titre) + '</h4>' +
+      '<div class="grille-reglages">' + champs + '</div>' + apres + '</section>';
   });
 
   return (
     // data-contexte pilote l'affichage U14 (Lambda ↔ Super Challenge) : voir blocContexteU14 et le
     // gestionnaire onReglagesChange. Pour les catégories non-U14, il vaut toujours 'LAMBDA' (sans effet).
-    '<form class="carte categorie form-categorie" data-cat="' + echapper(nom) + '"' +
+    '<form class="carte cv-cat-carte categorie form-categorie" data-cat="' + echapper(nom) + '"' +
         ' data-contexte="' + contexteTournoiDe(cat) + '">' +
-      '<div class="ligne-info">' +
-        '<span class="badge">' + echapper(nom) + '</span>' +
-      '</div>' +
-      blocTerrains(cat) +
-      '<div class="grille-reglages">' + champs + '</div>' +
-      // Forme de jeu FFR attendue pour le mois du tournoi (lecture seule, rempli par
-      // admin-conformite-ffr.js : majFormesCategories). Masqué tant que le référentiel FFR
-      // n'est pas chargé ou qu'aucune ligne ne correspond à la catégorie + mois.
-      '<div class="ffr-forme" data-cat="' + echapper(nom) + '" hidden></div>' +
+      '<h3 class="cv-cat-titre">Paramètres de la catégorie ' + echapper(nom) + '</h3>' +
       // Forme de jeu RETENUE par l'organisateur : select rempli dynamiquement (majFormesCategories)
       // avec les formes du mois. data-value = valeur stockée (Config.forme_jeu), pour la présélection
       // et le signalement orange « hors du mois ». Masqué tant qu'aucune forme n'est disponible.
+      // ⚠️ Il doit rester DANS le formulaire : onEnregistrerCategorie lit form.forme_jeu.
       '<div class="ffr-forme-choix" data-cat="' + echapper(nom) + '" data-value="' +
         echapper(String(cat.forme_jeu == null ? '' : cat.forme_jeu)) + '" hidden></div>' +
-      // Bouton « Appliquer la norme FFR » : rempli par admin-conformite-ffr.js (majBoutonNormeCategories)
-      // quand le référentiel expose des valeurs et qu'un champ (temps/effectif) est vide ou divergent.
-      '<div class="ffr-appliquer-carte" data-cat="' + echapper(nom) + '" hidden></div>' +
-      // Alerte « hors cadre FFR » EN DIRECT sur les champs de temps : rafraîchie à la frappe
-      // (majAlerteTempsCategorie), non bloquante. Vide tant que le réglage reste dans le cadre.
-      '<div class="ffr-alerte-temps" data-cat="' + echapper(nom) + '" hidden></div>' +
-      // Contexte U14 (Super Challenge de France) : rendu SEULEMENT pour l'U14 ; chaîne vide sinon.
-      // En SCF, le CSS (form[data-contexte="SCF"]) masque le bloc format d'après-midi ci-dessous.
-      blocContexteU14(cat) +
-      blocFormatApresMidi(cat) +
+      sections +
+      '<section class="cv-cat-section"><h4>Format après-midi</h4>' +
+        // Contexte U14 (Super Challenge de France) : rendu SEULEMENT pour l'U14 ; chaîne vide sinon.
+        // En SCF, le CSS (form[data-contexte="SCF"]) masque le bloc format d'après-midi ci-dessous.
+        blocContexteU14(cat) +
+        blocFormatApresMidi(cat) +
+      '</section>' +
       '<div class="ligne-action">' +
         '<button type="submit" class="bouton">Enregistrer</button>' +
         '<button type="button" class="bouton-suppr bouton-suppr-cat" data-cat="' + echapper(nom) + '">Supprimer</button>' +
-        '<span class="message-form message-cat"></span>' +
+        // data-role, pas seulement la classe : afficherMessage réécrit className, et le repère
+        // « message-cat » disparaîtrait dès le premier message affiché.
+        '<span class="message-form message-cat" data-role="msg-cat"></span>' +
       '</div>' +
     '</form>'
+  );
+}
+
+/**
+ * Carte « Référence FFR » posée à côté des paramètres de la catégorie.
+ *
+ * Elle n'affiche RIEN d'inventé : son tableau, la forme attendue et le bouton « Appliquer la
+ * norme FFR » sont remplis par admin-conformite-ffr.js à partir du référentiel réellement chargé
+ * (majReferencesFFRCategories / majFormesCategories / majBoutonNormeCategories). Tant que le
+ * référentiel est absent, la carte le dit au lieu de proposer des valeurs.
+ */
+function carteReferenceFFR(cat) {
+  const nom = echapper(String(cat.categorie || ''));
+  const icone = (typeof svgIcone === 'function') ? svgIcone('info') : '';
+  return (
+    '<aside class="carte cv-cat-carte cv-cat-reference" data-cat="' + nom + '">' +
+      '<h3 class="cv-cat-titre">Référence FFR <span class="cv-cat-titre-note">(à titre indicatif)</span></h3>' +
+      '<p class="cv-cat-reference-sous" data-cat="' + nom + '">' + nom + '</p>' +
+      '<div class="cv-cat-reference-table" data-cat="' + nom + '"></div>' +
+      // Forme FFR attendue du mois + badges (tournoi non autorisé / format limité) et alerte d'effectif.
+      '<div class="ffr-forme" data-cat="' + nom + '" hidden></div>' +
+      // Bouton « Appliquer la norme FFR » : rempli par admin-conformite-ffr.js (majBoutonNormeCategories)
+      // quand le référentiel expose des valeurs. Il remplit le formulaire voisin, il n'enregistre rien.
+      '<div class="ffr-appliquer-carte" data-cat="' + nom + '" hidden></div>' +
+      '<div class="cv-information cv-attention cv-cat-avertissement">' +
+        '<span class="ffr-statut-pastille" aria-hidden="true">' + icone + '</span>' +
+        '<span class="cv-information-texte"><strong>Vérifiez avant d’enregistrer</strong>' +
+        'Ces valeurs sont données à titre indicatif d’après les prescriptions FFR. ' +
+        'Adaptez-les selon l’organisation de votre tournoi.</span>' +
+      '</div>' +
+    '</aside>'
   );
 }
 
@@ -464,42 +590,32 @@ function blocFormatApresMidi(cat) {
       'génération. Sélectionne un format ci-dessous puis enregistre pour rendre ce choix explicite.</p>'
     : '';
 
-  const cartes = FORMATS_APRESMIDI.map(function (f) {
-    const choisi = (f.cle === fmt);
-    // `est-hors-cadre` distingue visuellement la carte signalée des autres, SANS la désactiver :
-    // elle reste cochable, c'est la confirmation (onReglagesChange) qui sécurise le choix.
-    return (
-      '<label class="format-carte f-' + f.cle + (choisi ? ' est-choisi' : '') +
-        (f.horsCadreEdr ? ' est-hors-cadre' : '') + '">' +
-        '<input type="radio" name="format_apresmidi" value="' + f.cle + '"' + (choisi ? ' checked' : '') + '>' +
-        '<span class="f-corps">' +
-          '<span class="f-titre">' + echapper(f.titre) + '</span>' +
-          '<span class="f-desc">' + echapper(f.desc) + '</span>' +
-        '</span>' +
-      '</label>'
-    );
+  // Menu déroulant : le nom des formats suffit à choisir, l'explication complète du format RETENU
+  // est révélée juste en dessous (voir .format-desc et data-format). Le format signalé
+  // `horsCadreEdr` reste proposé — c'est la confirmation (onReglagesChange) qui sécurise le choix.
+  const options = FORMATS_APRESMIDI.map(function (f) {
+    return '<option value="' + f.cle + '"' + (f.cle === fmt ? ' selected' : '') + '>' +
+      echapper(f.titre) + '</option>';
   }).join('');
-
-  // Récaps : un par format, révélé selon data-format (texte concret pour confirmer le choix).
-  const recaps =
-    '<span class="format-recap r-POULES_NIVEAU">Après-midi : <b>poules de niveau</b> — le classement de midi est découpé en poules de 4-5 (haute, niveau 2…) jouées en round-robin complet ; le 1ᵉʳ de la poule haute remporte le tournoi (aucune finale, conforme EDR).</span>' +
-    '<span class="format-recap r-CROISE">Après-midi : <b>classement croisé</b> — matchs équilibrés par niveau ; le vainqueur du Niveau 1 remporte le tournoi (classement général + podium).</span>' +
-    '<span class="format-recap r-CROISE_DIAGONAL">Après-midi : <b>classement croisé DIAGONAL</b> — le 1ᵉʳ d\'une poule affronte le 2ᵉ d\'une AUTRE poule (croisement en diagonale, à ne pas confondre avec le croisé simple 1ᵉʳ-contre-1ᵉʳ). Résultats cumulés au classement général + podium.</span>' +
-    '<span class="format-recap r-LIBRE">Après-midi : <b>matchs libres</b> — amicaux, sans classement ni podium (idéal pour les plus jeunes).</span>' +
-    '<span class="format-recap r-COUPE_PLATEAU">Après-midi : <b>Coupe + Plateau</b> — les premiers de chaque poule en élimination directe (finale + petite finale), les autres en plateau. ⚠️ Ces phases finales ne sont pas conformes au cadre École de Rugby.</span>';
+  const explications = FORMATS_APRESMIDI.map(function (f) {
+    return '<span class="format-desc d-' + f.cle + '">' + echapper(f.desc) + '</span>';
+  }).join('');
 
   return (
     '<div class="bloc-format" data-format="' + fmt + '">' +
-      '<span class="format-libelle">Format de l\'après-midi</span>' +
       encartInterdit +
       encartDefaut +
-      '<div class="format-cartes">' + cartes + '</div>' +
+      '<label class="reglage format-choix">' +
+        '<span class="r-libelle">Format retenu</span>' +
+        '<select class="r-input" name="format_apresmidi">' + options + '</select>' +
+        '<span class="f-aide">Définit le format de la phase finale de l\'après-midi.</span>' +
+      '</label>' +
+      '<div class="format-desc-zone">' + explications + '</div>' +
       '<label class="format-coupe-param reglage">' +
         '<span class="r-libelle">Qualifiés en Coupe (par poule)</span>' +
         '<input class="r-input" type="number" min="1" name="nbQualifiesCoupe" value="' + echapper(String(nbQ)) + '">' +
         '<span class="f-aide">Les premiers de chaque poule partent en Coupe ; les autres vont automatiquement en Plateau.</span>' +
       '</label>' +
-      '<div class="format-recap-zone">' + recaps + '</div>' +
     '</div>'
   );
 }
@@ -613,7 +729,7 @@ function champCategorie(champ, valeur) {
 async function onEnregistrerCategorie(evenement) {
   evenement.preventDefault();
   const form = evenement.target;
-  const message = form.querySelector('.message-cat');
+  const message = form.querySelector('[data-role="msg-cat"]') || form.querySelector('.message-cat');
   const nom = form.getAttribute('data-cat');
 
   // On rassemble les valeurs du formulaire. Toute catégorie existante est active
@@ -738,6 +854,7 @@ async function onAjouterCategorie(evenement) {
   bouton.disabled = true;
   try {
     await ecrireAdmin('enregistrerCategorie', data);
+    ongletCategorieActif = nom;  // on ouvre l'onglet de la catégorie qui vient de naître
     await rechargerReglages(); // la nouvelle carte apparaît
   } catch (erreur) {
     afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
