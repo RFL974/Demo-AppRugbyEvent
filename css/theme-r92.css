@@ -831,9 +831,13 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
 
 .cv-apresmidi-grid { display:grid; grid-template-columns:1fr 1fr; gap:24px; margin:24px 0; }
 .cv-apresmidi-grid > section { border:1px solid var(--cv-bordure); padding:24px; border-radius:12px; background:#fff; }
-.cv-score-categorie { display:grid; grid-template-columns:60px 1fr; gap:12px; padding:18px 0; border-bottom:1px solid var(--cv-bordure); font-size:13px; }
-.cv-score-categorie strong { font-size:18px; grid-row:1/3; }
-.cv-score-categorie progress { width:100%; height:8px; accent-color:var(--cv-action); }
+/* Ligne d'une catégorie, comme la maquette : le nom à gauche sur deux rangs, le compte et le
+   raccourci en tête, la jauge dessous sur toute la largeur restante. */
+.cv-score-categorie { display:grid; grid-template-columns:60px minmax(0,1fr) auto; gap:10px 12px;
+  padding:18px 0; border-bottom:1px solid var(--cv-bordure); font-size:13px; align-items:center; }
+.cv-score-categorie strong { font-size:18px; grid-row:1/3; grid-column:1; align-self:center; }
+.cv-score-compte { grid-column:2; font-size:14px; font-weight:600; color:var(--cv-texte); }
+.cv-score-categorie .cv-jauge { grid-column:2/4; }
 .cv-format-resume { margin-bottom:20px; }
 .cv-format-resume h3 { margin:10px 0; }
 .cv-format-resume p { font-size:13px; color:var(--cv-secondaire); line-height:1.6; }
@@ -844,9 +848,288 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
 .cv-recherche-resultat { font-size:13px; color:var(--cv-secondaire); }
 @media(max-width:767px){.cv-recherche,.cv-recherche label{display:block;}.cv-recherche input{display:block;margin-top:8px;width:100%;}}
 
-.cv-planning-categorie {display:flex;flex-direction:column;}
-.cv-compositions-poules {order:2;margin-top:20px;}
-.cv-filtres-planning #bouton-modifier-poules {margin-left:auto;}
+/* --------------------------------------------------------------------------
+   ÉCRAN « PUBLICATION » — deux cartes, puis le bandeau de clôture
+   À gauche la page publique (aperçu du tournoi, QR, adresse, partage), à droite
+   la table de marque (état, avertissements, ouverture). En pied, la clôture,
+   séparée de tout le reste parce qu'elle est irréversible.
+   -------------------------------------------------------------------------- */
+.cv-pub-bloc { background:transparent; border:0; box-shadow:none; padding:0; }
+/* `min(380px,100%)` et non `380px` : sous 380px de large, une piste de 380px déborde la page
+   au lieu de se réduire — mesuré à 390px, la page partait à 411px. */
+.cv-pub-grille { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(380px,100%),1fr));
+  gap:24px; align-items:start; }
+.cv-pub-grille > .carte { margin:0; height:100%; }
+.cv-pub-tete { display:flex; flex-wrap:wrap; gap:12px; align-items:center; margin-bottom:10px; }
+.cv-pub-tete h2 { margin:0; }
+.cv-pub-intro { margin:0 0 20px; font-size:14px; line-height:1.6; color:var(--cv-secondaire); }
+
+/* L'aperçu : la carte du tournoi à gauche, le QR à droite. */
+.cv-pub-apercu { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:20px; align-items:center;
+  padding:20px; border:1px solid var(--cv-bordure); border-radius:14px; background:#f8fbfe; }
+.theme-clair .cv-pub-carte { display:block; width:100%; padding:0; overflow:hidden; text-align:left;
+  border:1px solid var(--cv-bordure); border-radius:12px; background:#fff; }
+.theme-clair .cv-pub-carte:hover { border-color:var(--cv-action); box-shadow:var(--cv-ombre); }
+.cv-pub-carte-image { display:block; aspect-ratio:16/7; background:var(--cv-selection); }
+.cv-pub-carte-image img { display:block; width:100%; height:100%; object-fit:cover; }
+.cv-pub-carte-image.est-vide { display:grid; place-items:center; font-size:12px; color:var(--cv-secondaire); }
+.cv-pub-carte-corps { display:block; padding:16px; }
+.cv-pub-carte-nom { display:block; margin-bottom:10px; font-size:17px; font-weight:650;
+  letter-spacing:-.02em; color:var(--cv-texte); }
+.cv-pub-carte-ligne { display:flex; gap:9px; align-items:flex-start; margin-top:7px;
+  font-size:13px; color:var(--cv-secondaire); }
+.cv-pub-carte-ligne .ic { flex:0 0 auto; width:17px; height:17px; margin-top:1px; color:var(--cv-action); }
+.cv-pub-carte-cats { display:flex; flex-wrap:wrap; gap:6px; margin-top:12px; }
+.cv-pub-qr-place { display:flex; }
+.cv-pub-qr-place .acces-qr { margin:0; text-align:center; }
+.cv-pub-qr-place .acces-qr svg { width:132px; height:132px; }
+
+/* L'adresse publique : un champ qui se lit comme tel, le lien d'origine à l'intérieur. */
+.cv-pub-adresse { margin-top:22px; }
+.cv-pub-adresse-lib { display:block; margin-bottom:7px; font-size:12px; font-weight:600; color:var(--cv-secondaire); }
+.cv-pub-adresse-champ { display:flex; align-items:center; gap:10px; padding:12px 14px;
+  border:1px solid var(--cv-bordure); border-radius:10px; background:#fff; }
+.theme-clair .cv-pub-adresse-champ a { flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; font-size:14px; color:var(--cv-texte); }
+.cv-pub-actions { display:flex; flex-wrap:wrap; gap:12px; margin-top:16px; }
+.cv-pub-actions .bouton { flex:1 1 180px; margin:0; justify-content:center; }
+.cv-pub-page #bouton-publier { width:100%; margin-top:16px; justify-content:center; }
+.cv-pub-aide, .cv-marque-aide { margin-top:22px; }
+
+/* Table de marque : l'encart dit l'état en clair, au-dessus des gestes. */
+.cv-marque-encart { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; padding:18px 20px;
+  border:1px solid var(--cv-bordure); border-radius:12px; background:var(--cv-selection); text-align:left; }
+.cv-marque-encart-icone { grid-row:1/3; display:grid; place-items:center; width:38px; height:38px;
+  border-radius:10px; background:#fff; color:var(--cv-action); }
+.cv-marque-encart-icone .ic { width:21px; height:21px; }
+.cv-marque-encart strong { font-size:15px; color:var(--cv-action); }
+.cv-marque-encart > span:last-child { font-size:13px; line-height:1.6; color:var(--cv-secondaire); }
+.cv-marque-encart.cv-succes { background:#e9f6ef; border-color:#bde0cd; }
+.cv-marque-encart.cv-succes strong { color:var(--cv-succes); }
+.cv-marque-encart.cv-succes .cv-marque-encart-icone { color:var(--cv-succes); }
+.cv-marque-encart.cv-attention { background:#fff6df; border-color:#efce82; }
+.cv-marque-encart.cv-attention strong { color:#80520b; }
+.cv-marque-encart.cv-attention .cv-marque-encart-icone { color:#80520b; }
+#acces-saisie-avertissement:not(:empty) { margin-top:16px; }
+.theme-clair .cv-marque-ouvrir { display:flex; align-items:center; justify-content:center;
+  width:100%; margin-top:18px; }
+#acces-saisie-actions, #acces-saisie-actions-suite { display:flex; flex-wrap:wrap; gap:10px; }
+#acces-saisie-actions:not(:empty) { margin-top:12px; }
+#acces-saisie-actions .bouton, #acces-saisie-actions-suite .bouton { flex:1 1 160px; margin:0; justify-content:center; }
+
+/* Clôturer : à part, en pied, et rouge parce que c'est sans retour. */
+.cv-pub-cloture { display:flex; flex-wrap:wrap; gap:16px; align-items:center; margin-top:24px;
+  padding:20px 24px; border:1px solid #f0c3bd; border-radius:14px; background:#fef6f5; }
+.cv-pub-cloture-icone { display:grid; place-items:center; flex:0 0 auto; width:42px; height:42px;
+  border-radius:11px; background:#fff; color:var(--cv-danger); }
+.cv-pub-cloture-icone .ic { width:22px; height:22px; }
+.cv-pub-cloture-texte { display:flex; flex-direction:column; gap:4px; flex:1 1 300px; min-width:0; }
+.cv-pub-cloture-texte strong { font-size:15px; color:var(--cv-danger); }
+.cv-pub-cloture-texte > span { font-size:13px; line-height:1.6; color:var(--cv-secondaire); }
+.theme-clair .cv-pub-cloture .bouton-danger { margin:0; background:#fff; color:var(--cv-danger);
+  border:1px solid var(--cv-danger); }
+.theme-clair .cv-pub-cloture .bouton-danger:hover { background:var(--cv-danger); color:#fff; }
+
+/* --------------------------------------------------------------------------
+   L'AFFICHE EN GRAND — vue agrandie, et ce qui part à l'imprimante
+   -------------------------------------------------------------------------- */
+.cv-affiche-vue { position:fixed; inset:0; z-index:60; display:flex; flex-direction:column;
+  align-items:center; gap:18px; padding:24px 16px; overflow:auto; background:rgb(16 42 67 / 72%); }
+.cv-affiche-barre { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; }
+.cv-affiche-barre .bouton { margin:0; }
+.cv-affiche-papier { width:min(560px,100%); overflow:hidden; border-radius:14px; background:#fff;
+  box-shadow:0 24px 60px rgb(8 20 35 / 40%); }
+.cv-affiche-image { display:block; width:100%; height:auto; }
+.cv-affiche-composee { display:flex; flex-direction:column; gap:12px; align-items:center;
+  padding:52px 32px; background:linear-gradient(160deg,#123a63,#0b2440); color:#fff; text-align:center; }
+.cv-affiche-composee strong { font-size:30px; font-weight:700; letter-spacing:-.02em; line-height:1.2; }
+.cv-affiche-date { font-size:17px; }
+.cv-affiche-lieu { font-size:15px; opacity:.85; line-height:1.6; }
+.cv-affiche-cats { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; margin-top:8px; }
+.cv-affiche-cats span { padding:5px 14px; border:1px solid rgb(255 255 255 / 45%); border-radius:99px; font-size:13px; }
+.cv-affiche-bandeau { display:flex; gap:20px; align-items:center; padding:22px 24px;
+  border-top:2px solid var(--cv-bordure); background:#fff; }
+.cv-affiche-qr svg { display:block; width:124px; height:124px; }
+.cv-affiche-qr-absent { font-size:12px; color:var(--cv-secondaire); }
+.cv-affiche-mots { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.cv-affiche-mots strong { font-size:17px; letter-spacing:-.01em; color:var(--cv-texte); }
+.cv-affiche-mots span { font-size:13px; line-height:1.5; color:var(--cv-secondaire); }
+.cv-affiche-mots code { font-size:12px; color:var(--cv-action); overflow-wrap:anywhere; }
+body.cv-affiche-ouverte { overflow:hidden; }
+
+@media (max-width:767px) {
+  .cv-pub-apercu { grid-template-columns:1fr; justify-items:center; }
+  .cv-pub-actions .bouton, .cv-pub-cloture .bouton { flex:1 1 100%; }
+  .cv-affiche-bandeau { flex-direction:column; text-align:center; }
+}
+
+/* ⭐ CE QUI PART À L'IMPRIMANTE : l'affiche, et rien d'autre. Pas de fenêtre séparée — un
+   bloqueur de fenêtres la supprimerait sans rien dire. On masque la page, on garde le papier. */
+@media print {
+  body.cv-impression-affiche > *:not(.cv-affiche-vue) { display:none !important; }
+  body.cv-impression-affiche .cv-affiche-vue { position:static; padding:0; overflow:visible; background:#fff; }
+  body.cv-impression-affiche .cv-affiche-barre { display:none; }
+  body.cv-impression-affiche .cv-affiche-papier { width:100%; box-shadow:none; border-radius:0; }
+}
+
+/* --------------------------------------------------------------------------
+   ÉCRAN « APRÈS-MIDI » — bandeau d'état, scores par catégorie, format prévu
+   Le bandeau dit ce qui manque, la jauge dit où on en est, et la carte de
+   droite porte le geste. Même vocabulaire visuel que Poules & planning.
+   -------------------------------------------------------------------------- */
+.cv-bandeau-apresmidi { display:flex; flex-wrap:wrap; gap:16px; align-items:center; padding:18px 20px; }
+.cv-bandeau-icone { display:grid; place-items:center; flex:0 0 auto; width:30px; height:30px;
+  border-radius:50%; background:#e8a33d; color:#fff; font-weight:700; font-size:16px; }
+.cv-information.cv-validation .cv-bandeau-icone { background:var(--cv-succes); }
+.cv-bandeau-texte { display:flex; flex-direction:column; gap:4px; flex:1 1 320px; min-width:0; }
+.cv-bandeau-texte > strong { font-size:16px; letter-spacing:-.01em; }
+.cv-bandeau-sous { font-size:13px; font-weight:400; line-height:1.5; opacity:.9; }
+/* ⭐ UNE SEULE JAUGE, partout. Le rendu natif de <progress> change d'un moteur à l'autre
+   (coins carrés sur WebKit, piste invisible sur fond coloré) : on le remplace entièrement,
+   piste et remplissage, pour que la barre du bandeau et celle d'une catégorie soient la
+   même chose. `appearance:none` est indispensable AVANT les pseudo-éléments. */
+.cv-jauge { display:flex; align-items:center; gap:12px; min-width:0; }
+.cv-jauge progress { flex:1 1 auto; min-width:0; height:6px; border:0; border-radius:99px;
+  appearance:none; -webkit-appearance:none; background:#dde6ef; overflow:hidden; }
+.cv-jauge progress::-webkit-progress-bar { background:#dde6ef; border-radius:99px; }
+.cv-jauge progress::-webkit-progress-value { background:var(--cv-action); border-radius:99px; }
+.cv-jauge progress::-moz-progress-bar { background:var(--cv-action); border-radius:99px; }
+.cv-jauge-pct { flex:0 0 auto; min-width:42px; text-align:right; font-size:12px; color:var(--cv-secondaire); }
+
+.cv-bandeau-jauge { display:flex; flex-direction:column; align-items:stretch; gap:8px;
+  flex:1 1 300px; max-width:440px; }
+.cv-bandeau-compte { font-size:22px; font-weight:700; text-align:right; letter-spacing:-.02em; }
+/* Sur le fond crème du bandeau, la jauge emprunte SA couleur : une piste plus soutenue que
+   sur blanc, et un remplissage dans la teinte du message. */
+.cv-information .cv-jauge progress,
+.cv-information .cv-jauge progress::-webkit-progress-bar { background:rgb(0 0 0 / 12%); }
+.cv-information .cv-jauge progress::-webkit-progress-value { background:currentColor; }
+.cv-information .cv-jauge progress::-moz-progress-bar { background:currentColor; }
+.cv-information .cv-jauge-pct { color:inherit; }
+
+.cv-score-categorie.est-complet strong { color:var(--cv-succes); }
+/* Un raccourci de lecture, pas un bouton : il perd le cadre que `.bouton-lien` donne par
+   défaut (sélecteur au moins aussi spécifique, sinon la règle générale l'emporte). */
+.theme-clair .cv-score-lien { grid-column:3; grid-row:1; justify-self:end; padding:0; border:0;
+  background:transparent; font-size:13px; font-weight:600; text-align:right; }
+.theme-clair .cv-score-lien:hover { background:transparent; text-decoration:underline; }
+.cv-score-fait { grid-column:3; grid-row:1; justify-self:end; font-size:13px; color:var(--cv-succes); font-weight:600; }
+.cv-apresmidi-actions { display:flex; flex-direction:column; gap:10px; margin-top:22px; }
+.cv-apresmidi-actions .bouton { width:100%; margin:0; }
+.cv-apresmidi-note { margin:12px 0 18px; font-size:12px; color:var(--cv-secondaire); line-height:1.6; }
+.cv-aide-repliee { margin-top:24px; }
+
+/* --------------------------------------------------------------------------
+   ÉCRAN « POULES & PLANNING » — barre d'onglets, grille, fiche de match
+   Une barre : les catégories, puis le moment de la journée, puis les actions.
+   Sous elle, la grille heure × terrain et la fiche du match choisi ; sous le
+   tout, la composition des poules de la catégorie affichée.
+   -------------------------------------------------------------------------- */
+.cv-planning-barre { display:flex; flex-wrap:wrap; gap:8px; align-items:center; margin:0 0 24px; }
+.cv-onglets-planning { flex-wrap:nowrap; gap:2px; margin:0; padding:4px; background:var(--cv-selection);
+  border:1px solid var(--cv-bordure); border-radius:12px; }
+.theme-clair .cv-onglets-planning .cv-onglet { min-height:38px; padding:8px 20px; border:1px solid transparent;
+  border-radius:9px; background:transparent; color:var(--cv-secondaire); font-size:14px; }
+.theme-clair .cv-onglets-planning .cv-onglet:hover { background:#fff; color:var(--cv-action); }
+.theme-clair .cv-onglets-planning .cv-onglet.est-actif { background:#fff; color:var(--cv-action);
+  border-color:#bcd8ef; box-shadow:0 1px 3px rgb(16 42 67 / 10%); }
+.cv-planning-actions { display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin-left:auto; }
+.cv-planning-compte { display:inline-flex; align-items:center; gap:8px; font-size:13px; color:var(--cv-secondaire); }
+.cv-planning-compte::before { content:""; width:9px; height:9px; border-radius:50%; background:#e8a33d; }
+.cv-planning-compte.est-complet::before { background:var(--cv-succes); }
+.cv-planning-actions .bouton { margin:0; }
+
+.cv-planning-corps { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,340px); gap:24px; align-items:start; }
+.cv-planning-corps > * { min-width:0; }
+.cv-planning-titre { margin:0 0 14px; font-size:18px; font-weight:650; letter-spacing:-.02em; color:var(--cv-texte); }
+.cv-col-terrain { display:block; font-weight:650; color:var(--cv-texte); }
+.cv-col-grand { display:block; margin-top:2px; font-weight:400; font-size:12px; color:var(--cv-secondaire); }
+
+/* Un match : tout le bloc est le bouton qui ouvre sa fiche (aucun champ de score ici). */
+.theme-clair .cv-match { display:block; width:100%; padding:10px 12px; border:1px solid transparent;
+  border-radius:9px; background:transparent; color:var(--cv-texte); font-size:13px; text-align:center; }
+.theme-clair .cv-match:hover { background:var(--cv-selection); border-color:#bcd8ef; }
+.theme-clair .cv-match.est-ouvert { background:#fff; border-color:var(--cv-action); box-shadow:0 0 0 1px var(--cv-action); }
+.cv-match-equipes { display:flex; flex-wrap:wrap; gap:6px; align-items:baseline; justify-content:center; }
+.cv-match-vs { color:var(--cv-secondaire); }
+.cv-match-score { display:block; margin-top:4px; font-weight:700; color:var(--cv-action); }
+.cv-match small { display:block; margin-top:4px; color:var(--cv-secondaire); font-size:11px; }
+
+/* La fiche du match : lecture seule, le score s'y lit et ne s'y saisit pas. */
+.theme-clair .cv-fiche-match { padding:22px; border:1px solid var(--cv-bordure); border-radius:14px;
+  background:#fff; box-shadow:var(--cv-ombre); position:sticky; top:16px; }
+.theme-clair .cv-fiche-match.est-vide { background:#f8fbfe; box-shadow:none; color:var(--cv-secondaire); }
+.cv-fiche-match.est-vide p { margin:8px 0 0; font-size:13px; line-height:1.6; }
+.cv-fiche-tete { display:flex; align-items:center; justify-content:space-between; gap:12px; margin-bottom:16px; }
+.cv-fiche-tete strong { font-size:17px; letter-spacing:-.02em; }
+.theme-clair .cv-fiche-fermer { min-width:32px; min-height:32px; padding:0; border:1px solid var(--cv-bordure);
+  border-radius:8px; background:#fff; color:var(--cv-secondaire); font-size:18px; line-height:1; }
+.theme-clair .cv-fiche-fermer:hover { background:var(--cv-selection); color:var(--cv-action); }
+.cv-fiche-ligne { display:grid; grid-template-columns:86px 1fr; gap:12px; padding:8px 0; font-size:13px; align-items:baseline; }
+.cv-fiche-cle { color:var(--cv-secondaire); }
+.cv-fiche-valeur { color:var(--cv-texte); font-weight:550; }
+.cv-fiche-fin { color:var(--cv-secondaire); font-weight:400; }
+.cv-fiche-equipes { display:grid; grid-template-columns:1fr auto 1fr; gap:10px; align-items:start;
+  margin:18px 0 6px; padding-top:18px; border-top:1px solid var(--cv-bordure); text-align:center; }
+.cv-fiche-equipe { display:flex; flex-direction:column; align-items:center; gap:8px; }
+.cv-ecusson { display:grid; place-items:center; width:46px; height:46px; border-radius:12px;
+  background:var(--cv-selection); border:1px solid #bcd8ef; color:var(--cv-action); font-weight:700; font-size:13px; }
+.cv-fiche-nom { font-size:12px; font-weight:600; color:var(--cv-texte); overflow-wrap:anywhere; }
+.cv-fiche-vs { align-self:center; font-size:12px; color:var(--cv-secondaire); }
+.cv-fiche-score { display:flex; align-items:center; gap:10px; margin-top:16px; padding-top:16px;
+  border-top:1px solid var(--cv-bordure); }
+.cv-fiche-score .cv-fiche-cle { flex:1; }
+.cv-score-valeur { min-width:56px; padding:9px 0; border:1px solid var(--cv-bordure); border-radius:9px;
+  background:#f8fbfe; text-align:center; font-size:16px; font-weight:700; color:var(--cv-texte); }
+.cv-score-tiret { color:var(--cv-secondaire); }
+.cv-score-attente { font-size:13px; color:var(--cv-secondaire); }
+.cv-fiche-note { margin:12px 0 0; font-size:12px; color:var(--cv-secondaire); }
+
+/* Composition des poules : sous la grille, dans l'ordre du DOM. */
+.cv-poules-section { margin-top:32px; padding-top:28px; border-top:1px solid var(--cv-bordure); }
+.cv-compositions-poules .poule-compo ul { margin:10px 0 0; padding:0; list-style:none; }
+.cv-compositions-poules .poule-compo li { padding:7px 0; border-top:1px solid var(--cv-bordure); line-height:1.4; }
+.cv-compositions-poules .poule-compo li:first-child { border-top:0; }
+.cv-toutes-poules { margin-top:18px; }
+.theme-clair .cv-toutes-poules > summary { padding:12px 14px; border:1px solid var(--cv-bordure);
+  border-radius:10px; background:#f8fbfe; color:var(--cv-action); font-size:14px; font-weight:600; }
+.cv-toutes-poules h4 { margin:20px 0 10px; font-size:14px; color:var(--cv-secondaire); }
+
+.cv-planning-vide { padding:40px 24px; border:1px dashed var(--cv-bordure); border-radius:14px;
+  background:#f8fbfe; text-align:center; color:var(--cv-secondaire); }
+.cv-planning-vide strong { display:block; margin-bottom:6px; font-size:16px; color:var(--cv-texte); }
+.cv-planning-vide + .bouton, .cv-planning-vide ~ .bouton { margin-top:16px; }
+
+/* Pied de démonstration : en bas de l'écran, hors du chemin de préparation. */
+.cv-demo-pied { margin-top:32px; padding:18px 20px; border:1px dashed var(--cv-bordure);
+  border-radius:12px; background:#f8fbfe; }
+.cv-demo-titre { display:block; margin-bottom:10px; font-size:12px; font-weight:700;
+  text-transform:uppercase; letter-spacing:.06em; color:var(--cv-secondaire); }
+.cv-demo-pied .note-generation { margin:8px 0 0; }
+
+@media (max-width:1100px) {
+  .cv-planning-corps { grid-template-columns:1fr; }
+  .theme-clair .cv-fiche-match { position:static; }
+}
+@media (max-width:767px) {
+  .cv-planning-actions { width:100%; margin-left:0; }
+  /* Les groupes gardent leur largeur naturelle : étirés, ils laissaient un vide à droite de
+     « Matin ». Ils défilent seulement s'ils dépassent. */
+  .cv-onglets-planning { max-width:100%; overflow-x:auto; }
+  .cv-planning-actions .bouton { flex:1 1 100%; }
+  /* Étroit : le raccourci passe SOUS la jauge plutôt que de se casser en deux à droite. */
+  .cv-score-categorie { grid-template-columns:52px minmax(0,1fr); }
+  .cv-score-categorie strong { grid-row:1/3; }
+  .cv-score-categorie .cv-jauge { grid-column:2; grid-row:2; }
+  .theme-clair .cv-score-lien, .cv-score-fait { grid-column:2; grid-row:3; justify-self:start; text-align:left; }
+  .cv-bandeau-jauge { max-width:none; }
+}
+@media print { .cv-planning-barre, .cv-demo-pied, .cv-fiche-fermer { display:none; } }
+
+/* ⛔ PLUS DE `order` ICI. La composition des poules était remontée sous la grille par un
+   `order:2` alors qu'elle la PRÉCÉDAIT dans le DOM : l'œil et le lecteur d'écran lisaient
+   l'écran dans deux ordres différents (WCAG 2.4.3). `afficherPlanning()` l'écrit désormais
+   après la grille — la mise en page suit le DOM, elle ne le contredit plus. */
 
 .cv-information.cv-attention { color:#80520b; background:#fff6df; border-color:#efce82; }
 .cv-information.cv-validation { color:var(--cv-succes); background:#e7f7ef; border-color:#b8e0c9; }

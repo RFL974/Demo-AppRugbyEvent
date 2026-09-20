@@ -586,18 +586,43 @@ function estPublie() {
   return String(configCourante.global && configCourante.global.tournoi_publie).toLowerCase() === 'oui';
 }
 
+/**
+ * Peint l'ÉTAT de publication — la pastille de la tête de carte, ou la phrase complète.
+ * ⭐ Séparée de `majPublication()` parce que l'écran refondu la repeint APRÈS avoir déplacé
+ *    les blocs : à ce moment-là, relancer `majPublication()` entière relancerait aussi la
+ *    lecture de l'accès scores, donc un appel réseau de plus à chaque ouverture.
+ * ⛔ Aucune lecture, aucune écriture : cette fonction ne fait que dire ce qui est déjà su.
+ */
+function majEtatPublicationAffiche() {
+  const etat = document.getElementById('etat-publication');
+  if (!etat) return;
+  const publie = estPublie();
+  // Le MÊME <strong> sert les deux mises en page : pastille courte quand l'écran l'a posé dans
+  // une tête de carte, phrase complète dans le repli sans JavaScript, qui n'a pas de carte
+  // pour porter le contexte.
+  if (etat.classList.contains('cv-pastille')) {
+    etat.textContent = publie ? '✓ Publié' : 'Non publié';
+    etat.className = 'cv-pastille ' + (publie ? 'cv-succes' : 'cv-neutre');
+  } else {
+    etat.textContent = publie ? '🟢 Publié (visible du public)'
+                              : '⚪️ Non publié (les visiteurs voient « à venir »)';
+  }
+  const intro = document.getElementById('cv-pub-intro');
+  if (intro) {
+    intro.textContent = publie
+      ? 'La page publique est en ligne. Vous pouvez la partager avec les clubs, les parents et le public.'
+      : 'La page publique existe déjà à cette adresse : les visiteurs y voient l’écran « à venir » '
+        + 'tant que le tournoi n’est pas publié. Vous pouvez la communiquer dès maintenant.';
+  }
+}
+
 /** Met à jour l'état affiché et le libellé du bouton selon la publication en cours. */
 function majPublication() {
   const etat = document.getElementById('etat-publication');
   const bouton = document.getElementById('bouton-publier');
   if (!etat || !bouton) return;
-  if (estPublie()) {
-    etat.textContent = '🟢 Publié (visible du public)';
-    bouton.innerHTML = svgIcone('monde') + 'Masquer le tournoi';
-  } else {
-    etat.textContent = '⚪️ Non publié (les visiteurs voient « à venir »)';
-    bouton.innerHTML = svgIcone('monde') + 'Publier le tournoi';
-  }
+  majEtatPublicationAffiche();
+  bouton.innerHTML = svgIcone('monde') + (estPublie() ? 'Masquer le tournoi' : 'Publier le tournoi');
   majAccesPublic();   // l'adresse, elle, ne dépend pas de l'état : seule la NOTE change
   majVerrouPublier(); // le GESTE, lui, reste soumis aux prérequis — mais lui SEUL
   // ⭐ 5R — l'accès de la table de marque, relu APRÈS la connexion admin (cette fonction n'est
@@ -702,6 +727,18 @@ function majAccesPublic() {
   }
   const msg = document.getElementById('message-acces-public');
   if (msg) afficherMessage(msg, '', 'ok'); // efface un « adresse copiée » devenu obsolète
+  majApercuPublication();
+}
+
+/**
+ * Repeint la petite carte du tournoi (affiche, nom, date, lieu, catégories).
+ * ⛔ Sans effet quand la place n'existe pas — repli sans JavaScript, assistant mobile, ou
+ *    appelant qui ne fournit qu'un document réduit. Même prudence que partout dans ce fichier.
+ */
+function majApercuPublication() {
+  if (!document.querySelector) return;
+  const place = document.querySelector('[data-role="apercu-publication"]');
+  if (place) place.innerHTML = apercuPublicationHTML();
 }
 
 /**
@@ -731,6 +768,183 @@ async function onCopierAdressePublique() {
  *  ⛔ AUCUNE écriture serveur, AUCUN effet sur l'état de publication. */
 function onOuvrirPagePublique() {
   window.open(urlPagePublique(configCourante.global || {}), '_blank', 'noopener');
+}
+
+/* ==========================================================================
+   L'AFFICHE PUBLIQUE — l'aperçu de la carte, et sa vue agrandie imprimable
+   --------------------------------------------------------------------------
+   ⭐ CE QUE CETTE VUE SERT À FAIRE, ET C'EST UN GESTE DE TERRAIN : imprimer une
+   feuille à coller à l'entrée du stade, pour que le public scanne et suive les
+   scores sur son téléphone. Tout ici va dans ce sens — rien n'est décoratif.
+   ⛔ AUCUNE écriture serveur, AUCUN appel réseau : la vue relit ce que la page
+   connaît déjà, et le QR est dessiné en local (js/vendor/qrcode.js).
+   ========================================================================== */
+
+/* Deux pictogrammes propres à cet écran, dessinés ici comme ECRANS_ICONES le fait pour la
+   barre latérale : pas de dépendance nouvelle, et ils suivent la couleur du texte. */
+const PUB_ICONES = {
+  calendrier: '<rect x="3" y="5" width="18" height="16" rx="2"></rect><path d="M3 10h18M8 3v4M16 3v4"></path>',
+  lieu: '<path d="M12 21s7-5.7 7-11a7 7 0 1 0-14 0c0 5.3 7 11 7 11z"></path><circle cx="12" cy="10" r="2.6"></circle>'
+};
+function svgPub(nom) {
+  return '<svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' + (PUB_ICONES[nom] || '') + '</svg>';
+}
+
+/** Tout ce que l'affiche et son aperçu montrent, lu une seule fois. */
+function infosAffichePublique() {
+  const g = configCourante.global || {};
+  return {
+    nom: String(g.tournoi_nom || '').trim() || 'Tournoi',
+    date: g.tournoi_date ? formaterDateFr(g.tournoi_date) : '',
+    lieu: [g.tournoi_lieu, g.tournoi_adresse].map(function (v) { return String(v == null ? '' : v).trim(); })
+      .filter(Boolean),
+    // ⛔ L'affiche vient du SERVEUR (`tournoi_affiche_id`) : on ne recompose jamais une image
+    //    locale périmée. Vide = aucune affiche chargée dans « Infos du tournoi ».
+    affiche: g.tournoi_affiche_id ? urlAffiche(g.tournoi_affiche_id, 1200) : '',
+    categories: (configCourante.categories || []).filter(estPresente)
+      .map(function (c) { return String(c.categorie); }),
+    url: urlPagePublique(g)
+  };
+}
+
+/** Le QR de la page publique, en SVG local, à la taille demandée. '' si la brique manque. */
+function qrPublicSvg(url, cellule) {
+  if (typeof qrcode !== 'function' || !/^https?:\/\//.test(String(url || ''))) return '';
+  try {
+    const qr = qrcode(0, 'M');
+    qr.addData(url);
+    qr.make();
+    return qr.createSvgTag({ cellSize: cellule || 4, margin: 2 })
+      .replace('<svg ', '<svg aria-hidden="true" focusable="false" ');
+  } catch (e) { return ''; }
+}
+
+/**
+ * La petite carte du tournoi : l'affiche chargée, puis le nom, la date, le lieu et les
+ * catégories. C'est un BOUTON — on l'ouvre au clavier comme à la souris — et son nom
+ * accessible dit ce qu'il fait, pas seulement ce qu'il contient.
+ */
+function apercuPublicationHTML() {
+  const i = infosAffichePublique();
+  let h = '<button type="button" class="cv-pub-carte" data-ouvrir-affiche ' +
+          'aria-label="Ouvrir l’affiche de ' + echapper(i.nom) + ' en grand, pour l’imprimer">';
+  h += i.affiche
+    ? '<span class="cv-pub-carte-image"><img src="' + echapper(i.affiche) + '" alt=""></span>'
+    : '<span class="cv-pub-carte-image est-vide"><span>Aucune affiche chargée</span></span>';
+  h += '<span class="cv-pub-carte-corps"><strong class="cv-pub-carte-nom">' + echapper(i.nom) + '</strong>';
+  if (i.date) h += '<span class="cv-pub-carte-ligne">' + svgPub('calendrier') + '<span>' + echapper(i.date) + '</span></span>';
+  if (i.lieu.length) {
+    h += '<span class="cv-pub-carte-ligne">' + svgPub('lieu') + '<span>' +
+         i.lieu.map(function (l) { return echapper(l); }).join('<br>') + '</span></span>';
+  }
+  if (i.categories.length) {
+    h += '<span class="cv-pub-carte-cats">' + i.categories.map(function (c) {
+      return '<span class="cv-pastille cv-neutre">' + echapper(c) + '</span>';
+    }).join('') + '</span>';
+  }
+  return h + '</span></button>';
+}
+
+/**
+ * L'affiche telle qu'elle s'imprime : le visuel, puis un BANDEAU AJOUTÉ DESSOUS qui porte le
+ * QR code et l'adresse.
+ * ⭐ Le bandeau est ajouté SOUS l'affiche, jamais par-dessus : on ne sait pas ce que
+ *    l'organisateur a mis en bas à droite de son visuel, et le recouvrir serait abîmer son
+ *    travail sans le lui dire.
+ * ⭐ Sans affiche chargée, on en COMPOSE une sobre avec ce que le tournoi sait déjà — elle
+ *    s'imprime telle quelle, plutôt que de renvoyer l'organisateur en arrière.
+ */
+function affichePubliqueHTML() {
+  const i = infosAffichePublique();
+  let h = '<div class="cv-affiche-papier" data-role="affiche-papier">';
+  if (i.affiche) {
+    h += '<img class="cv-affiche-image" src="' + echapper(i.affiche) + '" alt="Affiche de ' + echapper(i.nom) + '">';
+  } else {
+    h += '<div class="cv-affiche-composee"><strong>' + echapper(i.nom) + '</strong>';
+    if (i.date) h += '<span class="cv-affiche-date">' + echapper(i.date) + '</span>';
+    if (i.lieu.length) h += '<span class="cv-affiche-lieu">' + i.lieu.map(function (l) { return echapper(l); }).join('<br>') + '</span>';
+    if (i.categories.length) {
+      h += '<span class="cv-affiche-cats">' + i.categories.map(function (c) {
+        return '<span>' + echapper(c) + '</span>';
+      }).join('') + '</span>';
+    }
+    h += '</div>';
+  }
+  const qr = qrPublicSvg(i.url, 6);
+  h += '<div class="cv-affiche-bandeau">' +
+       '<div class="cv-affiche-qr">' + (qr || '<span class="cv-affiche-qr-absent">QR indisponible</span>') + '</div>' +
+       '<div class="cv-affiche-mots"><strong>Scannez pour suivre le tournoi en direct</strong>' +
+       '<span>Planning, résultats et classements, mis à jour pendant la journée.</span>' +
+       '<code>' + echapper(i.url) + '</code></div></div>';
+  return h + '</div>';
+}
+
+/* La vue agrandie vit directement dans <body> : l'impression n'a ainsi qu'un seul élément à
+   garder, sans dépendre de l'endroit où le mode guidé a déplacé la carte. */
+let afficheVueDeclencheur = null;
+
+/* Échap referme la vue. ⛔ POSÉ À L'OUVERTURE, jamais au chargement du module : un
+   `document.addEventListener` à la racine s'exécute dès que le fichier est lu, et impose
+   à tout appelant — y compris aux suites de tests, qui simulent un DOM réduit — d'avoir
+   un document complet. Trois suites sont tombées là-dessus avant cette correction. */
+function afficheEchap(e) {
+  if (e.key === 'Escape') fermerAffichePublique();
+}
+
+/** Ouvre l'affiche en grand, par-dessus l'écran. Échap, la croix ou le fond la referment. */
+function ouvrirAffichePublique(declencheur) {
+  fermerAffichePublique();
+  afficheVueDeclencheur = declencheur || null;
+  const vue = document.createElement('div');
+  vue.id = 'cv-affiche-vue';
+  vue.className = 'cv-affiche-vue';
+  vue.setAttribute('role', 'dialog');
+  vue.setAttribute('aria-modal', 'true');
+  vue.setAttribute('aria-label', 'Affiche du tournoi');
+  vue.innerHTML = '<div class="cv-affiche-barre">' +
+      '<button type="button" class="bouton" data-imprimer-affiche>' + svgIcone('imprimante') + 'Imprimer l’affiche</button>' +
+      '<button type="button" class="bouton bouton-doux" data-fermer-affiche>Fermer</button>' +
+    '</div>' + affichePubliqueHTML();
+  vue.addEventListener('click', function (e) {
+    if (e.target.closest('[data-imprimer-affiche]')) { imprimerAffichePublique(); return; }
+    // Le fond referme, comme partout : le « papier » lui-même ne referme pas sous le doigt.
+    if (e.target.closest('[data-fermer-affiche]') || e.target === vue) fermerAffichePublique();
+  });
+  document.addEventListener('keydown', afficheEchap);
+  document.body.appendChild(vue);
+  document.body.classList.add('cv-affiche-ouverte');
+  const premier = vue.querySelector('[data-imprimer-affiche]');
+  if (premier && premier.focus) premier.focus();
+}
+
+
+/** Referme la vue et rend le focus au bouton qui l'avait ouverte. */
+function fermerAffichePublique() {
+  const vue = document.getElementById('cv-affiche-vue');
+  if (document.removeEventListener) document.removeEventListener('keydown', afficheEchap);
+  if (vue) vue.remove();
+  document.body.classList.remove('cv-affiche-ouverte');
+  if (afficheVueDeclencheur && afficheVueDeclencheur.focus) afficheVueDeclencheur.focus();
+  afficheVueDeclencheur = null;
+}
+
+/**
+ * Envoie l'affiche à l'impression. ⭐ Pas de fenêtre séparée : les bloqueurs de fenêtres la
+ * suppriment sans rien dire. On marque le <body>, la feuille d'impression ne garde que
+ * l'affiche, et on retire la marque une fois l'impression rendue ou annulée.
+ */
+function imprimerAffichePublique() {
+  if (!document.getElementById('cv-affiche-vue')) return;
+  document.body.classList.add('cv-impression-affiche');
+  const nettoyer = function () {
+    document.body.classList.remove('cv-impression-affiche');
+    window.removeEventListener('afterprint', nettoyer);
+  };
+  window.addEventListener('afterprint', nettoyer);
+  try { window.print(); } catch (e) { /* impression indisponible : la vue reste ouverte */ }
+  // Repli : certains navigateurs n'émettent pas `afterprint`.
+  setTimeout(nettoyer, 1500);
 }
 
 /** Dessine localement le QR de la page publique, sans service ni requête distante. */
@@ -1035,6 +1249,65 @@ function texteEcheanceAcces(etat) {
 }
 
 /** Rend l'état, les gestes possibles, l'avertissement et — seulement s'il est rendu — le lien. */
+/* Ce que la pastille et l'encart disent de chaque état. ⛔ Aucune règle nouvelle : on ne fait
+   que traduire l'état RENDU PAR LE SERVEUR — la liste des gestes possibles reste la sienne. */
+const ACCES_SCORES_RESUME = {
+  ABSENT:  { pastille: 'Non préparée', ton: 'cv-neutre', titre: 'Accès pas encore préparé',
+             texte: 'Préparez le lien pour que la table de marque puisse saisir les scores le jour du tournoi.' },
+  PREPARE: { pastille: 'Lien prêt', ton: 'cv-neutre', titre: 'Lien prêt, saisie fermée',
+             texte: 'Le lien existe et peut être transmis. Ouvrez la saisie le jour du tournoi pour que les scores soient enregistrés.' },
+  OUVERT:  { pastille: '✓ Saisie ouverte', ton: 'cv-succes', titre: 'Saisie des résultats en cours',
+             texte: 'Les résultats saisis sont automatiquement pris en compte dans la page publique (avec un léger délai).' },
+  FIGE:    { pastille: 'En pause', ton: 'cv-attention', titre: 'Saisie en pause',
+             texte: 'La table de marque ne peut plus saisir. Le même lien reprendra là où il s’est arrêté.' },
+  CLOTURE: { pastille: 'Clôturée', ton: 'cv-neutre', titre: 'Accès clôturé',
+             texte: 'Le lien est définitivement inutilisable. Les résultats déjà enregistrés sont conservés.' }
+};
+const ACCES_SCORES_RESUME_FERME_AUTO = { pastille: 'Fermée', ton: 'cv-attention',
+  titre: 'Saisie fermée automatiquement',
+  texte: 'La durée d’ouverture est écoulée. « Reprendre la saisie » rouvre le même lien pour 45 minutes.' };
+
+/**
+ * La pastille de la tête de carte et l'encart qui explique l'état, sur l'écran refondu.
+ * ⛔ Sans effet quand ces deux éléments n'existent pas : le repli sans JavaScript et
+ *    l'assistant mobile gardent la phrase complète de `#acces-saisie-etat`.
+ */
+function majResumeAccesScores(etat, fermeAuto) {
+  const pastille = document.getElementById('cv-marque-pastille');
+  const encart = document.getElementById('cv-marque-encart');
+  if (!pastille && !encart) return;
+  const resume = !etat ? null
+    : (fermeAuto ? ACCES_SCORES_RESUME_FERME_AUTO : ACCES_SCORES_RESUME[etat.etat]);
+  if (!resume) {
+    if (pastille) { pastille.textContent = ''; pastille.className = 'cv-pastille'; pastille.hidden = true; }
+    if (encart) { encart.innerHTML = ''; encart.hidden = true; }
+    return;
+  }
+  if (pastille) {
+    pastille.hidden = false;
+    pastille.textContent = resume.pastille;
+    pastille.className = 'cv-pastille ' + resume.ton;
+  }
+  if (encart) {
+    encart.hidden = false;
+    encart.className = 'cv-marque-encart ' + resume.ton;
+    encart.innerHTML = '<span class="cv-marque-encart-icone" aria-hidden="true">' + svgIcone('dossier') + '</span>' +
+      '<strong>' + echapper(resume.titre) + '</strong><span>' + echapper(resume.texte) + '</span>';
+  }
+}
+
+/**
+ * Le bandeau rouge SUIT le bouton de clôture, il ne le devine pas.
+ * ⛔ Appelé APRÈS la boucle des gestes : le serveur seul décide si CLOTURER est possible, et
+ *    c'est cette boucle qui démasque le bouton. Calculé avant, le bandeau restait caché sur un
+ *    accès pourtant clôturable — défaut constaté à l'écran avant d'être corrigé ici.
+ */
+function majBandeauCloture() {
+  const bandeau = document.getElementById('cv-pub-cloture');
+  const cloture = document.getElementById('acces-saisie-cloture');
+  if (bandeau) bandeau.hidden = !cloture || cloture.hidden;
+}
+
 function rendreAccesScores(etat) {
   const libelle = document.getElementById('acces-saisie-etat');
   const gestes = document.getElementById('acces-saisie-actions');
@@ -1050,6 +1323,8 @@ function rendreAccesScores(etat) {
   }
   if (avert) afficherMessage(avert, '', 'ok');
   afficherLienAccesScores('');
+  majResumeAccesScores(null, false);
+  majBandeauCloture();
   if (!etat) { libelle.textContent = 'Connecte-toi à l\'administration pour voir l\'accès.'; return; }
   if (etat.disponible === false) { libelle.textContent = etat.message || 'Accès indisponible.'; return; }
   if (etat.anomalie) { libelle.textContent = '⚠️ ' + (etat.message || 'Ligne d\'accès illisible.'); return; }
@@ -1057,6 +1332,7 @@ function rendreAccesScores(etat) {
   const fermeAuto = etat.fermee_automatiquement === true;
   libelle.textContent = fermeAuto ? ACCES_SCORES_LIBELLE_FERME_AUTO
     : (ACCES_SCORES_LIBELLES_ETAT[etat.etat] || ('État inconnu : ' + etat.etat));
+  majResumeAccesScores(etat, fermeAuto);
   const possibles = etat.actions_possibles || [];
   if (gestes || gestesSuite) {
     ACCES_SCORES_GESTES.forEach(function (g) {
@@ -1069,7 +1345,9 @@ function rendreAccesScores(etat) {
       if (!conteneur) return;
       const bouton = document.createElement('button');
       bouton.type = 'button';
-      bouton.className = 'bouton' + (g.danger ? ' bouton-danger' : '');
+      // Le geste principal de cette carte est « Ouvrir la table de marque » : les transitions
+      // (pause, reprise, renouvellement) restent secondaires à côté de lui.
+      bouton.className = 'bouton' + (g.danger ? ' bouton-danger' : ' bouton-doux');
       bouton.textContent = g.libelle;
       bouton.setAttribute('data-geste-acces', g.action);
       conteneur.appendChild(bouton);
@@ -1090,6 +1368,7 @@ function rendreAccesScores(etat) {
       (indispo || (aviso && aviso.type === 'ko') || (echeance && echeance.type === 'ko')) ? 'ko' : 'ok');
   }
   afficherLienAccesScores(etat.lien || '');
+  majBandeauCloture();   // ⭐ APRÈS la boucle des gestes, qui seule démasque le bouton
 }
 
 /** Le bouton et le QR : ⛔ affichés seulement pour une adresse https rendue par le serveur. */

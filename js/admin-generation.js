@@ -254,35 +254,92 @@ function majApresMidi() {
     etat.parentElement.classList.toggle('cv-validation',total>0 && saisis===total);
   }
 
+  // Le bandeau dit d'abord CE QUI MANQUE, puis pourquoi, puis où on en est.
+  const sous = document.getElementById('cv-apresmidi-sous');
+  const jauge = document.getElementById('cv-apresmidi-jauge');
+  const icone = etat.parentElement && etat.parentElement.querySelector('.cv-bandeau-icone');
+  const reste = total - saisis;
   if (total === 0) {
-    etat.textContent = '⚪️ Génère d\'abord les poules et le planning du matin.';
+    etat.textContent = 'Le planning du matin n’est pas encore généré';
+    if (sous) sous.textContent = 'Générez les poules et les horaires du matin avant de préparer l’après-midi.';
+    if (jauge) jauge.innerHTML = '';
+    if (icone) icone.textContent = '!';
     bouton.disabled = true;
   } else if (saisis === total) {
-    etat.textContent = '✅ ' + saisis + '/' + total + ' saisis — prêt à générer.';
+    etat.textContent = 'Tous les scores du matin sont saisis';
+    if (sous) sous.textContent = 'Le planning de l’après-midi peut être généré.';
+    if (icone) icone.textContent = '✓';
     bouton.disabled = false;
   } else {
-    etat.textContent = '⏳ ' + saisis + '/' + total +
-      ' saisis — complète tous les scores du matin (page Saisie) avant de générer.';
+    etat.textContent = reste + ' score' + (reste > 1 ? 's' : '') + ' du matin reste' + (reste > 1 ? 'nt' : '') + ' à saisir';
+    if (sous) sous.textContent = 'La génération du planning de l’après-midi sera disponible lorsque tous les ' +
+      'scores du matin auront été saisis.';
+    if (icone) icone.textContent = '!';
     bouton.disabled = true;
+  }
+  if (jauge && total > 0) {
+    const pct = Math.round(saisis / total * 100);
+    jauge.innerHTML = '<span class="cv-bandeau-compte">' + saisis + ' / ' + total + '</span>' +
+      jaugeHTML(saisis, total, pct, 'Scores du matin saisis : ' + saisis + ' sur ' + total);
   }
   majBoutonsScoresDemo();
   majDimancheScf(); // le bouton « dimanche » (Super Challenge Phase 3) suit le même cycle de vie
   const apercu=document.getElementById('cv-apresmidi-apercu');
-  if(apercu)apercu.innerHTML=apercuApresMidiCiel(matin,configCourante.categories||[]);
+  if(apercu){
+    apercu.innerHTML=apercuApresMidiCiel(matin,configCourante.categories||[]);
+    // ⭐ Le bouton de génération REJOINT la carte du format, sous la description de ce qu'il
+    //    produit. C'est le nœud d'origine qu'on déplace : son écouteur et son état désactivé
+    //    le suivent. La réécriture ci-dessus l'a détaché, la référence l'a gardé vivant.
+    const place=apercu.querySelector('[data-role="place-bouton-apresmidi"]');
+    if(place)place.appendChild(bouton);
+  }
 }
 
-/** Lecture des scores et formats existants, sans nouvelle règle de génération. */
+/**
+ * UNE jauge, une seule définition : la barre et son pourcentage, côte à côte.
+ * ⭐ Le pourcentage est ÉCRIT à côté de la barre — une barre seule ne se lit qu'à l'œil, et à
+ *    8 px de haut sur un fond clair elle ne dit rien de précis. Le nom accessible porte le
+ *    compte réel (« 3 sur 12 »), pas le seul pourcentage.
+ */
+function jaugeHTML(valeur, total, pct, etiquette) {
+  return '<span class="cv-jauge">' +
+    '<progress max="' + total + '" value="' + valeur + '" aria-label="' + echapper(etiquette) + '"></progress>' +
+    '<span class="cv-jauge-pct">' + pct + ' %</span></span>';
+}
+
+/**
+ * Lecture des scores et formats existants, sans nouvelle règle de génération.
+ * ⛔ Cet aperçu ne calcule RIEN : il lit les scores déjà enregistrés et les formats déjà réglés.
+ * Le raccourci « Voir les matchs à compléter » ouvre le planning SUR la catégorie concernée ;
+ * « Ouvrir la table de marque » conduit à l'écran Publication, seule source du lien à jeton.
+ */
 function apercuApresMidiCiel(matin,categories) {
   const noms=Array.from(new Set(matin.map(m=>m.categorie)));
   const scores=noms.map(nom=>{
     const matches=matin.filter(m=>m.categorie===nom),faits=matches.filter(m=>estTermine(m.statut)).length;
-    return '<div class="cv-score-categorie"><strong>'+echapper(nom)+'</strong><span>'+faits+' / '+matches.length+' scores saisis</span><progress max="'+matches.length+'" value="'+faits+'" aria-label="Scores saisis '+echapper(nom)+'"></progress></div>';
+    const complet=matches.length>0&&faits===matches.length;
+    const pct=matches.length?Math.round(faits/matches.length*100):0;
+    return '<div class="cv-score-categorie'+(complet?' est-complet':'')+'"><strong>'+echapper(nom)+'</strong>'+
+      '<span class="cv-score-compte">'+faits+' / '+matches.length+'</span>'+
+      (complet?'<span class="cv-score-fait">Complet</span>'
+              :'<button type="button" class="bouton-lien cv-score-lien" data-cv-matchs="'+echapper(nom)+'">'+
+               'Voir les matchs à compléter <span aria-hidden="true">→</span></button>')+
+      jaugeHTML(faits,matches.length,pct,'Scores saisis '+nom+' : '+faits+' sur '+matches.length)+
+      '</div>';
   }).join('');
   const formats=categories.filter(c=>noms.includes(c.categorie)).map(c=>{
     const f=definitionFormatApresMidi(formatApresMidiDe(c));
     return '<div class="cv-format-resume"><span class="cv-pastille cv-neutre">'+echapper(c.categorie)+'</span><h3>'+echapper(f?f.titre:'Format à définir')+'</h3><p>'+echapper(f?f.desc:'Consultez les réglages de cette catégorie.')+'</p></div>';
   }).join('');
-  return '<section><h2>Scores par catégorie</h2>'+(scores||'<p class="vide">Le planning du matin n’est pas encore généré.</p>')+'</section><section><h2>Formats prévus</h2>'+formats+'<button type="button" class="bouton-lien" data-cv-categories>Modifier les formats dans Catégories</button></section>';
+  return '<section><h2>Scores par catégorie</h2>'+
+    (scores||'<p class="vide">Le planning du matin n’est pas encore généré.</p>')+
+    '</section><section><h2>Format prévu</h2>'+
+    (formats||'<p class="vide">Aucune catégorie au planning du matin.</p>')+
+    '<div class="cv-apresmidi-actions" data-role="place-bouton-apresmidi">'+
+      '<button type="button" class="bouton" data-cv-publication>Ouvrir la table de marque</button>'+
+    '</div>'+
+    '<p class="cv-apresmidi-note">Tous les scores du matin doivent être saisis pour générer le planning de l’après-midi.</p>'+
+    '<button type="button" class="bouton-lien" data-cv-categories>Modifier les formats dans Catégories</button></section>';
 }
 
 /**
@@ -468,120 +525,325 @@ async function onClicArbitrage(evenement) {
   }
 }
 
+/* ⭐ L'ÉTAT DE L'ÉCRAN « Poules & planning » VIT DANS LE MODULE, jamais dans le DOM.
+   `afficherPlanning()` réécrit sa zone en entier à chaque rendu — rechargement des matchs,
+   enregistrement des poules, scores de démonstration. Un onglet actif ou une fiche ouverte
+   repérés dans le DOM disparaîtraient au premier de ces rafraîchissements, sous les doigts
+   de l'organisateur. Ils vivent donc ici, et le rendu les REPRODUIT. */
+let planningCategorie = '';        // catégorie affichée ('' = la première de la liste)
+let planningPhase = 'matin';       // 'matin' (poules) | 'aprem' (classement)
+let planningMatch = '';            // id_match dont la fiche est ouverte ('' = aucune)
+/* Les dernières données peintes. ⛔ Les écouteurs de la zone ne les capturent PAS dans une
+   fermeture : un clic sur un onglet rejouerait alors le rendu avec les poules d'il y a dix
+   minutes. Ils relisent ces deux variables, que seul `afficherPlanning()` écrit. */
+let planningPoules = [];
+let planningMatchs = [];
+
+/** Repeint le planning avec les dernières données connues (après un changement d'onglet, un
+ *  choix de match, ou une arrivée depuis un autre écran). */
+function rafraichirPlanning() { afficherPlanning(planningPoules, planningMatchs); }
+
+/** Choisit la catégorie affichée. Rendu par l'appelant : cette fonction ne peint rien. */
+function activerCategoriePlanning(cat) { planningCategorie = String(cat || ''); planningMatch = ''; }
+/** Choisit le moment de la journée. Change de vue → la fiche ouverte n'a plus lieu d'être. */
+function activerPhasePlanning(phase) { planningPhase = phase === 'aprem' ? 'aprem' : 'matin'; planningMatch = ''; }
+
 /**
- * Affiche les poules (composition) et le planning des matchs, par catégorie.
+ * Nom du GRAND terrain qui porte ce terrain de jeu, d'après `repartition_grands_terrains`
+ * (écrit par l'application de la répartition, écran Terrains).
+ * ⛔ Renvoie '' quand on ne sait pas : la colonne n'affiche alors que « Terrain 3 », jamais un
+ *    nom deviné. Le mot « Terrain » du nom de fiche est retiré — il est déjà dans l'en-tête.
+ */
+function grandTerrainDe(terrain) {
+  let rep = {};
+  try { rep = JSON.parse((configCourante.global || {}).repartition_grands_terrains || '{}') || {}; }
+  catch (e) { return ''; }
+  const nom = Object.keys(rep).find(function (k) {
+    return Array.isArray(rep[k]) && rep[k].some(function (id) { return String(id) === String(terrain); });
+  });
+  return nom ? String(nom).replace(/^terrains?\s+(de\s+|du\s+|des\s+|d’|d')?/i, '') : '';
+}
+
+/** Monogramme d'une équipe : les données ne portent AUCUN logo de club, l'écusson est une initiale. */
+function monogrammeEquipe(nom) {
+  const mots = String(nom || '').trim().split(/[\s\-–]+/).filter(Boolean);
+  if (!mots.length) return '?';
+  if (mots.length === 1) return mots[0].slice(0, 3).toUpperCase();
+  return (mots[0][0] + mots[1][0]).toUpperCase();
+}
+
+/** Nom d'une équipe à partir de son identifiant (repli : l'identifiant lui-même). */
+function nomEquipePlanning(id) {
+  const e = (equipesCourantes || []).find(function (x) { return x.id_equipe === id; });
+  return e ? e.nom_equipe : id;
+}
+
+/** Libellé de poule d'un match, vocabulaire Super Challenge et poules de niveau compris. */
+function libellePoulePlanning(m, catObj, aprem, nbNiv) {
+  const estScfCat = ctxScf(catObj).estScf;
+  if (estScfCat && aprem) return 'Poule ' + pouleEFG(m.poule);
+  if (estScfCat) return groupeLabelScf(catObj, m.poule, 0, false) || ('Groupe ' + m.poule);
+  if (aprem && catObj && formatApresMidiDe(catObj) === 'POULES_NIVEAU') {
+    return libellePouleNiveau(catObj, m.poule, nbNiv) || ('Poule ' + m.poule);
+  }
+  if (aprem) return 'Niveau ' + m.poule;
+  return 'Poule ' + m.poule;
+}
+
+/** Une barre d'onglets : [{cle, libelle, actif, attribut}] → boutons role=tab. */
+function ongletsPlanning(items, attribut, etiquette) {
+  return '<div class="cv-onglets cv-onglets-planning" role="tablist" aria-label="' + echapper(etiquette) + '">' +
+    items.map(function (it) {
+      return '<button type="button" class="cv-onglet' + (it.actif ? ' est-actif' : '') + '" role="tab"' +
+        ' aria-selected="' + (it.actif ? 'true' : 'false') + '" tabindex="' + (it.actif ? '0' : '-1') + '"' +
+        ' ' + attribut + '="' + echapper(it.cle) + '">' + echapper(it.libelle) + '</button>';
+    }).join('') + '</div>';
+}
+
+/**
+ * La grille du planning : une ligne par heure, une colonne par terrain, un bouton par match.
+ * ⛔ AUCUN champ de saisie : les scores s'enregistrent à la table de marque, cet écran les LIT.
+ */
+function grillePlanning(liste, catObj, aprem, nbNiv) {
+  if (!liste.length) return '';
+  const terrains = Array.from(new Set(liste.map(function (m) { return String(m.terrain); })))
+    .sort(function (a, b) { return a.localeCompare(b, 'fr', { numeric: true }); });
+  const heures = Array.from(new Set(liste.map(function (m) { return String(m.heure_debut); }))).sort();
+  let h = '<div class="table-scroll cv-planning-scroll"><table class="table-planning cv-planning-grille">' +
+          '<thead><tr><th scope="col">Heure</th>';
+  terrains.forEach(function (t) {
+    const grand = grandTerrainDe(t);
+    h += '<th scope="col"><span class="cv-col-terrain">Terrain ' + echapper(t) + '</span>' +
+         (grand ? '<span class="cv-col-grand">' + echapper(grand) + '</span>' : '') + '</th>';
+  });
+  h += '</tr></thead><tbody>';
+  heures.forEach(function (heure) {
+    h += '<tr><th scope="row">' + echapper(heure) + '</th>';
+    terrains.forEach(function (terrain) {
+      const rencontres = liste.filter(function (m) {
+        return String(m.heure_debut) === heure && String(m.terrain) === terrain;
+      });
+      h += '<td>' + rencontres.map(function (m) {
+        const a = nomEquipePlanning(m.equipe_A), b = nomEquipePlanning(m.equipe_B);
+        const arb = libelleArbitreScf(m, nomEquipePlanning);
+        const ouvert = String(m.id_match) === String(planningMatch);
+        // ⛔ Un nom accessible d'un seul tenant (« CLAMARTVÉLIZY ») ne se lit pas : on le pose.
+        const lu = a + ' contre ' + b + ', ' + heure + ', terrain ' + terrain + ', ' +
+                   libellePoulePlanning(m, catObj, aprem, nbNiv);
+        return '<button type="button" class="cv-match' + (ouvert ? ' est-ouvert' : '') + '"' +
+               ' data-match="' + echapper(String(m.id_match)) + '"' +
+               ' aria-pressed="' + (ouvert ? 'true' : 'false') + '"' +
+               ' aria-label="' + echapper(lu) + '">' +
+               '<span class="cv-match-equipes"><strong>' + echapper(a) + '</strong>' +
+               '<span class="cv-match-vs" aria-hidden="true">–</span>' +
+               '<strong>' + echapper(b) + '</strong></span>' +
+               (estTermine(m.statut) ? '<span class="cv-match-score">' + echapper(String(m.score_A)) + ' – ' +
+                 echapper(String(m.score_B)) + '</span>' : '') +
+               (arb ? '<small>Arbitre : ' + echapper(arb) + '</small>' : '') +
+               '</button>';
+      }).join('') + (rencontres.length ? '' : '<span class="cv-case-libre">—</span>') + '</td>';
+    });
+    h += '</tr>';
+  });
+  return h + '</tbody></table></div>';
+}
+
+/**
+ * La fiche « Détail du match ». ⛔ LECTURE SEULE : le score s'y LIT, il ne s'y saisit pas — la
+ * table de marque reste le seul chemin d'écriture, et cet écran le rappelle plutôt que d'ouvrir
+ * un second chemin d'enregistrement.
+ */
+function ficheMatchPlanning(m, catObj, aprem, nbNiv) {
+  if (!m) {
+    return '<aside class="cv-fiche-match est-vide" data-role="fiche-match" aria-label="Détail du match">' +
+           '<strong>Détail du match</strong><p>Choisissez un match dans le planning pour voir ses équipes, ' +
+           'sa poule et son score.</p></aside>';
+  }
+  const a = nomEquipePlanning(m.equipe_A), b = nomEquipePlanning(m.equipe_B);
+  const grand = grandTerrainDe(m.terrain);
+  const termine = estTermine(m.statut);
+  const ligne = function (cle, valeur) {
+    return '<div class="cv-fiche-ligne"><span class="cv-fiche-cle">' + echapper(cle) + '</span>' +
+           '<span class="cv-fiche-valeur">' + valeur + '</span></div>';
+  };
+  let h = '<aside class="cv-fiche-match" data-role="fiche-match" aria-label="Détail du match">' +
+          '<div class="cv-fiche-tete"><strong>Détail du match</strong>' +
+          '<button type="button" class="cv-fiche-fermer" data-fermer-match aria-label="Fermer le détail du match">×</button></div>';
+  h += ligne('Heure', echapper(String(m.heure_debut || '—')) +
+       (m.heure_fin ? ' <span class="cv-fiche-fin">→ ' + echapper(String(m.heure_fin)) + '</span>' : ''));
+  h += ligne('Terrain', 'Terrain ' + echapper(String(m.terrain)) + (grand ? ' — ' + echapper(grand) : ''));
+  h += ligne('Catégorie', echapper(String(m.categorie)));
+  h += ligne('Phase', echapper((aprem ? 'Après-midi' : 'Matin') + ' · ' + libellePoulePlanning(m, catObj, aprem, nbNiv)));
+  const arb = libelleArbitreScf(m, nomEquipePlanning);
+  if (arb) h += ligne('Arbitre', echapper(arb));
+  h += '<div class="cv-fiche-equipes"><div class="cv-fiche-equipe">' +
+       '<span class="cv-ecusson" aria-hidden="true">' + echapper(monogrammeEquipe(a)) + '</span>' +
+       '<span class="cv-fiche-nom">' + echapper(a) + '</span></div>' +
+       '<span class="cv-fiche-vs">contre</span>' +
+       '<div class="cv-fiche-equipe">' +
+       '<span class="cv-ecusson" aria-hidden="true">' + echapper(monogrammeEquipe(b)) + '</span>' +
+       '<span class="cv-fiche-nom">' + echapper(b) + '</span></div></div>';
+  h += '<div class="cv-fiche-score' + (termine ? '' : ' est-attente') + '">' +
+       '<span class="cv-fiche-cle">Score</span>' +
+       (termine
+         ? '<span class="cv-score-valeur">' + echapper(String(m.score_A)) + '</span>' +
+           '<span class="cv-score-tiret" aria-hidden="true">–</span>' +
+           '<span class="cv-score-valeur">' + echapper(String(m.score_B)) + '</span>'
+         : '<span class="cv-score-attente">Pas encore saisi</span>') + '</div>';
+  h += '<p class="cv-fiche-note">Les scores se saisissent à la table de marque.</p>';
+  return h + '</aside>';
+}
+
+/** La composition des poules d'UNE catégorie, en cartes. */
+function compositionsPoules(poules, cat, catObj) {
+  const liste = poules.filter(function (p) { return p.categorie === cat; });
+  if (!liste.length) return '<p class="vide">Pas encore de poules pour cette catégorie.</p>';
+  return '<div class="cv-compositions-poules">' + liste.map(function (p) {
+    const membres = (equipesCourantes || [])
+      .filter(function (e) { return e.categorie === cat && e.poule === p.nom_poule; })
+      .map(function (e) { return e.nom_equipe; });
+    const gl = groupeLabelScf(catObj, p.nom_poule, membres.length, false);
+    const titre = gl ? gl : ('Poule ' + p.nom_poule);
+    return '<div class="poule-compo"><strong>' + echapper(titre) + '</strong>' +
+      (membres.length
+        ? '<ul>' + membres.map(function (n) { return '<li>' + echapper(n) + '</li>'; }).join('') + '</ul>'
+        : '<p class="vide">Aucune équipe.</p>') + '</div>';
+  }).join('') + '</div>';
+}
+
+/**
+ * Affiche le planning : une barre d'onglets (catégorie, puis moment de la journée), la grille
+ * du moment choisi, la fiche du match ouvert, et sous le tout la composition des poules.
+ * ⭐ L'ordre du DOM est l'ordre de lecture : la composition est ÉCRITE après la grille, elle
+ *    n'y est plus ramenée par un `order:2` en CSS (WCAG 2.4.3).
  */
 function afficherPlanning(poules, matchs) {
   const zone = document.getElementById('affichage-planning');
   poules = poules || [];
   matchs = matchs || [];
+  planningPoules = poules; planningMatchs = matchs;
 
-  // Bouton « Modifier les poules » : visible dès qu'il y a des poules du matin (sauf en édition).
+  // Les deux boutons d'action vivent dans le HTML d'origine : on les DÉPLACE dans la barre à
+  // chaque rendu (la zone est réécrite), jamais on ne les recrée — leurs écouteurs survivent.
   const btnMod = document.getElementById('bouton-modifier-poules');
+  const btnGen = document.getElementById('bouton-generer');
   if (btnMod && !editionPoules) btnMod.hidden = poules.length === 0;
 
   if (poules.length === 0 && matchs.length === 0) {
-    zone.innerHTML = '<p class="vide">Pas encore de planning. Clique sur « Générer ».</p>';
+    zone.innerHTML = '<div class="cv-planning-vide"><strong>Pas encore de planning</strong>' +
+      '<p>Générez les poules et les horaires pour voir les rencontres du matin.</p></div>';
+    if (btnGen && zone.appendChild) zone.appendChild(btnGen);
     return;
   }
 
-  // Nom d'une équipe à partir de son identifiant.
-  function nom(id) {
-    const e = equipesCourantes.find(function (x) { return x.id_equipe === id; });
-    return e ? e.nom_equipe : id;
-  }
-
-  // Rend un tableau de matchs (triés par heure). enteteCol = intitulé de la 3e colonne.
-  // mapPoule = fonction optionnelle (m) → texte de la cellule « poule » (défaut : m.poule).
-  // Renvoie '' si la liste est vide.
-  function tableMatchs(liste, enteteCol, mapPoule) {
-    if (!liste.length) return '';
-    liste = liste.slice().sort(function (a, b) {
-      return String(a.heure_debut).localeCompare(String(b.heure_debut));
-    });
-    const terrains=Array.from(new Set(liste.map(m=>String(m.terrain)))).sort((a,b)=>a.localeCompare(b,'fr',{numeric:true}));
-    const heures=Array.from(new Set(liste.map(m=>String(m.heure_debut)))).sort();
-    let h='<div class="table-scroll cv-planning-scroll"><table class="table-planning cv-planning-grille"><thead><tr><th scope="col">Heure</th>' +
-      terrains.map(t=>'<th scope="col">Terrain '+echapper(t)+'</th>').join('')+'</tr></thead><tbody>';
-    heures.forEach(heure=>{
-      h+='<tr><th scope="row">'+echapper(heure)+'</th>';
-      terrains.forEach(terrain=>{
-        const rencontres=liste.filter(m=>String(m.heure_debut)===heure && String(m.terrain)===terrain);
-        h+='<td>'+rencontres.map(m=>{
-          const arb=libelleArbitreScf(m,nom);
-          return '<div class="cv-rencontre"><span class="cv-pastille cv-neutre">'+echapper(enteteCol+' '+(mapPoule?mapPoule(m):String(m.poule)))+'</span><strong>'+echapper(nom(m.equipe_A))+'</strong><span class="vs">contre</span><strong>'+echapper(nom(m.equipe_B))+'</strong>'+(arb?'<small>Arbitre : '+echapper(arb)+'</small>':'')+'</div>';
-        }).join('')+(rencontres.length?'':'<span class="cv-case-libre">—</span>')+'</td>';
-      });h+='</tr>';
-    });
-    return h+'</tbody></table></div>';
-  }
-
-  // Liste ordonnée des catégories concernées.
+  // Catégories concernées, dans l'ordre où elles apparaissent.
   const cats = [];
   poules.forEach(function (p) { if (cats.indexOf(p.categorie) < 0) cats.push(p.categorie); });
   matchs.forEach(function (m) { if (cats.indexOf(m.categorie) < 0) cats.push(m.categorie); });
+  // L'onglet mémorisé n'existe plus (catégorie retirée) → on retombe sur la première.
+  if (cats.indexOf(planningCategorie) < 0) planningCategorie = cats[0] || '';
+  const cat = planningCategorie;
 
-  let html = '<div class="cv-filtres-planning"><label>Catégorie<select id="cv-filtre-planning-categorie"><option value="">Toutes les catégories</option>'+cats.map(cat=>'<option>'+echapper(cat)+'</option>').join('')+'</select></label><label>Moment de la journée<select id="cv-filtre-planning-phase"><option value="">Toute la journée</option><option value="matin">Matin</option><option value="aprem">Après-midi</option></select></label><span class="cv-information-lecture">Consultation · scores sur la table de marque</span></div>';
-  cats.forEach(function (cat) {
-    // Matchs de la catégorie, séparés matin (poules) / après-midi (classement croisé).
-    const ms = matchs.filter(function (m) { return m.categorie === cat; });
-    const matin = ms.filter(function (m) { return String(m.phase) !== 'classement'; });
-    const aprem = ms.filter(function (m) { return String(m.phase) === 'classement'; });
+  const ms = matchs.filter(function (m) { return m.categorie === cat; });
+  const matin = ms.filter(function (m) { return String(m.phase) !== 'classement'; });
+  const aprem = ms.filter(function (m) { return String(m.phase) === 'classement'; });
+  // Un moment sans aucun match ne peut pas être affiché : on revient au matin.
+  if (planningPhase === 'aprem' && !aprem.length) planningPhase = 'matin';
+  const estAprem = planningPhase === 'aprem';
+  const liste = estAprem ? aprem : matin;
 
-    // Avancement : nombre de matchs dont le score est saisi (statut « terminé »).
-    const saisisTotal = ms.filter(function (m) { return estTermine(m.statut); }).length;
-    const saisisMatin = matin.filter(function (m) { return estTermine(m.statut); }).length;
-    const saisisAprem = aprem.filter(function (m) { return estTermine(m.statut); }).length;
+  const catObj = (configCourante.categories || []).find(function (c) { return c.categorie === cat; });
+  const nbNiv = estAprem && catObj && formatApresMidiDe(catObj) === 'POULES_NIVEAU'
+    ? nbPoulesNiveauCat(aprem, cat) : 0;
+  const saisis = liste.filter(function (m) { return estTermine(m.statut); }).length;
 
-    html += '<section class="cv-planning-categorie" data-categorie="'+echapper(cat)+'"><h3 style="color:var(--bleu-ciel);margin:20px 0 8px;">' + echapper(cat) +
-            badgeAvancement(saisisTotal, ms.length) + '</h3>';
+  let html = '<div class="cv-planning-barre">' +
+    ongletsPlanning(cats.map(function (c) {
+      return { cle: c, libelle: c, actif: c === cat };
+    }), 'data-plan-cat', 'Catégorie') +
+    ongletsPlanning([{ cle: 'matin', libelle: 'Matin', actif: !estAprem }]
+      .concat(aprem.length ? [{ cle: 'aprem', libelle: 'Après-midi', actif: estAprem }] : []),
+      'data-plan-phase', 'Moment de la journée') +
+    '<div class="cv-planning-actions"><span class="cv-planning-compte' +
+      (liste.length && saisis === liste.length ? ' est-complet' : '') + '" data-role="compte-planning">' +
+      liste.length + ' match' + (liste.length > 1 ? 's' : '') + ' · ' +
+      saisis + ' score' + (saisis > 1 ? 's' : '') + ' saisi' + (saisis > 1 ? 's' : '') +
+    '</span></div></div>';
 
-    // Objet catégorie (pour le vocabulaire Super Challenge) ; null si introuvable → libellés par défaut.
-    const catObj = (configCourante.categories || []).find(function (c) { return c.categorie === cat; });
-    const estScfCat = ctxScf(catObj).estScf;
+  const titre = estAprem ? 'Planning de l’après-midi' : 'Planning du matin';
+  html += '<div class="cv-planning-corps"><div class="cv-planning-principal">' +
+          '<h3 class="cv-planning-titre">' + titre + '</h3>' +
+          (liste.length ? grillePlanning(liste, catObj, estAprem, nbNiv)
+                        : '<p class="vide">Aucun match sur ce moment de la journée.</p>') +
+          '</div>';
+  const ouvert = liste.find(function (m) { return String(m.id_match) === String(planningMatch); });
+  if (!ouvert) planningMatch = '';
+  html += ficheMatchPlanning(ouvert, catObj, estAprem, nbNiv) + '</div>';
 
-    html += '<div class="cv-compositions-poules">';
-    // Composition des poules de la catégorie (« Triangulaire/Quadrangulaire A » en SCF, sinon « Poule A »).
-    poules.filter(function (p) { return p.categorie === cat; }).forEach(function (p) {
-      const membres = equipesCourantes
-        .filter(function (e) { return e.categorie === cat && e.poule === p.nom_poule; })
-        .map(function (e) { return echapper(e.nom_equipe); });
-      const gl = groupeLabelScf(catObj, p.nom_poule, membres.length, false);
-      const titrePoule = gl ? echapper(gl) : ('Poule ' + echapper(p.nom_poule));
-      html += '<div class="poule-compo"><strong>' + titrePoule + '</strong> : ' +
-              (membres.join(', ') || '—') + '</div>';
-    });
-
-    html += '</div>';
-    if (matin.length) {
-      html += '<div class="cv-planning-phase" data-phase="matin"><div class="planning-phase">' + (phaseLabelScf(catObj, false) || '🌅 Matin — poules') +
-              badgeAvancement(saisisMatin, matin.length) + '</div>';
-      html += tableMatchs(matin, estScfCat ? 'Groupe' : 'Poule')+'</div>';
-    }
-    if (aprem.length) {
-      // Vocabulaire « Poule haute / basse » si la catégorie est en POULES_NIVEAU (repli : Niveau N1).
-      const estPn = !estScfCat && catObj && formatApresMidiDe(catObj) === 'POULES_NIVEAU';
-      const nbNiv = estPn ? nbPoulesNiveauCat(aprem, cat) : 0;
-      html += '<div class="cv-planning-phase" data-phase="aprem"><div class="planning-phase">' + (phaseLabelScf(catObj, true) ||
-              (estPn ? '🏉 Après-midi — poules de niveau' : '🏉 Après-midi — classement croisé')) +
-              badgeAvancement(saisisAprem, aprem.length) + '</div>';
-      html += tableMatchs(aprem, estScfCat ? 'Poule' : (estPn ? 'Poule' : 'Niveau'),
-                          estScfCat ? function (m) { return pouleEFG(m.poule); }
-                          : (estPn ? function (m) { return libellePouleNiveau(catObj, m.poule, nbNiv) || m.poule; } : null))+'</div>';
-    }
-    html+='</section>';
-  });
+  html += '<section class="cv-poules-section"><h3 class="cv-planning-titre">Composition des poules ' +
+          echapper(cat) + '</h3>' + compositionsPoules(poules, cat, catObj);
+  // Toutes les catégories d'un coup : le filtre n'en montre qu'une, ce dépliant montre le reste.
+  if (cats.length > 1) {
+    html += '<details class="cv-toutes-poules"><summary>Voir toutes les équipes et les poules</summary>' +
+      cats.map(function (c) {
+        const co = (configCourante.categories || []).find(function (x) { return x.categorie === c; });
+        return '<h4>' + echapper(c) + '</h4>' + compositionsPoules(poules, c, co);
+      }).join('') + '</details>';
+  }
+  html += '</section>';
 
   zone.innerHTML = html;
-  zone.onchange=function(e){
-    if(!e.target.id.startsWith('cv-filtre-planning-'))return;
-    const cat=document.getElementById('cv-filtre-planning-categorie').value;
-    const phase=document.getElementById('cv-filtre-planning-phase').value;
-    zone.querySelectorAll('.cv-planning-categorie').forEach(el=>{el.hidden=!!cat && el.dataset.categorie!==cat;});
-    zone.querySelectorAll('.cv-planning-phase').forEach(el=>{el.hidden=!!phase && el.dataset.phase!==phase;});
+
+  // Les boutons d'origine rejoignent la barre (ils y ont été détruits par la réécriture ci-dessus,
+  // mais le NŒUD tenu par `btnMod`/`btnGen` a survécu : on le rattache, écouteurs compris).
+  const actions = zone.querySelector && zone.querySelector('.cv-planning-actions');
+  if (actions) {
+    if (btnMod) { btnMod.textContent = 'Modifier les poules à la main'; actions.appendChild(btnMod); }
+    // ⛔ Ce bouton EFFACE poules, matchs et scores : il reste SECONDAIRE à côté de « Modifier les
+    //    poules à la main », qui est le geste courant. Sa confirmation (et le second verrou par clé
+    //    admin dès qu'un score existe) est portée par onGenerer(), elle n'est pas touchée ici.
+    if (btnGen) {
+      btnGen.textContent = 'Générer les poules automatiquement';
+      btnGen.classList.add('bouton-doux');
+      actions.appendChild(btnGen);
+    }
+  }
+
+  // Écouteurs posés en PROPRIÉTÉ (pas addEventListener) : `afficherPlanning` est rappelée à
+  // chaque rechargement, un ajout les empilerait.
+  zone.onclick = function (e) {
+    const onglet = e.target.closest && e.target.closest('[data-plan-cat],[data-plan-phase]');
+    if (onglet) {
+      if (onglet.hasAttribute('data-plan-cat')) activerCategoriePlanning(onglet.getAttribute('data-plan-cat'));
+      else activerPhasePlanning(onglet.getAttribute('data-plan-phase'));
+      rafraichirPlanning();
+      const repeint = zone.querySelector('[aria-selected="true"][' +
+        (onglet.hasAttribute('data-plan-cat') ? 'data-plan-cat' : 'data-plan-phase') + ']');
+      if (repeint) repeint.focus();
+      return;
+    }
+    if (e.target.closest && e.target.closest('[data-fermer-match]')) {
+      planningMatch = ''; rafraichirPlanning(); return;
+    }
+    const match = e.target.closest && e.target.closest('[data-match]');
+    if (match) {
+      const id = match.getAttribute('data-match');
+      planningMatch = String(planningMatch) === String(id) ? '' : id;   // second clic : on referme
+      rafraichirPlanning();
+    }
   };
-  const filtres=zone.querySelector && zone.querySelector('.cv-filtres-planning');
-  if(filtres && btnMod)filtres.appendChild(btnMod);
+  // Flèches, Début et Fin dans les barres d'onglets (WAI-ARIA « tabs »).
+  zone.onkeydown = function (e) {
+    const onglet = e.target.closest && e.target.closest('[data-plan-cat],[data-plan-phase]');
+    const pas = { ArrowRight: 1, ArrowLeft: -1, Home: 'debut', End: 'fin' }[e.key];
+    if (!onglet || pas === undefined) return;
+    const freres = Array.from(onglet.parentNode.children);
+    const i = freres.indexOf(onglet);
+    const cible = pas === 'debut' ? freres[0] : pas === 'fin' ? freres[freres.length - 1]
+                : freres[(i + pas + freres.length) % freres.length];
+    e.preventDefault();
+    cible.click();
+  };
 }
 
 /** Petit badge « X/Y saisis » (vert si complet) pour le suivi de l'avancement des scores. */

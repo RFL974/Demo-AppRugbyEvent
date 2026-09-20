@@ -245,6 +245,18 @@ function construireEcrans() {
 
   zone.addEventListener('click', function (evenement) {
     if(evenement.target.closest('[data-cv-categories]')){ecransActiver('categories');return;}
+    // « Voir les matchs à compléter » : ouvre le planning SUR la catégorie concernée.
+    const versMatchs=evenement.target.closest('[data-cv-matchs]');
+    if(versMatchs){
+      if(typeof activerCategoriePlanning==='function')activerCategoriePlanning(versMatchs.getAttribute('data-cv-matchs'));
+      if(typeof activerPhasePlanning==='function')activerPhasePlanning('matin');
+      ecransActiver('poules');
+      if(typeof rafraichirPlanning==='function')rafraichirPlanning();
+      return;
+    }
+    // ⛔ Le lien de la table de marque porte un jeton : on n'en recopie pas un second ici. On
+    //    conduit à l'écran Publication, qui pilote cet accès et reste la seule source du lien.
+    if(evenement.target.closest('[data-cv-publication]')){ecransActiver('publication');return;}
     const bouton = evenement.target.closest('.cv-fermer-club');
     if (!bouton) return;
     const detail = bouton.closest('details');
@@ -731,6 +743,143 @@ function preparerEquipes() {
  if(typeof afficherEquipes==='function'&&typeof equipesCourantes!=='undefined')afficherEquipes(equipesCourantes);
 }
 
+/**
+ * Écran « Publication » : deux cartes côte à côte — la page du tournoi, la table de marque —
+ * et un bandeau de clôture en pied.
+ *
+ * ⛔ RIEN N'EST RECRÉÉ. Les boutons, les messages, le QR, le formulaire de litige sont les
+ * nœuds du HTML, DÉPLACÉS : leurs écouteurs (posés par admin-infos-publication.js avant que
+ * le mode guidé ne construise les écrans) et leurs identifiants survivent. Seuls les
+ * conteneurs, les deux pastilles d'état et l'encart d'explication sont neufs — et ce sont
+ * `majPublication()` et `rendreAccesScores()` qui les remplissent, pas cette fonction.
+ */
+function preparerPublication() {
+ const bloc=document.getElementById('bloc-publication');
+ if(!bloc||document.getElementById('cv-pub-page'))return;
+ const prendre=id=>document.getElementById(id);
+ bloc.classList.add('cv-pub-bloc');
+ // Les intitulés de l'ancienne mise en page font double emploi avec les têtes de cartes : le
+ // titre de la section, et les deux « L'adresse de… » qui introduisaient chaque zone.
+ const titreBloc=bloc.querySelector('h2');if(titreBloc)titreBloc.remove();
+ Array.from(bloc.querySelectorAll('.publication-acces-lib')).forEach(el=>el.remove());
+ const grille=document.createElement('div');grille.className='cv-pub-grille';
+
+ /* ---------------------------------------------------------- Page du tournoi */
+ const page=document.createElement('section');page.id='cv-pub-page';page.className='carte cv-pub-page';
+ page.innerHTML='<div class="cv-pub-tete"><h2>Page du tournoi</h2></div>'+
+   '<p class="cv-pub-intro" id="cv-pub-intro"></p>'+
+   '<div class="cv-pub-apercu"><div class="cv-pub-carte-place" data-role="apercu-publication"></div>'+
+   '<div class="cv-pub-qr-place"></div></div>'+
+   '<div class="cv-pub-adresse"><span class="cv-pub-adresse-lib" id="cv-pub-adresse-lib">Adresse publique</span>'+
+   '<div class="cv-pub-adresse-champ"></div></div>'+
+   '<div class="cv-pub-actions"></div>';
+ // La pastille d'état REPREND le <strong id="etat-publication"> du HTML : c'est lui que
+ // majPublication() écrit depuis toujours, on ne crée pas un second porteur d'état.
+ const etatPub=prendre('etat-publication');
+ if(etatPub){etatPub.className='cv-pastille';page.querySelector('.cv-pub-tete').appendChild(etatPub);}
+ // Le « État : » qui introduisait ce <strong> n'a plus de sens une fois la pastille en tête.
+ const ligneEtat=bloc.querySelector('.publication-etat');
+ if(ligneEtat)ligneEtat.remove();
+ // L'adresse : le <a> d'origine, posé dans un champ qui se lit comme tel.
+ const champ=page.querySelector('.cv-pub-adresse-champ');
+ const lien=prendre('acces-public-lien');
+ if(lien&&champ)champ.appendChild(lien);
+ const copier=prendre('bouton-copier-adresse-publique');
+ const ouvrir=prendre('bouton-ouvrir-page-publique');
+ const actions=page.querySelector('.cv-pub-actions');
+ if(ouvrir){ouvrir.classList.remove('bouton-doux');ouvrir.textContent='Voir la page';actions.appendChild(ouvrir);}
+ if(copier){copier.classList.add('bouton-doux');copier.textContent='Copier le lien';actions.appendChild(copier);}
+ const qrPublic=prendre('acces-public-qr');
+ if(qrPublic)page.querySelector('.cv-pub-qr-place').appendChild(qrPublic);
+ // Le geste « publier / masquer » reste DANS la carte qu'il concerne, sous ses deux actions
+ // de partage, avec son garde-fou et son message inchangés.
+ ['bouton-publier','message-verrou-publier','message-publication','message-acces-public']
+   .forEach(id=>{const el=prendre(id);if(el)page.appendChild(el);});
+ // Les trois notes longues (ce que publier fait, ce qu'il ne fait pas, ce que devient
+ // l'adresse) descendent dans un dépliant : elles restent lisibles en entier, sans occuper
+ // le haut de la carte à chaque visite.
+ const detailPub=document.createElement('details');detailPub.className='cv-options cv-pub-aide';
+ detailPub.innerHTML='<summary>Ce que publier fait, et ne fait pas<span>Visibilité, dossier des clubs, adresse</span></summary>';
+ Array.from(bloc.querySelectorAll('.note-generation')).forEach(n=>detailPub.appendChild(n));
+ const notePub=prendre('acces-public-note');if(notePub)detailPub.appendChild(notePub);
+ page.appendChild(detailPub);
+ grille.appendChild(page);
+
+ /* -------------------------------------------------------- Table de marque */
+ const marque=document.createElement('section');marque.id='cv-pub-marque';marque.className='carte cv-pub-marque';
+ marque.innerHTML='<div class="cv-pub-tete"><h2>Table de marque</h2>'+
+   '<span class="cv-pastille" id="cv-marque-pastille"></span></div>'+
+   '<p class="cv-pub-intro">La table de marque sert à saisir les résultats pendant le tournoi. '+
+   'Seuls les organisateurs y accèdent : la page demande la clé scores, que le lien ne contient pas.</p>'+
+   '<div class="cv-marque-encart" id="cv-marque-encart"></div>';
+ const saisie=document.getElementById('acces-saisie');
+ if(saisie){
+   // L'avertissement du serveur (échéance, fermeture automatique) garde son id : c'est
+   // afficherMessage() qui l'écrit, et il en réécrit la classe — le style passe par l'id.
+   // ⚠️ PIÈGE : `marque` n'est pas encore rattaché au document. Un nœud qu'on y déplace en
+   //    SORT donc, et `getElementById` ne le retrouve plus — il faut garder sa référence au
+   //    moment du déplacement. (Défaut constaté : le bouton d'ouverture gardait sa largeur de
+   //    bouton ordinaire parce que sa classe était posée sur un `null` silencieux.)
+   const deplaces={};
+   ['acces-saisie-avertissement','acces-saisie-lien','acces-saisie-actions','acces-saisie-actions-suite']
+     .forEach(id=>{const el=prendre(id);if(el){deplaces[id]=el;marque.appendChild(el);}});
+   if(deplaces['acces-saisie-lien'])deplaces['acces-saisie-lien'].classList.add('cv-marque-ouvrir');
+   // QR, notes et correction de litige : utiles, mais pas à chaque visite.
+   const detailMarque=document.createElement('details');detailMarque.className='cv-options cv-marque-aide';
+   detailMarque.innerHTML='<summary>QR code, renouvellement et correction d’un score<span>Ce que contient le lien, et comment corriger un litige</span></summary>';
+   // La phrase d'état longue (« Ouvert — la table de marque peut saisir… ») reste écrite par
+   // rendreAccesScores() : elle descend dans le dépliant, sous la pastille qui la résume.
+   const ligneEtatSaisie=saisie.querySelector('.acces-saisie-etat');
+   if(ligneEtatSaisie)detailMarque.appendChild(ligneEtatSaisie);
+   const corps=prendre('acces-saisie-corps');if(corps)detailMarque.appendChild(corps);
+   Array.from(saisie.querySelectorAll('.publication-acces-note, .acces-saisie-quoi')).forEach(n=>detailMarque.appendChild(n));
+   const litige=prendre('acces-saisie-litige');if(litige)detailMarque.appendChild(litige);
+   const msgSaisie=prendre('message-acces-saisie');if(msgSaisie)marque.appendChild(msgSaisie);
+   marque.appendChild(detailMarque);
+ }
+ grille.appendChild(marque);
+ bloc.appendChild(grille);
+
+ /* ------------------------------------------------------ Clôturer définitivement */
+ // ⛔ Le bandeau n'invente aucun geste : il ACCUEILLE le bouton du HTML, que le serveur
+ //    seul révèle (rendreAccesScores le laisse masqué tant que CLOTURER n'est pas permis).
+ const cloture=prendre('acces-saisie-cloture');
+ if(cloture){
+   const bandeau=document.createElement('div');bandeau.id='cv-pub-cloture';bandeau.className='cv-pub-cloture';
+   bandeau.innerHTML='<span class="cv-pub-cloture-icone" aria-hidden="true">'+svgIcone('corbeille')+'</span>'+
+     '<span class="cv-pub-cloture-texte"><strong>Clôturer définitivement</strong>'+
+     '<span>Cette action est irréversible. Elle masquera la page publique et fermera la table de marque.</span></span>';
+   cloture.textContent='Clôturer le tournoi';
+   bandeau.appendChild(cloture);
+   bloc.appendChild(bandeau);
+ }
+ // ⭐ L'état et l'aperçu sont repeints ICI, après le déplacement : majPublication() a pu
+ //    tourner avant que la pastille existe, et sa phrase longue y serait restée figée.
+ //    ⛔ On ne rappelle PAS majPublication() : elle relancerait la lecture de l'accès scores.
+ // Les deux conteneurs d'origine sont vidés : on les GARDE dans le DOM (l'assistant mobile et
+ // le repli sans JavaScript s'y accrochent) et on les retire de l'œil, comme les dépliants
+ // d'invitation. ⛔ Jamais supprimés : d'autres modes d'affichage les cherchent encore.
+ // Un conteneur qui ne porte plus ni contrôle ni texte n'a plus rien à montrer : il ne laisse
+ // qu'un cadre vide en haut de l'écran. ⛔ On le MASQUE sans le supprimer — l'assistant mobile
+ // et le repli sans JavaScript s'accrochent encore à ces nœuds.
+ const videMaintenant=el=>el&&!el.querySelector('button,input,select,textarea,a')&&!el.textContent.trim();
+ [prendre('acces-saisie'),bloc.querySelector('.cv-publication')].forEach(el=>{
+   if(videMaintenant(el))el.hidden=true;
+ });
+ if(typeof majEtatPublicationAffiche==='function')majEtatPublicationAffiche();
+ if(typeof majApercuPublication==='function')majApercuPublication();
+ if(typeof majResumeAccesScores==='function'&&typeof accesScoresCourant!=='undefined'){
+   majResumeAccesScores(accesScoresCourant,!!(accesScoresCourant&&accesScoresCourant.fermee_automatiquement));
+ }
+ if(typeof majBandeauCloture==='function')majBandeauCloture();
+ // La carte du tournoi et la vue agrandie : un seul écouteur délégué, posé sur le bloc, qui
+ // survit aux repeints de l'aperçu.
+ bloc.addEventListener('click',function(e){
+   const ouvre=e.target.closest&&e.target.closest('[data-ouvrir-affiche]');
+   if(ouvre&&typeof ouvrirAffichePublique==='function'){ouvrirAffichePublique(ouvre);return;}
+ });
+}
+
 /** Déplace les contrôles d’origine : les événements et identifiants restent identiques. */
 function preparerOutilsCiel() {
  [['liste-equipes','.equipe-item','Rechercher une équipe'],['liste-suivi-clubs','.suivi-club-ligne','Rechercher un club']].forEach(function(def){
@@ -741,13 +890,39 @@ function preparerOutilsCiel() {
  });
  const apresmidi=document.getElementById('bloc-apresmidi');
  if(apresmidi && !document.getElementById('cv-apresmidi-apercu')){
+   // Le titre de la carte répète celui de l'écran, comme ailleurs.
+   const titreAm=apresmidi.querySelector('h2');if(titreAm)titreAm.remove();
    const apercu=document.createElement('div');apercu.id='cv-apresmidi-apercu';apercu.className='cv-apresmidi-grid';
-   const etat=apresmidi.querySelector('.apresmidi-etat');etat.classList.add('cv-information');etat.after(apercu);
+   // ⭐ LE BANDEAU D'ÉTAT. Le <p> d'origine portait « Scores du matin : 0/27 saisis » sur une seule
+   //    ligne. Il devient un bandeau à trois parties — pictogramme, phrase, jauge — SANS changer de
+   //    nœud : #etat-scores-matin reste le même <strong>, c'est lui que majApresMidi() écrit.
+   const etat=apresmidi.querySelector('.apresmidi-etat');
+   const porteur=document.getElementById('etat-scores-matin');
+   etat.classList.add('cv-information','cv-bandeau-apresmidi');
+   etat.textContent='';
+   const icone=document.createElement('span');icone.className='cv-bandeau-icone';icone.setAttribute('aria-hidden','true');icone.textContent='!';
+   const texte=document.createElement('span');texte.className='cv-bandeau-texte';
+   texte.appendChild(porteur);
+   const sous=document.createElement('span');sous.className='cv-bandeau-sous';sous.id='cv-apresmidi-sous';
+   texte.appendChild(sous);
+   const jauge=document.createElement('span');jauge.className='cv-bandeau-jauge';jauge.id='cv-apresmidi-jauge';
+   etat.append(icone,texte,jauge);
+   etat.after(apercu);
    const aide=apresmidi.querySelector('.note-generation');
-   aide.textContent='Les rencontres de l’après-midi sont calculées à partir des résultats du matin, selon le format de chaque catégorie. Tous les scores du matin sont nécessaires. Les rencontres du matin sont conservées.';
+   // La longue explication devient un dépliant « Comment ça marche ? » en pied d'écran : elle
+   // reste lisible en entier, sans occuper le haut de la page à chaque visite.
+   const commentca=document.createElement('details');commentca.id='cv-apresmidi-aide';commentca.className='cv-options cv-aide-repliee';
+   commentca.innerHTML='<summary>Comment ça marche ?<span>Ce que la génération calcule, et ce qu’elle conserve</span></summary>';
+   aide.innerHTML='Les rencontres de l’après-midi sont calculées à partir des <strong>résultats du matin</strong>, '+
+     'selon le format de chaque catégorie. <strong>Tous les scores du matin</strong> sont nécessaires. '+
+     'Les rencontres du matin sont <strong>conservées</strong> : rien n’est effacé.<br>'+
+     'Si vous <strong>corrigez un score du matin</strong> après avoir généré l’après-midi, relancez la '+
+     'génération pour remettre les niveaux à jour.';
+   commentca.appendChild(aide);
    const details=document.createElement('details');details.className='cv-options';details.innerHTML='<summary>Options de démonstration<span>Remplir les scores fictifs de l’après-midi</span></summary>';
    const sim=document.getElementById('bouton-simuler-scores-apresmidi');const note=sim.nextElementSibling;
-   details.appendChild(sim);if(note)details.appendChild(note);details.appendChild(document.getElementById('message-simulation-apresmidi'));apresmidi.appendChild(details);
+   details.appendChild(sim);if(note)details.appendChild(note);details.appendChild(document.getElementById('message-simulation-apresmidi'));
+   apresmidi.append(commentca,details);
    if(adminConnecte)majApresMidi();
  }
  const infos=document.getElementById('ecran-infos');
@@ -775,13 +950,41 @@ function preparerOutilsCiel() {
  preparerOngletsInvitation();
  preparerSuiviClubs();
  preparerEquipes();
+ preparerPublication();
  const generation=document.getElementById('bloc-generation');
  if(generation && !document.getElementById('cv-outils-planning')){
+   // Le titre de la carte répète celui de l'écran : il s'en va, comme sur Suivi des clubs et Équipes.
+   const titreGen=generation.querySelector('h2');if(titreGen)titreGen.remove();
+   // L'avertissement « cela efface les poules précédentes » ne disparaît pas : il devient la
+   // description du bouton qui le porte. La confirmation du geste le répète de toute façon.
+   const avertGen=generation.querySelector('.note-generation');
+   const boutonGen=document.getElementById('bouton-generer');
+   if(avertGen&&boutonGen){
+     avertGen.id='aide-generer-poules';avertGen.className='cv-sr';
+     boutonGen.setAttribute('aria-describedby','aide-generer-poules');
+     boutonGen.setAttribute('title',avertGen.textContent.replace(/\s+/g,' ').trim());
+   }
+   // ⭐ LE PIED DE DÉMONSTRATION. Le bouton des scores fictifs quittait le haut de l'écran, entre
+   //    la génération et le planning : il descend en bas de page avec sa note et son message. Ce
+   //    sont les BLOCS D'ORIGINE qu'on déplace — écouteurs et identifiants conservés.
+   const demo=document.createElement('div');demo.className='cv-demo-pied';
+   demo.innerHTML='<span class="cv-demo-titre">Démonstration</span>';
+   const boutonDemo=document.getElementById('bouton-simuler-scores-matin');
+   const noteDemo=boutonDemo&&boutonDemo.nextElementSibling;
+   if(boutonDemo){
+     demo.appendChild(boutonDemo);
+     if(noteDemo&&noteDemo.classList&&noteDemo.classList.contains('note-generation'))demo.appendChild(noteDemo);
+     const msgDemo=document.getElementById('message-simulation-matin');if(msgDemo)demo.appendChild(msgDemo);
+   }
    const outils=document.createElement('details');outils.id='cv-outils-planning';outils.className='cv-options';
-   outils.innerHTML='<summary>Génération et options avancées<span>Recalculer les horaires, régénérer les poules, scores de démonstration</span></summary>';
-   const planning=document.getElementById('affichage-planning');
-   Array.from(generation.children).forEach(el=>{if(el!==planning && el.id!=='bouton-modifier-poules' && el.id!=='edition-poules')outils.appendChild(el);});
+   outils.innerHTML='<summary>Options avancées<span>Recalculer les horaires, arbitrages de la génération</span></summary>';
+   // ⛔ `bouton-generer` et `message-generation` restent DEHORS : afficherPlanning() pose le bouton
+   //    dans la barre d'actions, à côté de « Modifier les poules à la main ». L'enfermer ici le
+   //    rendrait introuvable, et son message d'erreur avec lui.
+   const gardes=['affichage-planning','bouton-modifier-poules','edition-poules','bouton-generer','message-generation'];
+   Array.from(generation.children).forEach(el=>{if(gardes.indexOf(el.id)<0 && el!==demo)outils.appendChild(el);});
    generation.appendChild(outils);
+   if(boutonDemo)generation.appendChild(demo);
  }
  const bloc=document.getElementById('bloc-equipes');
  if(bloc && !document.getElementById('cv-outils-equipes')){
