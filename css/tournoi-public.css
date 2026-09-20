@@ -242,6 +242,39 @@ a:hover { text-decoration: underline; }
 .tete-controls .live-barre { grid-column:3; grid-row:1; justify-content:flex-end; margin:0 0 10px; }
 .tete-controls .mp-filtre { margin:0; }
 .tete-cote:not(:has(> :not([hidden]))) { display:none; }
+/* ---------------------------------------------------------
+   CLASSEMENTS — barre de filtres, puis classement et scores
+   La barre dit sur quoi on lit (catégorie, créneau, poule) ;
+   le classement occupe la colonne large, les derniers scores
+   la colonne de droite, qui reste visible en défilant.
+   --------------------------------------------------------- */
+.cv-pub-filtres { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));
+  gap:18px; margin-bottom:24px; padding:18px 20px; border:1px solid var(--bordure);
+  border-radius:var(--rayon); background:var(--blanc); box-shadow:var(--ombre); }
+.cv-pub-filtre { display:flex; flex-direction:column; gap:7px; min-width:0; }
+.cv-pub-filtre-lib { font-size:12px; font-weight:600; color:var(--gris-texte); }
+.cv-pub-filtre select { width:100%; min-height:44px; }
+
+.cv-pub-colonnes { display:grid; grid-template-columns:minmax(0,1fr) minmax(280px,340px);
+  gap:24px; align-items:start; }
+.cv-pub-colonnes > * { min-width:0; }
+.cv-pub-derniers { position:sticky; top:16px; padding:22px; border:1px solid var(--bordure);
+  border-radius:var(--rayon); background:var(--blanc); box-shadow:var(--ombre); }
+.cv-pub-derniers .live-titre { margin-top:0; }
+/* La colonne est étroite : un score y tient sur deux lignes plutôt qu'en grille serrée. */
+.cv-pub-derniers .score-ligne { padding:12px 0; }
+.cv-pub-derniers .score-corps { flex-wrap:wrap; }
+/* ⭐ MESURÉ, PAS DEVINÉ : le tableau complet (10 colonnes) réclame 516 px. À côté de la carte
+   des derniers scores, la colonne principale en offre 960 : deux poules côte à côte n'en
+   laissaient que 468 chacune, et la colonne « Pts » — celle qu'on vient lire — passait sous
+   la barre de défilement. Une poule par ligne, donc, tant que la carte occupe la droite. */
+.cv-pub-principal .cv-classements-grid { grid-template-columns:repeat(auto-fit,minmax(min(100%,540px),1fr)); }
+
+@media (max-width:900px) {
+  .cv-pub-colonnes { grid-template-columns:1fr; }
+  .cv-pub-derniers { position:static; }
+}
+
 .cv-classements-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr)); gap:24px; }
 .cv-classements-grid > section { min-width:0; }
 @media(max-width:900px) { .tete-controls { grid-template-columns:1fr 1fr; } .tete-controls .live-barre { grid-column:1/-1; grid-row:2; justify-content:flex-start; } }

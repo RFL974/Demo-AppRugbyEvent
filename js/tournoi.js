@@ -107,6 +107,11 @@ function basculer(cible) {
   const choix = document.getElementById('cv-choix-equipe');
   if (choix) choix.hidden = (cible !== 'equipe');
   document.getElementById('vue-classements').hidden = (cible !== 'classements');
+  // ⛔ Le filtre de catégorie du haut de page ferait DOUBLON avec celui de la barre des
+  //    classements — même variable derrière les deux. Il s'efface ici et reste sur « Mon
+  //    équipe », où rien d'autre ne le porte. Une seule catégorie → masqué dans les deux cas.
+  const filtreCat = document.getElementById('filtre-categorie');
+  if (filtreCat) filtreCat.hidden = (cible === 'classements') || categoriesPresentes().length <= 1;
 }
 
 /**
@@ -612,31 +617,133 @@ function sectionClassementsEquipe(eq) {
    🏆 CLASSEMENTS — poules (matin) + niveaux croisés (après-midi), tableaux complets
    ========================================================================== */
 
+/* ==========================================================================
+   FILTRES DES CLASSEMENTS — catégorie, créneau, poule
+   --------------------------------------------------------------------------
+   ⭐ L'ÉTAT VIT DANS LE MODULE. `afficherClassements()` réécrit sa vue en entier à
+   chaque rafraîchissement (la page se relit toute seule pendant le tournoi) : un
+   choix laissé dans le DOM serait effacé sous les yeux du spectateur, au beau milieu
+   d'un match. Les trois listes sont donc REPEINTES depuis ces variables.
+   ⛔ La catégorie, elle, n'a pas de variable propre : c'est `categorieActive`, la MÊME
+   que le filtre du haut de page et que « Mon équipe ». Deux sources auraient divergé.
+   ========================================================================== */
+
+let pubCreneau = 'matin';   // 'matin' | 'aprem'
+let pubPoule = '';          // '' = toutes les poules
+
+/** Les créneaux réellement disponibles pour la catégorie affichée. Le matin existe toujours. */
+function creneauxPublics() {
+  const out = [{ cle: 'matin', libelle: 'Matin — poules' }];
+  const aprem = matchs.filter(function (m) {
+    return m.categorie === categorieActive && String(m.phase) === 'classement';
+  });
+  if (aprem.length) {
+    const fmt = formatApresMidiCat(categorieActive);
+    out.push({ cle: 'aprem', libelle: 'Après-midi — ' + (
+      fmt === 'COUPE_PLATEAU' ? 'Coupe & Plateau' :
+      fmt === 'LIBRE' ? 'matchs amicaux' :
+      fmt === 'POULES_NIVEAU' ? 'poules de niveau' : 'classement croisé') });
+  }
+  return out;
+}
+
+/** Les groupes du créneau affiché (poules le matin, niveaux l'après-midi). */
+function groupesDuCreneau() {
+  const par = classementParGroupe(pubCreneau === 'aprem' ? 'aprem' : 'matin');
+  const cat = par.find(function (c) { return c.categorie === categorieActive; }) || par[0];
+  return cat ? cat.groupes : [];
+}
+
+/** Ne garde que le groupe choisi. '' = tous. */
+function filtrerGroupes(groupes) {
+  if (!pubPoule) return groupes;
+  return groupes.filter(function (g) { return g.titre === pubPoule; });
+}
+
+/** Une liste déroulante de la barre de filtres. */
+function selectPublic(id, libelle, options, valeur) {
+  return '<label class="cv-pub-filtre"><span class="cv-pub-filtre-lib">' + echapper(libelle) + '</span>' +
+    '<select class="r-input" id="' + id + '">' + options.map(function (o) {
+      return '<option value="' + echapper(o.cle) + '"' + (o.cle === valeur ? ' selected' : '') + '>' +
+        echapper(o.libelle) + '</option>';
+    }).join('') + '</select></label>';
+}
+
+/** La barre : catégorie, créneau, poule. Les listes vides ou à une seule entrée restent
+ *  affichées — le spectateur doit voir SUR QUOI il lit, même quand il n'y a pas le choix. */
+function barreFiltresClassements(creneaux, groupes) {
+  const cats = categoriesPresentes().map(function (c) { return { cle: c, libelle: c }; });
+  const poules = [{ cle: '', libelle: 'Toutes les poules' }].concat(
+    groupes.map(function (g) { return { cle: g.titre, libelle: g.titre }; }));
+  return '<div class="cv-pub-filtres">' +
+    selectPublic('cv-pub-categorie', 'Catégorie', cats, categorieActive) +
+    selectPublic('cv-pub-creneau', 'Créneau', creneaux, pubCreneau) +
+    selectPublic('cv-pub-poule', 'Poule', poules, pubPoule) +
+    '</div>';
+}
+
+/**
+ * Un seul écouteur, DÉLÉGUÉ sur la vue : les trois listes sont recréées à chaque rendu, un
+ * écouteur posé sur elles serait perdu au premier rafraîchissement automatique.
+ */
+function brancherFiltresClassements() {
+  const zone = document.getElementById('vue-classements');
+  if (!zone || zone.dataset.filtresBranches) return;
+  zone.dataset.filtresBranches = '1';
+  zone.addEventListener('change', function (e) {
+    const cible = e.target;
+    if (!cible || !cible.id) return;
+    if (cible.id === 'cv-pub-categorie') {
+      // ⛔ La MÊME variable que le filtre du haut de page, et la même mémorisation : on ne
+      //    tient pas un second état de catégorie qui finirait par diverger.
+      categorieActive = cible.value;
+      try { localStorage.setItem(CLE_CATEGORIE, categorieActive); } catch (err) {}
+      const global = document.getElementById('select-categorie');
+      if (global) global.value = categorieActive;
+      pubCreneau = 'matin'; pubPoule = '';   // la catégorie change : ses créneaux et poules aussi
+    } else if (cible.id === 'cv-pub-creneau') {
+      pubCreneau = cible.value; pubPoule = '';
+    } else if (cible.id === 'cv-pub-poule') {
+      pubPoule = cible.value;
+    } else return;
+    afficherClassements();
+  });
+}
+
+/**
+ * La vue Classements : la barre de filtres, puis le classement à gauche et les derniers
+ * scores à droite.
+ * ⭐ Les derniers scores gardent leur portée « TOURNOI ENTIER » — toutes catégories, toutes
+ *    poules. C'est ce qu'un spectateur vient chercher en premier, et le filtrer par poule
+ *    l'aurait réduit à ce qu'il regarde déjà dans la colonne de gauche.
+ */
 function afficherClassements() {
   const zone = document.getElementById('vue-classements');
-  const matin = classementParGroupe('matin');
+  const creneaux = creneauxPublics();
+  // Un créneau mémorisé qui n'existe plus (catégorie sans après-midi) retombe sur le matin.
+  if (!creneaux.some(function (c) { return c.cle === pubCreneau; })) pubCreneau = creneaux[0].cle;
+  const groupes = groupesDuCreneau();
+  if (pubPoule && !groupes.some(function (g) { return g.titre === pubPoule; })) pubPoule = '';
 
-  // En tête : le fil des derniers scores du tournoi (portée « tournoi entier », comme les classements).
-  // L'encart partenaire (C) se glisse APRÈS les premiers scores : on ne fait jamais attendre
-  // le lecteur qui vient chercher un résultat.
-  let html = sectionDerniersScores() + encartFil();
-
-  if (!matin.length) {
-    zone.innerHTML = html + '<p class="vide">Aucune poule pour le moment.</p>';
-    brancherEncartsFil();
-    return;
+  let principal = '';
+  if (pubCreneau === 'aprem') {
+    principal = sectionApresMidiClassements(categorieActive);
+  } else if (!groupes.length) {
+    principal = '<p class="vide">Aucune poule pour le moment.</p>';
+  } else {
+    principal = '<div class="planning-phase">🌅 Poules (matin)</div>' +
+      '<div class="cv-classements-grid">' +
+      filtrerGroupes(groupes).map(function (g) {
+        return '<section>' + tableComplete(g.titre, g.classement) + '</section>';
+      }).join('') + '</div>';
   }
 
-  html += '<div class="planning-phase">🌅 Poules (matin)</div>';
-  matin.forEach(function (cat) {
-    html += '<h3 class="live-cat">' + echapper(cat.categorie) + '</h3>';
-    html += '<div class="cv-classements-grid">';
-    cat.groupes.forEach(function (g) { html += '<section>' + tableComplete(g.titre, g.classement) + '</section>'; });
-    html += '</div>';
-  });
-
-  html += sectionApresMidiClassements(categorieActive);
-  zone.innerHTML = html;
+  zone.innerHTML = barreFiltresClassements(creneaux, groupes) +
+    '<div class="cv-pub-colonnes">' +
+      '<div class="cv-pub-principal">' + principal + '</div>' +
+      '<aside class="cv-pub-derniers">' + sectionDerniersScores() + encartFil() + '</aside>' +
+    '</div>';
+  brancherFiltresClassements();
   brancherEncartsFil();
 }
 
@@ -1022,7 +1129,10 @@ function sectionApresMidiClassements(categorie) {
     ? '🏉 Après-midi — poules de niveau' : '🏉 Après-midi — classement croisé par niveau') + '</div>';
   classementParGroupe('aprem').forEach(function (cat) {
     html += '<div class="cv-classements-grid">';
-    cat.groupes.forEach(function (g) { html += '<section>' + tableComplete(g.titre, g.classement) + '</section>'; });
+    // Le filtre « Poule » de la barre agit ici sur les NIVEAUX — les groupes de l'après-midi.
+    // ⛔ Il ne touche ni l'arbre de Coupe, ni le plateau, ni le classement général : ceux-là
+    //    n'ont pas de groupe, les filtrer n'aurait aucun sens.
+    filtrerGroupes(cat.groupes).forEach(function (g) { html += '<section>' + tableComplete(g.titre, g.classement) + '</section>'; });
     html += '</div>';
   });
 
