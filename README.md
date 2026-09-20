@@ -89,16 +89,88 @@ rediriger toutes les pages.
 
 Sur `localhost`, `127.0.0.1`, `[::1]` ou `file:`, les pages ne contactent plus le backend distant.
 Elles attendent une API de test `/__api` sur la même origine. Un simple serveur statique permet
-de voir les fichiers, mais ne fournit pas de données ni de sauvegardes.
+de voir les fichiers, mais ne fournit ni données ni sauvegardes.
 
-Pour la revue de la refonte du 20 septembre 2026, l'atelier isolé se lance avec :
+Depuis la racine de ce dépôt, **si Python 3 est déjà disponible sur la machine** :
 
 ```bash
-node "/Users/romainrifleu/Documents/Codex/2026-09-20/tu-dois-r-aliser-la-refonte/work/serveur.cjs"
+python3 -m http.server 8137
 ```
 
-puis ouvrir `http://127.0.0.1:8137/atelier`. Les clés affichées sont fictives ; les données restent
-en mémoire. Les emails, Drive et les appels réseau Google sont bloqués. Le dossier `livrables`
-voisin du serveur contient le bilan Git, les contrats, les captures et les limites de vérification.
+⚠️ En alternative, `npx` rend le même service, mais **télécharge le paquet `http-server`** s'il
+n'est pas déjà dans le cache npm — ce n'est donc pas une option « sans installation » :
 
-La refonte ne demande aucune compilation, dépendance npm, migration backend ou modification des services distants.
+```bash
+npx --yes http-server -p 8137
+```
+
+puis ouvrir <http://127.0.0.1:8137/tournoi.html> (ou `admin.html`). Ces deux serveurs ne répondent
+pas sur `/__api` : la mise en page, la navigation et les styles se revoient, mais les listes
+restent vides et rien ne s'enregistre. C'est voulu — une revue visuelle ne doit pas pouvoir écrire
+dans un classeur réel.
+
+Une revue **avec des données** demande un atelier qui sert ce dépôt *et* répond sur `/__api` avec
+des données en mémoire. Cet atelier ne fait pas partie du dépôt et n'est pas fourni ici : aucun
+chemin de machine n'est donc documenté.
+
+Les tests, eux, ne demandent ni serveur ni navigateur ni dépendance :
+
+```bash
+node --test tests/*.test.js
+```
+
+## Publier la refonte « Ciel & Verre »
+
+### Le frontend ne demande aucune migration
+
+La refonte ne touche que des fichiers statiques (HTML, CSS, JS). Elle ne demande **ni compilation,
+ni dépendance npm, ni migration de données, ni modification des services Google** : publier le
+dépôt suffit. `js/config.js` garde l'adresse de backend qu'il avait déjà.
+
+Une vérification appuie cette phrase plutôt que de l'affirmer : la refonte n'ajoute et ne retire
+**aucune action backend**. Les 28 actions appelées par `js/` sont exactement celles de `main`
+(relevé des appels `apiGet` / `apiPost` / `apiPostProtege` sur les deux branches).
+
+Le seul point d'attention à la publication est le **cache du navigateur**. Chaque CSS et chaque JS
+modifié par cette livraison est appelé avec une version unique, `?v=refonte-ciel-verre-20260920`,
+pour qu'un visiteur déjà venu ne garde pas un ancien fichier. `tests/cache-busting-refonte.test.js`
+recense ces fichiers et refuse toute référence non versionnée ou restée sur une version antérieure.
+
+⚠️ **Une page échappe à ce versionnement** : la saisie protégée est servie par la passerelle Apps
+Script, dont le modèle `SaisieProtegee.html` est figé (son empreinte est vérifiée octet pour octet).
+Elle charge `css/styles.css`, `js/commun.js`, `js/dialog.js`, `js/api.js`, `js/saisie.js` et
+`js/saisie-protegee.js` **sans version**. Lever cette limite imposerait un redéploiement Apps
+Script : ce n'est pas fait ici. À la table de marque, prévoir un rafraîchissement forcé.
+
+### Le backend, lui, a changé séparément aujourd'hui
+
+⛔ **Ne pas lire « le frontend n'a rien à migrer » comme « il n'y a rien à faire côté Google ».**
+Le backend Apps Script vit dans un **autre dépôt** (`../backend`, miroir local privé) et a reçu
+le 20 septembre 2026 des changements qui lui sont propres, sans rapport avec la refonte visuelle.
+
+Ce qui est constaté, et rien de plus :
+
+- le `Code.gs` et le `Test.gs` du miroir **ne correspondent plus** aux empreintes du socle déployé
+  (Version 2 du 8 septembre 2026) ; le miroir en tient le compte dans deux manifestes distincts ;
+- trois actions appelées par ce frontend — `getAccesScoresAdmin`, `getMatchsLitige` et
+  `getSaisieScores`, qui font vivre la saisie protégée des scores — **n'existent pas** dans le
+  socle déployé, seulement dans l'état local ;
+- cette dépendance **précède la refonte** : elle est déjà présente sur `main`.
+
+### Le verdict, en trois phrases
+
+- ⭐ **La refonte frontend est techniquement prête à être publiée** : rien à compiler, rien à
+  migrer, rien à changer côté Google pour qu'elle s'affiche.
+- ⛔ **L'application complète n'est pas prête pour un déploiement fonctionnel de bout en bout**
+  tant que le backend Apps Script n'a pas été mis à jour chez Google.
+- ⚠️ **Publier le frontend seul n'est donc pas un déploiement complet sans risque** dès lors que
+  la **table de marque protégée** est attendue : `getAccesScoresAdmin`, `getMatchsLitige` et
+  `getSaisieScores` manquent au backend **actuellement déployé**, et la saisie des scores ne
+  répondra pas.
+
+Ce déploiement backend est une **opération Google séparée et explicite**, qui n'a pas été faite
+ici et qui ne relève pas de ce dépôt. Voir `../backend/README.md`.
+
+⚠️ Si la journée de démonstration prévoit la saisie protégée des scores, **ordonner les deux
+opérations** : mettre à jour le backend d'abord, publier le frontend ensuite. Publier le frontend
+seul ne casse pas ce qui marche aujourd'hui, mais ne fait pas apparaître ce qui manque.

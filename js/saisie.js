@@ -238,7 +238,9 @@ function preparerEnteteDocument() {
   }
   if (!document.getElementById('cv-feuille-saisie')) {
     const base = document.querySelector('link[rel="stylesheet"]');
-    const href = (base && base.getAttribute('href') || 'css/styles.css').replace(/styles\.css.*$/, 'saisie.css');
+    // ⭐ On remplace le seul nom du fichier : la version (`?v=…`) de la feuille de base,
+    //    quand la page en porte une, doit suivre — sinon `saisie.css` resterait en cache.
+    const href = (base && base.getAttribute('href') || 'css/styles.css').replace(/styles\.css/, 'saisie.css');
     const lien = document.createElement('link');
     lien.id = 'cv-feuille-saisie';
     lien.rel = 'stylesheet';

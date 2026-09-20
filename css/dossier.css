@@ -1,4 +1,4 @@
-@import url("tokens.css");
+@import url("tokens.css?v=refonte-ciel-verre-20260920");
 /* ============================================================================
    DOSSIER CLUB — style « document » : fond blanc, texte sombre, format A4.
    Charte : navy var(--cv-texte) (titres, entête) + bleu vif var(--cv-action) (accents),

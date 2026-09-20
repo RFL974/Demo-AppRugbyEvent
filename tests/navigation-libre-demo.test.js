@@ -99,8 +99,8 @@ vrai(!source.includes("svgIcone('verrou')") && !source.includes('ecr-verrou-msg'
   'le rendu de la sidebar ne contient plus de cadenas ni de message de verrou');
 vrai(!styles.includes('.ecr-onglet.est-verrouille') && !styles.includes('.ecr-pastille.est-verrou'),
   'les styles de verrou devenus inutiles ont disparu');
-vrai(html.includes('js/ecrans.js?v=navigation-libre-demo-1') &&
-  html.includes('css/ecrans.css?v=navigation-libre-demo-1'),
+vrai(html.includes('js/ecrans.js?v=refonte-ciel-verre-20260920') &&
+  html.includes('css/ecrans.css?v=refonte-ciel-verre-20260920'),
   'le navigateur recharge bien la nouvelle navigation et ses styles');
 vrai(source.includes('majVerrouPublier') && source.includes('Le garde-fou métier n\'est PAS supprimé'),
   'la liberté de navigation ne prétend pas retirer le verrou métier de publication');

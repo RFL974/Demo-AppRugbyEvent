@@ -3,3 +3,4 @@
 
 # Artefacts d'outillage local
 .playwright-mcp/
+.claude/
