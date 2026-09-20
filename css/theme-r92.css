@@ -776,6 +776,9 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
 @media screen {
  .cv-autorisation-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; align-items:start; }
  .cv-autorisation-grid > * { min-width:0; }
+ .cv-aide-autorisation { margin-bottom:20px; }
+ .cv-aide-autorisation > p { padding:0 16px 16px; }
+ .theme-clair #bouton-enregistrer-autorisation,.theme-clair #bouton-imprimer-autorisation { background:#fff; color:var(--cv-action); border:1px solid var(--cv-bordure); }
  .cv-autorisation-section { margin:0 0 12px; }
  .cv-autorisation-section .autorisation-groupe { margin:0; border:0; padding:16px; }
  .cv-autorisation-section legend { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
