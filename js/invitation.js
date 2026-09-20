@@ -63,7 +63,7 @@ async function initInvitation() {
 function construireInvitation(g, categories) {
   const cats = (categories || []).filter(catPresente)
     .slice().sort(function (a, b) { return comparerCategorie(a.categorie, b.categorie); });
-  let html = '';
+  let html = '<div class="cv-invitation-intro"><div>';
 
   // 1-3) EN-TÊTE VITRINE : blason centré en grand, titre, date · lieu, affiche en héros,
   //      puis le descriptif COMPLET du tournoi (plus de troncature : c'est la vitrine).
@@ -71,6 +71,8 @@ function construireInvitation(g, categories) {
     surtitre: 'Vous êtes invités',
     presentationDefaut: 'Nous serions ravis de vous compter parmi les clubs invités de cette journée.'
   });
+
+  html += '</div><aside>' + section('Votre réponse', blocReponse(g), 'inv-reponse') + '</aside></div>';
 
   // 4) LA JOURNÉE EN UN COUP D'ŒIL : frise horaire (accueil → coup d'envoi → pause
   //    méridienne → reprise → fin envisagée). Chaque étape sans heure est omise.
@@ -84,7 +86,7 @@ function construireInvitation(g, categories) {
   html += section('Sur place', blocSurPlace(g));
 
   // 7) VOTRE RÉPONSE : encart mis en avant — date limite + contact référent.
-  html += section('Votre réponse', blocReponse(g), 'inv-reponse');
+  // Le même appel à réponse est placé dans la colonne du héros.
 
   // 8) PIED DE PAGE : logo + liens de l'association (Instagram, site). L'invitation n'a pas
   //    de bandeau d'actions : ses liens vivent dans le pied.

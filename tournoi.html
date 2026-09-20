@@ -32,13 +32,17 @@
         <img src="assets/logo-tournoi.svg" alt="" width="64" height="64" decoding="async">
         <h1 class="titre-page" id="titre-tournoi">Le tournoi</h1>
       </div>
+            <div class="onglets" role="tablist" aria-label="Vues du tournoi">
+              <button class="onglet actif" data-onglet="equipe" role="tab" aria-selected="true" aria-controls="vue-equipe">📋 Mon équipe</button>
+              <button class="onglet" data-onglet="classements" role="tab" aria-selected="false" aria-controls="vue-classements">🏆 Classements</button>
+            </div>
     </div>
   </header>
 
   <!-- ============ BANDEAU DE TITRE (dégradé navy) ============ -->
   <section class="bandeau-titre">
     <div class="conteneur">
-      <p class="sous-titre">En direct</p>
+      <h2 class="cv-public-titre" id="cv-public-titre">Mon équipe</h2>
       <p class="chapo">Poules, planning et scores en temps réel. Choisis ton équipe pour suivre tes matchs.</p>
     </div>
   </section>
@@ -72,10 +76,7 @@
             </div>
 
             <!-- Barre d'onglets (segmenté). « Mon équipe » est l'onglet par défaut. -->
-            <div class="onglets" role="tablist" aria-label="Vues du tournoi">
-              <button class="onglet actif" data-onglet="equipe" role="tab" aria-selected="true" aria-controls="vue-equipe">📋 Mon équipe</button>
-              <button class="onglet" data-onglet="classements" role="tab" aria-selected="false" aria-controls="vue-classements">🏆 Classements</button>
-            </div>
+
 
             <!-- Filtre catégorie GLOBAL : pilote les deux onglets. Masqué s'il n'y a qu'une catégorie. -->
             <div id="filtre-categorie" class="mp-filtre" hidden>

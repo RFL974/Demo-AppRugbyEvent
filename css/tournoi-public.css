@@ -78,8 +78,8 @@ a:hover { text-decoration: underline; }
    3. EN-TÊTE (navy, logo + retour au site)
    --------------------------------------------------------- */
 .entete {
-  background: rgb(255 255 255 / .88);
-  backdrop-filter: blur(16px);
+  background: #102e4b;
+  color: #fff;
   position: sticky;
   top: 0;
   z-index: 100;
@@ -139,11 +139,8 @@ a:hover { text-decoration: underline; }
 /* Colonne souple : l'ordre d'affichage des blocs est piloté par les `order:` ci-dessous,
    indépendamment de leur position dans le HTML. */
 .carte-app {
-  background: var(--blanc);
-  border: 1px solid var(--bordure);
-  border-radius: var(--rayon);
-  box-shadow: var(--ombre);
-  padding: 20px 18px 24px;
+  background: transparent;
+  padding: 0;
   display: flex;
   flex-direction: column;
 }
@@ -201,12 +198,19 @@ a:hover { text-decoration: underline; }
 #select-equipe { margin-bottom: 10px; }
 .cv-equipe-grid { display:grid; grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr); gap:24px; align-items:start; }
 .cv-equipe-grid > * { min-width:0; }
-.cv-prochain { background:var(--cv-selection); border:1px solid #c9deef; padding:24px; border-radius:16px; margin:20px 0; }
-.cv-prochain h2 { font-size:18px; color:var(--cv-action); }
+.cv-prochain { color:#fff; background:#102e4b; border:1px solid #102e4b; padding:24px; border-radius:16px; margin:20px 0; }
+.cv-prochain h2 { font-size:14px; font-weight:600; color:#c6e4fa; }
+.cv-prochain .match-meta { color:#d3e6f5; }
+.cv-prochain .mp-adv { color:#fff; font-size:26px; }
+.cv-prochain .mp-avenir { color:#d7f8e8; background:#275642; font-style:normal; font-size:13px; border-radius:99px; padding:5px 12px; }
 .cv-prochain .match { margin-bottom:0; background:transparent; border:0; padding:16px 0 0; }
-.cv-rangs { padding:20px; background:#f7fafd; border:1px solid var(--cv-bordure); border-radius:16px; margin-top:20px; }
+.cv-rangs { padding:20px; background:#fff; border:1px solid var(--cv-bordure); border-radius:16px; margin-top:20px; }
 .cv-public-brand { display:flex; align-items:center; gap:16px; }
-.cv-public-brand .titre-page { font-size:20px; }
+.cv-public-brand .titre-page { font-size:20px; color:#fff; }
+.cv-public-titre { font-size:32px; line-height:1.2; color:var(--cv-texte); letter-spacing:-.03em; }
+.entete .onglets { margin:0; }
+.entete .onglet { background:transparent; border-color:#46657e; color:#d8e9f7; }
+.entete .onglet.actif { background:#dff2ff; color:#102e4b; border-color:#dff2ff; }
 @media(max-width:767px) { .cv-equipe-grid { grid-template-columns:1fr; } .conteneur { padding:0 16px; } .cv-public-brand .titre-page { font-size:17px; } .cv-prochain { padding:18px; } }
 .mp-filtre { margin-bottom: 16px; }
 
@@ -234,14 +238,14 @@ a:hover { text-decoration: underline; }
   gap: 20px;
   align-items: flex-start;
 }
-.tete-controls { flex:1 1 auto; min-width:0; display:grid; grid-template-columns:1fr 1.5fr; gap:16px 24px; }
-.tete-controls .live-barre { grid-column:2; grid-row:1; justify-content:flex-end; margin:0; }
-.tete-controls .onglets { grid-column:1; grid-row:1; margin:0; }
+.tete-controls { flex:1 1 auto; min-width:0; display:grid; grid-template-columns:minmax(140px,.7fr) minmax(220px,1.3fr) auto; gap:16px 24px; align-items:end; background:#e7f2fa; padding:20px; border:1px solid #d4e5f2; border-radius:16px; }
+.tete-controls .live-barre { grid-column:3; grid-row:1; justify-content:flex-end; margin:0 0 10px; }
 .tete-controls .mp-filtre { margin:0; }
 .tete-cote:not(:has(> :not([hidden]))) { display:none; }
 .cv-classements-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr)); gap:24px; }
 .cv-classements-grid > section { min-width:0; }
-@media(max-width:767px) { .tete-controls { grid-template-columns:1fr; } .tete-controls .live-barre,.tete-controls .onglets { grid-column:auto; grid-row:auto; justify-content:flex-start; } }
+@media(max-width:900px) { .tete-controls { grid-template-columns:1fr 1fr; } .tete-controls .live-barre { grid-column:1/-1; grid-row:2; justify-content:flex-start; } }
+@media(max-width:767px) { .entete .conteneur { flex-wrap:wrap; } .entete .onglets { width:100%; } .tete-controls { grid-template-columns:1fr; padding:16px; } .tete-controls .live-barre { grid-column:auto; grid-row:3; } .cv-prochain .mp-adv { font-size:22px; } }
 
 /* Colonne de droite : le podium, puis le rail partenaires. Sur ordinateur cette colonne
    est vide les trois quarts du temps — le rail s'y installe sans rien pousser. */

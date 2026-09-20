@@ -101,6 +101,8 @@ function basculer(cible) {
     b.classList.toggle('actif', actif);
     b.setAttribute('aria-selected', actif ? 'true' : 'false');
   });
+  const titreVue = document.getElementById('cv-public-titre');
+  if (titreVue) titreVue.textContent = cible === 'classements' ? 'Classements' : 'Mon équipe';
   document.getElementById('vue-equipe').hidden = (cible !== 'equipe');
   const choix = document.getElementById('cv-choix-equipe');
   if (choix) choix.hidden = (cible !== 'equipe');

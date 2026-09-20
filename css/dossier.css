@@ -674,9 +674,17 @@ body {
 @media screen {
  .cv-dossier-grid { display:grid; grid-template-columns:minmax(0,1.6fr) minmax(280px,1fr); gap:24px; align-items:start; }
  .cv-dossier-grid > * { min-width:0; }
- .barre-outils { position:sticky; top:0; z-index:30; min-height:64px; padding:12px 32px; background:rgb(255 255 255 / .9); backdrop-filter:blur(16px); color:var(--cv-texte); border-bottom:1px solid var(--cv-bordure); }
- .barre-outils-titre,.barre-outils-astuce { color:var(--cv-secondaire); }
- .btn-outil { color:var(--cv-action); border:1px solid var(--cv-bordure); border-radius:10px; min-height:44px; }
+ .barre-outils { position:sticky; top:0; z-index:30; min-height:64px; padding:12px 32px; background:#102e4b; color:#fff; border-bottom:1px solid var(--cv-bordure); }
+ .barre-outils-titre,.barre-outils-astuce { color:#ccdeec; }
+ .barre-outils-astuce { max-width:360px; font-size:11px; margin-left:auto; }
+ .cv-club-marque { display:flex; align-items:center; gap:10px; font-weight:700; }
+ .cv-club-marque small { display:block; font-size:11px; font-weight:400; color:#c6dbea; }
+ .cv-club-page { background:#dff2ff; color:#102e4b; padding:8px 16px; border-radius:8px; font-size:14px; font-weight:600; }
+ .cv-invitation-intro { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr); gap:32px; align-items:start; }
+ .cv-invitation-intro .inv-reponse { margin:0; background:var(--cv-selection); }
+ .cv-invitation-intro .inv-cta { background:transparent; border:0; padding:0; }
+ .cv-invitation-intro .inv-hero { padding-top:0; }
+ .btn-outil { color:#fff; border:1px solid #55738c; border-radius:10px; min-height:44px; }
  .btn-principal { color:#fff; }
  .rep-form input[type=number] { min-height:44px; border:1px solid var(--cv-bordure); border-radius:10px; padding:8px; font:inherit; color:var(--cv-texte); background:#fff; }
  .rep-form { display:grid; grid-template-columns:minmax(0,1.65fr) minmax(280px,1fr); gap:24px; align-items:start; }
@@ -694,6 +702,9 @@ body {
 }
 @media screen and (max-width:767px) {
  .cv-dossier-grid { grid-template-columns:1fr; gap:0; }
+ .cv-invitation-intro { grid-template-columns:1fr; gap:20px; }
+ .barre-outils-astuce { display:none; }
+ .cv-club-page { margin-left:auto; }
  .rep-form { grid-template-columns:1fr; }
  .cv-reponse-recap { position:static; padding:18px; }
  .feuille { margin:12px; padding:18px; }
