@@ -385,7 +385,7 @@ function reperesFFREmail(cats, A) {
  * Corps HTML de l'email d'invitation (compatible clients mail : tableaux + styles en ligne).
  * L'email EST l'invitation COMPLÈTE (décision Romain) : même contenu que la page vitrine —
  * blason centré, surtitre « a le plaisir de vous inviter », grand titre, date · lieu, affiche
- * centrée, descriptif complet, journée en un coup d'œil, UNE CARTE DÉTAILLÉE PAR CATÉGORIE
+ * centrée, descriptif complet, UNE CARTE DÉTAILLÉE PAR CATÉGORIE
  * (forme de jeu, temps de jeu, récupération, effectifs, arbitrage, règlement, après-midi
  * expliqué) et les repères FFR. `salutationHtml` est inséré TEL QUEL (jeton « {{SALUTATION}} »
  * pour l'envoi, ou « Bonjour {exemple}, » pour l'aperçu) ; `imgSrc` = l'affiche (URL Drive en
@@ -430,16 +430,12 @@ function emailHtmlInvitation(g, cats, imgSrc, salutationHtml, intro, lienReponse
   const bloc_salut = '<p style="margin:28px 0 8px;' + A + 'font-size:16px;line-height:1.5;font-weight:bold;color:' + EMAIL_NAVY + ';">' + salutationHtml + '</p>'
     + (String(intro || '').trim() ? '<p style="margin:0;' + A + 'font-size:14px;color:' + EMAIL_TXT + ';text-align:left;line-height:1.7;">' + nl2brEmail(intro) + '</p>' : '');
 
-  // « La journée en un coup d'œil » : la FRISE horaire (même visuel que la page vitrine —
-  // décision Romain, plus parlant que des lignes de tableau). Pas de ligne d'arbitrage ici :
-  // l'information figure déjà sur la carte de chaque catégorie.
+  // Informations pratiques de l'invitation initiale, sans la frise de la journée.
   const ligneJ = function (lib, val) {
     if (!val) return '';
-    return '<tr><td style="' + A + 'font-size:13px;line-height:1.5;color:' + EMAIL_GRIS + ';padding:8px 12px 8px 16px;vertical-align:top;">' + echapper(lib) + '</td>'
-      + '<td style="' + A + 'font-size:13px;line-height:1.5;color:' + EMAIL_TXT + ';font-weight:bold;padding:8px 16px 8px 0;vertical-align:top;">' + echapper(val) + '</td></tr>';
+    return '<tr><td style="' + A + 'font-size:14px;line-height:1.5;color:' + EMAIL_GRIS + ';padding:10px 10px 10px 12px;width:34%;vertical-align:top;">' + echapper(lib) + '</td>'
+      + '<td style="' + A + 'font-size:14px;line-height:1.5;color:' + EMAIL_TXT + ';font-weight:bold;padding:10px 12px 10px 0;vertical-align:top;overflow-wrap:anywhere;word-break:break-word;">' + echapper(val) + '</td></tr>';
   };
-  const frise = friseJourneeEmail(g, cats, A);
-  const blocJourJ = frise ? (emailTitreSection('La journée en un coup d\'œil') + frise) : '';
 
   // « Vous êtes invités » : l'invitation COMPLÈTE — une carte détaillée par catégorie
   // (miroir des cartes de la page vitrine, en HTML email-safe : tableaux empilés),
@@ -491,7 +487,7 @@ function emailHtmlInvitation(g, cats, imgSrc, salutationHtml, intro, lienReponse
   if (estOui(g.espace_sandwich_disponible)) pastilles.push('🥪 Espace sandwich');
   if (estOui(g.boutique_disponible)) pastilles.push('🛍️ Boutique');
   const repasOui = estOui(g.repas_sur_place_oui);
-  if (repasOui) pastilles.push('🍽️ Repas');
+  if (repasOui) pastilles.push('🍽️ Précommande de repas');
   let detailRepas = '';
   if (repasOui && g.repas_sur_place_mode === 'prix_personne' && String(g.repas_sur_place_montant || '').trim()) {
     detailRepas = String(g.repas_sur_place_montant).trim() + ' € par personne';
@@ -518,7 +514,7 @@ function emailHtmlInvitation(g, cats, imgSrc, salutationHtml, intro, lienReponse
         + 'padding:7px 14px;' + A + 'font-size:13px;margin:0 8px 8px 0;">' + echapper(p) + '</span>';
     }).join('') + '</p>';
     if (detailRepas) {
-      surPlace += '<p style="margin:2px 0 0;' + A + 'font-size:14px;color:' + EMAIL_TXT + ';"><strong>Repas :</strong> '
+      surPlace += '<p style="margin:2px 0 0;' + A + 'font-size:14px;color:' + EMAIL_TXT + ';"><strong>Précommande de repas :</strong> '
         + echapper(detailRepas) + '</p>';
     }
     if (detailGouter) {
@@ -542,11 +538,11 @@ function emailHtmlInvitation(g, cats, imgSrc, salutationHtml, intro, lienReponse
     + '<a href="' + lienInv + '" style="color:' + EMAIL_BLEU + ';">Voir la version en ligne</a></p>';
 
   // Après le contenu général, les cartes reprennent exactement l'ordre du menu initial.
-  return '<div style="background:' + EMAIL_FOND + ';padding:32px 14px;' + A + '">'
-    + '<table role="presentation" cellpadding="0" cellspacing="0" width="640" style="max-width:640px;width:100%;margin:0 auto;background:#ffffff;border-collapse:separate;border-radius:18px;box-shadow:0 8px 28px rgba(12,28,46,.10);">'
-    + '<tr><td style="padding:34px 38px 30px;">'
+  return '<div style="background:' + EMAIL_FOND + ';padding:16px 8px;' + A + '">'
+    + '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="max-width:720px;width:100%;margin:0 auto;background:#ffffff;border-collapse:separate;border-radius:18px;box-shadow:0 8px 28px rgba(12,28,46,.10);">'
+    + '<tr><td style="padding:24px 16px;">'
     + entete
-    + blocAffiche + bloc_salut + blocDescription + blocJourJ + tblInvites
+    + blocAffiche + bloc_salut + blocDescription + tblInvites
     + blocModalites + blocReponse + blocContacts + surPlace + boutonBas + pied
     + '</td></tr></table></div>';
 }
@@ -615,17 +611,6 @@ function emailTexteInvitation(g, cats, salutationTexte, intro, lienReponse, lien
       L.push('');
     }
   }
-  // La journée : les étapes de la frise HTML (pause avec sa durée, reprise calculée, notes), au
-  // même format que le texte du dossier, puis l'arbitrage.
-  const etapes = etapesJourneeEmail(g, cats);
-  const arb = [];
-  cats.forEach(function (c) { const v = String(c.arbitrage_organisation || '').trim(); if (v && arb.indexOf(v) === -1) arb.push(v); });
-  if (etapes.length || arb.length) {
-    L.push('LA JOURNÉE');
-    etapes.forEach(function (e) { L.push('- ' + e.h + ' ' + e.t + (e.n ? ' (' + e.n + ')' : '')); });
-    if (arb.length) L.push('Arbitrage : ' + arb.join(' · '));
-    L.push('');
-  }
   // Sections du menu « Invitation initiale », dans le même ordre.
   const modalites = [];
   if (String(g.date_limite_confirmation || '').trim()) modalites.push('Date limite de paiement : ' + formaterDateFr(g.date_limite_confirmation) + '.');
@@ -660,7 +645,7 @@ function emailTexteInvitation(g, cats, salutationTexte, intro, lienReponse, lien
   if (estOui(g.espace_sandwich_disponible)) services.push('espace sandwich');
   if (estOui(g.boutique_disponible)) services.push('boutique');
   if (estOui(g.repas_sur_place_oui)) {
-    let repas = 'repas';
+    let repas = 'précommande de repas';
     if (g.repas_sur_place_mode === 'prix_personne' && String(g.repas_sur_place_montant || '').trim()) {
       repas += ' — ' + String(g.repas_sur_place_montant).trim() + ' € par personne';
     } else if (g.repas_sur_place_mode === 'compris_inscription') {
@@ -2068,7 +2053,7 @@ function emailHtmlDossier(g, club, imgSrc, salutationHtml, intro, lienDossier) {
       + '<table role="presentation" cellpadding="0" cellspacing="0" width="100%" style="' + EMAIL_TABLEAU_INFOS + '">' + lignesHtml + '</table>') : '';
   };
 
-  /* --- 2) LE JOUR J : la journée en un coup d'œil (même frise que l'invitation) --- */
+  /* --- 2) LE JOUR J : la journée en un coup d'œil (réservée au dossier final) --- */
   const frise = friseJourneeEmail(g, cats, A);
   const blocJournee = frise ? (emailTitreSection('La journée en un coup d\'œil') + frise) : '';
 

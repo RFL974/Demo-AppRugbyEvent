@@ -15,8 +15,8 @@
  *   ① I — l'identité du tournoi : nom, date, lieu (le nom ne passait que par l'intro éditable) ;
  *   ② R — les liens de règlement ;
  *   ③ A — l'explication du format d'après-midi (seul son libellé restait) ;
- *   ④ P — la durée de la pause méridienne, l'heure de reprise et les notes de la frise ;
- *   et tout le reste du texte ne doit pas bouger : J (journée), S (Super Challenge), N (le reste).
+ *   ④ P — l'absence de la frise horaire dans le mail initial (demande du 20 septembre) ;
+ *   et tout le reste du texte ne doit pas bouger : J (frise disponible pour le dossier), S (Super Challenge), N (le reste).
  *
  *  ⭐ CODE RÉEL : js/commun.js, js/admin.js, js/admin-infos-publication.js et
  *  js/admin-invitations.js sont chargés entiers dans un bac Node isolé. ⛔ Rien n'est recopié.
@@ -240,63 +240,13 @@ function criteres(b) {
     (ligneApres(base, ligneCat(base, 'U10')) || '').indexOf('  Après-midi — ' + FORMATS.POULES_NIVEAU + ' : ') === 0 &&
     (ligneApres(base, ligneCat(base, 'U12')) || '').indexOf('  Après-midi — ' + FORMATS.CROISE + ' : ') === 0);
 
-  /* ---- P — pause, reprise et notes de la frise ---- */
-  C('P', 'P1', 'pause méridienne : son heure ET sa durée (12:00, 60 min)', () => ligneAvec(base, '12:00', 'Pause méridienne', '60 min'));
-  C('P', 'P2', 'reprise calculée : 12:00 + 60 min ⇒ 13:00', () => ligneAvec(base, '13:00', 'Reprise'));
-  C('P', 'P3', 'autre calcul : 12:20 + 95 min ⇒ reprise 13:55', () => {
-    const t = texte(b, avec((c) => { c.global.pause_dejeuner_debut = '12:20'; c.global.pause_dejeuner_duree_min = '95'; }));
-    return ligneAvec(t, '12:20', 'Pause méridienne', '95 min') && ligneAvec(t, '13:55', 'Reprise');
-  });
-  C('P', 'P4', 'notes de la frise : « Matin : matchs de poules » au coup d\'envoi, « Après-midi : selon la catégorie » à la reprise', () =>
-    ligneAvec(base, '09:15', 'Coup d\'envoi', 'Matin : matchs de poules') &&
-    ligneAvec(base, '13:00', 'Reprise', 'Après-midi : selon la catégorie'));
-  C('P', 'P5', 'chaque étape d\'etapesJourneeEmail (heure, étape, note) a SA ligne dans « LA JOURNÉE », dans l\'ordre', () => {
+  /* La frise ne figure plus dans l'invitation initiale (HTML et texte). */
+  C('P', 'P1', 'aucune frise horaire dans le mail initial, même avec les horaires configurés', () =>
+    base.indexOf('LA JOURNÉE') === -1 && base.indexOf('Pause méridienne') === -1 &&
+    html(b, CONFIG).indexOf("La journée en un coup d'œil") === -1);
+  C('J', 'J1', 'la frise reste disponible pour le dossier final', () => {
     etat(b, CONFIG);
-    const e = b.bac.etapesJourneeEmail(b.bac.globalInvitation(), b.bac.catsInvitationTriees()), bl = bloc(base);
-    let pos = 0;
-    return e.length === 5 && e.every((x) => {
-      const k = bl.findIndex((l, i) => i >= pos && l.indexOf(x.h) !== -1 && l.indexOf(x.t) !== -1 && (!x.n || l.indexOf(x.n) !== -1));
-      if (k === -1) return false;
-      pos = k + 1;
-      return true;
-    });
-  });
-
-  /* ---- J — le reste de la journée ne bouge pas ---- */
-  C('J', 'J1', 'accueil : 08:30', () => ligneAvec(base, '08:30', 'Accueil'));
-  C('J', 'J2', 'coup d\'envoi : 09:15', () => ligneAvec(base, '09:15', 'Coup d\'envoi'));
-  C('J', 'J3', 'fin envisagée automatique : 16:30 + 75 min ⇒ 17:45', () => ligneAvec(base, '17:45', 'Fin envisagée'));
-  C('J', 'J4', 'fin envisagée manuelle prioritaire (18:10)', () => {
-    const t = texte(b, avec((c) => { c.global.heure_fin_communiquee = '18:10'; }));
-    return ligneAvec(t, '18:10', 'Fin envisagée') && t.indexOf('17:45') === -1;
-  });
-  C('J', 'J5', 'arbitrage conservé dans « LA JOURNÉE », dans l\'ordre des catégories et sans doublon', () => {
-    const t = texte(b, avec((c) => { c.categories[0].arbitrage_organisation = 'Éducateurs des clubs'; }));
-    return bloc(base).some((l) => l.indexOf('Arbitrage : Éducateurs des clubs · Arbitres fédéraux · Arbitres de ligue') !== -1) &&
-      bloc(t).some((l) => l.indexOf('Arbitrage : Éducateurs des clubs · Arbitres de ligue') !== -1);
-  });
-  C('J', 'J6', 'durée de pause vide, invalide, nulle ou négative : ni durée ni reprise inventées', () =>
-    ['', 'abc', '0', '-15'].every((d) => {
-      const t = texte(b, avec((c) => { c.global.pause_dejeuner_duree_min = d; }));
-      return ligneAvec(t, '12:00', 'Pause méridienne') && t.indexOf('Reprise') === -1 &&
-        !bloc(t).some((l) => l.indexOf('Pause méridienne') !== -1 && /\d\s*min/.test(l.slice(l.indexOf('Pause méridienne'))));
-    }));
-  C('J', 'J7', 'pas de pause saisie : ni pause ni reprise', () => {
-    const t = texte(b, avec((c) => { c.global.pause_dejeuner_debut = ''; }));
-    return t.indexOf('Pause méridienne') === -1 && t.indexOf('Reprise') === -1 && ligneAvec(t, '08:30', 'Accueil');
-  });
-  C('J', 'J8', 'arbitrage seul (aucune heure) : il reste dans « LA JOURNÉE »', () => {
-    const t = texte(b, avec((c) => {
-      ['heure_rdv', 'heure_debut', 'pause_dejeuner_debut', 'heure_fin', 'heure_fin_communiquee'].forEach((k) => { c.global[k] = ''; });
-    }));
-    return bloc(t).some((l) => l.indexOf('Arbitrage : Éducateurs des clubs') !== -1) && t.indexOf('Accueil') === -1;
-  });
-  C('J', 'J9', 'ni heure ni arbitrage : aucun bloc « LA JOURNÉE »', () => {
-    const t = texte(b, avec((c) => {
-      ['heure_rdv', 'heure_debut', 'pause_dejeuner_debut', 'heure_fin', 'heure_fin_communiquee'].forEach((k) => { c.global[k] = ''; });
-      c.categories.forEach((x) => { x.arbitrage_organisation = ''; });
-    }));
-    return t.indexOf('LA JOURNÉE') === -1;
+    return b.bac.etapesJourneeEmail(b.bac.globalInvitation(), b.bac.catsInvitationTriees()).length === 5;
   });
 
   /* ---- S — Super Challenge de France inchangé ---- */
@@ -355,7 +305,7 @@ function criteres(b) {
   C('N', 'N12', 'signature en fin de texte', () => ls.slice(-3).join('|') === '|Au plaisir de vous accueillir,|L\'organisation du tournoi');
   C('N', 'N13', 'ordre des blocs aligné sur le menu « Invitation initiale »', () => {
     const reperes = ['{{SALUTATION}}', INTRO, '▶ Répondre à l\'invitation : {{LIEN_REPONSE}}', 'Première ligne du descriptif fictif.',
-      'VOUS ÊTES INVITÉS', '- U10 : ', 'RAPPEL IMPORTANT', 'LA JOURNÉE', 'MODALITÉS D\'INSCRIPTION',
+      'VOUS ÊTES INVITÉS', '- U10 : ', 'RAPPEL IMPORTANT', 'MODALITÉS D\'INSCRIPTION',
       'Date limite de paiement', 'RÉPONSE À L\'INVITATION', 'Réponse souhaitée avant le',
       'Contact : ', 'SUR PLACE', 'Sur place : ', 'Voir la version en ligne : ', 'Au plaisir de vous accueillir,'];
     let pos = -1;
@@ -378,8 +328,8 @@ const FAMILLES = [
   ['I', '① I — Identité du tournoi (nom, date, lieu)'],
   ['R', '② R — Règlements'],
   ['A', '③ A — Format d\'après-midi expliqué'],
-  ['P', '④ P — Pause, reprise et notes de la frise'],
-  ['J', '⑤ J — Le reste de la journée ne bouge pas'],
+  ['P', '④ P — Pas de frise dans le mail initial'],
+  ['J', '⑤ J — Frise du dossier conservée'],
   ['S', '⑥ S — Super Challenge de France inchangé'],
   ['N', '⑦ N — Tout le reste du texte, jetons et personnalisation']
 ];
@@ -390,10 +340,9 @@ const MUTANTS = [
     de: '  L.push(nom.toUpperCase() + (quand.length ? \' — \' + quand.join(\' · \') : \'\'));\n  L.push(\'\');\n', vers: '' },
   { famille: 'R', nom: 'M2 — sans le règlement',
     de: '      if (regl) seg.push(\'règlement : \' + regl[0]);\n', vers: '' },
-  { famille: 'P', nom: 'M3 — sans la durée de pause ni la reprise',
-    de: '  const etapes = etapesJourneeEmail(g, cats);\n  const arb = [];\n',
-    vers: '  const etapes = etapesJourneeEmail(g, cats).filter(function (e) { return e.t !== \'Reprise\'; })\n' +
-      '    .map(function (e) { return e.t === \'Pause méridienne\' ? { h: e.h, t: e.t, n: \'\' } : e; });\n  const arb = [];\n' },
+  { famille: 'P', nom: 'M3 — la journée réapparaît dans le mail initial',
+    de: '  // Sections du menu « Invitation initiale », dans le même ordre.',
+    vers: "  L.push('LA JOURNÉE');\n  // Sections du menu « Invitation initiale », dans le même ordre." },
   { famille: 'A', nom: 'M4 — sans l\'explication de l\'après-midi',
     de: '      if (!scf.estScf) {\n        const cle = cleFormatApresMidi(c);\n' +
       '        L.push(\'  Après-midi — \' + DOSSIER_FORMATS[cle] + \' : \' + DOSSIER_FORMATS_DESC[cle]);\n      }\n', vers: '' }
