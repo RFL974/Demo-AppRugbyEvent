@@ -771,3 +771,17 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
 .cv-information.cv-validation { color:var(--cv-succes); background:#e7f7ef; border-color:#b8e0c9; }
 .theme-clair .avc-partiel { color:#80520b; background:#fff3d6; }
 .theme-clair .avc-complet { color:var(--cv-succes); background:#e0f5e9; }
+
+/* Autorisation : saisie par section, documents et relevé réel dans la colonne droite. */
+@media screen {
+ .cv-autorisation-grid { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:24px; align-items:start; }
+ .cv-autorisation-grid > * { min-width:0; }
+ .cv-autorisation-section { margin:0 0 12px; }
+ .cv-autorisation-section .autorisation-groupe { margin:0; border:0; padding:16px; }
+ .cv-autorisation-section legend { position:absolute; width:1px; height:1px; overflow:hidden; clip-path:inset(50%); }
+ .cv-autorisation-apercu { position:sticky; top:88px; border:1px solid var(--cv-bordure); padding:20px; border-radius:16px; background:#fff; }
+ .cv-autorisation-apercu .ligne-action { display:grid; margin-top:0; }
+ .cv-autorisation-apercu #autorisation-feuille { max-height:52vh; overflow:auto; border-top:1px solid var(--cv-bordure); padding-top:12px; }
+ .cv-autorisation-apercu .autorisation-table { font-size:12px; }
+}
+@media screen and (max-width:1000px) { .cv-autorisation-grid { grid-template-columns:1fr; } .cv-autorisation-apercu { position:static; } }

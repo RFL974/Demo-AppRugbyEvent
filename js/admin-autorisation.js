@@ -207,21 +207,21 @@ function rendreSaisieAutorisation(masque) {
   masque = masque || {};
   let nbMasquees = 0;
   let html = '<form id="form-autorisation" class="autorisation-saisie">';
-  AUTORISATION_SAISIE.forEach(function (grp) {
+  AUTORISATION_SAISIE.forEach(function (grp, index) {
     const champs = grp.champs.filter(function (c) {
       if (masque[c.p]) { nbMasquees++; return false; }
       return true;
     });
     if (!champs.length) return;
-    html += '<fieldset class="autorisation-groupe"><legend>' + echapper(grp.titre) + '</legend>';
+    html += '<details class="cv-options cv-autorisation-section"' + (index === 0 ? ' open' : '') + '><summary>' + echapper(grp.titre) + '</summary><fieldset class="autorisation-groupe"><legend>' + echapper(grp.titre) + '</legend>';
     html += champs.map(champSaisieAutorisation).join('');
-    html += '</fieldset>';
+    html += '</fieldset></details>';
   });
 
   // B.2 — Récompenses par catégorie présente.
   const cats = catsPresentesAutorisation();
   if (cats.length) {
-    html += '<fieldset class="autorisation-groupe"><legend>B.2 — Récompenses par catégorie</legend>';
+    html += '<details class="cv-options cv-autorisation-section"><summary>B.2 — Récompenses par catégorie</summary><fieldset class="autorisation-groupe"><legend>B.2 — Récompenses par catégorie</legend>';
     html += cats.map(function (c) {
       const nom = String(c.categorie || '').trim();
       const v = valAutorisation('org_recompenses_' + nom);
@@ -230,7 +230,7 @@ function rendreSaisieAutorisation(masque) {
         ['non', 'oui'].map(function (o) { return '<option value="' + o + '"' + (v === o ? ' selected' : '') + '>' + o + '</option>'; }).join('') +
         '</select></label>';
     }).join('');
-    html += '</fieldset>';
+    html += '</fieldset></details>';
   }
   html += '</form>';
 
