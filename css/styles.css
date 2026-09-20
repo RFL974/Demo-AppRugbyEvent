@@ -1423,6 +1423,10 @@ button .ic { margin-right: 0.45em; }
   color: var(--bleu-ciel);
 }
 .phase-contenu { margin-top: 8px; }
+@media screen and (min-width:900px) {
+  #liste-matchs .phase-contenu { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:16px; }
+  #liste-matchs .phase-contenu > .match { margin:0; }
+}
 
 /* ==========================================================================
    PAGE PERFS DU CLUB (interne) — couleurs V/N/D reprises du planning :
@@ -1750,6 +1754,8 @@ details.dossier-final > .carte:last-child { margin-bottom: 0; }
 }
 
 /* Carte d'une équipe du club */
+.cv-perfs-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr)); gap:24px; align-items:start; }
+.cv-perfs-grid > section { min-width:0; }
 .perfs-equipe {
   border: 1px solid var(--cv-bordure);
   border-radius: var(--rayon);

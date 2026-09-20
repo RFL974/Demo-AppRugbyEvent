@@ -190,8 +190,8 @@ body.theme-clair { color:var(--cv-texte); background:var(--cv-fond); padding:24p
   background: #f8fafc;
 }
 .theme-clair .sponsors-formulaire .zone-depot {
-  border-color: rgba(255, 255, 255, 0.42);
-  background: var(--r92-navy);
+  border-color: #a8bfd2;
+  background: #fff;
 }
 .theme-clair .sponsors-interrupteur-publication {
   padding: 14px 16px;

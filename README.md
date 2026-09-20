@@ -31,8 +31,8 @@ demandée : on ouvre l'adresse, on choisit son équipe, on suit ses matchs.
 ### L'administration — `admin.html`
 
 L'écran de l'organisateur : réglages du tournoi, catégories et terrains, équipes, génération des
-poules et du planning, partenaires, publication. Sur grand écran, une barre latérale et quatre
-onglets ; sur mobile, un assistant à cartes qui guide pas à pas. **Protégée par une clé
+poules et du planning, partenaires, publication. La direction **Ciel & Verre** utilise une barre
+latérale par groupes sur ordinateur et le même parcours via le bouton Menu sur mobile. **Protégée par une clé
 administrateur.**
 
 ### La saisie des scores — `saisie.html` (page fermée) et la saisie protégée
@@ -76,7 +76,7 @@ Une page interne de suivi, en lecture seule, qui n'est liée depuis aucune autre
 
 | Dossier | Contenu |
 |---|---|
-| `css/` | Thème sombre des écrans de gestion, thème clair de la page publique, encarts partenaires, pages « document » |
+| `css/` | Tokens Ciel & Verre partagés, composants, navigation responsive, page publique, partenaires et impression |
 | `js/` | Une logique par page, plus les briques communes : `config.js` (adresse du backend), `api.js` (appels), `commun.js` et `commun-dossier.js` (fonctions partagées) |
 | `js/vendor/` | Bibliothèques tierces embarquées |
 | `assets/`, `img/` | Logos et icônes |
@@ -87,11 +87,18 @@ rediriger toutes les pages.
 
 ## Voir les pages en local
 
-Ouvrir un fichier directement suffit pour un aperçu. Pour un vrai serveur local, depuis la racine
-de ce dépôt :
+Sur `localhost`, `127.0.0.1`, `[::1]` ou `file:`, les pages ne contactent plus le backend distant.
+Elles attendent une API de test `/__api` sur la même origine. Un simple serveur statique permet
+de voir les fichiers, mais ne fournit pas de données ni de sauvegardes.
+
+Pour la revue de la refonte du 20 septembre 2026, l'atelier isolé se lance avec :
 
 ```bash
-python3 -m http.server 8123
+node "/Users/romainrifleu/Documents/Codex/2026-09-20/tu-dois-r-aliser-la-refonte/work/serveur.cjs"
 ```
 
-puis ouvrir `http://localhost:8123/tournoi.html`.
+puis ouvrir `http://127.0.0.1:8137/atelier`. Les clés affichées sont fictives ; les données restent
+en mémoire. Les emails, Drive et les appels réseau Google sont bloqués. Le dossier `livrables`
+voisin du serveur contient le bilan Git, les contrats, les captures et les limites de vérification.
+
+La refonte ne demande aucune compilation, dépendance npm, migration backend ou modification des services distants.

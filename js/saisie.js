@@ -451,7 +451,7 @@ function blocSaisieSimple(m, termine) {
   const champ = function (eqId, valeur) {
     return '<div class="eq-ligne">' +
       '<span class="eq">' + echapper(nomEquipe(eqId)) + '</span>' +
-      '<input class="r-input score" type="number" min="0" inputmode="numeric" value="' +
+      '<input class="r-input score" aria-label="Score de ' + echapper(nomEquipe(eqId)) + '" type="number" min="0" inputmode="numeric" value="' +
         echapper(String(valeur)) + '"' + (termine ? ' disabled' : '') + '></div>';
   };
   return champ(m.equipe_A, sa) + champ(m.equipe_B, sb);

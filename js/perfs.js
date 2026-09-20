@@ -216,15 +216,17 @@ function afficherTournoi() {
   }
 
   const cats = categoriesTriees(nôtres.map(function (e) { return e.categorie; }));
-  let html = bilanGlobalTournoi(nôtres);
+  let html = bilanGlobalTournoi(nôtres) + '<div class="cv-perfs-grid">';
 
   cats.forEach(function (cat) {
-    html += '<div class="perfs-cat">' + echapper(cat) + '</div>';
+    html += '<section><div class="perfs-cat">' + echapper(cat) + '</div>';
     nôtres.filter(function (e) { return e.categorie === cat; })
       .slice().sort(function (a, b) { return String(a.nom_equipe).localeCompare(String(b.nom_equipe)); })
       .forEach(function (e) { html += carteEquipeTournoi(e); });
+    html += '</section>';
   });
 
+  html += '</div>';
   zone.innerHTML = html;
 }
 
