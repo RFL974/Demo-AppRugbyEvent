@@ -332,6 +332,15 @@ function suiviActionsHtml(club, etat) {
     actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="marquer-a-payer" data-club="' +
       nom + '">Corriger le paiement</button>');
   }
+  if (etat.accepte) {
+    const dossierEnvoye = String(club.dossier_envoye || '').trim();
+    const categories = String(club.categories_engagees || '').trim();
+    actions.push('<button type="button" class="bouton suivi-action" data-action="envoyer-dossier" data-club="' + nom + '"' +
+      (categories ? '' : ' disabled title="Renseigne les catégories engagées dans Clubs invités"') + '>' +
+      (dossierEnvoye ? 'Renvoyer le dossier final' : 'Envoyer le dossier final') + '</button>' +
+      (dossierEnvoye ? '<small>Dossier envoyé le ' + echapper(suiviDate(dossierEnvoye)) + '</small>'
+        : '<small>' + (categories ? 'Dossier non envoyé' : 'Catégories engagées à renseigner') + '</small>'));
+  }
   return actions.length ? actions.join('') : '<span class="suivi-termine">À jour</span>';
 }
 
@@ -454,7 +463,7 @@ document.addEventListener('click', function (event) {
     return;
   }
   const bouton = event.target.closest('#liste-suivi-clubs [data-action][data-club]');
-  if (!bouton) return;
+  if (!bouton || bouton.disabled) return;
   const nom = bouton.getAttribute('data-club');
   const action = bouton.getAttribute('data-action');
   if (action === 'relance-reponse') envoyerInvitationClubUI(nom, { relance: true });
@@ -462,4 +471,5 @@ document.addEventListener('click', function (event) {
   else if (action === 'renvoyer-confirmation') suiviRenvoyerConfirmation(nom);
   else if (action === 'marquer-paye') suiviMarquerPaiement(nom, true);
   else if (action === 'marquer-a-payer') suiviMarquerPaiement(nom, false);
+  else if (action === 'envoyer-dossier') genererDossierFinal(nom);
 });

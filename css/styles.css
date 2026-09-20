@@ -2283,6 +2283,7 @@ a.bouton { display: inline-block; text-decoration: none; }
 .club-etat-badge.etat-complet       { background: rgba(53, 192, 106, 0.16); color: #6fd898; }
 .club-etat-badge.etat-decline       { background: rgba(224, 120, 120, 0.16); color: #eda3a3; }
 .club-invite-item { flex-wrap: wrap; }
+.club-invite-item .equipe-actions { flex-wrap: wrap; flex-shrink: 1; min-width: 0; max-width: 100%; align-items: center; }
 .club-invite-item .nom { display: flex; flex-direction: column; min-width: 0; }
 .club-contact {
   font-weight: 400;
@@ -2440,18 +2441,20 @@ a.bouton { display: inline-block; text-decoration: none; }
 .eml-msg.ko { color: #ffb3ab; }
 .eml-msg.ok { color: #8fe0a8; }
 
-/* Bouton d'envoi INDIVIDUEL de l'invitation (icône, sur la ligne du club). */
+/* Invitation initiale : un libellé explicite, puis un état grisé après envoi. */
 .bouton-inviter-club {
   background: rgba(46, 143, 224, 0.18);
   border: 1px solid rgba(120, 180, 255, 0.45);
   border-radius: 6px;
   cursor: pointer;
-  padding: 4px 8px;
-  font-size: 1rem;
-  line-height: 1;
+  padding: 10px 14px;
+  font-size: .85rem;
+  line-height: 1.4;
+  white-space: normal;
 }
 .bouton-inviter-club:hover:not([disabled]) { background: rgba(46, 143, 224, 0.32); }
-.bouton-inviter-club[disabled] { opacity: 0.4; cursor: not-allowed; }
+.bouton-inviter-club[disabled],
+.theme-clair .bouton-inviter-club[disabled] { background: #526071; border-color: #6b7787; color: #e0e4ea; opacity: 1; cursor: not-allowed; box-shadow: none; transform: none; }
 .club-badge-invite { color: #b8d8f8; }
 
 /* Aperçu de l'email d'invitation (Phase 1) — objet + message ÉDITABLES. */

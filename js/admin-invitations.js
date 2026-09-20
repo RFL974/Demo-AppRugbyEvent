@@ -805,6 +805,10 @@ async function envoyerInvitationClubUI(nom, options) {
   if (!club) return;
   const message = (estRelance && document.getElementById('message-suivi-clubs')) ||
     document.getElementById('message-club-invite');
+  if (!estRelance && String(club.invitation_envoyee || '').trim()) {
+    afficherMessage(message, 'Invitation déjà envoyée. Pour une relance, utilise « Suivi des clubs ».', 'ok');
+    return;
+  }
   const email = String(club.club_contact_email || '').trim();
   if (!email) { await dialogAlerter('« ' + nom + ' » n\'a pas d\'email de contact : à inviter manuellement.'); return; }
   const sujet = sujetInvitationCourant();
@@ -836,13 +840,12 @@ async function envoyerInvitationClubUI(nom, options) {
 
 /**
  * Envoi GROUPÉ des invitations : résumé AVANT confirmation (éligibles / sans email / déjà
- * invités), case « Renvoyer aussi » optionnelle, puis envoi tolérant aux pannes côté backend
+ * invités exclus), puis envoi tolérant aux pannes côté backend
  * et résumé final (« N envoyées, M échecs : … »).
  */
 async function onEnvoyerInvitationsGroupe() {
   const message = document.getElementById('message-invitations');
   const bouton = document.getElementById('bouton-envoyer-invitations');
-  const renvoyer = document.getElementById('inv-renvoyer').checked;
   const sujet = sujetInvitationCourant();
   const piecesAEnvoyer = piecesJointesDossierPourEnvoi('invitation');
   if (!sujet) { afficherMessage(message, '⚠️ L\'objet de l\'aperçu ne peut pas être vide.', 'ko'); return; }
@@ -852,19 +855,19 @@ async function onEnvoyerInvitationsGroupe() {
   const avecEmail = invitables.filter(function (c) { return String(c.club_contact_email || '').trim(); });
   const sansEmail = invitables.filter(function (c) { return !String(c.club_contact_email || '').trim(); });
   const deja = avecEmail.filter(function (c) { return String(c.invitation_envoyee || '').trim(); });
-  const eligibles = avecEmail.filter(function (c) { return renvoyer || !String(c.invitation_envoyee || '').trim(); });
+  const eligibles = avecEmail.filter(function (c) { return !String(c.invitation_envoyee || '').trim(); });
 
   if (!eligibles.length) {
     await dialogAlerter('Aucun club à inviter pour le moment.\n\n'
       + sansEmail.length + ' club(s) sans email (à inviter manuellement).\n'
       + deja.length + ' club(s) déjà invité(s)'
-      + (renvoyer ? '.' : ' — coche « Renvoyer aussi » pour les relancer.'));
+      + ' — les relances se font dans « Suivi des clubs ».');
     return;
   }
   const resume = 'Envoyer l\'invitation à ' + eligibles.length + ' club(s) ?\n\n'
     + '• ' + eligibles.length + ' recevront l\'invitation\n'
     + '• ' + sansEmail.length + ' sans email (à inviter manuellement)\n'
-    + '• ' + deja.length + ' déjà invité(s) ' + (renvoyer ? '(seront renvoyés)' : '(exclus)') + '\n'
+    + '• ' + deja.length + ' déjà invité(s) (exclus)\n'
     + '• ' + (piecesAEnvoyer.length
       ? piecesAEnvoyer.length + ' pièce(s) jointe(s) : ' + piecesAEnvoyer.map(function (p) { return p.nom; }).join(', ')
       : 'aucune pièce jointe');
@@ -878,7 +881,7 @@ async function onEnvoyerInvitationsGroupe() {
     const res = await ecrireAdmin('envoyerInvitationsGroupe', {
       sujet: sujet, html_modele: htmlModeleInvitation(), texte_modele: texteModeleInvitation(),
       base_reponse: baseReponseInvitation(), base_invitation: lienInvitationPublique(),
-      renvoyer: renvoyer ? 'oui' : 'non', pieces_jointes: piecesAEnvoyer
+      renvoyer: 'non', pieces_jointes: piecesAEnvoyer
     });
     // ⭐ R2 — rafraîchissement FORCÉ : la relecture doit être postérieure à l'envoi qu'on
     //   vient de faire. Passer par le registre garantit qu'aucune lecture commencée AVANT
@@ -1379,8 +1382,7 @@ function parseCatsEngagees(brut) {
 /**
  * Panneau « Accepté » d'un club : cases à cocher des catégories du tournoi (pré-cochées sur
  * toutes par défaut, ou sur categories_engagees si déjà renseigné), champ prénom du contact,
- * bouton d'enregistrement de la sélection, puis — une fois categories_engagees renseigné —
- * bouton « Générer le dossier final ».
+ * bouton d'ajout des équipes. L'envoi du dossier final se fait dans le suivi des clubs.
  */
 function panneauAccepteClub(club, nom) {
   const cats = (configCourante.categories || []).filter(estPresente)
@@ -1395,10 +1397,6 @@ function panneauAccepteClub(club, nom) {
       (coche ? ' checked' : '') + '> ' + echapper(val) + '</label>';
   }).join('');
 
-  const boutonGenerer = engBrut
-    ? '<button class="bouton bouton-generer-dossier" data-club="' + echapper(nom) + '">' + svgIcone('dossier') + 'Générer le dossier final</button>'
-    : '';
-
   return '<div class="club-panneau" data-club="' + echapper(nom) + '">' +
     resumeReponseClub(club) +
     '<p class="club-panneau-titre">Catégories engagées par le club</p>' +
@@ -1409,8 +1407,7 @@ function panneauAccepteClub(club, nom) {
       '<input type="text" class="club-prenom-input" value="' + echapper(String(club.club_contact_prenom || '')) + '" ' +
              'placeholder="Ex : Camille" autocomplete="off"></label>' +
     '<div class="club-panneau-actions">' +
-      '<button class="bouton bouton-cats-club" data-club="' + echapper(nom) + '">' + svgIcone('enregistrer') + 'Enregistrer la sélection</button>' +
-      boutonGenerer +
+      '<button type="button" class="bouton bouton-cats-club" data-club="' + echapper(nom) + '">' + svgIcone('enregistrer') + 'Ajouter les équipes au tournoi</button>' +
     '</div>' +
   '</div>';
 }
@@ -1508,10 +1505,12 @@ function afficherClubsInvites() {
       (invite ? '<span class="club-envoye club-badge-invite" title="Invitation envoyée">✉️ Invité le ' + echapper(invite) + '</span>' : '') +
       (envoye ? '<span class="club-envoye" title="Dossier envoyé">le ' + echapper(envoye) + '</span>' : '') +
       (alerte ? '<span class="club-alerte-ecart" tabindex="0" role="button" title="' + echapper(alerte) + '" data-club="' + echapper(nom) + '">⚠️ Écart</span>' : '');
-    // Bouton d'envoi INDIVIDUEL de l'invitation (désactivé si le club n'a pas d'email).
-    const boutonInviter = aEmail
-      ? '<button class="bouton-icone bouton-inviter-club" title="Envoyer l\'invitation" aria-label="Envoyer l\'invitation à ' + echapper(nom) + '" data-club="' + echapper(nom) + '">' + svgIcone('email') + '</button>'
-      : '<button class="bouton-icone bouton-inviter-club" title="Pas d\'email : à inviter manuellement" aria-label="Pas d\'email" disabled>' + svgIcone('email') + '</button>';
+    // Invitation initiale uniquement ; les relances restent dans le suivi des clubs.
+    const motifInvitation = invite ? 'Invitation déjà envoyée — relances dans Suivi des clubs'
+      : (!aEmail ? 'Ajoute une adresse email pour envoyer l’invitation' : 'Envoyer l’invitation à ' + nom);
+    const boutonInviter = '<button type="button" class="bouton bouton-inviter-club" title="' + echapper(motifInvitation) +
+      '" aria-label="' + echapper(motifInvitation) + '" data-club="' + echapper(nom) + '"' +
+      (invite || !aEmail ? ' disabled' : '') + '>Envoyer l’invitation</button>';
 
     html +=
       '<div class="equipe-item club-invite-item club-etat-' + etat + '" data-club="' + echapper(nom) + '">' +
@@ -1527,7 +1526,7 @@ function afficherClubsInvites() {
           '<button class="bouton-suppr bouton-icone bouton-suppr-club" title="Retirer" aria-label="Retirer" ' +
                   'data-club="' + echapper(nom) + '">' + svgIcone('corbeille') + '</button>' +
         '</div>' +
-        // Panneau de sélection des catégories + génération, visible seulement si Accepté.
+        // Panneau d'ajout des équipes, visible seulement si Accepté.
         (estAccepte(club.statut) ? panneauAccepteClub(club, nom) : '') +
       '</div>';
   });
@@ -1620,7 +1619,7 @@ async function onChangerStatutClub(evenement) {
   }
 }
 
-/** Clic dans la liste des clubs : suppression, envoi d'invitation, catégories, ou génération. */
+/** Clic dans la liste des clubs : suppression, invitation initiale, catégories, coordonnées. */
 async function onClicClubsInvites(evenement) {
   const btnSuppr = evenement.target.closest('.bouton-suppr-club');
   if (btnSuppr) return supprimerClubInviteUI(btnSuppr);
@@ -1628,8 +1627,6 @@ async function onClicClubsInvites(evenement) {
   if (btnInviter && !btnInviter.disabled) return envoyerInvitationClubUI(btnInviter.getAttribute('data-club'));
   const btnCats = evenement.target.closest('.bouton-cats-club');
   if (btnCats) return enregistrerCatsClub(btnCats);
-  const btnGen = evenement.target.closest('.bouton-generer-dossier');
-  if (btnGen) return genererDossierFinal(btnGen.getAttribute('data-club'));
   // Édition inline des coordonnées (Sprint 6, point 6e).
   const btnEdit = evenement.target.closest('.bouton-editer-club');
   if (btnEdit) { clubEnEdition = btnEdit.getAttribute('data-club'); afficherClubsInvites(); return; }
@@ -1777,7 +1774,8 @@ async function enregistrerCatsClub(bouton) {
       try { await rechargerEquipes(); } catch (e) { /* best-effort */ }
     }
 
-    afficherClubsInvites(); // liseré vert + « Générer le dossier final » + badge d'alerte éventuel
+    afficherClubsInvites();
+    if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
     afficherMessage(message, (cochees.length
       ? '✅ « ' + nom + ' » — catégories engagées : ' + cats + '.'
       : '✅ « ' + nom + ' » — sélection enregistrée (aucune catégorie cochée).') + txtEquipes, 'ok');
@@ -1801,15 +1799,20 @@ function lienDossierClub(nom, token) {
 }
 
 /**
- * « Générer le dossier final » : construit le lien personnalisé, puis
+ * « Envoyer le dossier final » dans le suivi : construit le lien personnalisé, puis
  *  - si le club a un email → ouvre l'aperçu email avant tout envoi ;
  *  - sinon → bascule en mode « Copier le lien » (pas d'aperçu, pas d'envoi auto).
- * ⚠️ La création des ÉQUIPES ne se fait PAS ici : elle a lieu au clic sur « Enregistrer la
- *    sélection » (voir enregistrerCatsClub).
+ * Les équipes sont ajoutées au clic sur « Ajouter les équipes au tournoi ».
  */
 async function genererDossierFinal(nom) {
   const club = clubsInvitesCourants.find(function (c) { return memeTexteSouple(c.club_nom, nom); });
   if (!club) return;
+
+  if (!estAccepte(club.statut) || !String(club.categories_engagees || '').trim()) {
+    afficherMessage(document.getElementById('message-suivi-clubs'),
+      'Le club doit avoir accepté et ses catégories engagées doivent être renseignées avant l’envoi du dossier.', 'ko');
+    return;
+  }
 
   // Dossier DÉJÀ envoyé : le lien précédent a circulé — le président a pu le partager à ses
   // éducateurs. On PROPOSE de le renouveler (l'ancien meurt, copies partagées comprises), sans
@@ -2253,7 +2256,7 @@ function ouvrirApercuEmail(club, lien, lienRenouvele) {
     overlay.remove();
     if (lienRenouvele && !envoye) {
       dialogAlerter('⚠️ Le lien de ' + String(club.club_nom || '') + ' a été renouvelé, mais ' +
-        'RIEN n\'a été envoyé.\nSon ancien lien ne fonctionne plus : relance « Générer le dossier ' +
+        'RIEN n\'a été envoyé.\nSon ancien lien ne fonctionne plus : relance « Envoyer le dossier ' +
         'final » et clique « Envoyer » pour lui transmettre le nouveau.');
     }
   };
@@ -2285,7 +2288,8 @@ function ouvrirApercuEmail(club, lien, lienRenouvele) {
       const c = clubsInvitesCourants.find(function (x) { return memeTexteSouple(x.club_nom, nom); });
       if (c && res && res.dossier_envoye) c.dossier_envoye = res.dossier_envoye;
       afficherClubsInvites();
-      afficherMessage(document.getElementById('message-club-invite'),
+      if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
+      afficherMessage(document.getElementById('message-suivi-clubs'),
         '✅ Dossier envoyé à ' + email +
         (piecesAEnvoyer.length ? ' avec ' + piecesAEnvoyer.length + ' pièce(s) jointe(s).' : '.'), 'ok');
       fermer();

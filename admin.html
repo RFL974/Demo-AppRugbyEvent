@@ -13,7 +13,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Barlow+Condensed:wght@500;600&family=Barlow:wght@400;600&display=swap" rel="stylesheet">
 
   <!-- Notre feuille de style commune -->
-  <link rel="stylesheet" href="css/styles.css?v=tarifs-mobile-demo-20260920">
+  <link rel="stylesheet" href="css/styles.css?v=parcours-clubs-20260920">
   <!-- Surcouche moderne navy/blanc/ciel (re-skin admin — retirer cette ligne pour revenir en arrière) -->
   <link rel="stylesheet" href="css/theme-r92.css?v=partenaires-simple-1">
   <!-- Mode « écrans » : barre latérale + onglets sur grand écran (structure construite par js/ecrans.js) -->
@@ -618,8 +618,8 @@
       </section>
 
       <!-- 4 bis) CLUBS INVITÉS (Phase 1) — en TÊTE de la page « Inviter un club » : liste + ajout,
-           statut, envoi individuel de l'invitation, et (une fois Accepté) génération du dossier
-           Phase 2. ⚠️ Les emails ne sont JAMAIS publics : la liste se charge avec la clé admin
+           statut, envoi initial de l'invitation et ajout des équipes au tournoi.
+           Les dossiers et relances se gèrent dans le suivi. Les emails ne sont JAMAIS publics : la liste se charge avec la clé admin
            (action listerClubsInvites) et n'apparaît pas dans les données publiques. -->
       <section class="carte" id="bloc-clubs-invites">
         <h2>Clubs invités</h2>
@@ -627,8 +627,9 @@
           Ajoute chaque club avec son contact, puis <strong>envoie l'invitation</strong> (Phase 1) —
           au club, ou à tous d'un coup via l'aperçu ci-dessous. Fais ensuite évoluer le
           <strong>statut</strong> (Invité → <strong>Accepté</strong> ou Décliné). Quand un club passe
-          <strong>Accepté</strong>, choisis ses <strong>catégories engagées</strong> puis
-          <strong>« Générer le dossier final »</strong> (Phase 2).
+          <strong>Accepté</strong>, choisis ses <strong>catégories engagées</strong> puis clique sur
+          <strong>« Ajouter les équipes au tournoi »</strong>.
+          Les <strong>relances</strong> et l'<strong>envoi du dossier final</strong> se font dans <strong>« Suivi des clubs »</strong>.
         </p>
         <form id="form-club-invite" class="form-equipe">
           <input id="champ-club-nom" type="text" placeholder="Nom du club" autocomplete="off" required>
@@ -645,7 +646,8 @@
         <h2>Suivi des clubs</h2>
         <p class="note-generation">
           Une vue claire des <strong>réponses</strong>, des commandes de <strong>repas et goûters</strong>
-          et des <strong>paiements</strong>. Les clubs qui demandent une action apparaissent en premier.
+          et des <strong>paiements</strong>. Gère ici les <strong>relances</strong> et l'<strong>envoi du dossier final</strong>.
+          Les clubs qui demandent une action apparaissent en premier.
         </p>
         <div id="suivi-clubs-resume" class="suivi-clubs-resume" aria-live="polite"></div>
         <div class="suivi-pdf-actions">
@@ -692,9 +694,9 @@
           🔒 Chaque club reçoit un <strong>email individuel</strong> : les adresses ne sont
           <strong>jamais partagées</strong> entre les clubs.
         </p>
-        <label class="mini-toggle ae-toggle"><input type="checkbox" id="inv-renvoyer"> Renvoyer aussi aux clubs déjà invités</label>
+        <p class="note-generation">Seuls les clubs qui n'ont pas encore reçu l'invitation sont concernés. Pour les relances, utilise <strong>« Suivi des clubs »</strong>.</p>
         <div class="ligne-action">
-          <button type="button" class="bouton" id="bouton-envoyer-invitations" data-ic="email">Envoyer les invitations à tous les clubs</button>
+          <button type="button" class="bouton" id="bouton-envoyer-invitations">Envoyer aux clubs non encore invités</button>
           <span class="message-form" id="message-invitations"></span>
         </div>
       </section>
@@ -964,8 +966,8 @@
           💡 Toute section <strong>sans donnée</strong> est simplement <strong>masquée</strong> —
           tu peux générer le dossier à tout moment et le regénérer quand tu complètes les infos.<br>
           👉 Pour l'<strong>envoi</strong> à un club (accueil personnalisé + email automatique),
-          utilise <strong>« Générer le dossier final »</strong> sur la ligne du club dans
-          <strong>« Clubs invités »</strong>.
+          utilise <strong>« Envoyer le dossier final »</strong> sur la carte du club dans
+          <strong>« Suivi des clubs »</strong>.
         </p>
         <div id="etat-dossier"></div>
         <!-- L'aperçu ouvre le dossier D'UN CLUB : les contacts jour J, le parking et les secours
@@ -1235,8 +1237,8 @@
   <script src="js/api.js"></script>
   <script src="js/admin.js"></script>
   <script src="js/admin-infos-publication.js?v=sync-tarifs-demo-20260920"></script>
-  <script src="js/admin-invitations.js?v=sync-tarifs-demo-20260920"></script>
-  <script src="js/admin-suivi-clubs.js?v=tarifs-mobile-demo-20260920"></script>
+  <script src="js/admin-invitations.js?v=parcours-clubs-20260920"></script>
+  <script src="js/admin-suivi-clubs.js?v=parcours-clubs-20260920"></script>
   <script src="js/admin-reglages.js"></script>
   <script src="js/admin-choix-categories.js"></script>
   <script src="js/admin-conformite-ffr.js"></script>
