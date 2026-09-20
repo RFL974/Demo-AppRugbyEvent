@@ -682,7 +682,9 @@ body {
  .cv-club-page { background:#dff2ff; color:#102e4b; padding:8px 16px; border-radius:8px; font-size:14px; font-weight:600; }
  .cv-invitation-intro { display:grid; grid-template-columns:minmax(0,1.7fr) minmax(280px,1fr); gap:32px; align-items:start; }
  .cv-invitation-intro .inv-reponse { margin:0; background:var(--cv-selection); }
- .cv-invitation-intro .inv-cta { background:transparent; border:0; padding:0; }
+ .cv-invitation-intro .inv-cta { background:transparent; border:0; padding:0; color:var(--cv-texte); text-align:left; }
+ .cv-invitation-intro .inv-cta-titre,.cv-invitation-intro .inv-cta-note { color:var(--cv-secondaire); letter-spacing:0; }
+ .cv-invitation-intro .inv-cta-contact a { color:var(--cv-action); }
  .cv-invitation-intro .inv-hero { padding-top:0; }
  .btn-outil { color:#fff; border:1px solid #55738c; border-radius:10px; min-height:44px; }
  .btn-principal { color:#fff; }
