@@ -3,12 +3,13 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),path=require('n
 const read=f=>fs.readFileSync(path.join(__dirname,'../js',f),'utf8');
 let n=0;function check(v,m){assert.ok(v,m);n++;}
 const c=vm.createContext({echapper:s=>String(s)});
+vm.runInContext(read('admin-invitations.js'),c);
 vm.runInContext(read('admin-reglages.js'),c);
-const g={heure_rdv:'08:45',heure_debut:'10:00',pause_dejeuner_debut:'12:15',pause_dejeuner_duree_min:'90',heure_fin:'16:12',marge_fin_communiquee_min:'45'};
+const g={heure_rdv:'08:45',heure_debut:'10:00',pause_dejeuner_debut:'12:15',pause_dejeuner_duree_min:'90',heure_fin:'15:27',marge_fin_communiquee_min:'45'};
 const ms=[{heure_fin:'14:50'},{heure_fin:'15:27'}];
 const avant=JSON.stringify({g,ms});
 let r=c.reperesHorairesCiel(g,ms);
-check(r.fin==='15:27','La fin des matchs vient des matchs, pas de la cible globale.');
+check(r.fin==='15:27','La fin des matchs suit le réglage utilisé dans les documents clubs.');
 check(r.finCommuniquee==='16:12','La clôture de 45 minutes est ajoutée une seule fois.');
 check(r.etapes[3][1]==='13:45','Pause de 90 minutes : reprise à 13:45.');
 check(JSON.stringify({g,ms})===avant,'La projection ne modifie aucune donnée.');
@@ -16,7 +17,7 @@ r=c.reperesHorairesCiel({...g,heure_fin_communiquee:'17:00'},ms);
 check(r.finCommuniquee==='17:00','L’heure explicitement communiquée prime.');
 r=c.reperesHorairesCiel({...g,pause_echelonnee:'oui',pause_echelonnee_fin:'14:05'},ms);
 check(r.etapes[3][1]==='14:05' && r.echelonnee,'Pause échelonnée : vrai dernier retour.');
-r=c.reperesHorairesCiel(g,[]);
+r=c.reperesHorairesCiel({...g,heure_fin:''},[]);
 check(r.fin===''&&r.finCommuniquee==='','Sans planning : pas de fin inventée.');
 const html=c.afficherHoraires(g);
 for(const id of ['heure_rdv','heure_debut','heure_fin','heure_fin_auto','heure_fin_communiquee','pause_echelonnee','pause_dejeuner_debut','pause_dejeuner_duree_min','battement_terrain_min','marge_fin_communiquee_min'])check(html.includes('name="'+id+'"'),'Champ conservé : '+id);

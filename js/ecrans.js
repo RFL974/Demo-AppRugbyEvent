@@ -244,6 +244,7 @@ function construireEcrans() {
   });
 
   zone.addEventListener('click', function (evenement) {
+    if(evenement.target.closest('[data-cv-categories]')){ecransActiver('categories');return;}
     const bouton = evenement.target.closest('.cv-fermer-club');
     if (!bouton) return;
     const detail = bouton.closest('details');
@@ -459,6 +460,23 @@ const DESCRIPTIONS_CIEL = {
 };
 /** Déplace les contrôles d’origine : les événements et identifiants restent identiques. */
 function preparerOutilsCiel() {
+ [['liste-equipes','.equipe-item','Rechercher une équipe'],['liste-suivi-clubs','.suivi-club-ligne','Rechercher un club']].forEach(function(def){
+   const liste=document.getElementById(def[0]);if(!liste||document.getElementById('cv-recherche-'+def[0]))return;
+   const barre=document.createElement('div');barre.className='cv-recherche';
+   barre.innerHTML='<label>'+def[2]+'<input class="r-input" type="search" id="cv-recherche-'+def[0]+'" data-liste="'+def[0]+'" data-lignes="'+def[1]+'" placeholder="Nom…"></label><span role="status" class="cv-recherche-resultat"></span>';
+   liste.before(barre);barre.querySelector('input').addEventListener('input',actualiserRecherchesCiel);
+ });
+ const apresmidi=document.getElementById('bloc-apresmidi');
+ if(apresmidi && !document.getElementById('cv-apresmidi-apercu')){
+   const apercu=document.createElement('div');apercu.id='cv-apresmidi-apercu';apercu.className='cv-apresmidi-grid';
+   const etat=apresmidi.querySelector('.apresmidi-etat');etat.classList.add('cv-information');etat.after(apercu);
+   const aide=apresmidi.querySelector('.note-generation');
+   aide.textContent='Les rencontres de l’après-midi sont calculées à partir des résultats du matin, selon le format de chaque catégorie. Tous les scores du matin sont nécessaires. Les rencontres du matin sont conservées.';
+   const details=document.createElement('details');details.className='cv-options';details.innerHTML='<summary>Options de démonstration<span>Remplir les scores fictifs de l’après-midi</span></summary>';
+   const sim=document.getElementById('bouton-simuler-scores-apresmidi');const note=sim.nextElementSibling;
+   details.appendChild(sim);if(note)details.appendChild(note);details.appendChild(document.getElementById('message-simulation-apresmidi'));apresmidi.appendChild(details);
+   if(adminConnecte)majApresMidi();
+ }
  const infos=document.getElementById('ecran-infos');
  const form=document.getElementById('form-infos-tournoi');
  if(infos && form && !document.getElementById('cv-affiche-carte')){
@@ -490,4 +508,16 @@ function preparerOutilsCiel() {
    ['chargement-equipes-demo','form-perfs-club'].forEach(id=>{const el=document.getElementById(id);if(el)outils.appendChild(el);});
    bloc.appendChild(outils);
  }
+ actualiserRecherchesCiel();
+}
+
+/** Filtrage de présentation uniquement : aucun changement des listes métier ou des exports. */
+function actualiserRecherchesCiel(){
+ document.querySelectorAll('.cv-recherche input').forEach(champ=>{
+   const normaliser=s=>String(s).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('fr');
+   const q=normaliser(champ.value.trim()),liste=document.getElementById(champ.dataset.liste);
+   let visibles=0;
+   liste.querySelectorAll(champ.dataset.lignes).forEach(ligne=>{ligne.hidden=!!q&&!normaliser(ligne.textContent).includes(q);if(!ligne.hidden)visibles++;});
+   champ.closest('.cv-recherche').querySelector('[role=status]').textContent=q?(visibles?visibles+' résultat'+(visibles>1?'s':''):'Aucun résultat'):'';
+ });
 }

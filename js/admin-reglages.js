@@ -66,22 +66,22 @@ function reperesHorairesCiel(g,matchs) {
   g=g||{};
   const echelonnee=String(g.pause_echelonnee).toLowerCase()==='oui';
   const fins=(matchs||[]).map(m=>String(m.heure_fin||'')).filter(h=>/^\d{2}:\d{2}$/.test(h)).sort();
-  const fin=fins.length?fins[fins.length-1]:'';
-  const ajouter=(h,n)=>{const m=/^(\d{1,2}):(\d{2})$/.exec(h||'');if(!m || !Number.isFinite(Number(n)))return '';const t=(Number(m[1])*60+Number(m[2])+Number(n))%1440;return String(Math.floor(t/60)).padStart(2,'0')+':'+String(t%60).padStart(2,'0');};
-  const reprise=echelonnee?g.pause_echelonnee_fin:ajouter(g.pause_dejeuner_debut,g.pause_dejeuner_duree_min);
-  const marge=g.marge_fin_communiquee_min!=='' && g.marge_fin_communiquee_min!=null?g.marge_fin_communiquee_min:75;
+  const dernierPlanifie=fins.length?fins[fins.length-1]:'';
+  const fin=g.heure_fin||'';
+  const ajouter=heurePlusMinutesEmail;
+  const reprise=echelonnee?g.pause_echelonnee_fin:(Number(g.pause_dejeuner_duree_min)>0?ajouter(g.pause_dejeuner_debut,Number(g.pause_dejeuner_duree_min)):'');
   return {etapes:[['Accueil des équipes',g.heure_rdv],['Premiers matchs',g.heure_debut],
     [echelonnee?'Pause échelonnée à partir de':'Pause déjeuner',g.pause_dejeuner_debut],
-    [echelonnee?'Dernier retour de pause':'Reprise',reprise],['Dernier match planifié',fin]],
-    finCommuniquee:g.heure_fin_communiquee||ajouter(fin,marge),echelonnee,fin};
+    [echelonnee?'Dernier retour de pause':'Reprise',reprise],['Fin des matchs prévue',fin]],
+    finCommuniquee:heureFinCommuniqueeAdmin(g),echelonnee,fin,dernierPlanifie};
 }
 function friseHorairesCiel(g,matchs) {
   const r=reperesHorairesCiel(g,matchs);
   // Les heures absentes restent explicites. La frise est une suite de repères, pas un axe à l’échelle.
-  return '<ol class="cv-frise">'+r.etapes.map(e=>'<li><strong>'+echapper(e[1]||'—')+'</strong><span>'+e[0]+'</span></li>').join('')+'</ol>' +
+  return '<ol class="cv-frise">'+r.etapes.slice().sort((a,b)=>(a[1]||'99:99').localeCompare(b[1]||'99:99')).map(e=>'<li><strong>'+echapper(e[1]||'—')+'</strong><span>'+e[0]+'</span></li>').join('')+'</ol>' +
     '<div class="cv-fin-journee"><span>Fin de journée annoncée aux clubs</span><strong>'+echapper(r.finCommuniquee||'—')+'</strong></div>' +
-    '<div class="cv-information"><strong>Horaires calculés depuis le planning</strong>'+ (r.fin?'La fin affichée correspond au dernier match actuellement planifié. Elle évoluera si vous générez de nouvelles rencontres.':'Générez le planning pour connaître la fin des matchs et la fin de journée.') +
-    (r.echelonnee?' Les équipes prennent leur pause à tour de rôle.':'')+'</div>';
+    '<div class="cv-information"><strong>Horaires calculés depuis le planning</strong>'+ (r.fin?'La fin prévue suit les réglages du tournoi. La fin annoncée reprend le calcul utilisé dans les invitations et dossiers clubs.':'Générez le planning pour connaître la fin des matchs et la fin de journée.') +
+    (r.dernierPlanifie && r.dernierPlanifie!==r.fin?' Dernier match actuellement planifié : '+echapper(r.dernierPlanifie)+'.':'')+(r.echelonnee?' Les équipes prennent leur pause à tour de rôle.':'')+'</div>';
 }
 function actualiserFriseHorairesCiel() {
  const el=document.getElementById('cv-frise-horaires');if(el)el.innerHTML=friseHorairesCiel(configCourante.global,matchsCourants);

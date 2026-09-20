@@ -263,6 +263,22 @@ function majApresMidi() {
   }
   majBoutonsScoresDemo();
   majDimancheScf(); // le bouton « dimanche » (Super Challenge Phase 3) suit le même cycle de vie
+  const apercu=document.getElementById('cv-apresmidi-apercu');
+  if(apercu)apercu.innerHTML=apercuApresMidiCiel(matin,configCourante.categories||[]);
+}
+
+/** Lecture des scores et formats existants, sans nouvelle règle de génération. */
+function apercuApresMidiCiel(matin,categories) {
+  const noms=Array.from(new Set(matin.map(m=>m.categorie)));
+  const scores=noms.map(nom=>{
+    const matches=matin.filter(m=>m.categorie===nom),faits=matches.filter(m=>estTermine(m.statut)).length;
+    return '<div class="cv-score-categorie"><strong>'+echapper(nom)+'</strong><span>'+faits+' / '+matches.length+' scores saisis</span><progress max="'+matches.length+'" value="'+faits+'" aria-label="Scores saisis '+echapper(nom)+'"></progress></div>';
+  }).join('');
+  const formats=categories.filter(c=>noms.includes(c.categorie)).map(c=>{
+    const f=definitionFormatApresMidi(formatApresMidiDe(c));
+    return '<div class="cv-format-resume"><span class="cv-pastille cv-neutre">'+echapper(c.categorie)+'</span><h3>'+echapper(f?f.titre:'Format à définir')+'</h3><p>'+echapper(f?f.desc:'Consultez les réglages de cette catégorie.')+'</p></div>';
+  }).join('');
+  return '<section><h2>Scores par catégorie</h2>'+(scores||'<p class="vide">Le planning du matin n’est pas encore généré.</p>')+'</section><section><h2>Formats prévus</h2>'+formats+'<button type="button" class="bouton-lien" data-cv-categories>Modifier les formats dans Catégories</button></section>';
 }
 
 /**

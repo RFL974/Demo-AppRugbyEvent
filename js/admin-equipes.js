@@ -179,6 +179,7 @@ function afficherEquipes(equipes) {
   });
 
   zone.innerHTML = html;
+  if(typeof actualiserRecherchesCiel==='function')actualiserRecherchesCiel();
 }
 
 /* ==========================================================================
