@@ -731,17 +731,17 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
 .cv-filtres-planning { display:flex; flex-wrap:wrap; gap:16px; align-items:end; margin:16px 0; padding:14px; background:#f3f9fd; border:1px solid var(--cv-bordure); border-radius:10px; }
 .cv-filtres-planning label { display:flex; flex-direction:column; gap:6px; font-size:12px; color:var(--cv-secondaire); }
 .cv-filtres-planning select { padding:10px 12px; min-height:42px; border:1px solid #ccdbe8; background:#fff; color:var(--cv-texte); border-radius:8px; font-size:14px; }
-.cv-information-lecture { margin-left:auto; color:var(--cv-secondaire); font-size:12px; padding-bottom:10px; }
+.cv-information-lecture { display:none; margin-left:auto; color:var(--cv-secondaire); font-size:12px; padding-bottom:10px; }
 .cv-planning-scroll { max-height:640px; overflow:auto; border:1px solid var(--cv-bordure); border-radius:10px; }
 .theme-clair .cv-planning-grille { width:100%; border-collapse:separate; border-spacing:0; }
 .theme-clair .cv-planning-grille thead th { position:sticky; top:0; z-index:2; background:#eaf4fc; padding:16px; }
 .theme-clair .cv-planning-grille th:first-child { position:sticky; left:0; z-index:1; background:#f4f9fd; width:80px; }
 .theme-clair .cv-planning-grille thead th:first-child { z-index:3; }
 .theme-clair .cv-planning-grille td { min-width:190px; vertical-align:top; border-left:1px solid var(--cv-bordure); }
-.cv-rencontre { display:flex; flex-direction:column; gap:4px; font-size:13px; padding:4px; }
-.cv-rencontre .cv-pastille { align-self:start; margin-bottom:7px; }
+.cv-rencontre { display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:4px 10px; font-size:13px; padding:4px; }
+.cv-rencontre .cv-pastille { justify-self:start; grid-column:1/-1; margin-bottom:5px; }
 .cv-rencontre .vs { font-size:11px; }
-.cv-rencontre small { color:var(--cv-secondaire); margin-top:6px; }
+.cv-rencontre small { color:var(--cv-secondaire); margin-top:6px; grid-column:1/-1; }
 .cv-compositions-poules { display:grid; grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); gap:12px; }
 .cv-compositions-poules .poule-compo { padding:14px; border:1px solid var(--cv-bordure); border-radius:10px; background:#f6fbff; font-size:13px; line-height:1.8; }
 .cv-compositions-poules .poule-compo strong { display:block; color:var(--cv-action); }
@@ -762,3 +762,7 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
 .cv-recherche label { display:flex; align-items:center; gap:12px; color:var(--cv-secondaire); font-size:13px; }
 .cv-recherche-resultat { font-size:13px; color:var(--cv-secondaire); }
 @media(max-width:767px){.cv-recherche,.cv-recherche label{display:block;}.cv-recherche input{display:block;margin-top:8px;width:100%;}}
+
+.cv-planning-categorie {display:flex;flex-direction:column;}
+.cv-compositions-poules {order:2;margin-top:20px;}
+.cv-filtres-planning #bouton-modifier-poules {margin-left:auto;}

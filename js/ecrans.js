@@ -499,7 +499,7 @@ function preparerOutilsCiel() {
    outils.innerHTML='<summary>Génération et options avancées<span>Recalculer les horaires, régénérer les poules, scores de démonstration</span></summary>';
    const planning=document.getElementById('affichage-planning');
    Array.from(generation.children).forEach(el=>{if(el!==planning && el.id!=='bouton-modifier-poules' && el.id!=='edition-poules')outils.appendChild(el);});
-   generation.prepend(outils);
+   generation.appendChild(outils);
  }
  const bloc=document.getElementById('bloc-equipes');
  if(bloc && !document.getElementById('cv-outils-equipes')){

@@ -576,6 +576,8 @@ function afficherPlanning(poules, matchs) {
     zone.querySelectorAll('.cv-planning-categorie').forEach(el=>{el.hidden=!!cat && el.dataset.categorie!==cat;});
     zone.querySelectorAll('.cv-planning-phase').forEach(el=>{el.hidden=!!phase && el.dataset.phase!==phase;});
   };
+  const filtres=zone.querySelector && zone.querySelector('.cv-filtres-planning');
+  if(filtres && btnMod)filtres.appendChild(btnMod);
 }
 
 /** Petit badge « X/Y saisis » (vert si complet) pour le suivi de l'avancement des scores. */
