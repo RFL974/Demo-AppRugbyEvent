@@ -766,3 +766,8 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
 .cv-planning-categorie {display:flex;flex-direction:column;}
 .cv-compositions-poules {order:2;margin-top:20px;}
 .cv-filtres-planning #bouton-modifier-poules {margin-left:auto;}
+
+.cv-information.cv-attention { color:#80520b; background:#fff6df; border-color:#efce82; }
+.cv-information.cv-validation { color:var(--cv-succes); background:#e7f7ef; border-color:#b8e0c9; }
+.theme-clair .avc-partiel { color:#80520b; background:#fff3d6; }
+.theme-clair .avc-complet { color:var(--cv-succes); background:#e0f5e9; }

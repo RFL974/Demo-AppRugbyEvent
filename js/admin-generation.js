@@ -249,6 +249,10 @@ function majApresMidi() {
   const matin = (matchsCourants || []).filter(function (m) { return String(m.phase) !== 'classement'; });
   const total = matin.length;
   const saisis = matin.filter(function (m) { return estTermine(m.statut); }).length;
+  if(etat.parentElement && etat.parentElement.classList){
+    etat.parentElement.classList.toggle('cv-attention',total===0 || saisis<total);
+    etat.parentElement.classList.toggle('cv-validation',total>0 && saisis===total);
+  }
 
   if (total === 0) {
     etat.textContent = '⚪️ Génère d\'abord les poules et le planning du matin.';
