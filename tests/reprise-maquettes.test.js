@@ -23,6 +23,20 @@ const html=c.afficherHoraires(g);
 for(const id of ['heure_rdv','heure_debut','heure_fin','heure_fin_auto','heure_fin_communiquee','pause_echelonnee','pause_dejeuner_debut','pause_dejeuner_duree_min','battement_terrain_min','marge_fin_communiquee_min'])check(html.includes('name="'+id+'"'),'Champ conservé : '+id);
 check(html.includes('form="form-horaires"'),'La barre persistante soumet le formulaire existant.');
 check(html.includes('Options avancées')&&html.includes('<details'),'Les options ouvrent les contrôles.');
+const sections=[{dataset:{categorie:'U10'}},{dataset:{categorie:'U12'}}];
+const phases=[{dataset:{phase:'matin'}},{dataset:{phase:'aprem'}}];
+const zone={innerHTML:'',querySelectorAll:sel=>sel==='.cv-planning-categorie'?sections:phases};
+const filtreCat={value:'U12'},filtrePhase={value:'matin'};
+const planning=vm.createContext({document:{getElementById:id=>id==='affichage-planning'?zone:id==='cv-filtre-planning-categorie'?filtreCat:id==='cv-filtre-planning-phase'?filtrePhase:{}},
+ equipesCourantes:[],configCourante:{categories:[]},editionPoules:false,echapper:s=>String(s),
+ libelleArbitreScf:()=>'',ctxScf:()=>({estScf:false}),phaseLabelScf:()=>'',estTermine:s=>s==='terminé'});
+vm.runInContext(read('admin-generation.js'),planning);
+planning.afficherPlanning([], [{categorie:'U10',terrain:'1',heure_debut:'10:00',equipe_A:'Équipe A',equipe_B:'Équipe B',phase:'poule',poule:'A'}]);
+check(typeof zone.onchange==='function','Les filtres sont raccordés à la zone du planning.');
+zone.onchange({target:{id:'cv-filtre-planning-categorie'}});
+check(sections[0].hidden&&!sections[1].hidden,'Le filtre catégorie masque uniquement les autres catégories.');
+check(!phases[0].hidden&&phases[1].hidden,'Le filtre matin masque l’après-midi.');
+check(zone.innerHTML.includes('Terrain 1')&&!zone.innerHTML.includes('<input'),'La grille affiche les terrains sans créer de saisie de score.');
 // Le bouton commun n’ignore pas une annulation ou une confirmation incertaine de catégorie.
 async function sauvegarde(choix,apres){
  const ecritures=[],messages=[];

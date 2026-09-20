@@ -429,13 +429,7 @@ function afficherArbitrages(res) {
   });
   html += '</ul></div>';
   zone.innerHTML = html;
-  zone.onchange=function(e){
-    if(!e.target.id.startsWith('cv-filtre-planning-'))return;
-    const cat=document.getElementById('cv-filtre-planning-categorie').value;
-    const phase=document.getElementById('cv-filtre-planning-phase').value;
-    zone.querySelectorAll('.cv-planning-categorie').forEach(el=>{el.hidden=!!cat && el.dataset.categorie!==cat;});
-    zone.querySelectorAll('.cv-planning-phase').forEach(el=>{el.hidden=!!phase && el.dataset.phase!==phase;});
-  };
+
 }
 
 /** Clic sur une piste d'arbitrage : applique le réglage puis régénère. */
@@ -575,6 +569,13 @@ function afficherPlanning(poules, matchs) {
   });
 
   zone.innerHTML = html;
+  zone.onchange=function(e){
+    if(!e.target.id.startsWith('cv-filtre-planning-'))return;
+    const cat=document.getElementById('cv-filtre-planning-categorie').value;
+    const phase=document.getElementById('cv-filtre-planning-phase').value;
+    zone.querySelectorAll('.cv-planning-categorie').forEach(el=>{el.hidden=!!cat && el.dataset.categorie!==cat;});
+    zone.querySelectorAll('.cv-planning-phase').forEach(el=>{el.hidden=!!phase && el.dataset.phase!==phase;});
+  };
 }
 
 /** Petit badge « X/Y saisis » (vert si complet) pour le suivi de l'avancement des scores. */
