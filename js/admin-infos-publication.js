@@ -25,8 +25,10 @@
    ⛔ Aucun site tiers ne les lit (découplage M1-PUB / PUB-4, doctrine D-048).
    -------------------------------------------------------------------------- */
 
-/** Pré-remplit le formulaire des infos du tournoi avec ce qui est déjà enregistré. */
-function majInfosTournoi() {
+/** Pré-remplit le formulaire des infos du tournoi avec ce qui est déjà enregistré.
+ *  @param {Object} [opt] `controleFFR: false` — ne pas relancer le contrôle FFR : l'appelant sait
+ *    que ses entrées (date, zone, catégories) n'ont pas bougé. Sans option : comportement historique. */
+function majInfosTournoi(opt) {
   if (typeof majChoixCategoriesTournoi === 'function') majChoixCategoriesTournoi();
   const form = document.getElementById('form-infos-tournoi');
   if (!form) return;
@@ -38,17 +40,38 @@ function majInfosTournoi() {
 
   // Date + zone de vacances : elles vivent dans la carte « Date & conformité FFR »
   // (#form-cadre-tournoi), pas ici. On les (re)remplit là-bas et on marque ce formulaire propre.
-  const cadre = document.getElementById('form-cadre-tournoi');
-  if (cadre) {
-    if (cadre.tournoi_date)  cadre.tournoi_date.value = g.tournoi_date || '';
-    if (cadre.zone_vacances) cadre.zone_vacances.value = g.zone_vacances || 'C'; // défaut 'C' (migration douce)
-    if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(cadre);
-  }
+  majCadreTournoi();
 
   // Aperçu de l'affiche déjà enregistrée (image Drive publique).
   afficheDataURI = '';
+  majApercuAfficheEnregistree();
+
+  // Formulaire (re)rempli avec l'état ENREGISTRÉ → nouvelle référence pour le
+  // détecteur de « modifications non enregistrées » de l'assistant.
+  if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
+
+  // Conformité FFR : (re)vérifie dès que les infos (dont la date) sont (re)chargées.
+  if (opt && opt.controleFFR === false) return;
+  if (typeof majConformiteFFR === 'function') majConformiteFFR();
+}
+
+/** Carte « Date & vérification » remise à l'état ENREGISTRÉ (date, zone) — et elle seule : les
+ *  infos générales, l'affiche et les cases en cours de saisie n'y sont pas touchées. */
+function majCadreTournoi() {
+  const cadre = document.getElementById('form-cadre-tournoi');
+  if (!cadre) return;
+  const g = configCourante.global || {};
+  if (cadre.tournoi_date)  cadre.tournoi_date.value = g.tournoi_date || '';
+  if (cadre.zone_vacances) cadre.zone_vacances.value = g.zone_vacances || 'C'; // défaut 'C' (migration douce)
+  if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(cadre);
+}
+
+/** Aperçu de l'affiche ENREGISTRÉE, ou rien — local : ni relecture, ni contrôle FFR, ni autre champ. */
+function majApercuAfficheEnregistree() {
+  const g = configCourante.global || {};
   const bloc = document.getElementById('apercu-affiche');
   const img = document.getElementById('apercu-affiche-img');
+  if (!bloc || !img) return;
   if (g.tournoi_affiche_id) {
     img.src = urlAffiche(g.tournoi_affiche_id, 600);
     bloc.hidden = false;
@@ -56,13 +79,68 @@ function majInfosTournoi() {
     img.removeAttribute('src');
     bloc.hidden = true;
   }
+}
 
-  // Formulaire (re)rempli avec l'état ENREGISTRÉ → nouvelle référence pour le
-  // détecteur de « modifications non enregistrées » de l'assistant.
-  if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
+/** Zone d'affiche atteignable au clavier : Tab s'y arrête, Entrée ou Espace ouvre le choix du
+ *  fichier (le champ fichier, masqué, ne l'était pas). Le clic et le glisser-déposer ne changent pas. */
+function rendreZoneAfficheAccessible() {
+  const zone = document.getElementById('zone-depot-affiche');
+  const champ = zone && zone.querySelector('input[type="file"]');
+  if (!zone || !champ || zone.getAttribute('tabindex') !== null) return;
+  zone.setAttribute('tabindex', '0');
+  zone.setAttribute('role', 'button');
+  zone.setAttribute('aria-label', 'Choisir l’affiche du tournoi (image)');
+  zone.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    champ.click();
+  });
+}
 
-  // Conformité FFR : (re)vérifie dès que les infos (dont la date) sont (re)chargées.
-  if (typeof majConformiteFFR === 'function') majConformiteFFR();
+/* --------------------------------------------------------------------------
+   CONTRAT D'ÉCRITURE « une écriture, une réponse exploitable » (backend `ecriture-v1`)
+   ⭐ La réponse d'`enregistrerInfosTournoi` porte la configuration RELUE sous le verrou
+   serveur : l'écran se met à jour depuis elle, sans relecture `getConfigAdmin` (une exécution
+   Apps Script entière, ~2,5 s, économisée à chaque clic). Elle dit aussi quels champs ont
+   RÉELLEMENT changé ; le contrôle FFR, lui, n'est relancé que si le verdict affiché ne porte
+   pas déjà sur la date, la zone et les catégories enregistrées.
+   ⛔ REPLI : un backend d'avant le contrat répond { ok: true } seul — on relit alors comme
+   avant. Le frontend peut donc être publié avant, après ou sans le backend.
+   -------------------------------------------------------------------------- */
+const CONTRAT_ECRITURE = 'ecriture-v1';
+
+/** La réponse suit-elle le contrat, avec une configuration complète ? */
+function reponseEcritureExploitable(res) {
+  const cfg = res && res.contrat === CONTRAT_ECRITURE ? res.config : null;
+  return !!(cfg && cfg.global && typeof cfg.global === 'object' && Array.isArray(cfg.categories));
+}
+
+/** Met `configCourante` à l'état enregistré : depuis la réponse si elle est exploitable, sinon par
+ *  une relecture (repli). */
+async function appliquerConfigEnregistree(res) {
+  configCourante = reponseEcritureExploitable(res) ? res.config : await lireConfigAdmin();
+}
+
+/** Faut-il relancer le contrôle FFR ? Non si le verdict affiché porte DÉJÀ sur la date, la zone et
+ *  les catégories courantes — le cas ordinaire : la saisie d'une date le relance aussitôt, et ces
+ *  infos ne touchent aucune autre entrée du contrôle (équipes, matchs, réglages des catégories).
+ *  ⛔ Backend d'avant le contrat, ou verdict absent / périmé : oui, comme avant. */
+function controleFFRARelancer(res) {
+  if (!res || res.contrat !== CONTRAT_ECRITURE) return true;
+  return !(typeof verdictFFRAJour === 'function' && verdictFFRAJour());
+}
+
+/** Message de fin d'enregistrement : succès, « rien à changer », avertissements du serveur. */
+function messageEcritureInfos(res, texteSucces) {
+  const avertissements = (res && Array.isArray(res.avertissements)) ? res.avertissements : [];
+  const inchange = res && res.contrat === CONTRAT_ECRITURE && Array.isArray(res.modifies) && res.modifies.length === 0;
+  let texte = inchange ? '✅ Déjà à jour : rien n’a changé depuis le dernier enregistrement.' : texteSucces;
+  if (avertissements.length) {
+    texte += '\n' + avertissements.map(function (a) { return '⚠️ ' + String(a && a.message || ''); }).join('\n');
+  }
+  // Une affiche refusée est une partie de la demande qui n'a pas abouti : elle se lit en rouge.
+  const partielle = avertissements.some(function (a) { return /^affiche/.test(String(a && a.code || '')); });
+  return { texte: texte, type: partielle ? 'ko' : 'ok' };
 }
 
 /* urlAffiche(), brancherZoneImage() et redimensionnerImage() — helpers partagés — sont
@@ -101,6 +179,10 @@ async function traiterFichierAffiche(fichier) {
     bloc.hidden = false;
   } catch (e) {
     afficheDataURI = '';
+    // L'aperçu ne montre plus une image qui ne partira pas : il revient à l'affiche enregistrée.
+    const form = document.getElementById('form-infos-tournoi');
+    if (form && form.tournoi_affiche) form.tournoi_affiche.value = '';
+    majApercuAfficheEnregistree();
     afficherMessage(message, "⚠️ Image illisible. Choisis un fichier image (JPG, PNG…).", 'ko');
   }
 }
@@ -114,11 +196,12 @@ async function onRetirerAffiche() {
   const message = document.getElementById('message-infos-tournoi');
   const form = document.getElementById('form-infos-tournoi');
 
-  // Cas 1 : choix non enregistré → on annule simplement la sélection.
+  // Cas 1 : choix non enregistré → on annule simplement la sélection. ⭐ Geste LOCAL : aucun appel,
+  //   et les autres champs de l'écran (saisies en cours comprises) ne sont pas réécrits.
   if (afficheDataURI) {
     afficheDataURI = '';
     form.tournoi_affiche.value = '';
-    majInfosTournoi(); // ré-affiche l'affiche enregistrée, ou masque l'aperçu si aucune
+    majApercuAfficheEnregistree(); // ré-affiche l'affiche enregistrée, ou masque l'aperçu si aucune
     afficherMessage(message, "Choix d'affiche annulé.", 'ok');
     return;
   }
@@ -130,9 +213,13 @@ async function onRetirerAffiche() {
   const bouton = document.getElementById('bouton-retirer-affiche');
   bouton.disabled = true;
   try {
+    // ⭐ UNE requête : `supprimerAffiche` n'efface que `tournoi_affiche_id` (et met le fichier Drive à la
+    //   corbeille) ; sa réussite suffit à le reporter ici — ni relecture de toute la configuration, ni
+    //   contrôle FFR (l'affiche n'y entre pas), ni réécriture des champs en cours de saisie.
     await ecrireAdmin('supprimerAffiche', {});
-    configCourante = await lireConfigAdmin();
-    majInfosTournoi();
+    configCourante.global = Object.assign({}, configCourante.global, { tournoi_affiche_id: '' });
+    majApercuAfficheEnregistree();
+    majDossier();
     afficherMessage(message, '🗑️ Affiche retirée.', 'ok');
   } catch (erreur) {
     afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
@@ -173,48 +260,165 @@ async function onEnregistrerCadre() {
   const bouton = document.getElementById('bouton-enregistrer-cadre');
   await avecBoutonOccupe(bouton, message, async function () {
     afficherMessage(message, 'Enregistrement de la date…', 'ok');
-    await ecrireAdmin('enregistrerInfosTournoi', lireCadreTournoi());
-    // On recharge la config pour refléter l'état réel, puis on rafraîchit ce qui dépend de la date.
-    configCourante = await lireConfigAdmin();
-    majInfosTournoi(); // remet date/zone à l'état enregistré (+ marque les formulaires propres)
+    const res = await ecrireAdmin('enregistrerInfosTournoi', lireCadreTournoi());
+    // L'état réel vient de la réponse (contrat d'écriture) ou, à défaut, d'une relecture.
+    await appliquerConfigEnregistree(res);
+    // ⭐ Seule la carte enregistrée revient à l'état du serveur : le nom, la description, l'affiche ou
+    //   les cases encore en cours de saisie ailleurs dans l'écran ne sont PAS écrasés.
+    majCadreTournoi();
+    if (controleFFRARelancer(res) && typeof majConformiteFFR === 'function') majConformiteFFR();
     majDossier();      // le dossier club montre la date
-    afficherMessage(message, '✅ Date & zone enregistrées.', 'ok');
+    majTableauBord();  // l'en-tête de l'écran aussi (actualiserCadreCiel)
+    const fin = messageEcritureInfos(res, '✅ Date & zone enregistrées.');
+    afficherMessage(message, fin.texte, fin.type);
   });
+}
+
+/** Une écriture des infos. Si elle porte le choix des catégories, les lectures de catégories en vol
+ *  sont invalidées au départ et au retour, comme pour toute écriture de catégorie (ecrireAdmin). */
+async function envoyerInfosTournoi(envoi) {
+  const invalider = function () {
+    if (envoi.categories_choisies && typeof invaliderLecturesCategories === 'function') invaliderLecturesCategories();
+  };
+  invalider();
+  try { return await ecrireAdmin('enregistrerInfosTournoi', envoi); } finally { invalider(); }
+}
+
+/** Le serveur a-t-il PU écrire malgré l'erreur ? Non pour un refus au contrat (il déclare `modifies`
+ *  vide) ni pour une clé non saisie (rien n'est parti). Oui pour tout le reste (réponse perdue…). */
+function ecritureInfosIncertaine(err) {
+  const r = err && err.reponse;
+  if (r && r.contrat === CONTRAT_ECRITURE && Array.isArray(r.modifies) && r.modifies.length === 0) return false;
+  return String((err && err.message) || '') !== 'Action annulée.';
+}
+
+/** Échec de l'envoi : l'erreur remonte au bouton. Si le choix des catégories était parti et que le
+ *  serveur a pu écrire, les catégories sont RELUES — jamais renvoyées automatiquement. */
+async function echecEnregistrementInfos(err, choix) {
+  if (choix && ecritureInfosIncertaine(err)) {
+    const etat = await reconcilierChoixCategoriesApresEchec(choix.selection);
+    err.message = String(err.message || 'Réponse du serveur indisponible.') + (etat === 'confirme'
+      ? ' Les catégories sont confirmées par relecture ; enregistre à nouveau pour confirmer les informations (sans risque de doublon).'
+      : ' Rien n’a été renvoyé automatiquement : enregistre à nouveau (sans risque de doublon).');
+  }
+  throw err;
 }
 
 /**
  * Enregistre les infos du tournoi (nom/date/lieu/description + affiche éventuelle),
  * indépendamment de la publication. Utilisable à tout moment, même après publication
  * (pour corriger une faute de frappe sans avoir à dépublier).
+ * ⭐ Contrat d'écriture : UNE requête pour tout le geste — infos, date, zone, affiche et choix des
+ *   catégories —, après la confirmation destructrice éventuelle. Le serveur revérifie les
+ *   suppressions ; s'il en refuse une, on redemande UNE fois avec ses chiffres, puis on renvoie.
  */
 async function onEnregistrerInfos() {
   const message = document.getElementById('message-infos-tournoi');
   const bouton = document.getElementById('bouton-enregistrer-infos');
   await avecBoutonOccupe(bouton, message, async function () {
-    // Une action visuelle commune, avec les confirmations et la réconciliation des
-    // catégories existantes conservées. Ne poursuivre que si leur état est confirmé.
     const informations = Object.assign({}, lireInfosTournoi(), lireCadreTournoi());
-    if (typeof choixCategoriesAValider === 'function' && choixCategoriesAValider()) {
+    let choix = null;
+    if (typeof choixCategoriesAValider === 'function' && choixCategoriesAValider() &&
+        typeof preparerEnvoiChoixCategories !== 'function') {
+      // Module des catégories d'avant le contrat (cache du navigateur mêlant deux versions des scripts) :
+      // parcours historique — valider les catégories d'abord, n'envoyer les infos que si c'est confirmé.
       await onValiderChoixCategories({ preventDefault: function () {} });
       if (choixCategoriesAValider()) {
         afficherMessage(message, 'Les catégories restent à valider. Consulte le message sous leur sélection ; les informations n’ont pas été envoyées.', 'ko');
         return;
       }
+    } else if (typeof choixCategoriesAValider === 'function' && choixCategoriesAValider()) {
+      choix = await preparerEnvoiChoixCategories();
+      if (choix.statut !== 'pret') {
+        afficherMessage(message, choix.statut === 'annule'
+          ? 'Enregistrement annulé : aucune information envoyée ; le choix des catégories reste à enregistrer.'
+          : 'Les catégories restent à valider. Consulte le message sous leur sélection ; les informations n’ont pas été envoyées.', 'ko');
+        return;
+      }
     }
-    afficherMessage(message, 'Enregistrement des infos…', 'ok');
-    await ecrireAdmin('enregistrerInfosTournoi', informations);
-    if (afficheDataURI) {
-      afficherMessage(message, "Envoi de l'affiche…", 'ok');
-      await ecrireAdmin('enregistrerAffiche', { affiche: afficheDataURI });
+    try {
+      await enregistrerInfosEtChoix(message, informations, choix);
+    } finally {
+      if (choix) libererChoixCategories();
     }
-    // On recharge la config pour refléter ce qui est réellement enregistré (dont l'affiche).
-    configCourante = await lireConfigAdmin();
-    majInfosTournoi();
-    majDossier(); // le dossier club reflète les nouvelles infos
-    majTableauBord();
-    document.getElementById('form-infos-tournoi').tournoi_affiche.value = ''; // vide le champ fichier
-    afficherMessage(message, '✅ Infos enregistrées.', 'ok');
   });
+}
+
+async function enregistrerInfosEtChoix(message, informations, choixInitial) {
+  let choix = choixInitial;
+  const affiche = afficheDataURI;
+  afficherMessage(message, 'Enregistrement des infos' + (affiche && choix ? ', de l’affiche' : affiche ? ' et de l’affiche' : '') +
+    (choix ? ' et des catégories…' : '…'), 'ok');
+  const base = affiche ? Object.assign({}, informations, { affiche: affiche }) : informations;
+  let res;
+  try {
+    res = await envoyerInfosTournoi(choix ? Object.assign({}, base, choix.envoi) : base);
+  } catch (err) {
+    const refus = choix && refusSuppressionCategories(err);
+    if (!refus) return echecEnregistrementInfos(err, choix);
+    // ⛔ Le serveur a refusé TOUTE la demande (rien n'est écrit) : une suppression réelle dépassait ce
+    //   qui avait été confirmé. Son état relu remplace l'affichage ; on redemande UNE fois.
+    appliquerRefusChoixCategories(refus);
+    const reprise = await preparerEnvoiChoixCategories(refus.a_confirmer, choix.confirmees);
+    if (reprise.statut !== 'pret') {
+      afficherMessage(message, '⚠️ ' + refus.error + ' Ton choix des catégories reste à enregistrer.', 'ko');
+      return;
+    }
+    choix = reprise;
+    try {
+      res = await envoyerInfosTournoi(Object.assign({}, base, choix.envoi));
+    } catch (err2) {
+      const refus2 = refusSuppressionCategories(err2);
+      if (!refus2) return echecEnregistrementInfos(err2, choix);
+      appliquerRefusChoixCategories(refus2);
+      afficherMessage(message, '⚠️ ' + refus2.error + ' Vérifie les catégories puis enregistre à nouveau.', 'ko');
+      return;
+    }
+  }
+  if (affiche && !reponseEcritureExploitable(res)) {
+    // Backend d'avant le contrat : il a ignoré l'affiche — elle part par son action historique.
+    afficherMessage(message, "Envoi de l'affiche…", 'ok');
+    await ecrireAdmin('enregistrerAffiche', { affiche: affiche });
+  }
+  let categoriesEnAttente = false;
+  let dejaRelue = false;
+  if (choix && reponseCategoriesExploitable(res)) {
+    categoriesEnAttente = !appliquerChoixCategoriesEnregistre(res, choix.selection);
+  } else if (choix && res && res.contrat === CONTRAT_ECRITURE) {
+    // Réponse au contrat mais incomplète : le serveur a PU appliquer le choix — relecture seule, qui
+    // sert aussi aux infos (configCourante vient d'être relue).
+    const etat = await reconcilierChoixCategoriesApresEchec(choix.selection);
+    categoriesEnAttente = etat !== 'confirme';
+    dejaRelue = etat !== 'inconnu';
+  } else if (choix) {
+    // Backend d'avant le contrat : il a ignoré le choix. Parcours historique, sans redemander ce
+    // qui vient d'être confirmé (il relit l'état et confirme de nouveau si celui-ci a changé).
+    libererChoixCategories();
+    afficherMessage(message, 'Enregistrement des catégories…', 'ok');
+    await onValiderChoixCategories({ preventDefault: function () {} },
+      { dejaConfirmees: choix.confirmees.map(function (c) { return c.categorie; }) });
+    categoriesEnAttente = choixCategoriesAValider();
+  }
+  // L'état enregistré (affiche comprise) vient de la réponse ; relu seulement en repli.
+  if (!dejaRelue) await appliquerConfigEnregistree(res);
+  majInfosTournoi({ controleFFR: controleFFRARelancer(res) });
+  majDossier(); // le dossier club reflète les nouvelles infos
+  majTableauBord();
+  const fin = messageEcritureInfos(res, choix && !categoriesEnAttente ? '✅ Infos et catégories enregistrées.' : '✅ Infos enregistrées.');
+  const form = document.getElementById('form-infos-tournoi');
+  if (affiche && fin.type === 'ko') {
+    // Affiche refusée par Drive : l'image choisie reste prête, un nouveau clic la renverra.
+    afficheDataURI = affiche;
+    document.getElementById('apercu-affiche-img').src = affiche;
+    document.getElementById('apercu-affiche').hidden = false;
+  } else {
+    form.tournoi_affiche.value = ''; // vide le champ fichier
+  }
+  if (categoriesEnAttente) {
+    fin.texte += '\n⚠️ Les catégories restent à valider : consulte le message sous leur sélection.';
+    fin.type = 'ko';
+  }
+  afficherMessage(message, fin.texte, fin.type);
 }
 
 /* --------------------------------------------------------------------------

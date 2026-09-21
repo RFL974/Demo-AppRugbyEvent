@@ -1098,6 +1098,8 @@ function brancherEcouteursAdmin() {
     zoneDepot: 'zone-depot-affiche',
     traiter: traiterFichierAffiche
   });
+  // … et atteignable au clavier (Tab, puis Entrée ou Espace ouvre le choix du fichier).
+  if (typeof rendreZoneAfficheAccessible === 'function') rendreZoneAfficheAccessible();
   // Bouton « Retirer l'affiche » (annule un choix non enregistré, ou supprime l'affiche enregistrée).
   ecouter('bouton-retirer-affiche', 'click', onRetirerAffiche);
 
@@ -1177,12 +1179,13 @@ function brancherEcouteursAdmin() {
       try { this.showPicker(); } catch (e) { /* navigateur non compatible : comportement normal */ }
     });
 
-  // Conformité FFR : re-vérifie dès que la date OU la zone de vacances change (carte cadre).
+  // Conformité FFR : re-vérifie quand la date OU la zone de vacances change (carte cadre) — une fois
+  // la saisie finie : au clavier, le champ date déclenche « change » à chaque touche.
   ecouter('form-cadre-tournoi', 'change', function (e) {
     const n = e.target && e.target.name;
-    if ((n === 'tournoi_date' || n === 'zone_vacances') && typeof majConformiteFFR === 'function') {
-      majConformiteFFR();
-    }
+    if (n !== 'tournoi_date' && n !== 'zone_vacances') return;
+    if (typeof planifierConformiteFFR === 'function') planifierConformiteFFR();
+    else if (typeof majConformiteFFR === 'function') majConformiteFFR();
   });
   // « Forme FFR attendue » des cartes : rafraîchit l'avertissement d'effectif à la saisie.
   ecouter('zone-categories', 'input', function (e) {

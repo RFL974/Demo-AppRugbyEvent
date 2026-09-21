@@ -28,7 +28,26 @@ var refFFRErreur = null;
 /* Dernier verdict de conformité (regles/temps) — mémorisé pour construire l'aperçu du bouton
    « Appliquer les valeurs FFR » au clic, sans nouvel appel réseau. */
 var dernierResConformite = null;
+/* Entrées (date | zone | catégories) du verdict AFFICHÉ — null tant qu'aucun verdict n'est affiché. */
+var signatureVerdictFFR = null;
 var conformiteFFRGeneration = 0;
+
+/** Résumé des trois entrées du contrôle FFR, dans la forme exacte envoyée au serveur. */
+function signatureEntreesFFR(dateISO, categories, zone) {
+  return String(dateISO || '') + '|' + String(zone || '') + '|' + (categories || []).join(',');
+}
+
+/**
+ * Le verdict affiché porte-t-il sur les valeurs COURANTES (date et zone du formulaire, catégories
+ * présentes) ? ⭐ Sert au contrat d'écriture : quand une sauvegarde prouve que date et zone n'ont
+ * pas bougé, un verdict déjà à jour n'est pas redemandé au serveur (une exécution Apps Script de
+ * moins). ⛔ Dans le doute — aucun verdict, catégories en cours de choix — la réponse est NON.
+ */
+function verdictFFRAJour() {
+  if (!dernierResConformite || signatureVerdictFFR === null) return false;
+  if (typeof choixCategoriesAValider === 'function' && choixCategoriesAValider()) return false;
+  return signatureVerdictFFR === signatureEntreesFFR(dateTournoiCourante(), categoriesPresentesNoms(), zoneVacancesCourante());
+}
 var datesCompatiblesGeneration = 0;
 
 function invaliderDatesCompatiblesFFR() {
@@ -128,6 +147,7 @@ function invaliderConformiteFFRAffichee() {
   conformiteFFRGeneration++;
   invaliderDatesCompatiblesFFR();
   dernierResConformite = null;
+  signatureVerdictFFR = null;
   const zone = document.getElementById('bloc-conformite-ffr');
   if (zone) {
     zone.innerHTML = statutNeutreFFR('Conformité FFR à recalculer',
@@ -135,13 +155,45 @@ function invaliderConformiteFFRAffichee() {
   }
 }
 
+/* Saisie de la date ou de la zone : on attend la FIN de la saisie avant d'interroger le serveur.
+   ⭐ Relevé navigateur du 2026-09-21 : taper « 22052027 » dans le champ date déclenche « change » à
+   chaque touche — 8 contrôles FFR (8 exécutions Apps Script) pour une seule date. */
+var DELAI_CONTROLE_FFR_SAISIE_MS = 600;
+var minuterieConformiteFFR = null;
+
+/**
+ * Relance du contrôle FFR après une saisie (écouteur « change » de la carte date et zone).
+ * Le verdict affiché est oublié TOUT DE SUITE (local : plus aucun verdict ne décrit la saisie, une
+ * réponse encore en vol est ignorée), puis un seul contrôle part quand la saisie est finie.
+ * Sans appel possible (catégories à valider, aucune catégorie), l'état neutre s'affiche sans attendre.
+ */
+function planifierConformiteFFR() {
+  if (minuterieConformiteFFR) { clearTimeout(minuterieConformiteFFR); minuterieConformiteFFR = null; }
+  if ((typeof choixCategoriesAValider === 'function' && choixCategoriesAValider()) || !categoriesPresentesNoms().length) {
+    return majConformiteFFR();
+  }
+  conformiteFFRGeneration++;
+  invaliderDatesCompatiblesFFR();
+  dernierResConformite = null;
+  signatureVerdictFFR = null;
+  const zone = document.getElementById('bloc-conformite-ffr');
+  if (zone) zone.innerHTML = statutNeutreFFR('Vérification en cours', 'Contrôle du calendrier FFR…');
+  minuterieConformiteFFR = setTimeout(function () {
+    minuterieConformiteFFR = null;
+    majConformiteFFR();
+  }, DELAI_CONTROLE_FFR_SAISIE_MS);
+}
+
 /** (Re)calcule et affiche le bloc « Conformité FFR », puis rafraîchit les formes des cartes. */
 async function majConformiteFFR() {
+  // Un contrôle immédiat (enregistrement, reprise…) remplace celui qui attendait la fin d'une saisie.
+  if (minuterieConformiteFFR) { clearTimeout(minuterieConformiteFFR); minuterieConformiteFFR = null; }
   const generation = ++conformiteFFRGeneration;
   invaliderDatesCompatiblesFFR();
   const zone = document.getElementById('bloc-conformite-ffr');
   if (!zone) return;
   dernierResConformite = null;
+  signatureVerdictFFR = null;
   const categories = categoriesPresentesNoms();
   if ((typeof choixCategoriesAValider === 'function' && choixCategoriesAValider()) || !categories.length) {
     zone.innerHTML = statutNeutreFFR('Catégories à valider',
@@ -176,12 +228,13 @@ async function majConformiteFFR() {
   }
 
   zone.innerHTML = statutNeutreFFR('Vérification en cours', 'Contrôle du calendrier FFR…');
+  const zoneVacances = zoneVacancesCourante();
   let res;
   try {
     res = await apiGet('getConformiteFFR', {
       date: dateISO,
       categories: categories.join(','),
-      zone: zoneVacancesCourante()
+      zone: zoneVacances
     }, { delaiMs: 30000 });
   } catch (e) {
     if (generation !== conformiteFFRGeneration) return;
@@ -194,6 +247,7 @@ async function majConformiteFFR() {
     return;
   }
   dernierResConformite = res; // mémorisé pour l'aperçu du bouton d'application
+  signatureVerdictFFR = signatureEntreesFFR(dateISO, categories, zoneVacances);
   zone.innerHTML = rendreConformiteFFR(res);
   majFormesCategories();
 }
@@ -1083,7 +1137,27 @@ function apercuAppliquerFFR(cat, variante) {
     '\n\nCes valeurs seront écrites dans les réglages. Tu pourras les remodifier ensuite.';
 }
 
-/** Clic sur « Appliquer les valeurs FFR » : confirmation, écriture backend, rechargement + recalcul. */
+/** La réponse d'« Appliquer les valeurs FFR » suit-elle le contrat, avec une configuration complète ? */
+function reponseValeursFFRExploitable(res) {
+  const cfg = res && res.contrat === 'ecriture-v1' ? res.config : null;
+  return !!(cfg && cfg.global && typeof cfg.global === 'object' && Array.isArray(cfg.categories));
+}
+
+/**
+ * L'écran prend la configuration RELUE par le serveur : les mêmes rendus que rechargerReglages
+ * (admin.js), sans la relecture ni l'attente du contrôle FFR.
+ */
+function appliquerConfigValeursFFR(cfg) {
+  configCourante = cfg;
+  if (typeof injecterReglages === 'function') injecterReglages(cfg.global, cfg.categories);
+  if (typeof injecterTerrains === 'function') injecterTerrains();
+  if (typeof remplirSelectCategories === 'function') remplirSelectCategories(cfg.categories);
+  if (typeof majChoixCategoriesTournoi === 'function') majChoixCategoriesTournoi();
+  if (typeof majTableauBord === 'function') majTableauBord();
+}
+
+/** Clic sur « Appliquer les valeurs FFR » : confirmation, UNE écriture, puis recalcul du verdict
+ *  en arrière-plan (contrat d'écriture) — ou, face à un backend d'avant, relecture + recalcul attendus. */
 async function onClicAppliquerFFR(e) {
   const btn = e.target.closest('.ffr-appliquer');
   if (!btn) return;
@@ -1098,11 +1172,17 @@ async function onClicAppliquerFFR(e) {
   btn.disabled = true;
   try {
     const res = await ecrireAdmin('appliquerValeursFFR', { categorie: cat, date: dateISO, variante: variante });
-    // Les champs de Config ont changé : on recharge les réglages (qui RECALCULE déjà la conformité —
-    // badges orange appliqués effacés, ignorés conservés). En absence de rechargerReglages (écran
-    // Conformité seul), on recalcule directement.
-    if (typeof rechargerReglages === 'function') await rechargerReglages();
-    else await majConformiteFFR();
+    if (reponseValeursFFRExploitable(res)) {
+      // ⭐ Contrat d'écriture : la configuration relue arrive avec la réponse. Le verdict est recalculé
+      //   en ARRIÈRE-PLAN — il le faut, son temps prévisionnel dépend des durées qui viennent d'être
+      //   écrites — sans retenir le message de résultat.
+      appliquerConfigValeursFFR(res.config);
+      majConformiteFFR().catch(function () { /* la zone affiche déjà sa reprise */ });
+    } else if (typeof rechargerReglages === 'function') {
+      // Backend d'avant le contrat : on recharge les réglages (qui RECALCULE déjà la conformité —
+      // badges orange appliqués effacés, ignorés conservés).
+      await rechargerReglages();
+    } else await majConformiteFFR();
     let msg = '✅ Valeurs FFR appliquées à ' + cat + '.';
     if (res && res.ignores && res.ignores.length) {
       msg += '\n\nNon appliqué :\n' + res.ignores.map(function (i) { return '• ' + i.raison; }).join('\n');
@@ -1215,17 +1295,30 @@ function rendreDatesCompatibles(res) {
   return html;
 }
 
+/* Un « Appliquer » de jour à la fois : sans garde, un double clic enregistrait deux fois la date et
+   finissait sur le message du second envoi (« Déjà à jour »), faux pour le premier. */
+var applicationDateEnCours = false;
+
 /** Clic « Appliquer » d'un jour : pose la date dans la carte, enregistre, ferme le panneau. */
 async function onClicResultatDate(e) {
   const btn = e.target.closest('.df-appliquer');
-  if (!btn) return;
+  if (!btn || applicationDateEnCours) return;
   const date = btn.getAttribute('data-date');
   if (!date) return;
   const champ = document.querySelector('[name="tournoi_date"]');
   if (champ) champ.value = date;
-  // Enregistre la date (+ zone) via le flux de la carte, qui recharge la conformité FFR.
-  if (typeof onEnregistrerCadre === 'function') await onEnregistrerCadre();
-  else if (typeof majConformiteFFR === 'function') await majConformiteFFR();
+  const zone = document.getElementById('finder-resultats');
+  const jours = zone ? Array.from(zone.querySelectorAll('.df-appliquer')) : [btn];
+  applicationDateEnCours = true;
+  jours.forEach(function (b) { b.disabled = true; });
+  try {
+    // Enregistre la date (+ zone) via le flux de la carte, qui recharge la conformité FFR.
+    if (typeof onEnregistrerCadre === 'function') await onEnregistrerCadre();
+    else if (typeof majConformiteFFR === 'function') await majConformiteFFR();
+  } finally {
+    applicationDateEnCours = false;
+    jours.forEach(function (b) { b.disabled = false; });
+  }
   const panneau = document.getElementById('panneau-trouver-date');
   if (panneau) panneau.hidden = true;
   const bouton = document.getElementById('bouton-trouver-date');

@@ -345,7 +345,7 @@ function invaliderAutorisationAffichee() {
    FFR elle alimente — vérifié dans `getDossierAutorisation` / `assemblerDossierAutorisation`
    (backend/Code.gs), pas déduit d'un nom d'action. */
 var ACTIONS_AUTORISATION_CROCHET = {
-  enregistrerInfosTournoi:       'A.2 nom/lieu/adresse/date — et A.3 (le mois choisit les formes)',
+  enregistrerInfosTournoi:       'A.2 nom/lieu/adresse/date — et A.3 (le mois choisit les formes ; catégories présentes, choix envoyé avec les infos)',
   enregistrerHoraires:           'A.2 heures de début et de fin',
   enregistrerCategorie:          'A.3 catégories présentes, B.2 format et durée de match',
   supprimerCategorie:            'A.3, B.2',
@@ -408,7 +408,10 @@ var ACTIONS_AUTORISATION_SANS_IMPACT = {
    ⭐ L'oubli coûte une route réseau superflue — jamais un écran faux. Même doctrine que
    l'allowlist d'effacement D-043 : l'oubli doit CONSERVER, pas détruire. */
 var CHAMPS_SANS_IMPACT_AUTORISATION = {
-  enregistrerInfosTournoi: ['tournoi_description', 'zone_vacances', 'perfs_mot_cle_club'],
+  // `affiche` / `tournoi_affiche_id` : l'affiche voyage désormais avec les infos (contrat d'écriture) ;
+  // elle reste sans impact, exactement comme `enregistrerAffiche` (liste C ci-dessus).
+  enregistrerInfosTournoi: ['tournoi_description', 'zone_vacances', 'perfs_mot_cle_club',
+                            'affiche', 'tournoi_affiche_id'],
   enregistrerInvitation:   ['date_limite_confirmation', 'tarif_engagement_modalites',
                             'parking_texte', 'encadrement_ratio', 'encadrement_diplomes',
                             'assurance_attestation_requise'],
@@ -492,10 +495,17 @@ function ecritureImpacteAutorisation(action, data, reponse) {
   // ① Le serveur déclare lui-même la NON-ÉCRITURE (backend/Code.gs:5508 et :1915).
   if (action === 'supprimerClubInvite' && reponse && reponse.apercu === true) return false;
   if (action === 'appliquerValeursFFR' && reponse && reponse.applique === false) return false;
+  // ⭐ Contrat d'écriture (`ecriture-v1`) : le serveur dit quels champs ont RÉELLEMENT changé.
+  //   Rien de changé : la feuille ne peut pas être devenue fausse. Sinon, seuls ces champs comptent —
+  //   renvoyer un formulaire entier inchangé ne coûte plus une relecture de la feuille.
+  //   ⛔ Sans cette preuve (backend d'avant le contrat), on juge sur les champs ENVOYÉS, comme avant.
+  const modifies = (reponse && reponse.contrat === 'ecriture-v1' && Array.isArray(reponse.modifies))
+    ? reponse.modifies : null;
+  if (modifies && modifies.length === 0) return false;
   // ② Écriture partielle dont AUCUN champ n'est lu par la feuille (voir la liste ci-dessus).
   const sansImpact = CHAMPS_SANS_IMPACT_AUTORISATION[action];
-  if (sansImpact && data) {
-    const cles = Object.keys(data).filter(function (c) { return c !== 'cle'; });
+  if (sansImpact && (modifies || data)) {
+    const cles = modifies || Object.keys(data).filter(function (c) { return c !== 'cle'; });
     if (cles.length && cles.every(function (c) { return sansImpact.indexOf(c) !== -1; })) return false;
   }
   return true;
