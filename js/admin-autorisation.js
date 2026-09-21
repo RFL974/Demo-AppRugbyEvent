@@ -415,7 +415,11 @@ var CHAMPS_SANS_IMPACT_AUTORISATION = {
   enregistrerInvitation:   ['date_limite_confirmation', 'tarif_engagement_modalites',
                             'parking_texte', 'encadrement_ratio', 'encadrement_diplomes',
                             'assurance_attestation_requise'],
-  enregistrerSurPlace:     ['buvette_disponible', 'espace_sandwich_disponible', 'boutique_disponible']
+  enregistrerSurPlace:     ['buvette_disponible', 'espace_sandwich_disponible', 'boutique_disponible'],
+  // Horaires : la feuille ne lit que `heure_debut` et la fin (`heure_fin_projetee || heure_fin_matin || heure_fin`,
+  // getDossierAutorisation) — contrôlé par tests/ecran-horaires-surface.test.js contre le vrai Code.gs.
+  enregistrerHoraires:     ['heure_fin_auto', 'battement_terrain_min', 'pause_dejeuner_debut', 'pause_dejeuner_duree_min',
+                            'heure_rdv', 'heure_fin_communiquee', 'marge_fin_communiquee_min', 'pause_echelonnee']
 };
 
 /* ⭐ DES RÉVISIONS, PAS UN BOOLÉEN — et les deux scénarios qui l'imposent :

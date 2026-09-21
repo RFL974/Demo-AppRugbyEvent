@@ -27,7 +27,7 @@
  * quand le mode écrans déplace les deux zones hors de #reglages.
  */
 function injecterReglages(global, categories) {
-  document.getElementById('zone-horaires').innerHTML = afficherHoraires(global);
+  injecterHoraires(global);
   document.getElementById('zone-categories').innerHTML = afficherCategories(categories);
   // Affiche d'emblée les conseils des catégories déjà en mode Manuel (sans attendre une frappe).
   document.querySelectorAll('.bloc-terrains[data-terrains="manuel"]').forEach(verifierTerrainsBloc);
@@ -43,8 +43,11 @@ function injecterReglages(global, categories) {
 function afficherHoraires(global) {
   function val(cle, def) {return (global && global[cle] != null && global[cle] !== '') ? echapper(String(global[cle])) : (def || '');}
   const auto=String((global && global.heure_fin_auto) || 'oui').toLowerCase() !== 'non';
+  // `novalidate` : les contrôles sont ceux de controlerSaisieHoraires, qui les MONTRENT. Le contrôle natif bloquait
+  // l'envoi sans un mot quand le champ fautif dormait dans un panneau fermé, et son pas de 5 min refusait le
+  // battement de 2 ou 3 min que le serveur accepte (et que l'arbitrage du planning propose).
   return '<div class="cv-horaires"><section class="carte"><h2>Horaires principaux</h2>' +
-    '<form id="form-horaires" class="form-reglages">' +
+    '<form id="form-horaires" class="form-reglages" novalidate>' +
     champHeure('heure_rdv','Accueil des équipes',val('heure_rdv')) +
     champHeure('heure_debut','Début des matchs',val('heure_debut')) +
     blocPauseDejeuner(global,val) +
@@ -155,49 +158,251 @@ function champNombre(nom, label, valeur, aide) {
          '</div>';
 }
 
+/* --------------------------------------------------------------------------
+   ÉCRAN « HORAIRES » — saisie en cours, contrôle et enregistrement (contrat d'écriture)
+   --------------------------------------------------------------------------
+   ⭐ UNE action = UNE requête (`enregistrerHoraires`), qui porte l'état FINAL du formulaire ; l'écran se met à
+     jour depuis la RÉPONSE, sans relecture. Tout le reste (panneaux, cases, flèches, pré-remplissage de
+     l'accueil) reste local : zéro appel.
+   ⛔ Une saisie non enregistrée n'est plus écrasée par une relecture lancée ailleurs (catégorie ajoutée, planning
+     généré, terrains appliqués…) : voir injecterHoraires.
+   -------------------------------------------------------------------------- */
+
+/* Champs du formulaire, dans l'ordre de l'envoi d'avant ce lot. */
+const CHAMPS_FORMULAIRE_HORAIRES = ['heure_debut', 'heure_rdv', 'heure_fin', 'heure_fin_auto', 'heure_fin_communiquee',
+  'marge_fin_communiquee_min', 'battement_terrain_min', 'pause_dejeuner_debut', 'pause_dejeuner_duree_min', 'pause_echelonnee'];
+
+/* Libellés de l'écran : un refus dit QUEL champ corriger. */
+const LIBELLES_HORAIRES = { heure_rdv: 'Accueil des équipes', heure_debut: 'Début des matchs',
+  pause_dejeuner_debut: 'Pause déjeuner — début', pause_dejeuner_duree_min: 'Pause déjeuner — durée',
+  marge_fin_communiquee_min: 'Clôture après le dernier match', battement_terrain_min: 'Battement entre deux matchs',
+  heure_fin: 'Fin des matchs', heure_fin_communiquee: 'Fin de journée communiquée aux clubs',
+  heure_fin_auto: 'Calcul automatique', pause_echelonnee: 'Pause méridienne échelonnée' };
+
+/* Borne TECHNIQUE des durées (une journée), la même que le serveur (HORAIRES_DUREE_MAX_MIN). */
+const DUREE_MAX_HORAIRES_MIN = 1440;
+
+/* Délai NOMINAL de l'écriture. Sans lui, une réponse qui ne vient jamais laissait le bouton sur
+   « Enregistrement… » pour toujours. À échéance : le bouton se libère et le message dit que l'enregistrement
+   n'est pas confirmé. ⛔ Aucun renvoi automatique (api.js ne rejoue pas cette écriture). */
+const DELAI_ECRITURE_HORAIRES_MS = 30000;
+
+/* Valeurs ENREGISTRÉES que montre le formulaire : lues au dernier rendu depuis l'état enregistré, ou reprises du
+   dernier enregistrement réussi. Un champ qui en diffère est une SAISIE EN COURS. null = carte pas encore rendue. */
+let horairesEnregistres = null;
+/* Vrai pendant l'envoi : une relecture qui aboutit à ce moment ne reconstruit pas le formulaire. */
+let horairesEnvoiEnCours = false;
+
+/** Valeurs du formulaire telles qu'elles partent au serveur (mêmes règles qu'avant ce lot). */
+function lireFormulaireHoraires(form) {
+  const data = {};
+  CHAMPS_FORMULAIRE_HORAIRES.forEach(function (champ) {
+    const c = form[champ];
+    if (champ === 'heure_fin_auto' || champ === 'pause_echelonnee') data[champ] = (c && c.checked) ? 'oui' : 'non';
+    else data[champ] = c ? c.value : '';
+  });
+  return data;
+}
+
+/** Champs dont la valeur à l'écran diffère de la valeur enregistrée : la saisie en cours. */
+function champsHorairesEnCours(form) {
+  if (!horairesEnregistres) return [];
+  const actuel = lireFormulaireHoraires(form);
+  return CHAMPS_FORMULAIRE_HORAIRES.filter(function (c) { return actuel[c] !== horairesEnregistres[c]; });
+}
+
+/** Pose une valeur ENREGISTRÉE dans un champ (le marqueur « accueil pré-rempli » n'a plus lieu d'être). */
+function ecrireChampHoraire(champ, valeur) {
+  if (champ.type === 'checkbox') champ.checked = (valeur === 'oui');
+  else champ.value = valeur;
+  if (champ.dataset) delete champ.dataset.autoRdv;
+}
+
+/** Ce qui dépend des cases, comme onReglagesChange le fait à la main : fin grisée en automatique, bloc
+ *  « pause échelonnée » (libellés, durée masquée). */
+function synchroniserDependancesHoraires(form) {
+  if (form.heure_fin && form.heure_fin_auto) form.heure_fin.disabled = !!form.heure_fin_auto.checked;
+  const bloc = form.querySelector && form.querySelector('.bloc-pause-dej');
+  if (bloc && form.pause_echelonnee) bloc.setAttribute('data-ech', form.pause_echelonnee.checked ? 'oui' : 'non');
+}
+
 /**
- * Enregistre les horaires quand on soumet le formulaire.
+ * Rend la carte « Horaires » depuis l'état ENREGISTRÉ `global`.
+ * ⭐ Sans saisie en cours, sans envoi en vol et sans focus dans le formulaire : rendu complet, comme avant (les
+ *   panneaux ouverts le restent).
+ * ⭐ Sinon — une relecture lancée par une autre étape (catégorie ajoutée, planning généré, terrains appliqués…)
+ *   aboutit pendant qu'on tape, ou alors qu'une saisie attend d'être enregistrée — le formulaire N'EST PAS
+ *   reconstruit : focus, curseur et panneaux restent en place. Un champ non modifié prend la valeur relue ; une
+ *   saisie en cours est gardée, sauf si le serveur a changé CE champ entre-temps (réinitialisation, arbitrage…) :
+ *   la valeur enregistrée l'emporte alors — jamais pour le champ qui a le focus —, et le message le dit.
+ */
+function injecterHoraires(global) {
+  const zone = document.getElementById('zone-horaires');
+  if (!zone) return;
+  const form = document.getElementById('form-horaires');
+  const actif = document.activeElement;
+  const enCours = form ? champsHorairesEnCours(form) : [];
+  const focusDedans = !!(form && actif && form.contains && form.contains(actif));
+  if (!form || !horairesEnregistres || (!enCours.length && !horairesEnvoiEnCours && !focusDedans)) {
+    const ouverts = form ? Array.from(zone.querySelectorAll('details')).map(function (d) { return d.open; }) : [];
+    zone.innerHTML = afficherHoraires(global);
+    Array.from(zone.querySelectorAll('details')).forEach(function (d, i) { if (ouverts[i]) d.open = true; });
+    const neuf = document.getElementById('form-horaires');
+    horairesEnregistres = neuf ? lireFormulaireHoraires(neuf) : null;
+    return;
+  }
+  const modele = document.createElement('div');
+  modele.innerHTML = afficherHoraires(global);
+  const releves = lireFormulaireHoraires(modele.querySelector('form'));
+  const gardes = [], remplaces = [];
+  CHAMPS_FORMULAIRE_HORAIRES.forEach(function (c) {
+    const champ = form[c];
+    if (!champ) return;
+    const affiche = lireFormulaireHoraires(form)[c];
+    if (enCours.indexOf(c) !== -1) {
+      if (releves[c] === horairesEnregistres[c] || champ === actif) {
+        if (affiche !== releves[c]) gardes.push(c);
+        return;
+      }
+      if (affiche !== releves[c]) remplaces.push(c);
+    }
+    if (affiche !== releves[c]) ecrireChampHoraire(champ, releves[c]);
+  });
+  synchroniserDependancesHoraires(form);
+  const finPause = zone.querySelector('#val-pause-fin');
+  if (finPause) finPause.textContent = (global && global.pause_echelonnee_fin) ? String(global.pause_echelonnee_fin) : '—';
+  const frise = zone.querySelector('#cv-frise-horaires');
+  if (frise) frise.innerHTML = friseHorairesCiel(global, typeof matchsCourants === 'undefined' ? [] : matchsCourants);
+  horairesEnregistres = releves;
+  if (!gardes.length && typeof assistantRephotographier === 'function') assistantRephotographier(form);
+  const message = document.getElementById('message-horaires');
+  if (horairesEnvoiEnCours || !message || (!gardes.length && !remplaces.length)) return;
+  const noms = function (liste) { return liste.map(function (c) { return LIBELLES_HORAIRES[c]; }).join(', '); };
+  afficherMessage(message, (gardes.length ? '✏️ Saisie non enregistrée conservée : ' + noms(gardes) + '. ' : '') +
+    (remplaces.length ? '↻ Valeur enregistrée entre-temps reprise pour : ' + noms(remplaces) + '.' : ''), 'ko');
+}
+
+/** Premier défaut de saisie, ou null : { champ, message }. Les règles du serveur (validerHoraires_), plus ce que
+ *  seul le navigateur voit : une heure incomplète ou un nombre illisible (le champ vaut alors ''). */
+function controlerSaisieHoraires(form, data) {
+  for (let i = 0; i < CHAMPS_FORMULAIRE_HORAIRES.length; i++) {
+    const c = form[CHAMPS_FORMULAIRE_HORAIRES[i]];
+    if (c && !c.disabled && c.validity && c.validity.badInput) {
+      return { champ: CHAMPS_FORMULAIRE_HORAIRES[i],
+        message: '« ' + LIBELLES_HORAIRES[CHAMPS_FORMULAIRE_HORAIRES[i]] + ' » est incomplet ou illisible : corrige-le ou vide-le.' };
+    }
+  }
+  if (!data.heure_debut) return { champ: 'heure_debut', message: "Renseigne l'heure de début." };
+  if (data.heure_fin_auto === 'non' && !data.heure_fin) {
+    return { champ: 'heure_fin', message: "Renseigne l'heure de fin (ou coche « auto »)." };
+  }
+  const durees = ['pause_dejeuner_duree_min', 'marge_fin_communiquee_min', 'battement_terrain_min'];
+  for (let j = 0; j < durees.length; j++) {
+    const v = String(data[durees[j]]).trim();
+    if (v && (!/^\d{1,4}$/.test(v) || Number(v) > DUREE_MAX_HORAIRES_MIN)) {
+      return { champ: durees[j], message: '« ' + LIBELLES_HORAIRES[durees[j]] + ' » : un nombre entier de minutes entre 0 et ' +
+        DUREE_MAX_HORAIRES_MIN + ' est attendu.' };
+    }
+  }
+  return null;
+}
+
+/** Montre le défaut : message, panneau ouvert s'il cachait le champ, focus sur le champ. */
+function signalerDefautHoraires(form, defaut, message) {
+  afficherMessage(message, defaut.message, 'ko');
+  const c = form[defaut.champ];
+  if (!c) return;
+  const panneau = c.closest && c.closest('details');
+  if (panneau && !panneau.open) panneau.open = true;
+  if (c.focus && !c.disabled) c.focus();
+}
+
+/**
+ * Échec de l'écriture. Un refus du SERVEUR (réponse lue) reste tel quel : rien n'a été écrit.
+ * ⛔ Une réponse PERDUE (délai, connexion coupée, 404 de Google au second saut, page illisible) peut cacher une
+ *   écriture réussie : jamais de renvoi automatique ; le message le dit, la saisie reste à l'écran, et la feuille
+ *   d'autorisation est tenue pour périmée (prudence gratuite : elle ne sera relue qu'à la prochaine visite).
+ */
+function erreurEnregistrementHoraires(erreur, data) {
+  const perdue = erreur && !erreur.reponse && (erreur.name === 'AbortError' || erreur.name === 'TypeError' ||
+    erreur.name === 'SyntaxError' || /erreur \(\d{3}\)/.test(String(erreur.message || '')));
+  if (!perdue) return erreur;
+  try {
+    if (typeof ecritureImpacteAutorisation === 'function' && typeof signalerAutorisationObsolete === 'function' &&
+        ecritureImpacteAutorisation('enregistrerHoraires', data, null)) signalerAutorisationObsolete();
+  } catch (e) { /* la feuille garde son état ; le message ci-dessous reste juste */ }
+  const cause = erreur.name === 'AbortError' ? 'aucune réponse du serveur dans le délai'
+    : erreur.name === 'TypeError' ? 'connexion interrompue' : String(erreur.message || 'réponse illisible').replace(/\.$/, '');
+  return new Error('Enregistrement non confirmé (' + cause + '). Tes horaires restent à l’écran : ' +
+    'un nouveau clic les enregistre, sans risque de doublon.');
+}
+
+/**
+ * Succès : l'écran se met à jour DEPUIS LA RÉPONSE — valeurs relues par le serveur (contrat `ecriture-v1`) ou, avec
+ * un backend d'avant le contrat ou une réponse incomplète, les valeurs envoyées (comportement d'avant). Jamais de
+ * relecture. Puis ce qui en dépend, en local : frise, fil « Où en suis-je ? », pastilles, bouton « Recalculer les
+ * horaires » (il ne suivait qu'au rechargement), état du dossier club.
+ * ⛔ Une modification faite PENDANT l'envoi n'est pas enregistrée : elle reste une saisie en cours et le message le dit.
+ */
+function appliquerHorairesEnregistres(form, envoye, res, message) {
+  const recu = (res && res.contrat === 'ecriture-v1' && Array.isArray(res.modifies) && res.enregistre &&
+    typeof res.enregistre === 'object') ? res.enregistre : null;
+  const complet = !!recu && Object.keys(envoye).every(function (c) { return Object.prototype.hasOwnProperty.call(recu, c); });
+  const enregistre = {};
+  Object.keys(envoye).forEach(function (c) { enregistre[c] = complet ? String(recu[c] == null ? '' : recu[c]) : envoye[c]; });
+  // « Déjà à jour » exige DEUX preuves : le serveur n'a rien écrit ET le formulaire était déjà l'état enregistré connu.
+  // Après une réponse perdue (ou un renvoi fait par le navigateur lui-même), le serveur ne réécrit rien, mais la
+  // modification de l'organisateur est bel et bien enregistrée : c'est « Horaires enregistrés » qu'il doit lire.
+  const connu = horairesEnregistres;
+  const dejaAJour = complet && res.modifies.length === 0 && !!connu &&
+    Object.keys(envoye).every(function (c) { return connu[c] === envoye[c]; });
+  configCourante.global = Object.assign({}, configCourante.global, enregistre);
+  horairesEnregistres = Object.assign({}, enregistre);
+  const actuel = lireFormulaireHoraires(form);
+  const pendant = CHAMPS_FORMULAIRE_HORAIRES.filter(function (c) { return actuel[c] !== envoye[c]; });
+  CHAMPS_FORMULAIRE_HORAIRES.forEach(function (c) {
+    if (pendant.indexOf(c) === -1 && actuel[c] !== enregistre[c] && form[c]) ecrireChampHoraire(form[c], enregistre[c]);
+  });
+  synchroniserDependancesHoraires(form);
+  // Valeurs désormais ENREGISTRÉES → l'assistant reprend sa photo de référence (sauf saisie faite pendant l'envoi).
+  if (!pendant.length && typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
+  majTableauBord();    // frise, fil « Où en suis-je ? », pastilles et bouton « Recalculer les horaires »
+  majDossier();        // la section Programme du dossier club suit
+  let texte = dejaAJour ? '✅ Déjà à jour : rien n’a changé depuis le dernier enregistrement.' : '✅ Horaires enregistrés.';
+  if (pendant.length) {
+    texte += ' ✏️ Modifié pendant l’envoi, pas encore enregistré : ' +
+      pendant.map(function (c) { return LIBELLES_HORAIRES[c]; }).join(', ') + '.';
+  }
+  ((res && res.avertissements) || []).forEach(function (a) { if (a && a.message) texte += ' ⚠️ ' + a.message; });
+  afficherMessage(message, texte, 'ok');
+}
+
+/**
+ * Enregistre les horaires quand on soumet le formulaire (bouton, ou Entrée dans un champ).
  */
 async function onEnregistrerHoraires(evenement) {
   evenement.preventDefault();
   const form = evenement.target;
   const message = document.getElementById('message-horaires');
+  // ⛔ Une écriture à la fois : Entrée dans un champ pendant l'envoi ne relance rien.
+  if (horairesEnvoiEnCours) return;
 
-  const auto = form.heure_fin_auto.checked;
-  const data = {
-    heure_debut:              form.heure_debut.value,
-    heure_rdv:                form.heure_rdv.value,
-    heure_fin:                form.heure_fin.value,
-    heure_fin_auto:           auto ? 'oui' : 'non',
-    heure_fin_communiquee:    form.heure_fin_communiquee.value,
-    marge_fin_communiquee_min: form.marge_fin_communiquee_min.value,
-    battement_terrain_min:    form.battement_terrain_min.value,
-    pause_dejeuner_debut:     form.pause_dejeuner_debut.value,
-    pause_dejeuner_duree_min: form.pause_dejeuner_duree_min.value,
-    pause_echelonnee:         (form.pause_echelonnee && form.pause_echelonnee.checked) ? 'oui' : 'non'
-  };
-
-  if (!data.heure_debut) {
-    afficherMessage(message, "Renseigne l'heure de début.", 'ko');
-    return;
-  }
-  if (!auto && !data.heure_fin) {
-    afficherMessage(message, "Renseigne l'heure de fin (ou coche « auto »).", 'ko');
-    return;
-  }
+  const data = lireFormulaireHoraires(form);
+  const defaut = controlerSaisieHoraires(form, data);
+  if (defaut) { signalerDefautHoraires(form, defaut, message); return; }
 
   const bouton = document.querySelector('[form="form-horaires"]') || form.querySelector('button');
-  await avecBoutonOccupe(bouton, message, async function () {
-    await ecrireAdmin('enregistrerHoraires', data);
-    // On met à jour la config gardée en mémoire.
-    configCourante.global = Object.assign({}, configCourante.global, data);
-    actualiserFriseHorairesCiel();
-    // Valeurs désormais ENREGISTRÉES → l'assistant reprend sa photo de référence.
-    if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
-    majEtatAvancement(); // le fil « Où en suis-je ? » suit les horaires
-    majDossier();        // la section Programme du dossier club suit
-    afficherMessage(message, '✅ Horaires enregistrés.', 'ok');
-  });
+  horairesEnvoiEnCours = true;
+  try {
+    await avecBoutonOccupe(bouton, message, async function () {
+      let res;
+      try { res = await ecrireAdmin('enregistrerHoraires', data, { delaiMs: DELAI_ECRITURE_HORAIRES_MS }); }
+      catch (erreur) { throw erreurEnregistrementHoraires(erreur, data); }
+      appliquerHorairesEnregistres(form, data, res, message);
+    });
+  } finally {
+    horairesEnvoiEnCours = false;
+  }
 }
 
 /* Onglet de catégorie affiché. Mémorisé ENTRE deux rendus : la zone est réécrite en entier à
