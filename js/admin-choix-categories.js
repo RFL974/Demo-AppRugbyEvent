@@ -84,8 +84,10 @@ function choixCategoriesConfirme(cfg, selection) {
 
 function rendreCategoriesChoix(cfg) {
   configCourante = cfg;
-  // Préserver les brouillons de date/horaires, les équipes et les matchs.
-  document.getElementById('zone-categories').innerHTML = afficherCategories(cfg.categories || []);
+  // Préserver les brouillons de date/horaires, les équipes et les matchs — et ceux des cartes de l'écran « Catégories »
+  // (injecterCategories, admin-reglages.js ; un module d'avant ce lot, resté en cache, rend comme avant).
+  if (typeof injecterCategories === 'function') injecterCategories(cfg.categories || []);
+  else document.getElementById('zone-categories').innerHTML = afficherCategories(cfg.categories || []);
   remplirSelectCategories(cfg.categories || []);
   injecterTerrains();
   majTableauBord();

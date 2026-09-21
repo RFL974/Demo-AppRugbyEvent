@@ -996,16 +996,21 @@ function majFormeChoixCategories(dateISO) {
 
     const connues = formes.map(function (x) { return x.libelle; });
     const horsMois = stocke !== '' && connues.indexOf(stocke) === -1;
+    // Choix EN COURS (pas encore enregistré) : un nouveau rendu de la liste le garde s'il reste proposé — sans quoi
+    // chaque contrôle FFR relancé ailleurs le ramenait en silence à la valeur stockée.
+    const existant = el.querySelector('select[name="forme_jeu"]');
+    const enCours = existant ? String(existant.value) : null;
+    const choix = (enCours !== null && enCours !== stocke && (enCours === '' || connues.indexOf(enCours) !== -1)) ? enCours : stocke;
 
     let options = '<option value="">— non précisée —</option>';
     formes.forEach(function (x) {
       options += '<option value="' + echapper(x.libelle) + '"' +
-        (x.libelle === stocke ? ' selected' : '') + '>' + echapper(x.libelle) + '</option>';
+        (x.libelle === choix ? ' selected' : '') + '>' + echapper(x.libelle) + '</option>';
     });
     // Valeur stockée hors du mois : on la GARDE en option (sélectionnée) pour ne jamais l'effacer
     // silencieusement à l'enregistrement — le signalement orange suffit (jamais un blocage).
     if (horsMois) {
-      options += '<option value="' + echapper(stocke) + '" selected>' + echapper(stocke) + ' (hors du mois)</option>';
+      options += '<option value="' + echapper(stocke) + '"' + (choix === stocke ? ' selected' : '') + '>' + echapper(stocke) + ' (hors du mois)</option>';
     }
 
     el.innerHTML =
