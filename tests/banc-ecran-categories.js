@@ -162,10 +162,12 @@ function creerDocument() {
         if (f === ':checked') return e.checked;                 // cases et boutons radio cochés, comme un navigateur
         if (f[0] === '#') return e.id === f.slice(1);
         if (f[0] === '.') return e.classList.contains(f.slice(1));
-        const a = /^\[([\w-]+)(?:="((?:[^"\\]|\\.)*)")?\]$/.exec(f);
+        // ⭐ La valeur peut être entre guillemets OU nue : `[role=status]` est un sélecteur valide, et
+        //    ecrans.js l'écrit ainsi. Sans ce second cas, il ne correspondait à RIEN — un silence, pas une erreur.
+        const a = /^\[([\w-]+)(?:=(?:"((?:[^"\\]|\\.)*)"|([^\]"]*)))?\]$/.exec(f);
         if (!a) return false;
-        if (a[2] === undefined) return e.hasAttribute(a[1]);
-        const attendu = a[2].replace(/\\(.)/g, '$1');
+        if (a[2] === undefined && a[3] === undefined) return e.hasAttribute(a[1]);
+        const attendu = (a[2] === undefined ? a[3] : a[2]).replace(/\\(.)/g, '$1');
         if (a[1] === 'value' && CONTROLES[e.tag]) return e.getAttribute('value') === attendu;
         return e.getAttribute(a[1]) === attendu;
       });

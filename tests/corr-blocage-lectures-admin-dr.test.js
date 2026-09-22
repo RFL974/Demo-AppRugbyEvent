@@ -174,6 +174,8 @@ const SRC_EQUIPES = [
   bloc(F_EQUIPES, 'function operationEquipesEnCours('),
   bloc(F_EQUIPES, 'function debuterOperationEquipes('),
   bloc(F_EQUIPES, 'function terminerOperationEquipes('),
+  // Lot « Équipes » : l'enveloppe qui fait couvrir la confirmation par l'opération en cours.
+  bloc(F_EQUIPES, 'function avecOperationEquipes('),
   bloc(F_EQUIPES, 'function ajoutPossibleEquipes('),
   bloc(F_EQUIPES, 'function majDisponibiliteAjout('),
   bloc(F_EQUIPES, 'function afficherRepriseEquipes('),

@@ -145,6 +145,16 @@ Depuis le 5ᵉ passage, chaque envoi d'e-mail de l'écran (invitation, relance, 
 confirmation) porte l'identifiant du geste (`id_envoi`) et, après une issue incertaine ou un refus « déjà parti » confirmé, `confirmer_renvoi` :
 le nouveau backend n'envoie plus aucun e-mail sous son verrou et ne double jamais un envoi. Un backend d'avant ignore ces champs et envoie
 comme avant ; un frontend d'avant garde les protections du serveur (un second envoi trop proche est refusé et le message le dit).
+Le lot « Équipes » (22 septembre 2026, local, non publié) touche **les deux dépôts**, sans ajouter ni retirer d'action backend.
+Les quatre écritures de l'écran (`ajouterEquipe`, `modifierEquipe`, `supprimerEquipe`, `supprimerEquipesCategorie`) passent au contrat
+d'écriture du backend : leur réponse porte désormais la liste des équipes relue par le serveur, et l'écran ne la redemande plus —
+**chacune des quatre passe ainsi de deux requêtes à une** (pour l'ajout, la seconde partait en arrière-plan ; pour les trois autres, elle
+faisait attendre). **Les deux sens fonctionnent** : un backend d'avant ne renvoie pas cette liste, le frontend la relit alors comme avant ;
+un frontend d'avant ignore le champ supplémentaire. L'ordre de publication ci-dessus ne change donc pas, et aucune combinaison de versions
+ne casse. Côté écran, un double clic sur « Supprimer » (ou « Supprimer les N équipes ») n'ouvre plus qu'une seule fenêtre et n'envoie plus
+qu'une écriture, et le focus reste sur l'onglet de catégorie que l'on vient de choisir — une correction d'accessibilité clavier qui ne
+dépend pas du backend.
+
 Le lot « Suivi des clubs » (22 septembre 2026, local, non publié) ne touche que le frontend : aucune action backend ajoutée ni modifiée,
 il fonctionne avec le backend d'avant comme avec le nouveau. La lecture de la liste des clubs est bornée (30 s par tentative, une seule
 relance) ; « Suivi des clubs » dit « Chargement… » ou l'échec (avec « Réessayer ») au lieu d'un faux « aucun club ». Depuis le Suivi, la

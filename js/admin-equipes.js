@@ -364,6 +364,17 @@ function terminerOperationEquipes() {
   majDisponibiliteAjout();
 }
 
+/**
+ * Exécute un geste ENTIER sous « opération en cours » — confirmation comprise, et quelle que soit
+ * la façon dont il se termine : succès, refus, annulation de la fenêtre, exception.
+ * ⭐ Un seul point de fermeture, donc aucun chemin de sortie ne peut l'oublier.
+ * @param {function(): Promise} geste
+ */
+function avecOperationEquipes(geste) {
+  debuterOperationEquipes();
+  return Promise.resolve().then(geste).finally(terminerOperationEquipes);
+}
+
 /** Ce que l'écriture a ACQUIS alors que l'écran ne le reflète pas encore ('' si rien en suspens). */
 let equipesAcquisNonReflete = '';
 
@@ -472,10 +483,21 @@ function refuserMutationSiIncertain(message, quoi) {
  * Actualise la liste APRÈS une écriture confirmée par le serveur.
  * @param {Object} message  la zone de message de la carte Équipes
  * @param {string} acquis   ce qui est ENREGISTRÉ, en une phrase — répété dans tous les cas
+ * @param {Object[]} [equipesRelues]  la liste relue SOUS LE VERROU, renvoyée par l'écriture elle-même
+ *   (lot « Équipes »). Quand elle est là, l'écran est à jour SANS seconde requête : c'est la preuve de
+ *   ce que le serveur a retenu, et elle est postérieure à l'écriture qui vient de se conclure.
+ *   ⛔ Absente — backend d'avant ce lot, ou réponse incomplète — le parcours historique reprend et
+ *   relit : aucune régression possible sur un déploiement ancien.
  * @return {Promise<boolean>} true si l'écran est à jour, false s'il est resté périmé
  */
-async function actualiserApresEcriture(message, acquis) {
+async function actualiserApresEcriture(message, acquis, equipesRelues) {
   masquerRepriseEquipes();
+  if (Array.isArray(equipesRelues)) {
+    appliquerEquipesRelues(equipesRelues, { fermerEdition: true });
+    afficherMessage(message, acquis, 'ok');
+    majDisponibiliteAjout();
+    return true;
+  }
   // ② l'écriture est acquise ; l'écran, pas encore. On le dit AVANT d'attendre la lecture.
   afficherMessage(message, acquis + ' Actualisation de la liste…', 'ok');
   try {
@@ -669,7 +691,13 @@ async function onAjouterEquipe(evenement) {
       try { console.warn('Affichage immédiat de l’équipe impossible :', err.message); }
       catch (e) { /* console indisponible : aucune incidence métier */ }
     }
-    if (integree) {
+    if (Array.isArray(reponseEcriture && reponseEcriture.equipes)) {
+      // ⭐ MIEUX QUE LA LIGNE SEULE (lot « Équipes ») : la réponse porte la liste ENTIÈRE, relue sous le
+      //   verrou après l'écriture. Elle vaut la vérification d'arrière-plan — qui devient inutile : une
+      //   requête de moins, et une preuve plus forte qu'un rendu déduit d'une seule ligne.
+      appliquerEquipesRelues(reponseEcriture.equipes);
+      afficherMessage(message, acquis, 'ok');
+    } else if (integree) {
       // Parcours rapide : la réponse de l'écriture contient la ligne réellement enregistrée.
       afficherMessage(message, acquis, 'ok');
       verifierEnArrierePlan = true;
@@ -703,18 +731,22 @@ function onAjouterEquipesDemo() {
  * le jeton neuf rend périmée toute lecture encore en vol, qui sera jetée à son arrivée.
  * ⛔ Une édition ouverte dans la liste n'est pas refermée : la mémoire suit, l'affichage attend le prochain rendu
  *   (enregistrement ou annulation de l'édition) — la saisie n'est jamais perdue.
+ * @param {Object} [options] { fermerEdition: true } pour repeindre MÊME si une ligne est en édition.
+ *   C'est le cas de l'enregistrement d'une modification : l'édition refermée est précisément celle
+ *   qui vient d'être enregistrée — la garder ouverte afficherait une saisie déjà acquise.
  * @return {boolean} true si la liste affichée est à jour
  */
-function appliquerEquipesRelues(equipes) {
+function appliquerEquipesRelues(equipes, options) {
   prendreJetonEquipes();
   equipesCourantes = equipes;
   const edition = document.querySelector('#liste-equipes .equipe-item.en-edition');
-  if (!edition) afficherEquipes(equipes);
+  const repeindre = !edition || !!(options && options.fermerEdition);
+  if (repeindre) afficherEquipes(equipes);
   if (!operationEquipesEnCours()) masquerRepriseEquipes();
   majDisponibiliteAjout();
   if (typeof actualiserEtatClubsDepuisEquipes === 'function') actualiserEtatClubsDepuisEquipes();
   majTableauBord();
-  return !edition;
+  return repeindre;
 }
 
 /**
@@ -744,28 +776,36 @@ async function onSupprimerEquipe(bouton) {
   // ⛔ R1 — garde à l'entrée : `id` vient d'une liste qui peut être périmée.
   if (refuserMutationSiIncertain(message, 'La suppression d\'équipe')) return;
 
-  if (!await dialogConfirmer('Supprimer l\'équipe « ' + nom + ' » ?', { ok: 'Supprimer', danger: true })) return;
+  // ⭐ LOT « ÉQUIPES » — L'OPÉRATION S'OUVRE AVANT LA QUESTION. La garde ci-dessus ne voyait rien
+  //   pendant que la fenêtre « Supprimer ? » était ouverte : deux clics rapides ouvraient DEUX
+  //   fenêtres et envoyaient DEUX `supprimerEquipe`. Le serveur refusait le second (« Équipe
+  //   introuvable ») — mais ce refus n'établit PAS l'absence d'effet, et l'écran se déclarait donc
+  //   périmé, fermait l'ajout et réclamait une actualisation… alors que la suppression avait
+  //   parfaitement réussi. Ouverte plus tôt, l'opération fait refuser le second clic tout de suite,
+  //   avec son message d'attente, et rien ne part.
+  //   ⛔ Une confirmation ANNULÉE doit tout rendre : `terminerOperationEquipes()` est dans le
+  //   `finally` de `avecOperationEquipes`, qui couvre la question ET l'écriture.
+  return avecOperationEquipes(async function () {
+    if (!await dialogConfirmer('Supprimer l\'équipe « ' + nom + ' » ?', { ok: 'Supprimer', danger: true })) return;
 
-  debuterOperationEquipes();   // ⭐ R2 — couvre l'écriture ET sa réconciliation
-  bouton.disabled = true;
-  try {
-    await ecrireAdmin('supprimerEquipe', { id_equipe: id });
-    // ⭐ Même règle que l'ajout : la suppression est acquise ; l'écran, lui, peut rester en retard.
-    await actualiserApresEcriture(message, '🗑️ « ' + nom + ' » supprimée.');
-  } catch (erreur) {
-    if (ecritureSansEffetEtabli(erreur)) {
-      afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-      bouton.disabled = false;
-    } else {
-      // ⛔ R1 — issue incertaine : la reprise est réellement OFFERTE, et le geste reste fermé.
-      afficherMessage(message, '⚠️ Impossible de savoir si « ' + nom + ' » a été supprimée : ' +
-        erreur.message + '\n⛔ Ne recommence pas. Actualise la liste pour voir ce que le serveur ' +
-        'a retenu.', 'ko');
-      afficherRepriseEquipes('');
+    bouton.disabled = true;
+    try {
+      const reponse = await ecrireAdmin('supprimerEquipe', { id_equipe: id });
+      // ⭐ Même règle que l'ajout : la suppression est acquise ; l'écran, lui, peut rester en retard.
+      await actualiserApresEcriture(message, '🗑️ « ' + nom + ' » supprimée.', reponse && reponse.equipes);
+    } catch (erreur) {
+      if (ecritureSansEffetEtabli(erreur)) {
+        afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+        bouton.disabled = false;
+      } else {
+        // ⛔ R1 — issue incertaine : la reprise est réellement OFFERTE, et le geste reste fermé.
+        afficherMessage(message, '⚠️ Impossible de savoir si « ' + nom + ' » a été supprimée : ' +
+          erreur.message + '\n⛔ Ne recommence pas. Actualise la liste pour voir ce que le serveur ' +
+          'a retenu.', 'ko');
+        afficherRepriseEquipes('');
+      }
     }
-  } finally {
-    terminerOperationEquipes();
-  }
+  });
 }
 
 /**
@@ -781,31 +821,34 @@ async function onSupprimerCategorieEquipes(bouton) {
     return (eq.categorie || '(sans catégorie)') === cat;
   }).length;
 
-  if (!await dialogConfirmer('Supprimer TOUTES les ' + combien + ' équipe(s) de la catégorie « ' + cat + ' » ?\n\n' +
-               'Cette action est irréversible.', { ok: 'Tout supprimer', danger: true })) return;
+  // ⭐ LOT « ÉQUIPES » — même règle que la suppression unitaire : l'opération couvre la confirmation,
+  //   sans quoi deux clics envoient deux `supprimerEquipesCategorie`, et le refus du second
+  //   (« Aucune équipe dans la catégorie ») fait passer pour douteux un écran parfaitement à jour.
+  return avecOperationEquipes(async function () {
+    if (!await dialogConfirmer('Supprimer TOUTES les ' + combien + ' équipe(s) de la catégorie « ' + cat + ' » ?\n\n' +
+                 'Cette action est irréversible.', { ok: 'Tout supprimer', danger: true })) return;
 
-  debuterOperationEquipes();   // ⭐ R2 — couvre l'écriture ET sa réconciliation
-  bouton.disabled = true;
-  bouton.textContent = 'Suppression…';
-  try {
-    const res = await ecrireAdmin('supprimerEquipesCategorie', { categorie: cat });
-    const n = (res && res.nb_supprimees != null) ? res.nb_supprimees : combien;
-    await actualiserApresEcriture(message, '🗑️ ' + n + ' équipe(s) de « ' + cat + ' » supprimée(s).');
-  } catch (erreur) {
-    bouton.textContent = 'Tout supprimer';
-    if (ecritureSansEffetEtabli(erreur)) {
-      afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-      bouton.disabled = false;
-    } else {
-      // ⛔ R1 — une suppression en lot peut avoir supprimé une PARTIE avant l'exception.
-      afficherMessage(message, '⚠️ Impossible de savoir ce qui a été supprimé dans « ' + cat +
-        ' » : ' + erreur.message + '\n⛔ Ne recommence pas : une partie a pu être supprimée. ' +
-        'Actualise la liste pour voir ce qu\'il reste.', 'ko');
-      afficherRepriseEquipes('');
+    bouton.disabled = true;
+    bouton.textContent = 'Suppression…';
+    try {
+      const res = await ecrireAdmin('supprimerEquipesCategorie', { categorie: cat });
+      const n = (res && res.nb_supprimees != null) ? res.nb_supprimees : combien;
+      await actualiserApresEcriture(message, '🗑️ ' + n + ' équipe(s) de « ' + cat + ' » supprimée(s).',
+        res && res.equipes);
+    } catch (erreur) {
+      bouton.textContent = 'Tout supprimer';
+      if (ecritureSansEffetEtabli(erreur)) {
+        afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+        bouton.disabled = false;
+      } else {
+        // ⛔ R1 — une suppression en lot peut avoir supprimé une PARTIE avant l'exception.
+        afficherMessage(message, '⚠️ Impossible de savoir ce qui a été supprimé dans « ' + cat +
+          ' » : ' + erreur.message + '\n⛔ Ne recommence pas : une partie a pu être supprimée. ' +
+          'Actualise la liste pour voir ce qu\'il reste.', 'ko');
+        afficherRepriseEquipes('');
+      }
     }
-  } finally {
-    terminerOperationEquipes();
-  }
+  });
 }
 
 /**
@@ -895,11 +938,12 @@ async function onEnregistrerNom(bouton) {
   bouton.disabled = true;
   bouton.textContent = 'Enregistrement…';
   try {
-    await ecrireAdmin('modifierEquipe', { id_equipe: id, nom_equipe: nouveauNom,
+    const reponse = await ecrireAdmin('modifierEquipe', { id_equipe: id, nom_equipe: nouveauNom,
                                           nb_joueurs: nbJoueurs, nb_educateurs: nbEducateurs });
     const resume = resumeEffectifs({ nb_joueurs: nbJoueurs, nb_educateurs: nbEducateurs });
     await actualiserApresEcriture(message,
-      '✏️ « ' + nouveauNom + ' » enregistrée' + (resume ? ' — ' + resume : '') + '.');
+      '✏️ « ' + nouveauNom + ' » enregistrée' + (resume ? ' — ' + resume : '') + '.',
+      reponse && reponse.equipes);
   } catch (erreur) {
     bouton.textContent = 'Enregistrer';
     if (ecritureSansEffetEtabli(erreur)) {

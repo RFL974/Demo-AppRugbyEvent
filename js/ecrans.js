@@ -717,10 +717,24 @@ function preparerEquipes() {
  // #reprise-equipes vivent entre les deux dans le HTML, et une barre insérée sous eux aurait
  // relégué le « ✅ ajoutée » au-dessus des onglets, loin du geste qui l'a produit.
  bloc.insertBefore(barre,bloc.firstChild);
+ // ⭐ LE FOCUS SUIT L'ONGLET CHOISI (lot « Équipes »). `afficherEquipes()` réécrit le contenu de la
+ //   barre : le bouton qui vient d'être activé est DÉTRUIT, et avec lui le point de focus. Au clavier,
+ //   Entrée ou Espace sur un onglet laissait donc le focus nulle part — la tabulation suivante repartait
+ //   du haut du document. On le repose sur l'onglet REPEINT, retrouvé par sa clé (l'ancien nœud n'existe
+ //   plus). ⛔ Seulement si le focus était DANS la barre : un clic à la souris pendant qu'on saisit
+ //   ailleurs ne doit pas voler le curseur d'un champ.
+ function reposerFocusOnglet(cle,avait){
+   if(!avait)return;
+   const apres=onglets.querySelector('[data-cat-equipes="'+cle+'"]');
+   if(apres)apres.focus();
+ }
  onglets.addEventListener('click',function(e){
    const onglet=e.target.closest('[data-cat-equipes]');if(!onglet)return;
-   activerOngletEquipes(onglet.getAttribute('data-cat-equipes'));
+   const cle=onglet.getAttribute('data-cat-equipes');
+   const avait=!!(document.activeElement&&onglets.contains(document.activeElement));
+   activerOngletEquipes(cle);
    afficherEquipes(equipesCourantes);
+   reposerFocusOnglet(cle,avait);
  });
  onglets.addEventListener('keydown',function(e){
    const onglet=e.target.closest('[data-cat-equipes]');
@@ -729,9 +743,10 @@ function preparerEquipes() {
    const liste2=Array.from(onglets.querySelectorAll('[data-cat-equipes]'));
    const i=liste2.indexOf(onglet);
    const cible=pas==='debut'?liste2[0]:pas==='fin'?liste2[liste2.length-1]:liste2[(i+pas+liste2.length)%liste2.length];
-   e.preventDefault();cible.click();
-   const apres=onglets.querySelector('[data-cat-equipes="'+cible.getAttribute('data-cat-equipes')+'"]');
-   if(apres)apres.focus();
+   e.preventDefault();
+   const cle=cible.getAttribute('data-cat-equipes');
+   cible.click();
+   reposerFocusOnglet(cle,true);
  });
  filtreClub.querySelector('select').addEventListener('change',function(e){
    activerFiltreClubEquipes(e.target.value);
