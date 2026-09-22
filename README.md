@@ -145,6 +145,12 @@ Depuis le 5ᵉ passage, chaque envoi d'e-mail de l'écran (invitation, relance, 
 confirmation) porte l'identifiant du geste (`id_envoi`) et, après une issue incertaine ou un refus « déjà parti » confirmé, `confirmer_renvoi` :
 le nouveau backend n'envoie plus aucun e-mail sous son verrou et ne double jamais un envoi. Un backend d'avant ignore ces champs et envoie
 comme avant ; un frontend d'avant garde les protections du serveur (un second envoi trop proche est refusé et le message le dit).
+Le lot « Suivi des clubs » (22 septembre 2026, local, non publié) ne touche que le frontend : aucune action backend ajoutée ni modifiée,
+il fonctionne avec le backend d'avant comme avec le nouveau. La lecture de la liste des clubs est bornée (30 s par tentative, une seule
+relance) ; « Suivi des clubs » dit « Chargement… » ou l'échec (avec « Réessayer ») au lieu d'un faux « aucun club ». Depuis le Suivi, la
+**première** invitation d'un club jamais invité envoie exactement la même demande que depuis « Inviter un club » (`relance: 'non'`) : le
+serveur ne note plus de « dernière relance » à cette date-là ; une vraie relance garde `relance: 'oui'` et son comportement. Un cache mêlant
+anciens et nouveaux fichiers reste correct, simplement sans ces protections.
 
 Le seul point d'attention à la publication est le **cache du navigateur**. Chaque CSS et chaque JS
 modifié par cette livraison est appelé avec une version unique, `?v=refonte-ciel-verre-20260920`,

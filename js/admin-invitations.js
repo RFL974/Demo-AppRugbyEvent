@@ -1178,6 +1178,10 @@ function selecteurBoutonsInvitation(nom) {
   return '#liste-clubs-invites .bouton-inviter-club[data-club="' + n + '"], [data-action="relance-reponse"][data-club="' + n + '"]';
 }
 
+/* Nature (relance ou première invitation) d'un envoi individuel à l'issue incertaine, par clé d'envoi : textes de la reprise.
+   Vit exactement comme sa marque dans `envoisIncertains` (posée à l'issue incertaine, retirée au succès). */
+const naturesEnvoisIncertains = new Map();
+
 /** Envoi INDIVIDUEL de l'invitation à un club (même contenu que l'aperçu). Une action = au plus un e-mail. */
 async function envoyerInvitationClubUI(nom, options) {
   const opt = options || {};
@@ -1206,10 +1210,20 @@ async function envoyerInvitationClubUI(nom, options) {
       : '\n\nAucune pièce jointe.';
     const incertain = envoisIncertains.has(cle)
       ? '\n\n⚠️ L’envoi précédent n’a pas été confirmé : le club l’a peut-être déjà reçu.' : '';
-    const question = estRelance ? 'Relancer « ' + nom + ' » sur sa réponse (' + email + ') ?'
+    // Lot « Suivi des clubs » — UNE PREMIÈRE INVITATION EST UNE INVITATION, d'où qu'elle parte. Le Suivi emprunte la voie « relance »
+    // (son message, ses boutons) même pour un club jamais invité : les mots ET la demande suivent donc ce que le club a reçu.
+    // ⛔ `relance: 'oui'` faisait noter au serveur une « dernière relance » à la date de la PREMIÈRE invitation, et ses refus
+    // parlaient de « la relance » (marque `rel` du registre). Une première invitation envoie désormais exactement la même demande
+    // que depuis « Inviter un club » (`relance: 'non'`) ; une vraie relance garde `relance: 'oui'` et son comportement historique.
+    // ⛔ Rien d'autre ne bouge : même identifiant d'envoi, même registre, même anti-doublon, même envoi hors verrou.
+    // Reprise d'un geste à l'issue incertaine : c'est le MÊME geste (même identifiant) — il garde sa nature, donc la même demande,
+    // même si la relecture montre entre-temps le club « invité » par ce premier envoi.
+    const vraieRelance = envoisIncertains.has(cle) && naturesEnvoisIncertains.has(cle) ? naturesEnvoisIncertains.get(cle)
+      : estRelance && !!String(club.invitation_envoyee || '').trim();
+    const question = vraieRelance ? 'Relancer « ' + nom + ' » sur sa réponse (' + email + ') ?'
       : 'Envoyer l\'invitation à « ' + nom + ' » (' + email + ') ?';
     if (!await dialogConfirmer(question + mentionPieces + incertain,
-      { ok: estRelance ? 'Relancer' : 'Envoyer' })) return;
+      { ok: vraieRelance ? 'Relancer' : 'Envoyer' })) return;
     marquerBoutonsEnvoi(selecteurBoutonsInvitation(nom), true);
     afficherMessage(message, '⏳ Envoi à ' + email + '…', 'ok');
     let res;
@@ -1217,23 +1231,33 @@ async function envoyerInvitationClubUI(nom, options) {
       res = await ecrireEnvoiEmail('envoyerInvitationClub', {
         club_nom: nom, sujet: sujet, html_modele: htmlModeleInvitation(), texte_modele: texteModeleInvitation(),
         base_reponse: baseReponseInvitation(), base_invitation: lienInvitationPublique(),
-        pieces_jointes: piecesAEnvoyer, relance: estRelance ? 'oui' : 'non'
+        pieces_jointes: piecesAEnvoyer, relance: vraieRelance ? 'oui' : 'non'
       }, { cle: cle, incertain: envoisIncertains.has(cle) });
     } catch (erreur) {
       if (!issueIncertaine(erreur)) { oublierIdEnvoi(cle); afficherMessage(message, '⚠️ ' + erreur.message, 'ko'); return; }
       envoisIncertains.add(cle);                                          // l'identifiant du geste est gardé pour la reprise
+      naturesEnvoisIncertains.set(cle, vraieRelance);                      // … et sa nature (invitation ou relance), pour les textes
       afficherMessage(message, messageIncertain('l’envoi à ' + email + ' n’est pas confirmé — le club l’a peut-être reçu',
         erreur, 'la liste est relue : « Invité le … » dira s’il est parti'), 'ko');
       if (typeof rafraichirRessourceAdmin === 'function') rafraichirRessourceAdmin('clubsInvites');
       return;
     }
     envoisIncertains.delete(cle);
+    naturesEnvoisIncertains.delete(cle);
     oublierIdEnvoi(cle);
-    if (res && res.invitation_envoyee) club.invitation_envoyee = res.invitation_envoyee;
-    if (res && res.derniere_relance_reponse) club.derniere_relance_reponse = res.derniere_relance_reponse;
+    // Lot « Suivi des clubs » : le résultat va AUSSI au club de la liste courante (remplacée pendant l'envoi, elle aurait
+    // gardé « invitation non envoyée » — et un second clic aurait mené à « Envoyer quand même ? »).
+    const envoi = {};
+    if (res && res.invitation_envoyee) envoi.invitation_envoyee = res.invitation_envoyee;
+    if (res && res.derniere_relance_reponse) envoi.derniere_relance_reponse = res.derniere_relance_reponse;
+    Object.assign(club, envoi);
+    appliquerAuClubInvite(nom, envoi, function () {
+      afficherClubsInvites();
+      if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
+    });
     afficherMessage(message, res && res.rejeu
-      ? '✅ ' + (estRelance ? 'Relance' : 'Invitation') + ' déjà partie vers ' + email + ' (la réponse précédente s’était perdue) : rien n’a été renvoyé.'
-      : estRelance ? '✅ Relance envoyée à ' + email + '.' : '✅ Invitation envoyée à ' + email +
+      ? '✅ ' + (vraieRelance ? 'Relance' : 'Invitation') + ' déjà partie vers ' + email + ' (la réponse précédente s’était perdue) : rien n’a été renvoyé.'
+      : vraieRelance ? '✅ Relance envoyée à ' + email + '.' : '✅ Invitation envoyée à ' + email +
       (piecesAEnvoyer.length ? ' avec ' + piecesAEnvoyer.length + ' pièce(s) jointe(s).' : '.'), 'ok');
   } finally {
     envoisEnCours.delete(cle);
@@ -1834,6 +1858,15 @@ function memeTexteSouple(a, b) {
   return plat(a) === plat(b);
 }
 
+/* ⭐ Lot « Suivi des clubs » — LA LECTURE EST BORNÉE. Sans délai client, une réponse muette laissait la liste en attente
+ *   pour toujours : « Suivi des clubs » affichait « Connecte-toi pour charger le suivi. » à un organisateur connecté, et
+ *   revenir sur l'écran ne relançait rien (la lecture pendue était partagée). 30 s par tentative ; `js/api.js` relance UNE
+ *   fois cette lecture de sa liste fermée après un délai dépassé ou un 404 : au pire ≈ 60 s, puis l'erreur est dite. */
+const DELAI_LECTURE_CLUBS_MS = 30000;
+/* L'état de la lecture, pour les écrans qui montrent la liste sans la lire eux-mêmes (« Suivi des clubs ») : `lue` — au moins
+ *   une lecture a réussi ; `enCours` — une lecture court ; `erreur` — message de la dernière lecture en échec, '' après un succès. */
+const etatLectureClubs = { lue: false, enCours: false, erreur: '' };
+
 /**
  * Charge la liste des clubs invités depuis le backend (clé admin) et l'affiche.
  *
@@ -1853,9 +1886,15 @@ function memeTexteSouple(a, b) {
 async function chargerClubsInvites() {
   const zone = document.getElementById('liste-clubs-invites');
   if (!zone) return false; // carte absente de cette page : rien n'a été relu
+  etatLectureClubs.enCours = true;
+  // Liste jamais lue : le Suivi dit « Chargement… » pendant la lecture (il affichait « Connecte-toi… » à un organisateur connecté).
+  if (!etatLectureClubs.lue && typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
   try {
-    const res = await ecrireAdmin('listerClubsInvites', {});
+    const res = await ecrireAdmin('listerClubsInvites', {}, { delaiMs: DELAI_LECTURE_CLUBS_MS });
     clubsInvitesCourants = (res && res.clubs) || [];
+    etatLectureClubs.lue = true;
+    etatLectureClubs.enCours = false;
+    etatLectureClubs.erreur = '';
     afficherClubsInvites();
     if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
     // L'aperçu du dossier ouvre le dossier D'UN CLUB : sa liste de choix suit les clubs chargés
@@ -1863,9 +1902,37 @@ async function chargerClubsInvites() {
     if (typeof majApercuDossier === 'function') majApercuDossier();
     return true;
   } catch (erreur) {
+    etatLectureClubs.enCours = false;
+    etatLectureClubs.erreur = String((erreur && erreur.name === 'AbortError')
+      ? 'délai de ' + Math.round(DELAI_LECTURE_CLUBS_MS / 1000) + ' s dépassé' : ((erreur && erreur.message) || 'erreur réseau')).replace(/\.\s*$/, '');
     zone.innerHTML = '<p class="vide">⚠️ Impossible de charger les clubs invités : '
       + echapper(erreur.message) + '</p>';
+    // Le Suivi montre la même liste : il dit l'échec au lieu d'un faux « aucun club ».
+    if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
     return false;
+  }
+}
+
+/**
+ * ⭐ Lot « Suivi des clubs » — LE RÉSULTAT D'UN GESTE VA À LA LISTE COURANTE. Un geste qui écrit sur un club (paiement,
+ * relance, confirmation, invitation) garde le club trouvé AVANT l'envoi ; si la liste a été remplacée pendant l'envoi
+ * (réponse d'un autre geste, « Rafraîchir »…), ce club n'est plus affiché et le résultat s'y perdait : l'écran montrait
+ * encore l'état d'avant (« En attente », « invitation non envoyée ») et reproposait le geste. Les champs relus sont donc
+ * posés sur le club de la liste COURANTE (l'appelant repeint, comme avant) ; et si une relecture est encore en vol —
+ * partie avant l'écriture, elle peut décrire l'état d'avant —, ils sont reposés APRÈS elle, dans la file de la
+ * ressource, puis `repeindre` est appelé. Aucune requête.
+ * @param {string} nom
+ * @param {Object} champs   champs relus dans la réponse du serveur
+ * @param {function(): void} [repeindre]  après la pose différée seulement
+ */
+function appliquerAuClubInvite(nom, champs, repeindre) {
+  const poser = function () {
+    (clubsInvitesCourants || []).forEach(function (c) { if (memeTexteSouple(c.club_nom, nom)) Object.assign(c, champs); });
+  };
+  poser();
+  const etat = typeof etatRessourceAdmin === 'function' ? etatRessourceAdmin('clubsInvites') : null;
+  if (etat && etat.enVol && typeof enfilerLectureAdmin === 'function') {
+    enfilerLectureAdmin('clubsInvites', function () { poser(); if (typeof repeindre === 'function') repeindre(); });
   }
 }
 

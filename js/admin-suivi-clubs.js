@@ -85,7 +85,10 @@ function suiviPrestationReglage(type, global) {
   return { actif: actif, mode: mode, libelle: actif ? (libelles[mode] || 'Commandes déclarées') : 'Non proposé' };
 }
 
-/** Données figées du PDF : aucun appel réseau et aucune écriture métier. */
+/** Données figées du PDF : aucun appel réseau et aucune écriture métier.
+ *  ⚠️ PORTÉE : les commandes saisies par les CLUBS INVITÉS qui participent (jeu de démonstration : 9 clubs, 262 joueurs). L'organisateur
+ *  (RACING 92, 4 équipes, 65 joueurs) ne remplit pas ce parcours : il n'y figure pas — ce n'est PAS un décompte des 327 joueurs du
+ *  tournoi. Compter d'office ses joueurs supposerait qu'ils commandent tous un repas ; une saisie dédiée serait une décision produit. */
 function suiviDonneesRestauration(clubs, global) {
   const g = global || {};
   const reglages = {
@@ -442,6 +445,11 @@ function suiviHtmlLignesCommande(etat) {
     echapper(suiviEuros(etat.commande.total)) + '</dd></div></dl>';
 }
 
+/** « disabled aria-busy » tant que ce geste est en vol pour ce club — même après un repeint du tableau ou de la fiche. */
+function suiviAttributsOccupe(type, nom) {
+  return typeof suiviGesteEnCours === 'function' && suiviGesteEnCours(type, nom) ? ' disabled aria-busy="true"' : '';
+}
+
 /**
  * Les actions d'un club. `opt.sansPaiement` retire la paire « Marquer payé / Relancer le
  * paiement » : la fiche la montre déjà en tête, on ne la répète pas dans le dépliant.
@@ -451,9 +459,7 @@ function suiviActionsHtml(club, etat, opt) {
   const nom = echapper(String(club.club_nom || ''));
   const actions = [];
   // ⭐ Un envoi en vol garde son bouton occupé, même quand le tableau et la fiche sont redessinés.
-  const occupe = function (type) {
-    return typeof suiviGesteEnCours === 'function' && suiviGesteEnCours(type, club.club_nom) ? ' disabled aria-busy="true"' : '';
-  };
+  const occupe = function (type) { return suiviAttributsOccupe(type, club.club_nom); };
   if (etat.attente) {
     const libelle = club.invitation_envoyee ? 'Relancer la réponse' : 'Envoyer l’invitation';
     actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="relance-reponse" data-club="' +
@@ -516,10 +522,15 @@ function suiviHtmlFiche(club) {
     : (etat.paiementAttendu ? 'Aucune preuve de paiement enregistrée.'
       : (etat.accepte ? 'Rien à régler pour ce club.'
         : (etat.decline ? 'Le club ne participe pas.' : 'Le club n’a pas encore répondu.')));
+  // ⭐ Lot « Suivi des clubs » : les deux boutons de tête de la fiche disent aussi qu'un geste est en vol (désactivés,
+  //   aria-busy, libellé) — ils restaient « Marquer payé » / « Relancer le paiement » cliquables pendant 30 à 90 s.
+  const occupeFiche = function (type) { return typeof suiviGesteEnCours === 'function' && suiviGesteEnCours(type, nom); };
   const boutonsPaiement = etat.paiementAttendu
     ? '<div class="cv-fiche-actions">' +
-      '<button type="button" class="bouton suivi-action" data-action="marquer-paye" data-club="' + echapper(nom) + '">Marquer payé</button>' +
-      '<button type="button" class="bouton bouton-doux suivi-action" data-action="relance-paiement" data-club="' + echapper(nom) + '">Relancer le paiement</button>' +
+      '<button type="button" class="bouton suivi-action" data-action="marquer-paye" data-club="' + echapper(nom) + '"' +
+        suiviAttributsOccupe('marquer-paye', nom) + '>' + (occupeFiche('marquer-paye') ? 'Enregistrement…' : 'Marquer payé') + '</button>' +
+      '<button type="button" class="bouton bouton-doux suivi-action" data-action="relance-paiement" data-club="' + echapper(nom) + '"' +
+        suiviAttributsOccupe('relance-paiement', nom) + '>' + (occupeFiche('relance-paiement') ? 'Envoi…' : 'Relancer le paiement') + '</button>' +
       '</div>'
     : '';
   const resteAFaire = suiviActionsHtml(club, etat, { sansPaiement: true });
@@ -641,11 +652,130 @@ function suiviHtmlTableau(affiches) {
     }).join('') + '</div>';
 }
 
+/* ============================================================================
+ *  LOT « SUIVI DES CLUBS » — ÉTAT DE LA LISTE ET FOCUS
+ * ============================================================================
+ *  ⛔ Deux faux états relevés (Chromium, vrai Code.gs) : pendant la première lecture, « Connecte-toi pour charger le
+ *  suivi. » à un organisateur connecté ; après une lecture en échec, « 0 réponse attendue… Aucun club dans ce filtre. »
+ *  — un tournoi vide, alors que l'erreur n'était écrite que dans « Inviter un club ». L'écran dit désormais ce qui se
+ *  passe : chargement, échec (avec « Réessayer »), ou dernier état connu quand une relecture échoue.
+ *  ⛔ Focus : chaque repeint remplace les boutons ; celui qui avait le focus disparaissait (le clavier retombait sur la
+ *  page) — après un filtre, un geste, ou un repeint venu d'ailleurs. Le repère est pris AVANT, rendu APRÈS, et jamais
+ *  volé à un élément qui l'a encore.
+ * ========================================================================== */
+let suiviRelectureEnCours = false;
+/* Le bouton d'où part un geste serveur : le focus y revient quand la confirmation (dialog.js, commun) ou la fenêtre du
+ * dossier l'a laissé tomber sur la page. `repli` : l'élément de secours où on l'a posé pendant que le bouton était occupé. */
+let suiviFocusGeste = null;
+const SUIVI_ZONES_FOCUS = ['suivi-clubs-resume', 'suivi-clubs-filtres', 'liste-suivi-clubs', 'cv-fiche-club'];
+
+/** L'état de la liste montrée : `connue` (lue, ou posée par une réponse), `enCours`, `erreur`. Module d'invitation
+ *  d'avant (cache mêlé) : liste tenue pour connue, comme avant. */
+function suiviEtatListe() {
+  const lecture = (typeof etatLectureClubs === 'object' && etatLectureClubs) ? etatLectureClubs : null;
+  if (!lecture) return { connue: true, enCours: false, erreur: '' };
+  const chargee = typeof ressourceAdminChargee === 'function' && ressourceAdminChargee('clubsInvites');
+  return {
+    connue: lecture.lue || chargee || (clubsInvitesCourants || []).length > 0,
+    enCours: !!lecture.enCours || suiviRelectureEnCours,
+    erreur: chargee ? '' : String(lecture.erreur || '')
+  };
+}
+
+/** Le HTML d'un état sans tableau (chargement, échec, déconnecté). */
+function suiviHtmlEtatListe(etat) {
+  if (typeof adminConnecte !== 'undefined' && !adminConnecte) return '<p class="vide">Connecte-toi pour charger le suivi.</p>';
+  if (etat.enCours || !etat.erreur) return '<p class="vide" role="status">Chargement du suivi des clubs…</p>';
+  return '<div class="vide suivi-etat-lecture" role="alert"><p>⚠️ Impossible de charger le suivi des clubs (' + echapper(etat.erreur) +
+    '). Aucun chiffre n’est affiché tant que la liste n’est pas lue.</p>' +
+    '<button type="button" class="bouton bouton-doux" data-action="relire-suivi">Réessayer</button></div>';
+}
+
+/** Relit la liste des clubs (bouton « Réessayer ») : une lecture à la fois, l'écran suit. */
+function suiviRelire() {
+  if (suiviRelectureEnCours || typeof rafraichirRessourceAdmin !== 'function') return Promise.resolve(false);
+  suiviRelectureEnCours = true;
+  const lecture = rafraichirRessourceAdmin('clubsInvites');
+  afficherSuiviClubs();
+  return Promise.resolve(lecture).then(function (ok) { return ok; }, function () { return false; }).then(function (ok) {
+    suiviRelectureEnCours = false;
+    afficherSuiviClubs();
+    return ok;
+  });
+}
+
+/** Le repère du contrôle qui a le focus (ou de `element`), s'il est dans le Suivi : sa zone et ce qui l'identifie. */
+function suiviRepereFocus(element) {
+  const el = element === undefined ? document.activeElement : element;
+  if (!el || el === document.body || typeof el.getAttribute !== 'function') return null;
+  for (let i = 0; i < SUIVI_ZONES_FOCUS.length; i++) {
+    const zone = document.getElementById(SUIVI_ZONES_FOCUS[i]);
+    if (zone && zone !== el && typeof zone.contains === 'function' && zone.contains(el)) {
+      return { zone: SUIVI_ZONES_FOCUS[i], id: el.id || '', filtre: el.getAttribute('data-filtre'),
+        action: el.getAttribute('data-action'), club: el.getAttribute('data-club') };
+    }
+  }
+  return null;
+}
+
+/** Le focus est-il perdu (page, élément retiré) ? Un élément encore en place le garde : on ne le vole jamais. */
+function suiviFocusPerdu() {
+  const actif = document.activeElement;
+  return !actif || actif === document.body || actif.isConnected === false;
+}
+
+/**
+ * Rend le focus au contrôle équivalent du repère, sinon à un repli sûr de sa zone (titre de la fiche, filtre actif).
+ * Un bouton occupé (désactivé) ne peut pas recevoir le focus : repli. @return {string|null} 'exact' | 'repli' | null
+ */
+function suiviRendreFocus(repere, forcer) {
+  if (!repere || (!forcer && !suiviFocusPerdu())) return null;
+  const zone = document.getElementById(repere.zone);
+  if (!zone) return null;
+  const pareil = function (e) {
+    if (repere.id) return e.id === repere.id;
+    return e.getAttribute('data-filtre') === repere.filtre && e.getAttribute('data-action') === repere.action &&
+      e.getAttribute('data-club') === repere.club;
+  };
+  const cible = Array.prototype.filter.call(zone.querySelectorAll('button, input, [tabindex]'), pareil)
+    .filter(function (e) { return !e.disabled && !e.hidden; })[0];
+  if (cible && typeof cible.focus === 'function') { cible.focus(); return 'exact'; }
+  let repli = null;
+  if (repere.zone === 'cv-fiche-club') repli = document.getElementById('cv-fiche-nom');
+  else if (repere.zone === 'liste-suivi-clubs') {
+    repli = Array.prototype.filter.call(zone.querySelectorAll('[data-action="ouvrir-fiche"]'), function (e) {
+      return e.getAttribute('data-club') === repere.club; })[0] || document.querySelector('#suivi-clubs-filtres .est-actif');
+  } else repli = document.querySelector('#' + repere.zone + ' .est-actif') || document.querySelector('#suivi-clubs-filtres .est-actif');
+  if (repli && typeof repli.focus === 'function') { repli.focus(); return 'repli'; }
+  return null;
+}
+
+/** Fin d'un geste lancé depuis le Suivi : si le focus est perdu, ou resté sur le repli posé pendant l'envoi, il revient
+ *  au bouton d'origine (redevenu actif) ; sinon on n'y touche pas. */
+function suiviTerminerFocusGeste(geste) {
+  if (!geste || suiviFocusGeste !== geste) return;
+  suiviFocusGeste = null;
+  const ici = suiviRepereFocus();
+  const surRepli = !!(geste.repli && ici && JSON.stringify(ici) === JSON.stringify(geste.repli));
+  if (suiviFocusPerdu() || surRepli) suiviRendreFocus(geste.repere, true);
+}
+
 function afficherSuiviClubs() {
   const resume = document.getElementById('suivi-clubs-resume');
   const filtres = document.getElementById('suivi-clubs-filtres');
   const liste = document.getElementById('liste-suivi-clubs');
   if (!resume || !filtres || !liste) return;
+  const repere = suiviRepereFocus();                                  // pris AVANT de remplacer les boutons
+  const etatListe = suiviEtatListe();
+  if (!etatListe.connue) {
+    resume.innerHTML = ''; filtres.innerHTML = '';
+    liste.innerHTML = suiviHtmlEtatListe(etatListe);
+    suiviClubSelectionne = ''; suiviFicheDepliee = false;
+    afficherFicheClub();
+    if (typeof actualiserRecherchesCiel === 'function') actualiserRecherchesCiel();
+    suiviRendreFocusApresRepeint(repere);
+    return;
+  }
   const clubs = (clubsInvitesCourants || []).slice();
   const compte = { tous: clubs.length, attente: 0, oui: 0, non: 0, paiement: 0 };
   clubs.forEach(function (club) {
@@ -668,11 +798,28 @@ function afficherSuiviClubs() {
     suiviClubSelectionne = '';
     suiviFicheDepliee = false;
   }
-  liste.innerHTML = affiches.length
+  // Relecture en échec APRÈS une première lecture réussie : le tableau garde le dernier état connu, et le dit.
+  const avertissement = etatListe.erreur && !etatListe.enCours
+    ? '<div class="suivi-etat-lecture" role="alert"><p>⚠️ La liste des clubs n’a pas pu être relue (' + echapper(etatListe.erreur) +
+      ') : le suivi montre le dernier état connu.</p><button type="button" class="bouton bouton-doux" data-action="relire-suivi">Réessayer</button></div>'
+    : '';
+  liste.innerHTML = avertissement + (affiches.length
     ? suiviHtmlTableau(affiches)
-    : '<p class="vide">Aucun club dans ce filtre.</p>';
+    : '<p class="vide">Aucun club dans ce filtre.</p>');
   afficherFicheClub();
   if(typeof actualiserRecherchesCiel==='function')actualiserRecherchesCiel();
+  suiviRendreFocusApresRepeint(repere);
+}
+
+/** Focus après un repeint : d'abord celui qu'avait l'écran ; à défaut (confirmation fermée : focus tombé sur la page), le
+ *  bouton d'où est parti le geste en cours. ⛔ Jamais sans geste de l'organisateur, jamais volé à un élément vivant. */
+function suiviRendreFocusApresRepeint(repere) {
+  const geste = suiviFocusGeste;
+  let rendu = suiviRendreFocus(repere);
+  if (!repere && geste) rendu = suiviRendreFocus(geste.repere);
+  // Posé sur un repli pendant qu'un geste est en vol (bouton occupé) : la fin du geste le ramènera au bouton d'origine.
+  if (geste && rendu === 'repli') geste.repli = suiviRepereFocus();
+  else if (geste && !repere && rendu === 'exact' && !geste.suivi) suiviFocusGeste = null;   // geste sans fin connue (dossier)
 }
 
 /* ⭐ Gestes du suivi qui écrivent (lot « Inviter un club », 2ᵉ passage) : même règle que l'écran « Inviter un club » —
@@ -702,6 +849,13 @@ function suiviIssueIncertaine(erreur) {
 function suiviMessageIncertain(quoi, erreur) {
   if (typeof messageIncertain === 'function') return messageIncertain(quoi, erreur, 'le suivi est relu');
   return '⚠️ Réponse du serveur non reçue : ' + quoi + '. Rien n’est renvoyé automatiquement ; le suivi est relu.';
+}
+
+/** Le résultat d'un geste réussi : sur le club trouvé au clic ET sur celui de la liste courante — remplacée pendant l'envoi,
+ *  elle aurait gardé l'état d'avant (lot « Suivi des clubs », `appliquerAuClubInvite`). Module d'invitation d'avant : comme avant. */
+function suiviAppliquerAuClub(club, nom, champs) {
+  Object.assign(club, champs);
+  if (typeof appliquerAuClubInvite === 'function') appliquerAuClubInvite(nom, champs, afficherSuiviClubs);
 }
 
 /** Un geste du suivi : garde « un à la fois », état occupé, écriture bornée, issue incertaine relue. */
@@ -746,8 +900,7 @@ async function suiviMarquerPaiement(nom, paye) {
     function (avert) { return dialogConfirmer(question + avert, { ok: paye ? 'Marquer payé' : 'Corriger' }); },
     function () { return suiviEcrire('enregistrerPaiementClub', { club_nom: nom, statut: paye ? 'paye' : 'a_payer' }); },
     function (res, message) {
-      club.paiement_statut = res.paiement_statut || '';
-      club.date_paiement = res.date_paiement || '';
+      suiviAppliquerAuClub(club, nom, { paiement_statut: res.paiement_statut || '', date_paiement: res.date_paiement || '' });
       afficherMessage(message, paye ? '✅ Paiement enregistré.' : '✅ Paiement remis à « À payer ».', 'ok');
     }, 'le paiement de « ' + nom + ' » n’est pas confirmé');
 }
@@ -764,7 +917,7 @@ async function suiviRelancerPaiement(nom) {
     },
     function () { return suiviEcrireEmail('relancerPaiementClub', { club_nom: nom }, 'relance-paiement', nom); },
     function (res, message) {
-      club.derniere_relance_paiement = res.derniere_relance_paiement || '';
+      suiviAppliquerAuClub(club, nom, { derniere_relance_paiement: res.derniere_relance_paiement || '' });
       afficherMessage(message, res.rejeu ? '✅ Relance de paiement déjà partie vers ' + email + ' (la réponse précédente s’était perdue) : ' +
         'rien n’a été renvoyé.' : '✅ Relance de paiement envoyée à ' + email + '.', 'ok');
     }, 'la relance de paiement à ' + email + ' n’est pas confirmée — le club l’a peut-être reçue');
@@ -781,8 +934,8 @@ async function suiviRenvoyerConfirmation(nom) {
     },
     function () { return suiviEcrireEmail('renvoyerConfirmationReponseClub', { club_nom: nom }, 'renvoyer-confirmation', nom); },
     function (res, message) {
-      club.confirmation_reponse_envoyee = res.confirmation_reponse_envoyee || '';
-      club.confirmation_reponse_erreur = res.confirmation_reponse_erreur || '';
+      suiviAppliquerAuClub(club, nom, { confirmation_reponse_envoyee: res.confirmation_reponse_envoyee || '',
+        confirmation_reponse_erreur: res.confirmation_reponse_erreur || '' });
       afficherMessage(message, res.rejeu ? '✅ Confirmation déjà partie vers ' + email + ' (la réponse précédente s’était perdue) : ' +
         'rien n’a été renvoyé.' : '✅ Confirmation renvoyée à ' + email + '.', 'ok');
     }, 'le renvoi de la confirmation à ' + email + ' n’est pas confirmé — le club l’a peut-être reçue');
@@ -818,17 +971,33 @@ document.addEventListener('click', function (event) {
       return;
     }
   }
+  // « Réessayer » d'une lecture de la liste en échec (lot « Suivi des clubs »).
+  const relire = event.target.closest('#liste-suivi-clubs [data-action="relire-suivi"]');
+  if (relire) {
+    if (relire.disabled || suiviRelectureEnCours) return;
+    const retour = { repere: suiviRepereFocus(relire), repli: null, suivi: true };
+    suiviFocusGeste = retour;
+    suiviRelire().then(function () { suiviTerminerFocusGeste(retour); });
+    return;
+  }
   // ⭐ Les actions vivent dans les DEUX zones : le tableau (repli sans panneau latéral) et la
   //   fiche. Un seul contrat `data-action` + `data-club`, un seul aiguillage.
   const bouton = event.target.closest('#liste-suivi-clubs [data-action][data-club], #cv-fiche-club [data-action][data-club]');
   if (!bouton || bouton.disabled) return;
   const nom = bouton.getAttribute('data-club');
   const action = bouton.getAttribute('data-action');
-  if (action === 'ouvrir-fiche') suiviSelectionnerClub(nom);
-  else if (action === 'relance-reponse') envoyerInvitationClubUI(nom, { relance: true });
-  else if (action === 'relance-paiement') suiviRelancerPaiement(nom);
-  else if (action === 'renvoyer-confirmation') suiviRenvoyerConfirmation(nom);
-  else if (action === 'marquer-paye') suiviMarquerPaiement(nom, true);
-  else if (action === 'marquer-a-payer') suiviMarquerPaiement(nom, false);
-  else if (action === 'envoyer-dossier') genererDossierFinal(nom);
+  if (action === 'ouvrir-fiche') { suiviSelectionnerClub(nom); return; }
+  // Un geste serveur : la confirmation (commune) laisse tomber le focus sur la page ; il reviendra à ce bouton.
+  const repere = suiviRepereFocus(bouton);
+  const dejaSuivi = suiviFocusGeste && JSON.stringify(suiviFocusGeste.repere) === JSON.stringify(repere);
+  const geste = dejaSuivi ? null : { repere: repere, repli: null, suivi: action !== 'envoyer-dossier' };
+  if (geste) suiviFocusGeste = geste;
+  let fin = null;
+  if (action === 'relance-reponse') fin = envoyerInvitationClubUI(nom, { relance: true });
+  else if (action === 'relance-paiement') fin = suiviRelancerPaiement(nom);
+  else if (action === 'renvoyer-confirmation') fin = suiviRenvoyerConfirmation(nom);
+  else if (action === 'marquer-paye') fin = suiviMarquerPaiement(nom, true);
+  else if (action === 'marquer-a-payer') fin = suiviMarquerPaiement(nom, false);
+  else if (action === 'envoyer-dossier') genererDossierFinal(nom);   // fenêtre d'envoi : focus rendu au premier repeint utile
+  if (geste && geste.suivi) Promise.resolve(fin).then(function () { suiviTerminerFocusGeste(geste); }, function () { suiviTerminerFocusGeste(geste); });
 });
