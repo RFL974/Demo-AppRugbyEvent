@@ -450,25 +450,30 @@ function suiviActionsHtml(club, etat, opt) {
   const options = opt || {};
   const nom = echapper(String(club.club_nom || ''));
   const actions = [];
+  // ⭐ Un envoi en vol garde son bouton occupé, même quand le tableau et la fiche sont redessinés.
+  const occupe = function (type) {
+    return typeof suiviGesteEnCours === 'function' && suiviGesteEnCours(type, club.club_nom) ? ' disabled aria-busy="true"' : '';
+  };
   if (etat.attente) {
     const libelle = club.invitation_envoyee ? 'Relancer la réponse' : 'Envoyer l’invitation';
     actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="relance-reponse" data-club="' +
-      nom + '">' + libelle + '</button>' +
+      nom + '"' + occupe('relance-reponse') + '>' + (occupe('relance-reponse') ? 'Envoi…' : libelle) + '</button>' +
       (club.derniere_relance_reponse ? '<small>Dernière relance : ' + echapper(suiviDate(club.derniere_relance_reponse)) + '</small>' : ''));
   }
   if (etat.confirmationAttendue) {
     actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="renvoyer-confirmation" data-club="' +
-      nom + '">Renvoyer la confirmation</button>');
+      nom + '"' + occupe('renvoyer-confirmation') + '>' + (occupe('renvoyer-confirmation') ? 'Envoi…' : 'Renvoyer la confirmation') + '</button>');
   }
   if (etat.paiementAttendu && !options.sansPaiement) {
     actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="relance-paiement" data-club="' +
-      nom + '">Relancer le paiement</button>' +
-      '<button type="button" class="bouton suivi-action" data-action="marquer-paye" data-club="' + nom + '">Marquer payé</button>' +
+      nom + '"' + occupe('relance-paiement') + '>' + (occupe('relance-paiement') ? 'Envoi…' : 'Relancer le paiement') + '</button>' +
+      '<button type="button" class="bouton suivi-action" data-action="marquer-paye" data-club="' + nom + '"' + occupe('marquer-paye') +
+      '>Marquer payé</button>' +
       (club.derniere_relance_paiement ? '<small>Dernière relance : ' + echapper(suiviDate(club.derniere_relance_paiement)) + '</small>' : ''));
   }
   if (etat.paye) {
     actions.push('<button type="button" class="bouton bouton-doux suivi-action" data-action="marquer-a-payer" data-club="' +
-      nom + '">Corriger le paiement</button>');
+      nom + '"' + occupe('marquer-a-payer') + '>Corriger le paiement</button>');
   }
   if (etat.accepte || etat.dossierDisponible) {
     const dossierEnvoye = String(club.dossier_envoye || '').trim();
@@ -670,60 +675,117 @@ function afficherSuiviClubs() {
   if(typeof actualiserRecherchesCiel==='function')actualiserRecherchesCiel();
 }
 
+/* ⭐ Gestes du suivi qui écrivent (lot « Inviter un club », 2ᵉ passage) : même règle que l'écran « Inviter un club » —
+   délai borné, un envoi à la fois par club et par geste (le bouton reste occupé même si le tableau est redessiné),
+   issue incertaine dite « non confirmée », jamais renvoyée, suivie d'une relecture des clubs. */
+const suiviGestesEnCours = new Set();
+const suiviGestesIncertains = new Set();
+function suiviCleGeste(type, nom) { return type + '|' + String(nom || '').normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase(); }
+function suiviGesteEnCours(type, nom) {
+  if (type === 'relance-reponse') return typeof envoiEnCours === 'function' && envoiEnCours('invitation', nom);
+  return suiviGestesEnCours.has(suiviCleGeste(type, nom));
+}
+function suiviEcrire(action, data) {
+  return typeof ecrireInvitation === 'function' ? ecrireInvitation(action, data) : ecrireAdmin(action, data);
+}
+/** Un e-mail du suivi (5ᵉ passage) : identifiant du geste, repris après une issue incertaine (le serveur répond alors « déjà
+ *  envoyé »), et confirmation explicite d'un renvoi retenu par le serveur. Module d'invitation d'avant : comme avant. */
+function suiviEcrireEmail(action, data, type, nom) {
+  const cle = suiviCleGeste(type, nom);
+  if (typeof ecrireEnvoiEmail !== 'function') return suiviEcrire(action, data);
+  return ecrireEnvoiEmail(action, data, { cle: cle, incertain: suiviGestesIncertains.has(cle) });
+}
+function suiviIssueIncertaine(erreur) {
+  if (typeof issueIncertaine === 'function') return issueIncertaine(erreur);
+  return !(erreur && erreur.reponse && typeof erreur.reponse === 'object') && !/^Action annulée/.test(String((erreur && erreur.message) || ''));
+}
+function suiviMessageIncertain(quoi, erreur) {
+  if (typeof messageIncertain === 'function') return messageIncertain(quoi, erreur, 'le suivi est relu');
+  return '⚠️ Réponse du serveur non reçue : ' + quoi + '. Rien n’est renvoyé automatiquement ; le suivi est relu.';
+}
+
+/** Un geste du suivi : garde « un à la fois », état occupé, écriture bornée, issue incertaine relue. */
+async function suiviExecuterGeste(type, nom, confirmer, ecrire, reussite, quoiIncertain) {
+  const cle = suiviCleGeste(type, nom);
+  if (suiviGestesEnCours.has(cle)) return;                      // ⛔ double clic : rien de plus
+  suiviGestesEnCours.add(cle);
+  const message = document.getElementById('message-suivi-clubs');
+  try {
+    const avertissement = suiviGestesIncertains.has(cle)
+      ? '\n\n⚠️ Le geste précédent n’a pas été confirmé : il a peut-être déjà eu lieu.' : '';
+    if (!await confirmer(avertissement)) return;
+    afficherSuiviClubs();                                          // le bouton passe « occupé »
+    let res;
+    try { res = await ecrire(); }
+    catch (erreur) {
+      if (!suiviIssueIncertaine(erreur)) {
+        if (typeof oublierIdEnvoi === 'function') oublierIdEnvoi(cle);
+        afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+        return;
+      }
+      suiviGestesIncertains.add(cle);                               // l'identifiant d'un e-mail est gardé pour la reprise
+      afficherMessage(message, suiviMessageIncertain(quoiIncertain, erreur), 'ko');
+      if (typeof rafraichirRessourceAdmin === 'function') rafraichirRessourceAdmin('clubsInvites');
+      return;
+    }
+    suiviGestesIncertains.delete(cle);
+    if (typeof oublierIdEnvoi === 'function') oublierIdEnvoi(cle);
+    reussite(res, message);
+  } finally {
+    suiviGestesEnCours.delete(cle);
+    afficherSuiviClubs();
+  }
+}
+
 async function suiviMarquerPaiement(nom, paye) {
   const club = (clubsInvitesCourants || []).find(function (c) { return memeTexteSouple(c.club_nom, nom); });
   if (!club) return;
-  const message = document.getElementById('message-suivi-clubs');
   const question = paye ? 'Confirmer la réception du paiement de « ' + nom + ' » ?'
     : 'Retirer la marque « payé » pour « ' + nom + ' » ?';
-  if (!await dialogConfirmer(question, { ok: paye ? 'Marquer payé' : 'Corriger' })) return;
-  try {
-    const res = await ecrireAdmin('enregistrerPaiementClub', {
-      club_nom: nom, statut: paye ? 'paye' : 'a_payer'
-    });
-    club.paiement_statut = res.paiement_statut || '';
-    club.date_paiement = res.date_paiement || '';
-    afficherSuiviClubs();
-    afficherMessage(message, paye ? '✅ Paiement enregistré.' : '✅ Paiement remis à « À payer ».', 'ok');
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-  }
+  return suiviExecuterGeste(paye ? 'marquer-paye' : 'marquer-a-payer', nom,
+    function (avert) { return dialogConfirmer(question + avert, { ok: paye ? 'Marquer payé' : 'Corriger' }); },
+    function () { return suiviEcrire('enregistrerPaiementClub', { club_nom: nom, statut: paye ? 'paye' : 'a_payer' }); },
+    function (res, message) {
+      club.paiement_statut = res.paiement_statut || '';
+      club.date_paiement = res.date_paiement || '';
+      afficherMessage(message, paye ? '✅ Paiement enregistré.' : '✅ Paiement remis à « À payer ».', 'ok');
+    }, 'le paiement de « ' + nom + ' » n’est pas confirmé');
 }
 
 async function suiviRelancerPaiement(nom) {
   const club = (clubsInvitesCourants || []).find(function (c) { return memeTexteSouple(c.club_nom, nom); });
   if (!club) return;
-  const message = document.getElementById('message-suivi-clubs');
   const email = String(club.club_contact_email || '').trim();
   const total = suiviClubCommande(club).total;
-  if (!await dialogConfirmer('Envoyer un rappel de paiement de ' + suiviEuros(total) + ' à « ' + nom +
-    ' » (' + email + ') ?', { ok: 'Envoyer la relance' })) return;
-  try {
-    const res = await ecrireAdmin('relancerPaiementClub', { club_nom: nom });
-    club.derniere_relance_paiement = res.derniere_relance_paiement || '';
-    afficherSuiviClubs();
-    afficherMessage(message, '✅ Relance de paiement envoyée à ' + email + '.', 'ok');
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-  }
+  return suiviExecuterGeste('relance-paiement', nom,
+    function (avert) {
+      return dialogConfirmer('Envoyer un rappel de paiement de ' + suiviEuros(total) + ' à « ' + nom +
+        ' » (' + email + ') ?' + avert, { ok: 'Envoyer la relance' });
+    },
+    function () { return suiviEcrireEmail('relancerPaiementClub', { club_nom: nom }, 'relance-paiement', nom); },
+    function (res, message) {
+      club.derniere_relance_paiement = res.derniere_relance_paiement || '';
+      afficherMessage(message, res.rejeu ? '✅ Relance de paiement déjà partie vers ' + email + ' (la réponse précédente s’était perdue) : ' +
+        'rien n’a été renvoyé.' : '✅ Relance de paiement envoyée à ' + email + '.', 'ok');
+    }, 'la relance de paiement à ' + email + ' n’est pas confirmée — le club l’a peut-être reçue');
 }
 
 async function suiviRenvoyerConfirmation(nom) {
   const club = (clubsInvitesCourants || []).find(function (c) { return memeTexteSouple(c.club_nom, nom); });
   if (!club) return;
-  const message = document.getElementById('message-suivi-clubs');
   const email = String(club.club_contact_email || '').trim();
-  if (!await dialogConfirmer('Renvoyer l’e-mail de confirmation à « ' + nom + ' » (' + email + ') ?',
-    { ok: 'Renvoyer la confirmation' })) return;
-  try {
-    const res = await ecrireAdmin('renvoyerConfirmationReponseClub', { club_nom: nom });
-    club.confirmation_reponse_envoyee = res.confirmation_reponse_envoyee || '';
-    club.confirmation_reponse_erreur = res.confirmation_reponse_erreur || '';
-    afficherSuiviClubs();
-    afficherMessage(message, '✅ Confirmation renvoyée à ' + email + '.', 'ok');
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-  }
+  return suiviExecuterGeste('renvoyer-confirmation', nom,
+    function (avert) {
+      return dialogConfirmer('Renvoyer l’e-mail de confirmation à « ' + nom + ' » (' + email + ') ?' + avert,
+        { ok: 'Renvoyer la confirmation' });
+    },
+    function () { return suiviEcrireEmail('renvoyerConfirmationReponseClub', { club_nom: nom }, 'renvoyer-confirmation', nom); },
+    function (res, message) {
+      club.confirmation_reponse_envoyee = res.confirmation_reponse_envoyee || '';
+      club.confirmation_reponse_erreur = res.confirmation_reponse_erreur || '';
+      afficherMessage(message, res.rejeu ? '✅ Confirmation déjà partie vers ' + email + ' (la réponse précédente s’était perdue) : ' +
+        'rien n’a été renvoyé.' : '✅ Confirmation renvoyée à ' + email + '.', 'ok');
+    }, 'le renvoi de la confirmation à ' + email + ' n’est pas confirmé — le club l’a peut-être reçue');
 }
 
 document.addEventListener('click', function (event) {

@@ -81,20 +81,26 @@ const boutons = { 'bouton-simuler-scores-matin': {}, 'bouton-simuler-scores-apre
 const ctxBoutons = vm.createContext({ document: { getElementById: id => boutons[id] },
   equipesCourantes: [], matchsCourants: [] });
 vm.runInContext(generation, ctxBoutons);
-const eq24 = ['U10', 'U12'].flatMap(categorie => Array.from({ length: 12 }, () => ({ categorie })));
-const m36 = Array.from({ length: 36 }, () => ({ phase: 'poule' }));
-ctxBoutons.equipesCourantes = eq24.slice(0, 21); ctxBoutons.matchsCourants = m36;
+// ⭐ Lot « Inviter un club » (2ᵉ passage) : le jeu RÉEL — 10 U10 + 11 U12, RACING 92-1 dans chacune — plus 12 + 12.
+const jeu = [['U10', 10], ['U12', 11]].flatMap(([categorie, n]) => Array.from({ length: n }, (_, i) =>
+  ({ categorie, nom_equipe: i === 0 ? 'RACING 92-1' : categorie + ' ÉQUIPE ' + i })));
+const m45 = Array.from({ length: 45 }, () => ({ phase: 'poule' }));
+ctxBoutons.equipesCourantes = jeu; ctxBoutons.matchsCourants = [];
 ctxBoutons.majBoutonsScoresDemo();
-vrai(boutons['bouton-simuler-scores-matin'].disabled, '21 équipes : le matin attend les trois inscriptions');
-ctxBoutons.equipesCourantes = eq24; ctxBoutons.majBoutonsScoresDemo();
-vrai(!boutons['bouton-simuler-scores-matin'].disabled, '24 équipes et 36 matchs : bouton matin accessible');
+vrai(boutons['bouton-simuler-scores-matin'].disabled, 'jeu de démonstration sans planning : le matin attend la génération');
+ctxBoutons.matchsCourants = m45; ctxBoutons.majBoutonsScoresDemo();
+vrai(!boutons['bouton-simuler-scores-matin'].disabled, '10 + 11 équipes et les 45 matchs générés : bouton matin accessible');
 vrai(boutons['bouton-simuler-scores-apresmidi'].disabled, 'sans planning après-midi : bouton désactivé');
-for (const nb of [12, 18, 24]) {
-  ctxBoutons.matchsCourants = m36.concat(Array.from({ length: nb }, () => ({ phase: 'classement' })));
+for (const nb of [5, 10, 45]) {
+  ctxBoutons.matchsCourants = m45.concat(Array.from({ length: nb }, () => ({ phase: 'classement' })));
   ctxBoutons.majBoutonsScoresDemo();
-  vrai(!boutons['bouton-simuler-scores-apresmidi'].disabled, nb + ' matchs de classement : bouton accessible');
+  vrai(!boutons['bouton-simuler-scores-apresmidi'].disabled, nb + ' matchs de classement générés : bouton accessible');
 }
-ctxBoutons.equipesCourantes = eq24.slice(0, 21); ctxBoutons.majBoutonsScoresDemo();
-vrai(boutons['bouton-simuler-scores-apresmidi'].disabled, '21 équipes : après-midi attend les inscriptions');
+ctxBoutons.equipesCourantes = jeu.filter(e => !(e.categorie === 'U12' && e.nom_equipe === 'RACING 92-1')); ctxBoutons.majBoutonsScoresDemo();
+vrai(boutons['bouton-simuler-scores-matin'].disabled && boutons['bouton-simuler-scores-apresmidi'].disabled,
+  'sans RACING 92-1 en U12 : aucune simulation (l’équipe cible manque)');
+ctxBoutons.equipesCourantes = jeu.concat([{ categorie: 'U8', nom_equipe: 'AUTRE' }]); ctxBoutons.majBoutonsScoresDemo();
+vrai(boutons['bouton-simuler-scores-matin'].disabled, 'une équipe d’une autre catégorie : simulation indisponible');
+vrai(!/=== 12|length === 24|12 équipes U10, 12 équipes U12/.test(generation), 'plus aucune exigence 12 + 12 dans le frontend');
 
 console.log('OK — ' + controles + '/' + controles + ' contrôles passés.');

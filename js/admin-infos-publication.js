@@ -440,6 +440,8 @@ function normaliserTelephone(valeur) {
 function majContactsSecurite() {
   const form = document.getElementById('form-contacts-securite');
   if (!form) return;
+  // ⭐ Sans perte de saisie (lot « Inviter un club », 2ᵉ passage) : un brouillon ou le focus ne sont pas écrasés.
+  if (typeof remplirCarteSansBrouillon === 'function' && !remplirCarteSansBrouillon('contacts', function () {})) return;
   const g = configCourante.global || {};
   form.referent_nom.value = g.referent_nom || '';
   form.referent_tel.value = g.referent_tel || '';
@@ -454,6 +456,7 @@ function majContactsSecurite() {
   // Formulaire (re)rempli avec l'état ENREGISTRÉ → référence pour le détecteur
   // de « modifications non enregistrées » de l'assistant.
   if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
+  if (typeof noterBaseCarte === 'function') noterBaseCarte('contacts');
 }
 
 /** Révèle / masque les champs conditionnels selon les cases à cocher. */
@@ -503,6 +506,13 @@ async function onEnregistrerContacts() {
     data[cle] = norme;
   }
 
+  if (typeof enregistrerCarteConfig === 'function') {
+    return enregistrerCarteConfig({ cle: 'contacts', action: 'enregistrerContactsSecurite', data: data, bouton: bouton,
+      message: message, texteOk: '✅ Contacts & sécurité enregistrés.', apres: function () {
+        majContactsSecurite(); // numéros normalisés ré-affichés — sauf frappe faite pendant l'envoi, qui reste un brouillon
+        majDossier();          // les sections Sécurité / Contact du dossier suivent
+      } });
+  }
   await avecBoutonOccupe(bouton, message, async function () {
     await ecrireAdmin('enregistrerContactsSecurite', data);
     configCourante.global = Object.assign({}, configCourante.global, data);
@@ -521,6 +531,7 @@ async function onEnregistrerContacts() {
 function majSurPlace() {
   const form = document.getElementById('form-surplace');
   if (!form) return;
+  if (typeof remplirCarteSansBrouillon === 'function' && !remplirCarteSansBrouillon('surplace', function () {})) return;
   const g = configCourante.global || {};
   form.buvette_disponible.checked = estOui(g.buvette_disponible);
   form.espace_sandwich_disponible.checked = estOui(g.espace_sandwich_disponible);
@@ -537,6 +548,7 @@ function majSurPlace() {
   form.gouter_fin_tournoi_montant.value = g.gouter_fin_tournoi_montant || '';
   majAffichageOptionsSurPlace();
   if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
+  if (typeof noterBaseCarte === 'function') noterBaseCarte('surplace');
 }
 
 /** Affiche les options des repas/goûters, puis le montant uniquement pour le tarif par personne. */
@@ -593,6 +605,13 @@ async function onEnregistrerSurPlace() {
     gouter_fin_tournoi_mode:    gouter.mode,
     gouter_fin_tournoi_montant: gouter.montant
   };
+  if (typeof enregistrerCarteConfig === 'function') {
+    return enregistrerCarteConfig({ cle: 'surplace', action: 'enregistrerSurPlace', data: data, bouton: bouton, message: message,
+      texteOk: '✅ « Sur place » enregistré. Le suivi de démonstration suit les tarifs sauvegardés.', apres: function (resultat) {
+        majApercuInvitation(); // l'aperçu de l'email suit (ligne « Sur place »)
+        appliquerSuiviTarifsEnregistres(resultat);
+      } });
+  }
   await avecBoutonOccupe(bouton, message, async function () {
     const resultat = await ecrireAdmin('enregistrerSurPlace', data);
     configCourante.global = Object.assign({}, configCourante.global, data);
@@ -607,6 +626,7 @@ async function onEnregistrerSurPlace() {
 function majReponse() {
   const form = document.getElementById('form-reponse');
   if (!form) return;
+  if (typeof remplirCarteSansBrouillon === 'function' && !remplirCarteSansBrouillon('reponse', function () {})) return;
   const g = configCourante.global || {};
   form.date_limite_reponse.value = g.date_limite_reponse || '';
   form.contact_reponse_nom.value = g.contact_reponse_nom || '';
@@ -614,6 +634,7 @@ function majReponse() {
   form.contact_reponse_email.value = g.contact_reponse_email || '';
   form.email_expediteur.value = g.email_expediteur || '';
   if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(form);
+  if (typeof noterBaseCarte === 'function') noterBaseCarte('reponse');
 }
 
 /** Rappel visuel « au moins un des deux » (tél / email) au blur des champs de contact. */
@@ -670,6 +691,13 @@ async function onEnregistrerReponse() {
     return;
   }
 
+  if (typeof enregistrerCarteConfig === 'function') {
+    return enregistrerCarteConfig({ cle: 'reponse', action: 'enregistrerReponseInvitation', data: data, bouton: bouton,
+      message: message, texteOk: '✅ « Réponse à l\'invitation » enregistrée.', apres: function () {
+        majReponse();          // numéro normalisé ré-affiché — sauf frappe faite pendant l'envoi
+        majApercuInvitation(); // l'aperçu de l'email suit (date limite de réponse)
+      } });
+  }
   await avecBoutonOccupe(bouton, message, async function () {
     await ecrireAdmin('enregistrerReponseInvitation', data);
     configCourante.global = Object.assign({}, configCourante.global, data);

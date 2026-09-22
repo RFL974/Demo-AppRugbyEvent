@@ -50,8 +50,19 @@ c.rechargerEquipes=async()=>{refresh++;vm.runInContext("equipesCourantes=[{id_eq
  vm.runInContext('equipesCourantes=[]',c);club.selection_enregistree='2026-09-20';
  c.actualiserBoutonEquipesClub(panneau);
  assert.equal(c.etatClubInvite(club),'a-enregistrer');assert(!btn.disabled);assert(!boutonGrise());
- c.ecrireAdmin=async()=>{throw Error('Échec de synchronisation')};
+ c.ecrireAdmin=async()=>{const e=Error('Échec de synchronisation');e.reponse={error:'Échec de synchronisation'};throw e};
  await c.enregistrerCatsClub(btn);assert(!btn.disabled);assert(!boutonGrise());assert.equal(dom['message-club-invite'].type,'ko');
+ // Issue INCERTAINE (réseau coupé, sans réponse lisible) : une seule émission, jamais renvoyée, « non confirmé », et la RELECTURE
+ // des équipes tranche — rien d'écrit : bouton rendu, club orange ; équipes écrites avant la perte : « Équipes ajoutées ».
+ const avantRelecture=refresh;let emissions=0;c.ecrireAdmin=async()=>{emissions++;throw Error('Failed to fetch')};
+ c.rechargerEquipes=async()=>{refresh++;vm.runInContext('equipesCourantes=[]',c)};
+ await c.enregistrerCatsClub(btn);await new Promise(r=>setTimeout(r,0));
+ assert.equal(emissions,1);assert.equal(refresh,avantRelecture+1);assert(!btn.disabled);assert(!boutonGrise());assert.equal(c.etatClubInvite(club),'a-enregistrer');
+ assert.equal(dom['message-club-invite'].type,'ko');assert(/n’est pas confirmé/.test(dom['message-club-invite'].textContent),dom['message-club-invite'].textContent);
+ c.rechargerEquipes=async()=>{refresh++;vm.runInContext("equipesCourantes=[{id_equipe:'e1',nom_equipe:'Club Test-1',categorie:'U10'}]",c)};
+ await c.enregistrerCatsClub(btn);await new Promise(r=>setTimeout(r,0));
+ assert.equal(emissions,2);assert.equal(refresh,avantRelecture+2);assert.equal(c.etatClubInvite(club),'equipes-ajoutees');assert(boutonGrise());
+ vm.runInContext('equipesCourantes=[]',c);c.actualiserBoutonEquipesClub(panneau);
  // Une réponse sans équipe effectivement relue ne prouve pas l'ajout.
  c.rechargerEquipes=async()=>{};
  c.ecrireAdmin=async()=>({ok:true,equipes_creees:[],equipes_supprimees:[]});

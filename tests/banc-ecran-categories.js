@@ -153,12 +153,13 @@ function creerDocument() {
         while (n && n.tag) { if (correspond(n, reste)) return true; n = n.parentNode; }
         return false;
       }
-      const m = /^([a-z0-9]*)((?:[#.][\w-]+|\[[^\]]+\]|:disabled)*)$/i.exec(s);
+      const m = /^([a-z0-9]*)((?:[#.][\w-]+|\[[^\]]+\]|:disabled|:checked)*)$/i.exec(s);
       if (!m) return false;
       if (m[1] && e.tag !== m[1].toLowerCase()) return false;
-      const filtres = m[2].match(/[#.][\w-]+|\[[^\]]+\]|:disabled/g) || [];
+      const filtres = m[2].match(/[#.][\w-]+|\[[^\]]+\]|:disabled|:checked/g) || [];
       return filtres.every((f) => {
         if (f === ':disabled') return e.disabled;
+        if (f === ':checked') return e.checked;                 // cases et boutons radio cochés, comme un navigateur
         if (f[0] === '#') return e.id === f.slice(1);
         if (f[0] === '.') return e.classList.contains(f.slice(1));
         const a = /^\[([\w-]+)(?:="((?:[^"\\]|\\.)*)")?\]$/.exec(f);

@@ -471,18 +471,6 @@
           alimentent automatiquement la <strong>demande d'autorisation</strong> (nombre de
           participants et nombre d'éducateurs). Modifiables ensuite avec le crayon ✏️.</p>
 
-        <div id="chargement-equipes-demo">
-          <button type="button" class="bouton bouton-doux" id="bouton-charger-equipes-demo">
-            Démo — Préparer le suivi des équipes présentes
-          </button>
-          <p class="note-generation">
-            Prépare <strong>Clubs invités</strong> et <strong>Suivi des clubs</strong> à partir
-            des équipes déjà affichées ci-dessous. Aucune équipe n’est créée ou réintroduite.
-            Les exemples de refus et de réponses en attente restent disponibles, sans équipe engagée.
-            Les commandes de démonstration suivent automatiquement les tarifs enregistrés dans l’invitation initiale. Les réponses et paiements existants sont conservés.
-          </p>
-        </div>
-
         <!-- Message de retour (succès / erreur) -->
         <div id="message-equipe" class="message-form"></div>
 
@@ -631,6 +619,20 @@
         </form>
         <div id="message-club-invite" class="message-form"></div>
         <div id="liste-clubs-invites"><p class="vide">Connecte-toi pour voir la liste des clubs invités.</p></div>
+
+        <!-- JEU DE DÉMONSTRATION — seul point d'entrée (lot « Inviter un club »). Le serveur crée les clubs invités,
+             leur suivi et les équipes (celles du club organisateur comprises) ; rien n'est supprimé ni écrasé. -->
+        <details class="cv-options" id="chargement-equipes-demo">
+          <summary>Démonstration<span>Créer les clubs, leur suivi et leurs équipes fictives</span></summary>
+          <p class="note-generation">
+            Crée les <strong>clubs invités</strong> du jeu de démonstration, leur <strong>suivi</strong>
+            (réponses, commandes, paiements) et leurs <strong>équipes</strong> — celles du club organisateur
+            comprises. Les commandes suivent les tarifs enregistrés dans l’invitation initiale. Les données déjà
+            présentes sont conservées : rien n’est supprimé ni écrasé, et un second clic ne crée aucun doublon.
+          </p>
+          <button type="button" class="bouton bouton-doux" id="bouton-charger-equipes-demo">Démo — Créer le jeu de démonstration</button>
+          <div id="message-jeu-demo" class="message-form" aria-live="polite"></div>
+        </details>
       </section>
 
       <section class="carte" id="bloc-suivi-clubs">

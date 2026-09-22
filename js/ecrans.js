@@ -989,8 +989,9 @@ function preparerOutilsCiel() {
  const bloc=document.getElementById('bloc-equipes');
  if(bloc && !document.getElementById('cv-outils-equipes')){
    const outils=document.createElement('details');outils.id='cv-outils-equipes';outils.className='cv-options';
-   outils.innerHTML='<summary>Outils et paramètres des équipes<span>Jeu de démonstration et identification de votre club</span></summary>';
-   ['chargement-equipes-demo','form-perfs-club'].forEach(id=>{const el=document.getElementById(id);if(el)outils.appendChild(el);});
+   outils.innerHTML='<summary>Outils et paramètres des équipes<span>Identification de votre club (page Perfs)</span></summary>';
+   // ⭐ Le jeu de démonstration n'est plus ici : il vit dans « Inviter un club », onglet « Clubs invités ».
+   ['form-perfs-club'].forEach(id=>{const el=document.getElementById(id);if(el)outils.appendChild(el);});
    bloc.appendChild(outils);
  }
  actualiserRecherchesCiel();

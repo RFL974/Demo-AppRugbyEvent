@@ -168,28 +168,34 @@ async function onRecalculerHoraires() {
 }
 
 /**
- * Les boutons de simulation ne s'activent que pour le scénario exact de la démo :
- * 24 équipes (12 U10 + 12 U12), 36 matchs le matin, puis 18 en CROISE l'après-midi.
- * Le serveur répète tous ces contrôles avant d'écrire.
+ * Les boutons de simulation s'activent pour le jeu de démonstration tel qu'il est généré (lot « Inviter un club »,
+ * 2ᵉ passage) : des équipes U10 et U12 seulement, RACING 92-1 dans chacune, puis les matchs du matin réellement
+ * générés (le jeu : 10 + 11 équipes, 4 poules, 45 matchs) ; l'après-midi, dès qu'un classement a été généré.
+ * ⛔ Plus d'exigence 12 + 12 : le serveur vérifie, avant d'écrire, que chaque poule est complète.
  */
 function majBoutonsScoresDemo() {
   const cleCat = function (v) { return String(v == null ? '' : v).trim().toUpperCase().replace(/^[MU](?=\d)/, ''); };
+  const equipes = equipesCourantes || [];
   const matin = (matchsCourants || []).filter(function (m) { return String(m.phase) !== 'classement'; });
   const aprem = (matchsCourants || []).filter(function (m) { return String(m.phase) === 'classement'; });
-  const equipesU10 = (equipesCourantes || []).filter(function (e) { return cleCat(e.categorie) === '10'; });
-  const equipesU12 = (equipesCourantes || []).filter(function (e) { return cleCat(e.categorie) === '12'; });
-  const structureEquipes = equipesU10.length === 12 && equipesU12.length === 12 && equipesCourantes.length === 24;
+  const equipesU10 = equipes.filter(function (e) { return cleCat(e.categorie) === '10'; });
+  const equipesU12 = equipes.filter(function (e) { return cleCat(e.categorie) === '12'; });
+  const cible = function (liste) {
+    return liste.filter(function (e) { return String(e.nom_equipe || '').trim().toUpperCase() === 'RACING 92-1'; }).length === 1;
+  };
+  const structureEquipes = equipesU10.length >= 2 && equipesU12.length >= 2 &&
+    equipesU10.length + equipesU12.length === equipes.length && cible(equipesU10) && cible(equipesU12);
   const boutonMatin = document.getElementById('bouton-simuler-scores-matin');
   const boutonAprem = document.getElementById('bouton-simuler-scores-apresmidi');
   if (boutonMatin) {
-    boutonMatin.disabled = !(structureEquipes && matin.length === 36);
+    boutonMatin.disabled = !(structureEquipes && matin.length > 0);
     boutonMatin.title = boutonMatin.disabled
-      ? 'Disponible avec 12 équipes U10, 12 équipes U12 et les 36 matchs du matin.' : '';
+      ? 'Disponible avec des équipes U10 et U12 seulement (RACING 92-1 dans chacune) et les matchs du matin générés.' : '';
   }
   if (boutonAprem) {
     boutonAprem.disabled = !(structureEquipes && aprem.length > 0);
     boutonAprem.title = boutonAprem.disabled
-      ? 'Disponible avec 12 équipes U10, 12 équipes U12 et un classement croisé ou croisé diagonal généré.' : '';
+      ? 'Disponible avec des équipes U10 et U12 seulement et un classement de l’après-midi généré.' : '';
   }
 }
 

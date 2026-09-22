@@ -360,6 +360,7 @@ var ACTIONS_AUTORISATION_CROCHET = {
   supprimerClubInvite:           'A.4, B.3',
   enregistrerCategoriesEngagees: 'A.4 équipes créées ou retirées',
   creerEquipesClub:              'A.4',
+  creerJeuDemoRacing:            'A.4 clubs, équipes et participants, B.3 éducateurs (jeu de démonstration)',
   ajouterEquipe:                 'A.4 nombre d\'équipes et participants, B.2',
   modifierEquipe:                'A.4',
   supprimerEquipe:               'A.4',
@@ -895,16 +896,55 @@ var PDF_FORMAT_SPORTIF = {
  *  (backend, session 27). ANTI-DOUBLE-COMPTE : les équipes créées par une réponse d'invitation
  *  (`source` = 'auto') sont écartées, leurs effectifs étant déjà dans les totaux de leur club.
  *  Une équipe sans `source` est traitée comme manuelle (cas prudent : aucun club derrière elle). */
-function effectifsEquipesManuellesAut(equipes) {
+function effectifsEquipesManuellesAut(equipes, couvertes) {
   var joueurs = null, educateurs = null;
   (equipes || []).forEach(function (e) {
     if (String((e && e.source) || '').trim().toLowerCase() === 'auto') return;
+    if (couvertes && e && couvertes[String(e.id_equipe)] === true) return;   // déjà dans le total de son club
     var j = parseInt(String((e && e.nb_joueurs) == null ? '' : e.nb_joueurs).trim(), 10);
     var ed = parseInt(String((e && e.nb_educateurs) == null ? '' : e.nb_educateurs).trim(), 10);
     if (isFinite(j) && j >= 0) joueurs = (joueurs || 0) + j;
     if (isFinite(ed) && ed >= 0) educateurs = (educateurs || 0) + ed;
   });
   return { joueurs: joueurs, educateurs: educateurs };
+}
+
+/** ⭐ Une équipe logique, UN compte — miroir de equipesCouvertesParClubs (backend, lot « Inviter un club », 2ᵉ passage).
+ *  Une équipe saisie à la main au nom d'un club ACCEPTÉ (« CLUB » / « CLUB-N », collisions exclues) dont le rang tient
+ *  dans la déclaration du club pour sa catégorie est déjà comptée par le total de ce club. PUR.
+ *  @return {Object} { id_equipe: true } */
+function equipesCouvertesAut(clubs, equipes) {
+  var couvertes = {};
+  var plat = function (s) { return String(s == null ? '' : s).normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase(); };
+  var noms = (clubs || []).map(function (c) { return String((c && c.club_nom) || '').trim(); }).filter(Boolean);
+  var entier = function (v) { var n = parseInt(String(v == null ? '' : v).trim(), 10); return isFinite(n) && n >= 0 ? n : null; };
+  (clubs || []).forEach(function (c) {
+    var accepte = c && (plat(c.statut) === 'accepte' || plat(c.statut) === 'confirme');
+    if (!accepte || (entier(c.nb_joueurs_total) == null && entier(c.nb_educateurs_total) == null)) return;
+    var nomClub = String(c.club_nom || '').trim();
+    var autres = noms.filter(function (n) { return plat(n) !== plat(nomClub); });
+    var places = {}, detail = null, nb = {};
+    try { detail = JSON.parse(String(c.detail_effectifs || '')); } catch (e) { detail = null; }
+    if (detail && typeof detail === 'object') {
+      Object.keys(detail).forEach(function (cat) { if (Array.isArray(detail[cat])) places[cat] = detail[cat].length; });
+    } else {
+      try { nb = JSON.parse(String(c.nb_equipes_par_categorie || '{}')) || {}; } catch (e2) { nb = {}; }
+      Object.keys(nb).forEach(function (cat) { var n = parseInt(nb[cat], 10); if (isFinite(n) && n > 0) places[cat] = n; });
+    }
+    var prises = {};
+    (equipes || []).forEach(function (e) {
+      if (!e || String(e.source || '').trim().toLowerCase() === 'auto') return;
+      var ne = String(e.nom_equipe || '').trim();
+      if (autres.some(function (a) { return plat(a) === plat(ne); })) return;
+      var rang = ne === nomClub ? 0 : (ne.indexOf(nomClub + '-') === 0 && /^\d+$/.test(ne.slice(nomClub.length + 1))
+        ? parseInt(ne.slice(nomClub.length + 1), 10) - 1 : null);
+      var cat = String(e.categorie || '').trim();
+      if (rang == null || rang < 0 || !(rang < (places[cat] || 0)) || prises[cat + '|' + rang]) return;
+      prises[cat + '|' + rang] = true;
+      couvertes[String(e.id_equipe)] = true;
+    });
+  });
+  return couvertes;
 }
 
 /** Total des ÉDUCATEURS (B.3) — miroir de totalEducateursAutorisation (backend, session 26) :
@@ -1399,7 +1439,7 @@ async function onTelechargerPdfAutorisation() {
     // Effectifs déclarés ÉQUIPE PAR ÉQUIPE sur les équipes saisies à la main (session 27) —
     // miroir de effectifsEquipesManuelles (backend) : on écarte les équipes 'auto', déjà
     // couvertes par les totaux de leur club, sinon elles seraient comptées deux fois.
-    const effEq = effectifsEquipesManuellesAut(eqs);
+    const effEq = effectifsEquipesManuellesAut(eqs, equipesCouvertesAut(clubs, eqs));
     if (effEq.joueurs != null) nbParticipants += effEq.joueurs;
     if (effEq.educateurs != null) nbEducateurs += effEq.educateurs;
     const setClubs = {};

@@ -1,6 +1,19 @@
 #!/usr/bin/env node
 'use strict';
 
+/* ============================================================================
+ *  ÉCRAN « ÉQUIPES » ET JEU DE DÉMONSTRATION (lot « Inviter un club », 21 septembre 2026)
+ * ============================================================================
+ *  Le jeu de démonstration a quitté l'écran « Équipes » : il se crée depuis « Inviter un club » (onglet « Clubs
+ *  invités ») et le serveur en est la seule source (JEU_DEMO_RACING). Ce que ce fichier garde :
+ *    · l'écran « Équipes » n'a plus AUCUNE implémentation du jeu (ni données, ni appel serveur) ;
+ *    · l'ancien nom `onAjouterEquipesDemo` (qu'un admin.js resté en cache branche encore) DÉLÈGUE au nouveau bouton,
+ *      ou le dit quand la page est incomplète — sans rien envoyer ;
+ *    · `appliquerEquipesRelues` applique la liste relue par le serveur comme une lecture ciblée réussie (même registre
+ *      de fraîcheur), sans refermer une édition en cours.
+ *  Le parcours complet (vrais modules contre le vrai Code.gs) : tests/ecran-invitation-surface.test.js.
+ * ============================================================================ */
+
 const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
@@ -9,120 +22,77 @@ const assert = require('node:assert/strict');
 const racine = path.join(__dirname, '..');
 const lire = rel => fs.readFileSync(path.join(racine, rel), 'utf8');
 let controles = 0;
-function egal(recu, attendu, message) {
-  const normalise = valeur => (valeur && typeof valeur === 'object')
-    ? JSON.parse(JSON.stringify(valeur)) : valeur;
-  assert.deepStrictEqual(normalise(recu), normalise(attendu), message);
-  controles++;
-}
+function egal(recu, attendu, message) { assert.deepStrictEqual(recu, attendu, message); controles++; }
 function vrai(valeur, message) { assert.ok(valeur, message); controles++; }
 
+const src = lire('js/admin-equipes.js');
+const sansCommentaires = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/[^\n]*/g, '$1');
+vrai(!/ecrireAdmin\('(chargerClubsDemoRacing|creerJeuDemoRacing)'/.test(src), 'l’écran Équipes n’appelle plus le serveur pour la démonstration');
+vrai(!/EQUIPES_DEMO_RACING|preparerAjoutEquipesDemo|CLAMART-2|VERSAILLES/.test(sansCommentaires), 'aucune donnée du jeu dans l’écran Équipes');
+
+const html = lire('admin.html');
+const blocEquipes = html.slice(html.indexOf('id="bloc-equipes"'), html.indexOf('</section>', html.indexOf('id="bloc-equipes"')));
+const blocClubs = html.slice(html.indexOf('id="bloc-clubs-invites"'), html.indexOf('</section>', html.indexOf('id="bloc-clubs-invites"')));
+vrai(blocEquipes.indexOf('bouton-charger-equipes-demo') === -1 && blocClubs.indexOf('id="bouton-charger-equipes-demo"') !== -1,
+  'le bouton du jeu est dans « Clubs invités », plus dans « Équipes »');
+vrai(blocClubs.indexOf('Démo — Créer le jeu de démonstration') !== -1 && html.indexOf('Préparer le suivi des équipes présentes') === -1,
+  'le libellé annonce la création du jeu, l’ancien libellé a disparu');
+
 const elements = {
-  'bouton-charger-equipes-demo': { disabled: false, textContent: '' },
-  'bouton-ajouter': { disabled: false, textContent: '' },
+  'bouton-ajouter': { disabled: false },
   'message-equipe': { textContent: '', type: '' },
+  'message-jeu-demo': { textContent: '', type: '' },
   'reprise-equipes': { hidden: true },
   'liste-equipes': { innerHTML: '' }
 };
-let appels = [];
-let confirmations = [];
-let confirmation = true;
-let rafraichissementsClubs = 0;
-let ecrireImpl = async function (action, payload) {
-  return { ok: true, equipe: Object.assign({ id_equipe: 'E' + appels.length, source: 'manuel' }, payload) };
-};
-
+let editionOuverte = null;
+let rendus = 0, tableaux = 0, etatsClubs = 0;
 const contexte = vm.createContext({
   console,
   document: {
     getElementById(id) { return elements[id] || null; },
-    querySelector() { return null; }
+    querySelector(sel) { return sel === '#liste-equipes .equipe-item.en-edition' ? editionOuverte : null; }
   },
-  configCourante: {
-    categories: [{ categorie: 'U10', presente: 'oui' }, { categorie: 'U12', presente: 'oui' }]
-  },
+  configCourante: { categories: [{ categorie: 'U10', presente: 'oui' }] },
   equipesCourantes: [],
-  estPresente: cat => String(cat && cat.presente || 'oui').toLowerCase() !== 'non',
-  echapper: valeur => String(valeur == null ? '' : valeur),
+  estPresente: () => true,
+  echapper: v => String(v == null ? '' : v),
   svgIcone: () => '',
-  comparerCategorie: (a, b) => String(a).localeCompare(String(b), 'fr'),
   afficherMessage: (zone, texte, type) => { zone.textContent = texte; zone.type = type; },
-  majTableauBord() {},
-  async apiGet() { return contexte.equipesCourantes.slice(); },
-  async dialogConfirmer(texte, options) {
-    confirmations.push({ texte, options });
-    return confirmation;
-  },
-  async ecrireAdmin(action, payload, options) {
-    appels.push({ action, payload: Object.assign({}, payload), options });
-    return ecrireImpl(action, payload, options);
-  },
-  async rafraichirRessourceAdmin(ressource) {
-    if (ressource === 'clubsInvites') rafraichissementsClubs++;
-    return true;
-  },
-  estRefusCle: () => false
+  majTableauBord() { tableaux++; },
+  actualiserEtatClubsDepuisEquipes() { etatsClubs++; }
 });
-vm.runInContext(lire('js/admin-equipes.js'), contexte, { filename: 'js/admin-equipes.js' });
-
-const selection = [
-  { id_equipe: 'E1', nom_equipe: 'CLUB CHOISI-1', categorie: 'U8', nb_joueurs: '8', nb_educateurs: '2' },
-  { id_equipe: 'E2', nom_equipe: 'CLUB CHOISI-2', categorie: 'U8', nb_joueurs: '9', nb_educateurs: '1' }
-];
-const html = lire('admin.html');
-vrai(!lire('js/admin-equipes.js').includes('EQUIPES_DEMO_RACING'), 'aucun lot fixe d’équipes dans le bouton');
-vrai(html.includes('Démo — Préparer le suivi des équipes présentes'), 'le libellé annonce la source réelle');
-vrai(!html.includes('Ajouter les 21 équipes préparées'), 'aucune promesse de créer un lot fixe');
+vm.runInContext(src, contexte, { filename: 'js/admin-equipes.js' });
+contexte.afficherEquipes = function () { rendus++; };
+vm.runInContext('afficherEquipes = globalThis.afficherEquipes;', contexte);
 
 (async function () {
-  contexte.equipesCourantes = selection.map(e => ({...e}));
-  contexte.configCourante.categories = [{categorie:'U8', presente:'oui'}];
-  ecrireImpl = async (action, payload) => ({ok:true, equipes:payload.equipes.length, clubs:4});
-  const avant = JSON.stringify(contexte.equipesCourantes);
+  // Délégation : l'ancien nom déclenche le nouveau bouton, rien d'autre.
+  let delegations = 0;
+  contexte.onCreerJeuDemo = async () => { delegations++; return 'nouveau'; };
+  egal(await contexte.onAjouterEquipesDemo(), 'nouveau', 'l’ancien nom délègue au bouton de « Inviter un club »');
+  egal(delegations, 1, 'une seule délégation');
+  delete contexte.onCreerJeuDemo;
+  vm.runInContext('delete globalThis.onCreerJeuDemo;', contexte);
   await contexte.onAjouterEquipesDemo();
-  egal(appels.length, 1, 'un seul appel prépare les clubs');
-  egal(appels[0].action, 'chargerClubsDemoRacing', 'aucun appel ajouterEquipe');
-  egal(appels[0].payload.equipes, selection, 'la liste affichée exacte est transmise au serveur');
-  egal(JSON.stringify(contexte.equipesCourantes), avant, 'la liste des équipes est inchangée');
-  egal(appels[0].options.delaiMs, 45000, 'l’appel reste borné');
-  vrai(confirmations[0].texte.includes('2 équipe(s)') && confirmations[0].texte.includes('Aucune équipe'),
-    'la confirmation donne le nombre réellement choisi');
-  vrai(elements['message-equipe'].textContent.includes('2 équipe(s) présentes'), 'le résultat est dynamique');
-  egal(rafraichissementsClubs, 1, 'les deux écrans sont relus');
-  appels = [];
-  await contexte.onAjouterEquipesDemo();
-  egal(appels.length, 1, 'un second clic ne crée aucune équipe');
-  contexte.equipesCourantes = [selection[1]];
-  appels = [];
-  await contexte.onAjouterEquipesDemo();
-  egal(appels[0].payload.equipes, [selection[1]], 'une équipe retirée de la liste ne réapparaît pas dans le lot');
-  contexte.equipesCourantes.push({id_equipe:'E3',nom_equipe:'AUTRE CLUB',categorie:'U14',nb_joueurs:'',nb_educateurs:''});
-  appels = [];
-  await contexte.onAjouterEquipesDemo();
-  egal(appels[0].payload.equipes.length, 2, 'une nouvelle équipe affichée est prise en compte sans liste prédéfinie');
-  egal(appels[0].payload.equipes[1].nb_joueurs, '', 'un effectif inconnu n’est pas inventé');
-  contexte.equipesCourantes = [];
-  appels = [];
-  await contexte.onAjouterEquipesDemo();
-  egal(appels.length, 0, 'une liste vide ne génère ni équipes ni clubs');
-  contexte.equipesCourantes = selection;
-  confirmation = false;
-  await contexte.onAjouterEquipesDemo();
-  egal(appels.length, 0, 'annuler ne déclenche aucune écriture');
-  confirmation = true;
-  contexte.rafraichirRessourceAdmin = async () => false;
-  await contexte.onAjouterEquipesDemo();
-  vrai(elements['message-equipe'].type === 'ko' && elements['message-equipe'].textContent.includes('actualisée'),
-    'une relecture échouée ne produit pas de faux succès');
-  contexte.rafraichirRessourceAdmin = async () => true;
-  ecrireImpl = async () => { throw new Error('La liste des équipes a changé.'); };
-  await contexte.onAjouterEquipesDemo();
-  vrai(elements['message-equipe'].type === 'ko' && elements['message-equipe'].textContent.includes('a changé'),
-    'un écran périmé signalé par le serveur reste une erreur visible');
-  ecrireImpl = async () => ({ok:true, equipes:99});
-  await contexte.onAjouterEquipesDemo();
-  vrai(elements['message-equipe'].type === 'ko', 'un nombre non confirmé ne produit pas de succès');
-  egal(elements['bouton-charger-equipes-demo'].textContent, 'Démo — Préparer le suivi des équipes présentes',
-    'le bouton redevient disponible avec le bon libellé');
+  vrai(elements['message-jeu-demo'].type === 'ko' && /recharge-la/.test(elements['message-jeu-demo'].textContent) &&
+    /Rien n’a été envoyé/.test(elements['message-jeu-demo'].textContent), 'page incomplète (cache mêlé) : c’est dit, rien n’est envoyé');
+
+  // Disponibilité : seul le bouton « Ajouter » de l'écran dépend de l'état des équipes.
+  contexte.majDisponibiliteAjout();
+  egal(elements['bouton-ajouter'].disabled, false, 'le bouton Ajouter reste gouverné par l’écran');
+
+  // Liste relue par le serveur : appliquée comme une lecture ciblée réussie.
+  const jetonAvant = vm.runInContext('lectureEquipesJeton', contexte);
+  const liste = [{ id_equipe: 'E01', nom_equipe: 'CLAMART-1', categorie: 'U10', nb_joueurs: '10', nb_educateurs: '1', source: 'auto' }];
+  vrai(contexte.appliquerEquipesRelues(liste) === true, 'liste relue appliquée et affichée');
+  egal(vm.runInContext('lectureEquipesJeton', contexte), jetonAvant + 1, 'un jeton neuf : toute lecture encore en vol sera jetée');
+  egal(vm.runInContext('equipesCourantes', contexte), liste, 'la mémoire de l’écran est la liste du serveur');
+  vrai(rendus === 1 && tableaux === 1 && etatsClubs === 1, 'liste, tableau de bord et états des clubs repeints une fois');
+  editionOuverte = { getAttribute: () => 'E01' };
+  vrai(contexte.appliquerEquipesRelues(liste.concat([{ id_equipe: 'E02', nom_equipe: 'MEUDON', categorie: 'U10' }])) === false,
+    'une édition ouverte n’est pas refermée : la liste attendra le prochain rendu');
+  egal(rendus, 1, 'aucun rendu pendant l’édition');
+  egal(vm.runInContext('equipesCourantes.length', contexte), 2, 'la mémoire suit quand même le serveur');
   console.log('OK — ' + controles + ' contrôles passés.');
 })().catch(err => { console.error(err); process.exit(1); });

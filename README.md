@@ -131,6 +131,21 @@ Une vérification appuie cette phrase plutôt que de l'affirmer : la refonte n'a
 **aucune action backend**. Les 28 actions appelées par `js/` sont exactement celles de `main`
 (relevé des appels `apiGet` / `apiPost` / `apiPostProtege` sur les deux branches).
 
+⚠️ **Exception depuis le lot « Inviter un club » (21 septembre 2026, local, non publié).** Le bouton du jeu de
+démonstration a quitté l'écran « Équipes » pour l'onglet « Clubs invités » et appelle désormais
+`creerJeuDemoRacing` au lieu de `chargerClubsDemoRacing` (une action remplacée, aucune autre). Le backend doit
+donc être publié **avant** ce frontend : sinon le bouton répond « le serveur n'a pas encore la version… » et ne
+crée rien. À l'inverse, un ancien frontend resté en cache reçoit du nouveau backend un refus qui indique le
+nouveau bouton, sans rien écrire.
+Depuis le 4ᵉ passage du même lot, les gestes de la liste des clubs (ajouter, modifier, retirer un club, ajouter ses équipes,
+envoi groupé) demandent au serveur la liste relue dans leur réponse (`renvoyer_etat`) au lieu de la relire ensuite. Un
+backend d'avant ignore la demande et répond comme avant : le frontend relit alors la liste, comme avant. L'ordre de
+publication ci-dessus ne change pas.
+Depuis le 5ᵉ passage, chaque envoi d'e-mail de l'écran (invitation, relance, envoi groupé, dossier final, relance de paiement,
+confirmation) porte l'identifiant du geste (`id_envoi`) et, après une issue incertaine ou un refus « déjà parti » confirmé, `confirmer_renvoi` :
+le nouveau backend n'envoie plus aucun e-mail sous son verrou et ne double jamais un envoi. Un backend d'avant ignore ces champs et envoie
+comme avant ; un frontend d'avant garde les protections du serveur (un second envoi trop proche est refusé et le message le dit).
+
 Le seul point d'attention à la publication est le **cache du navigateur**. Chaque CSS et chaque JS
 modifié par cette livraison est appelé avec une version unique, `?v=refonte-ciel-verre-20260920`,
 pour qu'un visiteur déjà venu ne garde pas un ancien fichier. `tests/cache-busting-refonte.test.js`

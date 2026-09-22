@@ -37,13 +37,17 @@ verifier('l’initialisation branche la zone de fichiers', /brancherPiecesJointe
 verifier('les limites client sont présentes', /DOSSIER_PJ_MAX_FICHIERS = 5/.test(invitations) && /DOSSIER_PJ_MAX_OCTETS_TOTAL = 10 \* 1024 \* 1024/.test(invitations));
 verifier('le contenu est réellement lu avant envoi', /new FileReader\(\)/.test(invitations) && /readAsDataURL\(fichier\)/.test(invitations));
 verifier('le glisser-déposer et le retrait individuel sont gérés', /addEventListener\('drop'/.test(invitations) && /piece-jointe-retirer/.test(invitations));
-verifier('la sélection seule ne déclenche aucun POST', !/async function ajouterPiecesJointesDossier[\s\S]*?ecrireAdmin\(/.test(
+verifier('la sélection seule ne déclenche aucun POST', !/async function ajouterPiecesJointesDossier[\s\S]*?ecrire(Admin|Invitation|EnvoiEmail)\(/.test(
   invitations.slice(invitations.indexOf('async function ajouterPiecesJointesDossier'), invitations.indexOf('function piecesJointesDossierPourEnvoi'))
 ));
 verifier('la fenêtre d’envoi récapitule les fichiers', /const resumePieces = piecesAEnvoyer\.length/.test(invitations));
-verifier('les pièces sont transmises uniquement avec envoyerDossierEmail', /ecrireAdmin\('envoyerDossierEmail',[\s\S]*?pieces_jointes: piecesAEnvoyer/.test(invitations));
-verifier('l’envoi individuel transmet les pièces de l’invitation', /ecrireAdmin\('envoyerInvitationClub',[\s\S]*?pieces_jointes: piecesAEnvoyer/.test(invitations));
-verifier('l’envoi groupé transmet la même sélection', /ecrireAdmin\('envoyerInvitationsGroupe',[\s\S]*?pieces_jointes: piecesAEnvoyer/.test(invitations));
+// Chaque motif est BORNÉ à son propre appel : sans borne, `[\s\S]*?` débordait jusqu'aux pièces d'un appel suivant (un appel
+// sans pièces jointes passait quand même — constaté sur l'invitation individuelle et l'envoi groupé).
+// 5ᵉ passage : les e-mails passent par `ecrireEnvoiEmail` (identifiant du geste), qui appelle ecrireInvitation.
+const transmetPieces = (action) => new RegExp("ecrire(?:Admin|Invitation|EnvoiEmail)\\('" + action + "',(?:(?!ecrire(?:Admin|Invitation|EnvoiEmail)\\()[\\s\\S])*?pieces_jointes: piecesAEnvoyer").test(invitations);
+verifier('les pièces sont transmises uniquement avec envoyerDossierEmail', transmetPieces('envoyerDossierEmail'));
+verifier('l’envoi individuel transmet les pièces de l’invitation', transmetPieces('envoyerInvitationClub'));
+verifier('l’envoi groupé transmet la même sélection', transmetPieces('envoyerInvitationsGroupe'));
 verifier('la présentation de la liste et du récapitulatif existe', /\.piece-jointe-dossier/.test(styles) && /\.eml-pieces-jointes/.test(styles));
 
 if (echecs) {

@@ -17,6 +17,6 @@ front.majDossier=()=>{};front.majApercuInvitation=()=>{};front.afficherClubsInvi
  forms['form-surplace'].repas_sur_place_montant.value='11,25';forms['form-surplace'].gouter_fin_tournoi_montant.value='4,75';await front.onEnregistrerSurPlace();
  assert.equal(front.suiviClubCommande(front.clubsInvitesCourants[0]).total,210.75,'le suivi reçoit les nouveaux prix repas et goûter sans bouton Démo ni rechargement');assert.equal(renders,3);
  assert.deepEqual(JSON.stringify(front.clubsInvitesCourants),JSON.stringify(clubs),'affichage et stockage concordent');
- const before=JSON.stringify(front.clubsInvitesCourants);front.ecrireAdmin=async()=>{throw Error('réseau');};await assert.rejects(()=>front.onEnregistrerModalites(),/réseau/);assert.equal(JSON.stringify(front.clubsInvitesCourants),before,'aucun prix non sauvegardé ne devient un montant de suivi');assert.equal(renders,3);
+ const before=JSON.stringify(front.clubsInvitesCourants);front.ecrireAdmin=async()=>{throw Error('réseau');};const dejaDits=messages.length;await front.onEnregistrerModalites();assert(/n’est pas confirmé/.test(messages.slice(dejaDits).join(' ')),'réseau coupé : enregistrement dit non confirmé, jamais renvoyé');assert.equal(JSON.stringify(front.clubsInvitesCourants),before,'aucun prix non sauvegardé ne devient un montant de suivi');assert.equal(renders,3);
  console.log('OK — 9 contrôles de bout en bout : sauvegarde des formulaires → serveur → suivi affiché.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

@@ -717,6 +717,24 @@ function rafraichirRessourceAdmin(id, opt) {
   return forcee;
 }
 
+/**
+ * ⭐ UNE ÉCRITURE QUI RENVOIE LA RESSOURCE RELUE SOUS LE VERROU la pose ICI, à la place d'une relecture
+ * (lot « Inviter un club » : le jeu de démonstration renvoie la liste des clubs). Elle passe par la FILE de la
+ * ressource : une lecture partie avant l'écriture se termine d'abord, puis la réponse de l'écriture — plus
+ * récente — la recouvre. La ressource est alors « chargée », sauf si une lecture plus récente est en vol :
+ * c'est elle qui conclura.
+ * @param {string} id
+ * @param {function(): void} appliquer  remplit la mémoire et repeint (ne lit rien)
+ * @return {Promise<boolean>}
+ */
+function appliquerRessourceAdmin(id, appliquer) {
+  const etat = etatRessourceAdmin(id);
+  return enfilerLectureAdmin(id, function () { appliquer(); return true; }).then(function () {
+    if (!etat.enVol) marquerRessourceAdmin(id, true);
+    return true;
+  }, function () { return false; });
+}
+
 /** Garantit plusieurs ressources EN PARALLÈLE (elles sont indépendantes). */
 function assurerRessourcesAdmin(ids) {
   return Promise.all((ids || []).map(assurerRessourceAdmin));
@@ -1006,7 +1024,13 @@ function brancherEcouteursAdmin() {
 
   // On branche le formulaire d'ajout et les boutons de suppression (équipes).
   ecouter('form-equipe', 'submit', onAjouterEquipe);
-  ecouter('bouton-charger-equipes-demo', 'click', onAjouterEquipesDemo);
+  // Jeu de démonstration — bouton de l'onglet « Clubs invités » (onCreerJeuDemo, admin-invitations.js). ⭐ Le nom
+  // est résolu AU CLIC : un module resté en cache sans ce gestionnaire ne casse pas le branchement du reste de la page.
+  ecouter('bouton-charger-equipes-demo', 'click', function () {
+    if (typeof onCreerJeuDemo === 'function') return onCreerJeuDemo();
+    if (typeof onAjouterEquipesDemo === 'function') return onAjouterEquipesDemo();
+    return undefined;
+  });
   ecouter('liste-equipes', 'click', onClicListe);
   // Reprise CIBLÉE de la liste des équipes (CORR-BLOCAGE-LECTURES-ADMIN-DR) : relit la seule
   // liste après une actualisation ratée, sans recharger la page ni réémettre d'écriture.
@@ -1125,6 +1149,8 @@ function brancherEcouteursAdmin() {
     zoneDepot: 'zone-depot-parking',
     traiter: traiterFichierParking
   });
+  // … et atteignable au clavier, comme celle de l'affiche (Tab, puis Entrée ou Espace).
+  if (typeof rendreZoneDepotAccessible === 'function') rendreZoneDepotAccessible('zone-depot-parking', 'Choisir la photo du parking (image)');
   ecouter('bouton-retirer-parking', 'click', onRetirerPhotoParking);
 
   // Carte « Encadrement & assurance » : bouton dédié.
@@ -1171,6 +1197,11 @@ function brancherEcouteursAdmin() {
   ecouter('form-club-invite', 'submit', onAjouterClubInvite);
   ecouter('liste-clubs-invites', 'change', onChangerStatutClub);
   ecouter('liste-clubs-invites', 'click', onClicClubsInvites);
+  // Clavier : Entrée / Espace sur le badge « ⚠️ Écart », Échap et Entrée dans une ligne en édition. Nom résolu à la
+  // frappe (un module resté en cache sans ce gestionnaire ne casse pas le branchement du reste).
+  ecouter('liste-clubs-invites', 'keydown', function (e) {
+    return typeof onClavierClubsInvites === 'function' ? onClavierClubsInvites(e) : undefined;
+  });
 
   // Champ date : ouvre le calendrier dès qu'on clique n'importe où sur la barre
   // (par défaut, seul le clic sur la petite icône l'ouvre). showPicker() peut ne pas
@@ -1288,10 +1319,31 @@ async function rechargerEtRendre(opt) {
 async function rafraichirAdmin() {
   const bouton = document.getElementById('bouton-rafraichir-admin');
   const texte = bouton.textContent;
+  if (bouton.disabled) return;
   bouton.disabled = true;
   bouton.textContent = '⏳ …';
   try {
+    // ⭐ Lot « Inviter un club » (2ᵉ passage) — « Rafraîchir » relit AUSSI la liste des clubs invités dès qu'un écran
+    //   l'a chargée (Inviter, Suivi, Autorisation) : elle n'est pas dans getAll. En parallèle, par le registre (une
+    //   lecture fraîche, jamais une lecture commencée avant). ⛔ Jamais chargée : rien à relire, l'arrivée sur l'écran
+    //   s'en chargera — l'ouverture reste à trois appels.
+    const etatClubs = typeof etatRessourceAdmin === 'function' ? etatRessourceAdmin('clubsInvites') : null;
+    const clubs = (etatClubs && (etatClubs.chargee || etatClubs.enVol) && typeof rafraichirRessourceAdmin === 'function')
+      ? rafraichirRessourceAdmin('clubsInvites') : Promise.resolve(null);
     await rechargerEtRendre({ equipes: true, publication: true, heure: true });
+    // Les cartes « Invitation initiale » et « Dossier final » suivent la configuration relue — une carte qui porte un
+    // brouillon, ou le focus, n'est pas réécrite (seulement avec le module qui sait le garantir).
+    if (typeof remplirCarteSansBrouillon === 'function') {
+      if (typeof majInvitation === 'function') majInvitation();
+      if (typeof majReponse === 'function') majReponse();
+      if (typeof majSurPlace === 'function') majSurPlace();
+      if (typeof majContactsSecurite === 'function') majContactsSecurite();
+      if (typeof majApercuInvitation === 'function') majApercuInvitation();
+    }
+    if (await clubs === false) {
+      const repereClubs = document.getElementById('maj-admin');
+      if (repereClubs) repereClubs.textContent += ' — ⚠️ clubs invités non actualisés.';
+    }
     // Le compteur seul ne suffit pas : rendre aussi les cartes sans écraser un brouillon.
     if (typeof actualiserCartesCategoriesSansBrouillon === 'function' &&
         !actualiserCartesCategoriesSansBrouillon()) {
@@ -1424,6 +1476,18 @@ function rechargerLaPage() {
   }
 }
 
+/* ⭐ Lot « Inviter un club », 4ᵉ passage — la réinitialisation est BORNÉE. Sans délai client, une réponse muette laissait
+   « Réinitialisation… » pour toujours ; une réponse perdue (404 après exécution) affichait « erreur » sur un classeur déjà
+   vidé, et l'ancienne édition restait à l'écran. 3 min : près de trois fois l'estimation haute du modèle de coût (64,6 s),
+   sous la limite d'une exécution Apps Script (6 min). ⛔ Geste destructif, non rejouable : JAMAIS renvoyé. Issue inconnue
+   (délai, réseau, HTTP) : l'écran oublie ce qui serait faux et relit le serveur exactement comme après un succès ; le
+   message dit que rien n'est confirmé, puis ce que la relecture a trouvé. Refus lisible du serveur : rien n'a été effacé. */
+const DELAI_REINITIALISATION_MS = 180000;
+function reinitialisationIncertaine(erreur) {
+  if (typeof issueIncertaine === 'function') return issueIncertaine(erreur);
+  return !(erreur && erreur.reponse && typeof erreur.reponse === 'object') && !/^Action annulée/.test(String((erreur && erreur.message) || ''));
+}
+
 async function onReinitialiser() {
   const message = document.getElementById('message-reinitialisation');
   const bouton = document.getElementById('bouton-reinitialiser');
@@ -1468,7 +1532,12 @@ async function onReinitialiser() {
   afficherMessage(message, 'Réinitialisation en cours…', 'ok');
 
   try {
-    const res = await ecrireAdmin('reinitialiserTournoi', {});
+    let res = null, incertaine = null;
+    try { res = await ecrireAdmin('reinitialiserTournoi', {}, { delaiMs: DELAI_REINITIALISATION_MS }); }
+    catch (erreur) {
+      if (!reinitialisationIncertaine(erreur)) throw erreur;      // refus lisible : rien n'a été effacé
+      incertaine = erreur;                                        // ⛔ jamais renvoyée : l'écran relit le serveur
+    }
 
     // ⭐ M1-B2 / B2-0 — LES CLUBS INVITÉS D'ABORD, et EN OUBLIANT AVANT DE RELIRE.
     //
@@ -1557,6 +1626,21 @@ async function onReinitialiser() {
     // Après le rechargement (comme avant le refactor) : en cas d'erreur réseau,
     // l'affichage — pistes d'arbitrage comprises — reste intact.
     document.getElementById('arbitrages').innerHTML = '';
+
+    if (incertaine) {
+      // La relecture dit ce qui s'est passé : un tournoi vidé (ni catégorie, ni équipe) → elle a eu lieu.
+      const faite = !((configCourante && configCourante.categories) || []).length &&
+        !((typeof equipesCourantes !== 'undefined' && equipesCourantes) || []).length;
+      const cause = incertaine.name === 'AbortError' ? 'délai de ' + Math.round(DELAI_REINITIALISATION_MS / 1000) + ' s dépassé'
+        : String(incertaine.message || 'erreur réseau').replace(/\.$/, '');
+      afficherMessage(message, '⚠️ Réponse du serveur non reçue (' + cause + ') : la réinitialisation n’est pas confirmée. ' +
+        'Rien n’est renvoyé automatiquement. ' + (faite
+        ? 'Relecture faite : le tournoi est vide — elle a bien eu lieu.'
+        : 'Relecture faite : le tournoi est toujours là — elle n’a pas eu lieu ; tu peux recommencer.') +
+        ((clubsRelus && ecranComplet) ? '' : ' ⚠️ L\'écran n\'a pas pu être entièrement rafraîchi (réseau) : recharge la page.'),
+        faite ? 'ok' : 'ko');
+      return;
+    }
 
     const nbC = (res && res.nb_categories != null) ? res.nb_categories : '?';
     const nbE = (res && res.nb_equipes != null) ? res.nb_equipes : '?';

@@ -18,19 +18,6 @@
    ÉQUIPES
    -------------------------------------------------------------------------- */
 
-/** La liste affichée est la seule sélection de démonstration. Aucun nom ni effectif
- * n'est ajouté : le serveur relit cette même liste avant de préparer les clubs. */
-function preparerAjoutEquipesDemo() {
-  const equipes = (typeof equipesCourantes !== 'undefined' && equipesCourantes || []).map(function (e) {
-    const copie = {};
-    ['id_equipe', 'nom_equipe', 'categorie', 'nb_joueurs', 'nb_educateurs'].forEach(function (cle) {
-      copie[cle] = String(e[cle] == null ? '' : e[cle]).trim();
-    });
-    return copie;
-  });
-  return { equipes: equipes };
-}
-
 /**
  * Remplit la liste déroulante avec les catégories PRÉSENTES.
  * Guidage : s'il n'y a AUCUNE catégorie, on ne peut pas saisir d'équipe → on affiche une aide
@@ -409,10 +396,8 @@ function ajoutPossibleEquipes() {
  */
 function majDisponibiliteAjout() {
   const indisponible = operationEquipesEnCours() || listeEquipesIncertaine() || !ajoutPossibleEquipes();
-  ['bouton-ajouter', 'bouton-charger-equipes-demo'].forEach(function (id) {
-    const bouton = document.getElementById(id);
-    if (bouton) bouton.disabled = indisponible;
-  });
+  const bouton = document.getElementById('bouton-ajouter');
+  if (bouton) bouton.disabled = indisponible;
 }
 
 /** Montre la reprise ciblée et marque l'écran DOUTEUX. `acquis` = ce qui est enregistré et doit rester dit. */
@@ -700,47 +685,36 @@ async function onAjouterEquipe(evenement) {
   if (verifierEnArrierePlan) verifierEquipesEnArrierePlan();
 }
 
-/** Prépare uniquement le suivi des équipes déjà affichées. La liste transmise sert de
- * garde contre un écran périmé ; seuls les enregistrements relus par le serveur font foi. */
-async function onAjouterEquipesDemo() {
-  const bouton = document.getElementById('bouton-charger-equipes-demo');
-  const message = document.getElementById('message-equipe');
-  if (refuserMutationSiIncertain(message, 'La préparation de la démonstration')) return;
-  const plan = preparerAjoutEquipesDemo();
-  if (!plan.equipes.length) {
-    afficherMessage(message, 'Ajoute d’abord les équipes souhaitées dans « Équipes ». La démo ne crée aucune équipe automatiquement.', 'ko');
-    return;
-  }
-  const confirme = await dialogConfirmer(
-    'Préparer le suivi des ' + plan.equipes.length + ' équipe(s) actuellement affichée(s) ?' +
-    '\nAucune équipe ne sera ajoutée, supprimée ou remplacée.' +
-    '\nLes commandes de démonstration seront recalculées avec les tarifs enregistrés. Les refus et réponses en attente restent conservés.',
-    { ok: 'Préparer le suivi' }
-  );
-  if (!confirme) return;
-  debuterOperationEquipes();
-  try {
-    if (bouton) bouton.textContent = 'Préparation du suivi des clubs…';
-    afficherMessage(message, '⏳ Vérification des équipes présentes et préparation du suivi…', 'ok');
-    const res = await ecrireAdmin('chargerClubsDemoRacing', { equipes: plan.equipes }, { delaiMs: 45000 });
-    if (!res || Number(res.equipes) !== plan.equipes.length) {
-      afficherMessage(message, '⚠️ La préparation n’a pas confirmé la liste des équipes. Actualise les données avant de poursuivre.', 'ko');
-      return;
-    }
-    if (typeof rafraichirRessourceAdmin === 'function') {
-      const relu = await rafraichirRessourceAdmin('clubsInvites');
-      if (relu === false) {
-        afficherMessage(message, '⚠️ Les clubs ont été préparés, mais leur liste n’a pas pu être actualisée. Recharge la page pour voir le suivi à jour.', 'ko');
-        return;
-      }
-    }
-    afficherMessage(message, '✅ Suivi préparé pour les ' + res.equipes + ' équipe(s) présentes. Aucune équipe créée. Les réponses et paiements existants sont conservés.', 'ok');
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message + '\nAucune équipe n’a été créée par ce bouton.', 'ko');
-  } finally {
-    if (bouton) bouton.textContent = 'Démo — Préparer le suivi des équipes présentes';
-    terminerOperationEquipes();
-  }
+/** ⛔ PLUS DE JEU DE DÉMONSTRATION ICI (lot « Inviter un club »). Le seul point d'entrée est le bouton de l'onglet
+ *  « Clubs invités » (`onCreerJeuDemo`, admin-invitations.js), et le jeu lui-même vit côté serveur. Ce nom reste
+ *  défini pour un admin.js resté en cache qui le branche encore : il délègue, sans aucune donnée. */
+function onAjouterEquipesDemo() {
+  if (typeof onCreerJeuDemo === 'function') return onCreerJeuDemo();
+  // Cache mêlé : le module de l'écran « Inviter un club » est d'une version précédente. On le DIT, rien ne part.
+  const zone = document.getElementById('message-jeu-demo') || document.getElementById('message-equipe');
+  if (zone) afficherMessage(zone, '⚠️ Cette page est incomplète (fichiers d’une version précédente encore en cache) : ' +
+    'recharge-la pour créer le jeu de démonstration. Rien n’a été envoyé.', 'ko');
+  return undefined;
+}
+
+/**
+ * La liste des équipes RELUE PAR LE SERVEUR, reçue dans la réponse d'une écriture d'un autre écran (jeu de
+ * démonstration) : appliquée comme une lecture ciblée réussie, sans relecture. ⭐ Même registre de fraîcheur :
+ * le jeton neuf rend périmée toute lecture encore en vol, qui sera jetée à son arrivée.
+ * ⛔ Une édition ouverte dans la liste n'est pas refermée : la mémoire suit, l'affichage attend le prochain rendu
+ *   (enregistrement ou annulation de l'édition) — la saisie n'est jamais perdue.
+ * @return {boolean} true si la liste affichée est à jour
+ */
+function appliquerEquipesRelues(equipes) {
+  prendreJetonEquipes();
+  equipesCourantes = equipes;
+  const edition = document.querySelector('#liste-equipes .equipe-item.en-edition');
+  if (!edition) afficherEquipes(equipes);
+  if (!operationEquipesEnCours()) masquerRepriseEquipes();
+  majDisponibiliteAjout();
+  if (typeof actualiserEtatClubsDepuisEquipes === 'function') actualiserEtatClubsDepuisEquipes();
+  majTableauBord();
+  return !edition;
 }
 
 /**
