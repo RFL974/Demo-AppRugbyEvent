@@ -1188,7 +1188,25 @@ critere('F.5', 'js/api.js ne pose AUCUN écouteur (ni addEventListener, ni onabo
     (o.code.match(/Date\.now\(\)/g) || []).length === 1 && /url\.searchParams\.set\('_', String\(Date\.now\(\)\)\);/.test(o.code) &&
     /echeance: performance\.now\(\) \+ delaiMs/.test(o.code));
 
-critere('F.6', 'recensement : les actions GET appelées par la page sont exactement les 11 rejouables + getHistorique, toutes en littéral',
+/* ⭐ PRÉMISSE ADAPTÉE (lot « Poules & planning »), et le contrôle MORD DANS LES DEUX SENS.
+   L'égalité d'origine présumait que les 11 actions rejouables étaient TOUTES appelées. Depuis que
+   « Générer » prépare sa confirmation avec l'état déjà affiché, `getMatchs` n'est plus appelée
+   nulle part — l'égalité échouait alors qu'AUCUNE action non classée n'était apparue.
+   ⛔ Une simple INCLUSION serait insuffisante : une action GET qui DISPARAÎTRAIT par accident
+     passerait inaperçue. Le contrôle exige donc les deux directions à la fois :
+       ① aucune action appelée hors des listes classées (apparition non classée → échec) ;
+       ② toutes en littéral (un nom calculé échapperait au classement) ;
+       ③ et la liste des déclarées NON appelées est EXACTEMENT celle des retraits volontaires,
+         aujourd'hui `['getMatchs']` — une disparition inattendue la fait grossir, et le test
+         échoue.
+   ⭐ LE RETRAIT VOLONTAIRE, NOMMÉ : `getMatchs` a été retiré par le lot « Poules & planning ».
+     L'écran comptait les scores avec cette lecture avant d'ouvrir sa confirmation ; il les compte
+     désormais dans l'état qu'il affiche déjà, et c'est le SERVEUR qui tranche sous le verrou
+     (`genererPoulesEtPlanningContrat_`, refus `scores_presents` / `scores_apparus`). Remettre
+     `getMatchs` dans le code ferait échouer ce contrôle — ce qui est voulu : la lecture préalable
+     ne doit pas revenir sans décision. */
+var GET_RETIREES_VOLONTAIREMENT = ['getMatchs'];
+critere('F.6', 'recensement : TOUTE action GET appelée est classée et en littéral, et les seules classées non appelées sont les retraits volontaires (' + GET_RETIREES_VOLONTAIREMENT.join(', ') + ')',
   async () => {
     const appelees = new Set();
     let nonLitteraux = 0;
@@ -1199,9 +1217,14 @@ critere('F.6', 'recensement : les actions GET appelées par la page sont exactem
       while ((m = litteral.exec(f.src))) appelees.add(m[1]);
       nonLitteraux += (f.src.match(/\bapiGet\(\s*[^'\s)]/g) || []).length;
     });
-    return { appelees: Array.from(appelees).sort(), nonLitteraux };
+    const classees = GET_ATTENDUES.concat([GET_EXCLUE]);
+    const appeleesTri = Array.from(appelees).sort();
+    return { appelees: appeleesTri, nonLitteraux,
+      nonClassees: appeleesTri.filter((a) => classees.indexOf(a) === -1),
+      declareesNonAppelees: classees.filter((a) => appeleesTri.indexOf(a) === -1).sort() };
   },
-  (o) => json(o.appelees) === json(GET_ATTENDUES.concat([GET_EXCLUE]).sort()) && o.nonLitteraux === 0,
+  (o) => o.nonClassees.length === 0 && o.nonLitteraux === 0 &&
+         json(o.declareesNonAppelees) === json(GET_RETIREES_VOLONTAIREMENT.slice().sort()),
   (o) => json(o));
 
 /* ========================================================================== */

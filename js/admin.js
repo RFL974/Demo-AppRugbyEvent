@@ -182,7 +182,11 @@ async function ecrireAdmin(action, data, options) {
   //   garderait une lecture périmée sans le savoir. `appliquerRepartitionTerrains` (lot « Terrains »)
   //   écrit le champ « Terrains » de N catégories d'un coup : elle en fait partie.
   const changeCategories = ['enregistrerCategorie', 'supprimerCategorie',
-    'appliquerRepartitionTerrains'].indexOf(action) !== -1;
+    'appliquerRepartitionTerrains',
+    // ⭐ Lot « Poules & planning » : une piste d'arbitrage de type « catégorie » écrit la ligne
+    //   de cette catégorie (nb_poules, durée de mi-temps, terrains…). Sans cette ligne, l'écran
+    //   « Catégories » garderait une lecture périmée sans le savoir.
+    'appliquerArbitrageEtRegenerer'].indexOf(action) !== -1;
   const invalider = function () {
     if (changeCategories && typeof invaliderLecturesCategories === 'function') invaliderLecturesCategories();
   };

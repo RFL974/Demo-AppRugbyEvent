@@ -15,6 +15,144 @@
  * ============================================================================
  */
 
+
+/* ==========================================================================================
+ *  SOCLE DU LOT « POULES & PLANNING » — garde d'opération, délai borné, état relu, focus
+ * ==========================================================================================
+ *  Quatre protections, toutes appuyées sur un scénario mesuré de la campagne « AVANT ».
+ * ======================================================================================== */
+
+/* ⭐ UNE OPÉRATION À LA FOIS, FENÊTRE DE CONFIRMATION COMPRISE (protection acquise aux lots
+   « Équipes » et « Terrains »).
+   ⛔ LE DÉFAUT MESURÉ. PP-F3 : un double clic sur « Générer » ouvrait DEUX fenêtres, émettait
+     8 requêtes, prenait 2 verrous et lançait DEUX tirages complets — le second effaçant le
+     premier. PP-F4, PP-F5 et PP-R3 : même chose pour l'éditeur de poules, les scores de
+     démonstration et le recalcul des horaires.
+   ⭐ La garde se ferme AVANT la première question : le second clic ne produit rien du tout. */
+let poulesOperationEnCours = false;
+function operationPoulesEnCours() { return poulesOperationEnCours; }
+function avecOperationPoules(geste) {
+  if (poulesOperationEnCours) return Promise.resolve(false);
+  /* ⭐ LE FOCUS EST MÉMORISÉ AVANT que la garde ne ferme les boutons, et rendu APRÈS leur
+     réouverture. ⛔ Sans cela, la garde se retournait contre l'accessibilité : elle désactivait
+     le bouton déclencheur, et le focus ne pouvait plus lui revenir à la fermeture de la
+     fenêtre de confirmation (un élément désactivé ne reçoit pas le focus). */
+  const memoOperation = focusCourantPoules();
+  poulesOperationEnCours = true;
+  majDisponibilitePoules();
+  return Promise.resolve().then(geste).finally(function () {
+    poulesOperationEnCours = false;
+    majDisponibilitePoules();
+    rendreFocusPoules(memoOperation);
+  });
+}
+
+/* ⭐ LES ACTIONS CONCURRENTES DE L'ÉCRAN SE FERMENT PENDANT UNE ÉCRITURE.
+   ⛔ LE DÉFAUT MESURÉ. Pendant une génération, « Modifier les poules à la main » et
+     « Appliquer les scores de démo » restaient cliquables : on pouvait ouvrir l'éditeur sur un
+     planning en train d'être réécrit, ou empiler une seconde écriture. */
+function majDisponibilitePoules() {
+  const occupe = operationPoulesEnCours();
+  [['bouton-generer', true], ['bouton-recalculer-horaires', false],
+   ['bouton-modifier-poules', true], ['bouton-simuler-scores-matin', false]].forEach(function (paire) {
+    const el = document.getElementById(paire[0]);
+    if (!el) return;
+    if (occupe) { el.dataset.poulesRouvrir = el.disabled ? '' : 'oui'; el.disabled = true; }
+    else if (el.dataset.poulesRouvrir === 'oui') { el.disabled = false; delete el.dataset.poulesRouvrir; }
+  });
+  const enregistrer = document.querySelector('#edition-poules [data-action="enregistrer"]');
+  if (enregistrer && !occupe && enregistrer.dataset.poulesRouvrir === 'oui') {
+    enregistrer.disabled = false; delete enregistrer.dataset.poulesRouvrir;
+  }
+  if (typeof majBoutonsScoresDemo === 'function' && !occupe) majBoutonsScoresDemo();
+}
+
+/* ⭐ DÉLAI NOMINAL DES QUATRE ÉCRITURES DE L'ÉCRAN.
+   ⛔ LE DÉFAUT MESURÉ. PP-F7, PP-R4 et PP-H3 : serveur muet ⇒ le geste ne se terminait JAMAIS,
+     bouton figé sur « Génération… » / « Recalcul… » indéfiniment.
+   ⛔ Ce délai arrête L'ATTENTE DU NAVIGATEUR, il n'annule PAS l'exécution Apps Script : le
+     classeur peut très bien avoir été écrit. Le message le dit, et aucun renvoi automatique
+     n'est fait (api.js ne rejoue aucune de ces quatre écritures). */
+const DELAI_ECRITURE_POULES_MS = 30000;
+
+/**
+ * Traduit l'échec d'une écriture de l'écran. Un refus du SERVEUR (réponse lue) reste tel quel :
+ * rien n'a été écrit. Une réponse PERDUE laisse le résultat INCONNU.
+ * @param {Error} erreur
+ * @param {string} quoi   ce que le geste faisait, pour le message
+ * @param {string} suite  ce qu'il faut faire ensuite
+ */
+function erreurEcriturePoules(erreur, quoi, suite) {
+  const perdue = erreur && !erreur.reponse && (erreur.name === 'AbortError' || erreur.name === 'TypeError' ||
+    erreur.name === 'SyntaxError' || /erreur \(\d{3}\)/.test(String(erreur.message || '')));
+  if (!perdue) return { certain: true, message: erreur.message };
+  const cause = erreur.name === 'AbortError' ? 'aucune réponse du serveur dans le délai'
+    : erreur.name === 'TypeError' ? 'connexion interrompue'
+    : String(erreur.message || 'réponse illisible').replace(/\.$/, '');
+  return { certain: false, message: '⏳ Résultat INCONNU (' + cause + ') : ' + quoi +
+    ' a peut-être été enregistré. ' + suite };
+}
+
+/** L'état relu que le serveur joint à une écriture au contrat est-il exploitable ? */
+function etatPoulesUtilisable(res) {
+  return !!(res && res.contrat === 'ecriture-v1' && Array.isArray(res.poules) &&
+    Array.isArray(res.matchs) && Array.isArray(res.equipes) &&
+    res.config && res.config.global && Array.isArray(res.config.categories));
+}
+
+/**
+ * ⭐ RAFRAÎCHIT L'ÉCRAN DEPUIS L'ÉTAT RELU PAR LE SERVEUR — la relecture en moins.
+ * ⛔ LE DÉFAUT MESURÉ. Chaque écriture était suivie de `getAll` PUIS `getConfigAdmin` : deux
+ *   requêtes de plus par geste (PP-F1, PP-C1, PP-D1, PP-D3, PP-R1…).
+ * ⛔ REPLI EXACT. Sans contrat, ou si l'état est incomplet, on relit comme avant : un backend
+ *   d'AVANT continue de fonctionner sans rien changer.
+ * @return {Promise<boolean>} true si l'état de la réponse a servi, false si on a relu
+ */
+async function rafraichirPoulesDepuis(res, opt) {
+  opt = opt || {};
+  if (!etatPoulesUtilisable(res)) { await rechargerEtRendre(opt); return false; }
+  configCourante = res.config;
+  equipesCourantes = res.equipes;
+  matchsCourants = res.matchs || [];
+  if (typeof actualiserEtatClubsDepuisEquipes === 'function') actualiserEtatClubsDepuisEquipes();
+  if (opt.reglages && typeof injecterReglages === 'function') injecterReglages(configCourante.global, configCourante.categories);
+  if (opt.selectCats && typeof remplirSelectCategories === 'function') remplirSelectCategories(configCourante.categories);
+  afficherPlanning(res.poules, res.matchs);
+  majApresMidi();
+  if (typeof majFeuilleJour === 'function') majFeuilleJour();
+  if (typeof majDossier === 'function') majDossier();
+  if (typeof majTableauBord === 'function') majTableauBord();
+  return true;
+}
+
+/* ⭐ LE FOCUS EST RENDU APRÈS CHAQUE RENDU ET APRÈS CHAQUE CONFIRMATION.
+   ⛔ LE DÉFAUT MESURÉ. PP-B4 à PP-B9, PP-C1, PP-D1, PP-F1, PP-J1 à PP-J4, PP-J6 : tout geste
+     qui repeint laissait `document.activeElement` à `null`, et `js/dialog.js` ne rend pas le
+     focus au bouton qui a ouvert la fenêtre (il reste sur le bouton OK d'une fenêtre retirée
+     du document). Un organisateur au clavier devait retraverser la page à chaque geste.
+   ⛔ La correction est LOCALE à cet écran : `js/dialog.js` est partagé par 3 pages et 15
+     modules (77 appels) — le modifier sortirait du périmètre de ce lot. */
+function focusCourantPoules() {
+  const a = document.activeElement;
+  return (a && a !== document.body) ? a : null;
+}
+function rendreFocusPoules(memo, repli) {
+  const cible = (memo && memo.isConnected && !memo.disabled) ? memo
+    : (typeof repli === 'string' ? document.getElementById(repli) : repli);
+  if (cible && cible.isConnected && !cible.disabled && typeof cible.focus === 'function') cible.focus();
+}
+/** Enveloppe une confirmation : le focus revient au déclencheur, quelle que soit la réponse. */
+async function confirmerEnGardantLeFocus(message, options) {
+  const memo = focusCourantPoules();
+  try { return await dialogConfirmer(message, options); }
+  finally { rendreFocusPoules(memo); }
+}
+async function demanderCleEnGardantLeFocus(role, message) {
+  const memo = focusCourantPoules();
+  try { return await demanderCleValide(role, message); }
+  finally { rendreFocusPoules(memo); }
+}
+
 /* --------------------------------------------------------------------------
    GÉNÉRATION (poules + planning)
    -------------------------------------------------------------------------- */
@@ -27,40 +165,59 @@
  * garde la confirmation simple (phase de préparation).
  */
 async function onGenerer() {
-  // Compte les scores déjà saisis, sur des données à jour (pas la copie en mémoire).
-  let matchsFrais = matchsCourants || [];
-  try { matchsFrais = (await apiGet('getMatchs')) || matchsFrais; } catch (e) { /* repli mémoire */ }
-  const nbScores = matchsFrais.filter(function (m) { return estTermine(m.statut); }).length;
+  return avecOperationPoules(async function () {
+    const message = document.getElementById('message-generation');
+    /* ⭐ LA CONFIRMATION SE PRÉPARE AVEC L'ÉTAT DÉJÀ AFFICHÉ — plus de lecture préalable.
+       ⛔ Avant ce lot, un `getMatchs` partait à CHAQUE clic, y compris quand la confirmation
+         était ensuite annulée (PP-F2 : une requête pour rien). Le compte des scores est
+         désormais lu dans `matchsCourants`, que l'écran peint déjà, et c'est le SERVEUR qui
+         tranche sous le verrou — voir `genererPoulesEtPlanningContrat_`. */
+    const vus = (matchsCourants || []).filter(function (m) { return estTermine(m.statut); }).length;
+    let confirme = false;
 
-  if (nbScores > 0) {
-    // Des scores existent → avertissement renforcé + double verrou (clé admin).
-    if (!await dialogConfirmer(
-        '⚠️ ATTENTION : ' + nbScores + ' match(s) ont déjà un score saisi.\n\n' +
-        'Régénérer va EFFACER DÉFINITIVEMENT toutes les poules, tous les matchs et TOUS ces scores.\n\n' +
-        'Veux-tu vraiment tout regénérer ?',
-        { ok: 'Continuer', danger: true })) return;
-    const cle = await demanderCleValide('admin',
-        'Confirmation forte : ' + nbScores + ' score(s) seront effacés.\n\nEntre la clé admin pour confirmer :');
-    if (cle == null) return; // annulé → rien n'est effacé
-  } else {
-    // Aucun score saisi (préparation) : confirmation simple.
-    if (!await dialogConfirmer('Générer les poules et le planning ?\n\n' +
+    if (vus > 0) {
+      if (!await confirmerEnGardantLeFocus(
+          '⚠️ ATTENTION : ' + vus + ' match(s) ont déjà un score saisi.\n\n' +
+          'Régénérer va EFFACER DÉFINITIVEMENT toutes les poules, tous les matchs et TOUS ces scores.\n\n' +
+          'Veux-tu vraiment tout regénérer ?', { ok: 'Continuer', danger: true })) return;
+      const cle = await demanderCleEnGardantLeFocus('admin',
+          'Confirmation forte : ' + vus + ' score(s) seront effacés.\n\nEntre la clé admin pour confirmer :');
+      if (cle == null) return;                       // annulé → rien n'est effacé
+      confirme = true;
+    } else if (!await confirmerEnGardantLeFocus('Générer les poules et le planning ?\n\n' +
                'Cela efface les poules et le planning précédents.', { ok: 'Générer' })) return;
-  }
-  await genererMaintenant();
+
+    const issue = await genererMaintenant({ scores_vus: String(vus), scores_confirmes: confirme ? 'oui' : 'non' });
+
+    /* ⭐ DES SCORES SONT APPARUS PENDANT CE TEMPS : le serveur a REFUSÉ sans rien effacer.
+       On montre le vrai nombre, et on ne redemande qu'UNE fois — jamais de renvoi automatique. */
+    if (issue && (issue.code === 'scores_presents' || issue.code === 'scores_apparus')) {
+      const reels = issue.scores_saisis;
+      if (!await confirmerEnGardantLeFocus(
+          '⚠️ ' + reels + ' score(s) sont saisis à cet instant sur le serveur.\n\n' +
+          'Rien n\'a été effacé. Régénérer les effacera DÉFINITIVEMENT.\n\nContinuer ?',
+          { ok: 'Continuer', danger: true })) return;
+      const cle2 = await demanderCleEnGardantLeFocus('admin',
+          'Confirmation forte : ' + reels + ' score(s) seront effacés.\n\nEntre la clé admin pour confirmer :');
+      if (cle2 == null) return;
+      await genererMaintenant({ scores_vus: String(reels), scores_confirmes: 'oui' });
+    }
+    void message;
+  });
 }
 
 /** Fait réellement la génération (sans reconfirmation) puis rafraîchit tout. */
-async function genererMaintenant() {
+async function genererMaintenant(garde) {
   const bouton  = document.getElementById('bouton-generer');
   const message = document.getElementById('message-generation');
+  const memoFocus = focusCourantPoules();
   const texteBouton = bouton.textContent;
   bouton.disabled = true;
   bouton.textContent = 'Génération…';
   afficherMessage(message, 'Génération en cours…', 'ok');
 
   try {
-    const res = await ecrireAdmin('genererPoulesEtPlanning', {});
+    const res = await ecrireAdmin('genererPoulesEtPlanning', garde || {}, { delaiMs: DELAI_ECRITURE_POULES_MS });
     const nbP = (res && res.nb_poules != null) ? res.nb_poules : '?';
     const nbM = (res && res.nb_matchs != null) ? res.nb_matchs : '?';
     const enRetard = res && res.avertissements && res.avertissements.length;
@@ -73,10 +230,25 @@ async function genererMaintenant() {
 
     afficherArbitrages(res); // pistes d'ajustement si dépassement (heure de fin manuelle)
 
-    // On recharge tout : planning + réglages (l'heure de fin auto a pu changer).
-    await rechargerEtRendre({ reglages: true, selectCats: true });
+    // ⭐ L'état relu vient AVEC la réponse : plus de `getAll` ni de `getConfigAdmin`.
+    await rafraichirPoulesDepuis(res, { reglages: true, selectCats: true });
+    rendreFocusPoules(memoFocus, 'bouton-generer');
+    return null;
   } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+    /* ⭐ UN REFUS DU SERVEUR PORTANT UN CODE est rendu à l'appelant : c'est lui qui décide. */
+    const refus = erreur && erreur.reponse;
+    if (refus && (refus.code === 'scores_presents' || refus.code === 'scores_apparus')) {
+      afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+      if (etatPoulesUtilisable(refus)) await rafraichirPoulesDepuis(refus, { reglages: true, selectCats: true });
+      rendreFocusPoules(memoFocus, 'bouton-generer');
+      return refus;
+    }
+    const issue = erreurEcriturePoules(erreur, 'la génération',
+      '⛔ NE RECLIQUE PAS à l\'aveugle : « Générer » retire au sort, un second tirage remplacerait le premier. ' +
+      'Utilise « Rafraîchir » pour voir l\'état réel, puis décide.');
+    afficherMessage(message, (issue.certain ? '⚠️ ' : '') + issue.message, 'ko');
+    rendreFocusPoules(memoFocus, 'bouton-generer');
+    return null;
   } finally {
     bouton.disabled = false;
     bouton.textContent = texteBouton;
@@ -135,36 +307,41 @@ function majBoutonRecalculer() {
 
 /** Recalcule les horaires sans nouveau tirage (garde poules + scores). */
 async function onRecalculerHoraires() {
-  if (!await dialogConfirmer(
-      "Recalculer les horaires du matin ?\n\nMêmes poules, mêmes affrontements : seules les heures " +
-      "(et terrains) changent. Les scores déjà saisis sont conservés.", { ok: 'Recalculer' })) return;
+  return avecOperationPoules(async function () {
+    if (!await confirmerEnGardantLeFocus(
+        "Recalculer les horaires du matin ?\n\nMêmes poules, mêmes affrontements : seules les heures " +
+        "(et terrains) changent. Les scores déjà saisis sont conservés.", { ok: 'Recalculer' })) return;
 
-  const bouton = document.getElementById('bouton-recalculer-horaires');
-  const message = document.getElementById('message-generation');
-  const texteBouton = bouton.textContent;
-  bouton.disabled = true;
-  bouton.textContent = 'Recalcul…';
-  afficherMessage(message, 'Recalcul des horaires…', 'ok');
+    const bouton = document.getElementById('bouton-recalculer-horaires');
+    const message = document.getElementById('message-generation');
+    const memoFocus = focusCourantPoules();
+    const texteBouton = bouton.textContent;
+    bouton.disabled = true;
+    bouton.textContent = 'Recalcul…';
+    afficherMessage(message, 'Recalcul des horaires…', 'ok');
 
-  try {
-    const res = await ecrireAdmin('recalculerHoraires', {});
-    const avert = res && res.avertissements && res.avertissements.length;
-    let texte = '✅ Horaires recalculés (' + (res.nb_matchs != null ? res.nb_matchs : '?') + ' match(s)).';
-    if (res.scores_conserves) texte += '\n💾 ' + res.scores_conserves + ' score(s) conservé(s).';
-    if (res.heure_fin_matin) texte += '\n🌅 Fin du matin : ' + res.heure_fin_matin + '.';
-    if (res.heure_fin_journee) texte += '\n🏁 Fin de la journée : ' + res.heure_fin_journee + '.';
-    if (avert) texte += '\n⚠️ ' + res.avertissements.join('\n⚠️ ');
-    afficherMessage(message, texte, avert ? 'ko' : 'ok');
-
-    // On recharge tout (comme après une génération), sans toucher aux formulaires en cours.
-    await rechargerEtRendre({ reglages: true, selectCats: true });
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-  } finally {
-    bouton.disabled = false;
-    bouton.textContent = texteBouton;
-    majBoutonRecalculer();
-  }
+    try {
+      const res = await ecrireAdmin('recalculerHoraires', {}, { delaiMs: DELAI_ECRITURE_POULES_MS });
+      const avert = res && res.avertissements && res.avertissements.length;
+      let texte = '✅ Horaires recalculés (' + (res.nb_matchs != null ? res.nb_matchs : '?') + ' match(s)).';
+      if (res.scores_conserves) texte += '\n💾 ' + res.scores_conserves + ' score(s) conservé(s).';
+      if (res.heure_fin_matin) texte += '\n🌅 Fin du matin : ' + res.heure_fin_matin + '.';
+      if (res.heure_fin_journee) texte += '\n🏁 Fin de la journée : ' + res.heure_fin_journee + '.';
+      if (avert) texte += '\n⚠️ ' + res.avertissements.join('\n⚠️ ');
+      afficherMessage(message, texte, avert ? 'ko' : 'ok');
+      await rafraichirPoulesDepuis(res, { reglages: true, selectCats: true });
+    } catch (erreur) {
+      /* ⭐ Le recalcul ne tire PAS au sort : recliquer est sans danger, et le message le dit. */
+      const issue = erreurEcriturePoules(erreur, 'le recalcul des horaires',
+        'Recliquer est sans danger : le recalcul garde les mêmes poules et les mêmes affrontements.');
+      afficherMessage(message, (issue.certain ? '⚠️ ' : '') + issue.message, 'ko');
+    } finally {
+      bouton.disabled = false;
+      bouton.textContent = texteBouton;
+      majBoutonRecalculer();
+      rendreFocusPoules(memoFocus, 'bouton-recalculer-horaires');
+    }
+  });
 }
 
 /**
@@ -208,34 +385,43 @@ function libelleMatchManuelDemo(m) {
 }
 
 async function onSimulerScoresDemo(phase) {
-  const matin = phase === 'MATIN';
-  const bouton = document.getElementById(matin ? 'bouton-simuler-scores-matin' : 'bouton-simuler-scores-apresmidi');
-  const message = document.getElementById(matin ? 'message-simulation-matin' : 'message-simulation-apresmidi');
-  const libelle = matin ? 'du matin' : 'de l’après-midi';
-  if (!bouton || !await dialogConfirmer('Appliquer les scores de démonstration ' + libelle + ' ?\n\n' +
-      'Les matchs prévus pour la saisie en direct resteront vides. Tous les scores simulés resteront corrigeables.',
-      { ok: 'Appliquer' })) return;
+  return avecOperationPoules(async function () {
+    const matin = phase === 'MATIN';
+    const bouton = document.getElementById(matin ? 'bouton-simuler-scores-matin' : 'bouton-simuler-scores-apresmidi');
+    const message = document.getElementById(matin ? 'message-simulation-matin' : 'message-simulation-apresmidi');
+    const libelle = matin ? 'du matin' : 'de l’après-midi';
+    if (!bouton) return;
+    if (!await confirmerEnGardantLeFocus('Appliquer les scores de démonstration ' + libelle + ' ?\n\n' +
+        'Les matchs prévus pour la saisie en direct resteront vides. Tous les scores simulés resteront corrigeables.',
+        { ok: 'Appliquer' })) return;
 
-  const texteBouton = bouton.textContent;
-  bouton.disabled = true;
-  bouton.textContent = 'Application…';
-  afficherMessage(message, 'Application du scénario de démonstration…', 'ok');
-  try {
-    const res = await ecrireAdmin('simulerScoresDemo', { phase: phase });
-    const manuels = (res.matchs_manuels || []).map(libelleMatchManuelDemo);
-    let texte = res.deja_applique
-      ? '✅ Les scores automatiques étaient déjà en place.'
-      : '✅ ' + res.nb_scores_appliques + ' score(s) appliqué(s).';
-    if (manuels.length) texte += '\n🎯 À saisir pendant la démo :\n• ' + manuels.join('\n• ');
-    texte += '\n✏️ Les scores enregistrés restent corrigeables depuis la table de marque.';
-    afficherMessage(message, texte, 'ok');
-    await rechargerEtRendre({ reglages: true });
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-  } finally {
-    bouton.textContent = texteBouton;
-    majBoutonsScoresDemo();
-  }
+    const memoFocus = focusCourantPoules();
+    const texteBouton = bouton.textContent;
+    bouton.disabled = true;
+    bouton.textContent = 'Application…';
+    afficherMessage(message, 'Application du scénario de démonstration…', 'ok');
+    try {
+      const res = await ecrireAdmin('simulerScoresDemo', { phase: phase }, { delaiMs: DELAI_ECRITURE_POULES_MS });
+      const manuels = (res.matchs_manuels || []).map(libelleMatchManuelDemo);
+      let texte = res.deja_applique
+        ? '✅ Les scores automatiques étaient déjà en place.'
+        : '✅ ' + res.nb_scores_appliques + ' score(s) appliqué(s).';
+      if (res.historique_complete) texte += '\n🗂️ ' + res.historique_complete + ' ligne(s) d’historique complétée(s).';
+      if (manuels.length) texte += '\n🎯 À saisir pendant la démo :\n• ' + manuels.join('\n• ');
+      texte += '\n✏️ Les scores enregistrés restent corrigeables depuis la table de marque.';
+      afficherMessage(message, texte, 'ok');
+      await rafraichirPoulesDepuis(res, { reglages: true });
+    } catch (erreur) {
+      /* ⭐ La simulation est IDEMPOTENTE côté serveur : recliquer ne double aucun score. */
+      const issue = erreurEcriturePoules(erreur, 'l’application des scores de démonstration',
+        'Recliquer est sans danger : le serveur reconnaît les scores déjà appliqués et complète l’historique.');
+      afficherMessage(message, (issue.certain ? '⚠️ ' : '') + issue.message, 'ko');
+    } finally {
+      bouton.textContent = texteBouton;
+      majBoutonsScoresDemo();
+      rendreFocusPoules(memoFocus, matin ? 'bouton-simuler-scores-matin' : 'bouton-simuler-scores-apresmidi');
+    }
+  });
 }
 
 function onSimulerScoresMatin() { return onSimulerScoresDemo('MATIN'); }
@@ -503,32 +689,76 @@ function afficherArbitrages(res) {
 async function onClicArbitrage(evenement) {
   const bouton = evenement.target.closest('.arb-item');
   if (!bouton) return;
+  return avecOperationPoules(async function () {
+    const type = bouton.getAttribute('data-type');
+    const champ = bouton.getAttribute('data-champ');
+    const valeur = bouton.getAttribute('data-valeur');
+    const categorie = bouton.getAttribute('data-categorie');
+    const message = document.getElementById('message-generation');
 
-  const type = bouton.getAttribute('data-type');
-  const champ = bouton.getAttribute('data-champ');
-  const valeur = bouton.getAttribute('data-valeur');
-  const categorie = bouton.getAttribute('data-categorie');
-  const message = document.getElementById('message-generation');
+    if (!await confirmerEnGardantLeFocus('Appliquer cet ajustement puis régénérer le planning ?',
+        { ok: 'Appliquer' })) return;
 
-  if (!await dialogConfirmer('Appliquer cet ajustement puis régénérer le planning ?', { ok: 'Appliquer' })) return;
-
-  bouton.disabled = true;
-  try {
-    if (type === 'global') {
-      const data = {};
-      data[champ] = valeur;
-      await ecrireAdmin('enregistrerHoraires', data);
-    } else if (type === 'categorie') {
-      const cat = configCourante.categories.find(function (c) { return c.categorie === categorie; });
-      const maj = Object.assign({}, cat);
-      maj[champ] = valeur;
-      await ecrireAdmin('enregistrerCategorie', maj);
+    const memoFocus = focusCourantPoules();
+    bouton.disabled = true;
+    try {
+      /* ⭐ UNE SEULE REQUÊTE, UN SEUL VERROU.
+         ⛔ LE DÉFAUT MESURÉ (PP-G1, PP-G2) : le réglage puis la régénération partaient en DEUX
+           écritures et DEUX verrous, avec une fenêtre où le réglage était écrit sans que le
+           planning le suive. */
+      const res = await ecrireAdmin('appliquerArbitrageEtRegenerer',
+        { type: type, champ: champ, valeur: valeur, categorie: categorie },
+        { delaiMs: DELAI_ECRITURE_POULES_MS });
+      const nbP = (res && res.nb_poules != null) ? res.nb_poules : '?';
+      const nbM = (res && res.nb_matchs != null) ? res.nb_matchs : '?';
+      let texte = '✅ Ajustement appliqué' + (res && res.reglage_ecrit === false ? ' (réglage déjà à cette valeur)' : '') +
+        ' — ' + nbP + ' poule(s) et ' + nbM + ' match(s) régénérés.';
+      if (res && res.avertissements && res.avertissements.length) texte += '\n⚠️ ' + res.avertissements.join('\n⚠️ ');
+      afficherMessage(message, texte, 'ok');
+      afficherArbitrages(res);
+      await rafraichirPoulesDepuis(res, { reglages: true, selectCats: true });
+      rendreFocusPoules(memoFocus);
+      return;
+    } catch (erreur) {
+      /* ⛔ LE REPLI NE SE DÉCLENCHE QUE SUR « Action inconnue » — un backend d'AVANT ce lot.
+         Un conflit, une demande invalide, un refus métier ou une panne ne relancent JAMAIS la
+         série : rejouer écrirait ce que le serveur venait d'écarter. */
+      const inconnue = /Action inconnue/i.test(String(erreur && erreur.message));
+      if (!inconnue) {
+        const refus = erreur && erreur.reponse;
+        if (refus && refus.code === 'arbitrage_partiel') {
+          afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+        } else {
+          const issue = erreurEcriturePoules(erreur, 'l’ajustement',
+            '⛔ NE RECLIQUE PAS à l\'aveugle : la régénération retire au sort. Rafraîchis d\'abord.');
+          afficherMessage(message, (issue.certain ? '⚠️ ' : '') + issue.message, 'ko');
+        }
+        bouton.disabled = false;
+        rendreFocusPoules(memoFocus);
+        return;
+      }
     }
-    await genererMaintenant(); // régénère avec le nouveau réglage
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-    bouton.disabled = false;
-  }
+
+    /* ⭐ REPLI HISTORIQUE — backend d'avant : les deux écritures d'origine, dans le même ordre. */
+    try {
+      if (type === 'global') {
+        const data = {};
+        data[champ] = valeur;
+        await ecrireAdmin('enregistrerHoraires', data, { delaiMs: DELAI_ECRITURE_POULES_MS });
+      } else if (type === 'categorie') {
+        const cat = configCourante.categories.find(function (c) { return c.categorie === categorie; });
+        const maj = Object.assign({}, cat);
+        maj[champ] = valeur;
+        await ecrireAdmin('enregistrerCategorie', maj, { delaiMs: DELAI_ECRITURE_POULES_MS });
+      }
+      await genererMaintenant({});
+    } catch (erreur) {
+      const issue = erreurEcriturePoules(erreur, 'l’ajustement', 'Rafraîchis pour voir l’état réel.');
+      afficherMessage(document.getElementById('message-generation'),
+        (issue.certain ? '⚠️ ' : '') + issue.message, 'ko');
+      bouton.disabled = false;
+    }
+  });
 }
 
 /* ⭐ L'ÉTAT DE L'ÉCRAN « Poules & planning » VIT DANS LE MODULE, jamais dans le DOM.
@@ -913,6 +1143,8 @@ function onModifierPoules() {
   document.getElementById('bouton-modifier-poules').hidden = true;
   document.getElementById('affichage-planning').innerHTML = ''; // remplacé par l'éditeur
   afficherEditionPoules();
+  // ⭐ L'éditeur qui s'ouvre prend le focus sur sa première équipe déplaçable (PP-B7, PP-J3).
+  rendreFocusPoules(document.querySelector('#edition-poules [data-action="retirer"]'));
 }
 
 /** Affiche l'éditeur de poules (cartes de poules + zone « à replacer » + équilibre). */
@@ -994,6 +1226,13 @@ function onClicEditionPoules(evenement) {
     if (modele.pools[pool].indexOf(id) < 0) modele.pools[pool].push(id);
   }
   afficherEditionPoules();
+  /* ⭐ LE FOCUS SUIT L'ÉQUIPE DÉPLACÉE. `afficherEditionPoules()` réécrit toute la zone : sans
+     cela, `document.activeElement` retombait à `null` à CHAQUE clic (PP-B8, PP-B9, PP-J4), et
+     un organisateur au clavier devait retraverser la page entre deux déplacements. */
+  const suite = (action === 'retirer') ? 'affecter' : 'retirer';
+  const memeEquipe = document.querySelector('#edition-poules [data-action="' + suite + '"][data-id="' +
+    (typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id) + '"]');
+  rendreFocusPoules(memeEquipe || document.querySelector('#edition-poules [data-action="enregistrer"]'));
 }
 
 /** Annule l'édition et réaffiche le planning normal (matchs inchangés). */
@@ -1001,48 +1240,93 @@ function onAnnulerEditionPoules() {
   editionPoules = null;
   document.getElementById('edition-poules').innerHTML = '';
   afficherPlanning(poulesDepuisEquipes(), matchsCourants);
+  // ⭐ Le focus revient sur le bouton qui rouvre l'éditeur, pas dans le vide.
+  rendreFocusPoules(null, 'bouton-modifier-poules');
 }
 
 /** Valide la nouvelle répartition et demande au backend de recalculer les matchs du matin. */
 async function onEnregistrerPoules() {
-  const message = document.getElementById('message-edition-poules');
+  return avecOperationPoules(async function () {
+    const message = document.getElementById('message-edition-poules');
 
-  // Toutes les équipes doivent être réaffectées (aucune « à replacer »).
-  const restantes = Object.keys(editionPoules).reduce(function (n, cat) {
-    return n + editionPoules[cat].bench.length;
-  }, 0);
-  if (restantes > 0) {
-    afficherMessage(message, 'Réaffecte d\'abord les ' + restantes + ' équipe(s) « à replacer ».', 'ko');
-    return;
-  }
+    // Toutes les équipes doivent être réaffectées (aucune « à replacer »).
+    const restantes = Object.keys(editionPoules).reduce(function (n, cat) {
+      return n + editionPoules[cat].bench.length;
+    }, 0);
+    if (restantes > 0) {
+      afficherMessage(message, 'Réaffecte d\'abord les ' + restantes + ' équipe(s) « à replacer ».', 'ko');
+      return;
+    }
 
-  // Construit l'assignation { id_equipe: nom_poule }.
-  const assignation = {};
-  Object.keys(editionPoules).forEach(function (cat) {
-    const pools = editionPoules[cat].pools;
-    Object.keys(pools).forEach(function (nom) {
-      pools[nom].forEach(function (id) { assignation[id] = nom; });
+    // Construit l'assignation { id_equipe: nom_poule }.
+    const assignation = {};
+    Object.keys(editionPoules).forEach(function (cat) {
+      const pools = editionPoules[cat].pools;
+      Object.keys(pools).forEach(function (nom) {
+        pools[nom].forEach(function (id) { assignation[id] = nom; });
+      });
     });
+    /* ⭐ LA BASE : la répartition telle que l'ÉDITEUR l'a chargée. Le serveur refuse tout si le
+       classeur a bougé depuis (`conflit_poules`).
+       ⛔ LE DÉFAUT MESURÉ (PP-H1) : sans elle, un tirage fait sur un autre poste pendant que
+         l'éditeur était ouvert était écrasé EN SILENCE, l'écran annonçant « ✅ Poules mises à jour ». */
+    const base = {};
+    (equipesCourantes || []).forEach(function (e) {
+      if (String(e.poule || '').trim()) base[String(e.id_equipe)] = String(e.poule);
+    });
+
+    /* ⛔ PAS DE COURT-CIRCUIT CÔTÉ ÉCRAN, ET C'EST DÉLIBÉRÉ.
+       Une première version refermait l'éditeur sans rien envoyer quand la répartition demandée
+       était identique à celle qu'il avait chargée : zéro requête, mais MESURÉ FAUX — si un autre
+       poste avait modifié la répartition entre-temps, l'écran se refermait sur un état PÉRIMÉ en
+       affichant « les poules et le planning sont inchangés », ce qui était un mensonge.
+       ⭐ La requête est donc TOUJOURS émise : c'est la vérification la plus légère qui donne un
+       retour fiable. Avec le nouveau backend elle n'écrit RIEN (garde « composition identique »,
+       0 écriture, 0 invalidation) et rapporte l'état réellement enregistré ; si la répartition a
+       bougé, la `base` déclenche `conflit_poules` et l'écran reçoit le vrai état. */
+    if (!await confirmerEnGardantLeFocus('Enregistrer cette répartition et recalculer les matchs du matin ?',
+        { ok: 'Enregistrer' })) return;
+
+    const bouton = document.querySelector('#edition-poules [data-action="enregistrer"]');
+    const memoFocus = focusCourantPoules();
+    if (bouton) { bouton.disabled = true; bouton.textContent = 'Recalcul…'; }
+    afficherMessage(message, 'Recalcul des matchs…', 'ok');
+    try {
+      const res = await ecrireAdmin('reorganiserPoulesMatin',
+        { assignation: JSON.stringify(assignation), base: JSON.stringify(base) },
+        { delaiMs: DELAI_ECRITURE_POULES_MS });
+      editionPoules = null;
+      document.getElementById('edition-poules').innerHTML = '';
+      await rafraichirPoulesDepuis(res, { reglages: true });
+      const nbP = (res && res.nb_poules != null) ? res.nb_poules : '?';
+      const nbM = (res && res.nb_matchs != null) ? res.nb_matchs : '?';
+      const finTxt = (res && res.heure_fin_journee) ? ' Fin de la journée : ' + res.heure_fin_journee + '.' : '';
+      afficherMessage(document.getElementById('message-generation'),
+        (res && res.inchange)
+          ? '✅ Aucun changement : les poules et le planning sont inchangés.'
+          : '✅ Poules mises à jour : ' + nbP + ' poule(s), ' + nbM + ' match(s) recalculés.' + finTxt, 'ok');
+      rendreFocusPoules(memoFocus, 'bouton-modifier-poules');
+    } catch (erreur) {
+      /* ⭐ CONFLIT : le serveur a tout écarté. On applique l'état relu et on invite à DÉCIDER,
+         jamais à réessayer — rejouer écrirait la répartition d'avant sur celle d'après. */
+      const refus = erreur && erreur.reponse;
+      if (refus && refus.code === 'conflit_poules') {
+        editionPoules = null;
+        document.getElementById('edition-poules').innerHTML = '';
+        if (etatPoulesUtilisable(refus)) await rafraichirPoulesDepuis(refus, { reglages: true });
+        else await rechargerEtRendre({ reglages: true });
+        afficherMessage(document.getElementById('message-generation'),
+          '⚠️ ' + erreur.message + '\nLa répartition affichée est celle du serveur : reprends tes changements dessus.', 'ko');
+        rendreFocusPoules(memoFocus, 'bouton-modifier-poules');
+        return;
+      }
+      /* ⭐ La réorganisation est IDEMPOTENTE (vérifié sur les 8 frontières de panne) : recliquer
+         est sans danger, et le message le dit. */
+      const issue = erreurEcriturePoules(erreur, 'la répartition',
+        'Recliquer est sans danger : la même répartition renvoyée donne le même résultat.');
+      afficherMessage(message, (issue.certain ? '⚠️ ' : '') + issue.message, 'ko');
+      if (bouton) { bouton.disabled = false; bouton.innerHTML = svgIcone('enregistrer') + 'Enregistrer et recalculer'; }
+      rendreFocusPoules(memoFocus);
+    }
   });
-
-  if (!await dialogConfirmer('Enregistrer cette répartition et recalculer les matchs du matin ?',
-      { ok: 'Enregistrer' })) return;
-
-  const bouton = document.querySelector('#edition-poules [data-action="enregistrer"]');
-  if (bouton) { bouton.disabled = true; bouton.textContent = 'Recalcul…'; }
-  afficherMessage(message, 'Recalcul des matchs…', 'ok');
-  try {
-    const res = await ecrireAdmin('reorganiserPoulesMatin', { assignation: JSON.stringify(assignation) });
-    editionPoules = null;
-    document.getElementById('edition-poules').innerHTML = '';
-    await rechargerEtRendre({ reglages: true }); // l'heure de fin auto a changé
-    const nbP = (res && res.nb_poules != null) ? res.nb_poules : '?';
-    const nbM = (res && res.nb_matchs != null) ? res.nb_matchs : '?';
-    const finTxt = (res && res.heure_fin_journee) ? ' Fin de la journée : ' + res.heure_fin_journee + '.' : '';
-    afficherMessage(document.getElementById('message-generation'),
-      '✅ Poules mises à jour : ' + nbP + ' poule(s), ' + nbM + ' match(s) recalculés.' + finTxt, 'ok');
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-    if (bouton) { bouton.disabled = false; bouton.innerHTML = svgIcone('enregistrer') + 'Enregistrer et recalculer'; }
-  }
 }

@@ -70,8 +70,14 @@ vrai(html.includes('id="bouton-simuler-scores-matin"') &&
   html.includes('id="bouton-simuler-scores-apresmidi"'), 'les deux boutons sont présents dans les bonnes cartes');
 vrai(admin.includes("ecouter('bouton-simuler-scores-matin'") &&
   admin.includes("ecouter('bouton-simuler-scores-apresmidi'"), 'les deux boutons sont branchés une seule fois');
-vrai(generation.includes("ecrireAdmin('simulerScoresDemo', { phase: phase })"),
+/* ⭐ PRÉMISSE ADAPTÉE (lot « Poules & planning ») — l'appel porte désormais un DÉLAI borné en
+   troisième argument (`{ delaiMs: DELAI_ECRITURE_POULES_MS }`), sans quoi un serveur muet laissait
+   le bouton figé pour toujours. L'invariant protégé — « les boutons passent par l'écriture
+   administrateur protégée » — est INCHANGÉ, et on le renforce : l'appel doit être borné. */
+vrai(/ecrireAdmin\('simulerScoresDemo', \{ phase: phase \}/.test(generation),
   'les boutons passent par l’écriture administrateur protégée');
+vrai(/ecrireAdmin\('simulerScoresDemo', \{ phase: phase \}, \{ delaiMs: DELAI_ECRITURE_POULES_MS \}\)/.test(generation),
+  '⭐ et cette écriture est BORNÉE : un serveur muet ne fige plus le bouton');
 vrai(generation.includes('Les scores enregistrés restent corrigeables'),
   'l’interface rappelle explicitement que Romain garde la main pour corriger');
 vrai(css.includes('.match-demo') && css.includes('.bandeau-demo'),

@@ -355,6 +355,9 @@ var ACTIONS_AUTORISATION_CROCHET = {
   // `enregistrerCategorie` et `enregistrerPlanTerrains` réunies. ⛔ Absente de cette liste, elle aurait
   // laissé la feuille FFR se croire à jour après avoir changé les catégories.
   appliquerRepartitionTerrains:  'A.3, B.1, B.2 (terrains des catégories + composition des grands terrains)',
+  // ⭐ Lot « Poules & planning » : la piste d'arbitrage écrit soit un horaire global, soit une
+  //   ligne de catégorie — deux familles que la feuille d'autorisation lit déjà.
+  appliquerArbitrageEtRegenerer: 'A.3, B.1 (réglage d’horaires ou de catégorie appliqué par une piste d’arbitrage)',
   enregistrerContactsSecurite:   'B.4 responsable sécurité, antenne de secours',
   enregistrerInvitation:         'B.5 droits d\'inscription (tarif_engagement_*)',
   enregistrerSurPlace:           'B.5 goûter de fin de tournoi (prix par personne)',
