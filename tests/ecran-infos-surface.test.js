@@ -233,10 +233,21 @@ const bouton = (attributs) => ({ disabled: false, getAttribute: (a) => (attribut
   b.el('finder-resultats').querySelectorAll = () => [jour];
   x = await b.jouer(() => Promise.all([b.ctx.onClicResultatDate(clic('.df-appliquer', jour)), b.ctx.onClicResultatDate(clic('.df-appliquer', jour))]));
   const envoi = x.ecritures[0] && x.ecritures[0].corps;
+  /* ⭐ Lot « Publication » — L'ENVOI PORTE EN PLUS SA BASE DE FUSION (`base_infos`), et c'est
+     EXIGÉ ici, pas toléré : « Appliquer » un jour proposé passe par `onEnregistrerCadre`, donc par
+     la même écriture que la carte « Date & conformité FFR ». Sans la base, un second onglet qui
+     aurait changé la date entre-temps se ferait écraser en silence — exactement le défaut que la
+     contre-épreuve du lot avait reproduit sur « Publier ».
+     ⛔ Le contrôle est RENFORCÉ, pas assoupli : on exige que la base porte EXACTEMENT les deux
+     champs envoyés — ni un de plus (elle ne doit pas parler du nom ou de la description, que
+     cette écriture n'envoie pas), ni un de moins. */
+  const baseEnvoyee = Object.keys((envoi && envoi.base_infos) || {}).sort().join();
   vrai(x.ecritures.length === 1 && x.attendues.map((r) => r.action).join() === 'enregistrerInfosTournoi' &&
-       Object.keys(envoi).filter((k) => !['action', 'cle'].includes(k)).sort().join() === 'tournoi_date,zone_vacances' &&
+       Object.keys(envoi).filter((k) => !['action', 'cle'].includes(k)).sort().join() === 'base_infos,tournoi_date,zone_vacances' &&
+       baseEnvoyee === 'tournoi_date,zone_vacances' &&
        b.srv.global().tournoi_date === '2027-05-22' && b.srv.global().tournoi_nom !== 'Nom tapé, pas encore enregistré',
-    'W.1 ⭐ « Appliquer » un jour proposé : UNE écriture attendue (date + zone seulement), double clic compris', x.resume);
+    'W.1 ⭐ « Appliquer » un jour proposé : UNE écriture attendue (date + zone seulement, plus leur ' +
+    'base de fusion), double clic compris', x.resume + ' | base : ' + baseEnvoyee);
   vrai(b.el('form-infos-tournoi').tournoi_nom.value === 'Nom tapé, pas encore enregistré' &&
        b.el('form-infos-tournoi').tournoi_description.value === 'Texte en cours' && /affiche-en-attente/.test(b.ctx.afficheDataURI) &&
        b.el('form-cadre-tournoi').tournoi_date.value === '2027-05-22' && b.el('panneau-trouver-date').hidden === true &&

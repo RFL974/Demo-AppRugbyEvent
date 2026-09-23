@@ -25,6 +25,69 @@
    ⛔ Aucun site tiers ne les lit (découplage M1-PUB / PUB-4, doctrine D-048).
    -------------------------------------------------------------------------- */
 
+/* ==========================================================================================
+ *  LA BASE DE FUSION — ce que le serveur portait quand ce formulaire a été peint
+ * ------------------------------------------------------------------------------------------
+ *  🔬 LE DÉFAUT FERMÉ (contre-épreuve du lot « Publication »). « Publier » enregistre les infos au
+ *  passage. Un onglet resté ouvert depuis le matin renvoyait donc les valeurs du matin, et
+ *  écrasait en silence ce qu'un second onglet avait corrigé l'après-midi. ⚠️ « Rafraîchir » ne
+ *  resynchronise volontairement PAS ce formulaire (il détruirait une saisie en cours) : la fenêtre
+ *  restait ouverte toute la session.
+ *
+ *  ⭐ CE QUE CETTE MÉMOIRE EST, ET CE QU'ELLE N'EST PAS.
+ *   · C'est la valeur BRUTE reçue du serveur, telle que `configCourante.global` la porte — ⛔ JAMAIS
+ *     la valeur affichée ni la valeur normalisée par le formulaire (`.value.trim()`). Un espace de
+ *     fin ferait sinon passer un champ jamais touché pour une modification, et il écraserait.
+ *   · Elle n'est RENOUVELÉE que depuis un état serveur CONFIRMÉ : le chargement de l'écran, ou la
+ *     configuration relue sous le verrou et jointe à une réponse d'écriture. ⛔ Jamais depuis le
+ *     formulaire, ⛔ jamais avant que le serveur ait confirmé.
+ *   · Elle est envoyée telle quelle (`base_infos`) et c'est le SERVEUR qui arbitre, sous le verrou.
+ *
+ *  ⛔ SANS BACKEND QUI LA COMPREND, IL N'Y A PAS DE PROTECTION, et l'écran ne prétend pas le
+ *  contraire : un backend d'avant ignore `base_infos` et reprend son comportement historique. La
+ *  suite `ecran-publication-surface` le caractérise explicitement (section K).
+ * ========================================================================================== */
+
+/** Les champs que les formulaires de l'administration envoient à `enregistrerInfosTournoi`. */
+const CHAMPS_BASE_INFOS = ['tournoi_nom', 'tournoi_lieu', 'tournoi_adresse', 'tournoi_description',
+                           'tournoi_date', 'zone_vacances'];
+
+/** La base brute, champ par champ. ⛔ `undefined` pour un champ jamais chargé : le serveur
+ *  applique alors son comportement historique sur CE champ, et le dit. */
+let baseInfosTournoi = {};
+
+/**
+ * Mémorise la base de CES champs depuis `configCourante` — donc depuis un état serveur.
+ * ⛔ Appelée UNIQUEMENT là où le formulaire est (re)peint depuis une configuration confirmée.
+ * @param {Array<string>} champs
+ */
+function memoriserBaseInfos(champs) {
+  const g = (typeof configCourante !== 'undefined' && configCourante && configCourante.global) || {};
+  (champs || []).forEach(function (champ) {
+    baseInfosTournoi[champ] = g[champ] === undefined ? '' : g[champ];
+  });
+}
+
+/** La base à joindre à un envoi : les champs de CET envoi dont on connaît la base, et eux seuls.
+ *  ⛔ Un champ sans base n'entre pas : mieux vaut le comportement historique, annoncé, qu'une
+ *    base inventée qui déciderait à tort qu'un champ n'a pas bougé. */
+function baseInfosPour(envoi) {
+  const base = {};
+  Object.keys(envoi || {}).forEach(function (champ) {
+    if (CHAMPS_BASE_INFOS.indexOf(champ) !== -1 && baseInfosTournoi[champ] !== undefined) {
+      base[champ] = baseInfosTournoi[champ];
+    }
+  });
+  return base;
+}
+
+/** L'envoi, augmenté de sa base de fusion. ⛔ Rien d'ajouté si aucune base n'est connue : la
+ *  demande reste alors exactement celle d'avant ce lot. */
+function avecBaseInfos(envoi) {
+  const base = baseInfosPour(envoi);
+  return Object.keys(base).length ? Object.assign({}, envoi, { base_infos: base }) : envoi;
+}
+
 /** Pré-remplit le formulaire des infos du tournoi avec ce qui est déjà enregistré.
  *  @param {Object} [opt] `controleFFR: false` — ne pas relancer le contrôle FFR : l'appelant sait
  *    que ses entrées (date, zone, catégories) n'ont pas bougé. Sans option : comportement historique. */
@@ -37,6 +100,10 @@ function majInfosTournoi(opt) {
   form.tournoi_lieu.value = g.tournoi_lieu || '';
   form.tournoi_adresse.value = g.tournoi_adresse || '';
   form.tournoi_description.value = g.tournoi_description || '';
+  /* ⭐ LA BASE EST PRISE ICI, au moment MÊME où le formulaire est peint, et depuis `g` — la valeur
+     BRUTE du serveur, ⛔ pas celle qu'on vient de poser dans le champ (`|| ''` la normalise déjà).
+     Les deux doivent rester distinctes : c'est tout le sens de la fusion. */
+  memoriserBaseInfos(['tournoi_nom', 'tournoi_lieu', 'tournoi_adresse', 'tournoi_description']);
 
   // Date + zone de vacances : elles vivent dans la carte « Date & conformité FFR »
   // (#form-cadre-tournoi), pas ici. On les (re)remplit là-bas et on marque ce formulaire propre.
@@ -63,6 +130,8 @@ function majCadreTournoi() {
   const g = configCourante.global || {};
   if (cadre.tournoi_date)  cadre.tournoi_date.value = g.tournoi_date || '';
   if (cadre.zone_vacances) cadre.zone_vacances.value = g.zone_vacances || 'C'; // défaut 'C' (migration douce)
+  // ⭐ MÊME RÈGLE que pour les infos : la base vient de `g`, pas du champ qu'on vient de remplir.
+  memoriserBaseInfos(['tournoi_date', 'zone_vacances']);
   if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(cadre);
 }
 
@@ -260,7 +329,7 @@ async function onEnregistrerCadre() {
   const bouton = document.getElementById('bouton-enregistrer-cadre');
   await avecBoutonOccupe(bouton, message, async function () {
     afficherMessage(message, 'Enregistrement de la date…', 'ok');
-    const res = await ecrireAdmin('enregistrerInfosTournoi', lireCadreTournoi());
+    const res = await ecrireAdmin('enregistrerInfosTournoi', avecBaseInfos(lireCadreTournoi()));
     // L'état réel vient de la réponse (contrat d'écriture) ou, à défaut, d'une relecture.
     await appliquerConfigEnregistree(res);
     // ⭐ Seule la carte enregistrée revient à l'état du serveur : le nom, la description, l'affiche ou
@@ -281,7 +350,7 @@ async function envoyerInfosTournoi(envoi) {
     if (envoi.categories_choisies && typeof invaliderLecturesCategories === 'function') invaliderLecturesCategories();
   };
   invalider();
-  try { return await ecrireAdmin('enregistrerInfosTournoi', envoi); } finally { invalider(); }
+  try { return await ecrireAdmin('enregistrerInfosTournoi', avecBaseInfos(envoi)); } finally { invalider(); }
 }
 
 /** Le serveur a-t-il PU écrire malgré l'erreur ? Non pour un refus au contrat (il déclare `modifies`
@@ -813,6 +882,55 @@ function onClicApercuDossier(evenement) {
    PUBLICATION (rendre le tournoi visible ou non sur la page publique)
    -------------------------------------------------------------------------- */
 
+/* ⏱️ LES DÉLAIS DE CET ÉCRAN — et pourquoi il en manquait.
+ *
+ * 🔬 LE DÉFAUT FERMÉ (lot « Publication »). Tous les autres écrans de l'administration bornent leurs
+ * appels (`DELAI_ECRITURE_HORAIRES_MS`, `DELAI_ECRITURE_TERRAINS_MS`, `DELAI_LECTURE_CLUBS_MS`…).
+ * Celui-ci, non : `onPublier` et les gestes de la table de marque appelaient `ecrireAdmin` SANS
+ * options, et `chargerAccesScores` appelait `apiPostProtege` de même. Un serveur muet laissait donc
+ * le bouton « Publier » grisé sur « Publication… » INDÉFINIMENT, et la carte de la table de marque
+ * vide, sans message — constaté au banc : après l'équivalent de 400 s, rien ne se dénouait.
+ *
+ * ⚠️ DEUX NOMBRES QUI NE DISENT PAS LA MÊME CHOSE, même règle qu'à la « Demande d'autorisation » :
+ * `delaiMs` borne UNE TENTATIVE, `budgetMs` borne l'ATTENTE TOTALE. `getAccesScoresAdmin` est une
+ * LECTURE rejouable (liste fermée d'api.js) : sans budget, deux tentatives de 20 s auraient fait
+ * patienter 40 s pour un écran qui en annonce 20. Les ÉCRITURES, elles, ne sont jamais rejouées —
+ * un seul nombre leur suffit.
+ * ⛔ Un délai côté navigateur n'ANNULE PAS l'exécution Apps Script : elle se poursuit chez Google.
+ * C'est exactement pourquoi un délai dépassé sur une ÉCRITURE est traité comme un résultat
+ * INCONNU — jamais comme un échec certain (voir `messageInconnuPublication`).
+ */
+const DELAI_ECRITURE_PUBLICATION_MS = 30000;
+const DELAI_LECTURE_ACCES_SCORES_MS = 20000;
+const BUDGET_LECTURE_ACCES_SCORES_MS = 20000;
+
+/**
+ * ⭐ L'ISSUE EST-ELLE INCONNUE ? Vrai pour un délai dépassé, une panne réseau ou une erreur HTTP :
+ * la requête a pu aboutir CHEZ GOOGLE sans que sa réponse revienne. Faux pour un refus LISIBLE du
+ * serveur (`{ error }`, que `apiPost` attache à l'erreur) : là, le serveur a parlé, et il a dit non.
+ * ⛔ La distinction n'est pas cosmétique : une réponse perdue annoncée « ⚠️ échec » pousse
+ *   l'organisateur à recliquer, donc à réécrire. Même doctrine que `issueIncertaine`
+ *   (admin-invitations.js) ; ⛔ pas la même fonction, parce que celle-là nomme le délai des
+ *   invitations dans son message — un partage aurait fait mentir l'un des deux écrans.
+ */
+function issueInconnuePublication(erreur) {
+  return !(erreur && erreur.reponse && typeof erreur.reponse === 'object');
+}
+
+/** La cause lisible d'une issue inconnue. */
+function causeInconnuePublication(erreur, delaiMs) {
+  if (erreur && erreur.name === 'AbortError') {
+    return 'délai de ' + Math.round((erreur.delaiMs || delaiMs || DELAI_ECRITURE_PUBLICATION_MS) / 1000) + ' s dépassé';
+  }
+  return String((erreur && erreur.message) || 'erreur réseau').replace(/\.$/, '');
+}
+
+/** « ⚠️ Réponse du serveur non reçue (cause) : <quoi>. Rien n'est réémis automatiquement ; <suite>. » */
+function messageInconnuPublication(quoi, erreur, suite) {
+  return '⚠️ Réponse du serveur non reçue (' + causeInconnuePublication(erreur) + ') : ' + quoi +
+    '. Rien n’est réémis automatiquement' + (suite ? ' ; ' + suite : '') + '.';
+}
+
 /** Vrai si le tournoi est actuellement publié (visible du public). */
 function estPublie() {
   return String(configCourante.global && configCourante.global.tournoi_publie).toLowerCase() === 'oui';
@@ -848,7 +966,22 @@ function majEtatPublicationAffiche() {
   }
 }
 
-/** Met à jour l'état affiché et le libellé du bouton selon la publication en cours. */
+/**
+ * Met à jour l'état affiché et le libellé du bouton selon la publication en cours.
+ *
+ * ⛔ AUCUNE LECTURE, AUCUNE ÉCRITURE : cette fonction PEINT ce que la page sait déjà.
+ *
+ * 🔬 CE QUI A CHANGÉ, ET POURQUOI C'EST LE CŒUR DU LOT « PUBLICATION ». Elle appelait
+ * `chargerAccesScores()` — donc une requête `getAccesScoresAdmin` (8 lectures, 4 047 cellules).
+ * Or elle est appelée à l'OUVERTURE de l'administration (`chargerAdmin`), à chaque « Rafraîchir »
+ * (`rechargerEtRendre`) et après CHAQUE publication ou masquage (`onPublier`) — alors que publier
+ * ne change strictement RIEN à l'accès de la table de marque. Une lecture accrochée à un repeint
+ * part autant de fois qu'on repeint.
+ * ⭐ Cette lecture est devenue une RESSOURCE D'ÉCRAN (`ADMIN_RESSOURCES.accesScores`, admin.js) :
+ * elle part à l'ARRIVÉE sur l'écran, une seule fois, et le retour ne coûte rien.
+ * ⛔ NE JAMAIS LA REMETTRE ICI : ce serait rendre à `majPublication()` le pouvoir d'émettre des
+ * requêtes, et le compte de l'écran redeviendrait imprévisible.
+ */
 function majPublication() {
   const etat = document.getElementById('etat-publication');
   const bouton = document.getElementById('bouton-publier');
@@ -857,9 +990,22 @@ function majPublication() {
   bouton.innerHTML = svgIcone('monde') + (estPublie() ? 'Masquer le tournoi' : 'Publier le tournoi');
   majAccesPublic();   // l'adresse, elle, ne dépend pas de l'état : seule la NOTE change
   majVerrouPublier(); // le GESTE, lui, reste soumis aux prérequis — mais lui SEUL
-  // ⭐ 5R — l'accès de la table de marque, relu APRÈS la connexion admin (cette fonction n'est
-  //   appelée qu'une fois connecté). ⛔ Lecture seule, sans verrou ; aucun changement d'état ici.
-  chargerAccesScores();
+  /* ⭐ REPLI DE CACHE MÊLÉ, ET RIEN D'AUTRE — la SEULE requête que cette fonction puisse encore
+     faire partir. Un navigateur peut servir un `js/admin.js` d'avant ce lot avec ce module-ci :
+     ils portent la MÊME version d'URL (⛔ ce lot ne change pas la version de cache), donc leurs
+     deux entrées de cache expirent indépendamment. Cet `admin.js`-là ne connaît pas l'étape
+     « publication » : personne ne lirait l'état de l'accès, et la carte de la table de marque
+     resterait sur « Connecte-toi à l'administration » — le jour du tournoi.
+     ⛔ AVEC UN `admin.js` À JOUR, CETTE LIGNE NE PART JAMAIS : l'étape existe, et c'est elle qui
+     lit, une seule fois, à l'arrivée sur l'écran. Le contrôle I9 de
+     `tests/ecran-publication-surface.test.js` éprouve les deux cas, avec un lecteur mêlé. */
+  if (!etapePublicationConnue()) chargerAccesScores();
+}
+
+/** L'`admin.js` chargé connaît-il l'étape « publication » (donc la ressource et son registre) ? */
+function etapePublicationConnue() {
+  return typeof ADMIN_ETAPES === 'object' && !!ADMIN_ETAPES && !!ADMIN_ETAPES.publication &&
+         typeof assurerRessourceAdmin === 'function';
 }
 
 /**
@@ -1352,8 +1498,16 @@ function masquerAccesScores() {
 }
 
 /**
- * Lit l'état de l'accès (clé admin). ⭐ Appelée après la connexion (`majPublication`) et après chaque
- * geste. ⛔ Sans clé admin rangée, elle ne fait RIEN : elle n'ouvre jamais de fenêtre de clé.
+ * Lit l'état de l'accès (clé admin).
+ *
+ * ⭐ ELLE N'EST PLUS APPELÉE QUE PAR LE REGISTRE (`ADMIN_RESSOURCES.accesScores`, admin.js) : à
+ * l'arrivée sur l'écran, au rafraîchissement explicite, et en repli quand un backend d'avant ne
+ * joint pas l'état à sa réponse d'écriture. ⛔ Plus par `majPublication()` — voir son bandeau.
+ * ⛔ Sans clé admin rangée, elle ne fait RIEN : elle n'ouvre jamais de fenêtre de clé.
+ * ⛔ Elle n'inscrit rien dans le registre : elle LIT, peint et pose son message. Le registre est
+ *   le seul écrivain de l'état des ressources (doctrine R2, admin.js).
+ * ⏱️ Bornée : `delaiMs` par tentative, `budgetMs` pour le total (cette lecture est rejouable après
+ *   un 404 de la Web App, liste fermée d'api.js).
  */
 async function chargerAccesScores() {
   if (!document.getElementById('acces-saisie')) return false;
@@ -1362,7 +1516,8 @@ async function chargerAccesScores() {
   if (!cle) { masquerAccesScores(); return false; }
   const numero = ++accesScoresSequence;
   try {
-    const etat = await apiPostProtege('getAccesScoresAdmin', {}, 'admin', 'admin');
+    const etat = await apiPostProtege('getAccesScoresAdmin', {}, 'admin', 'admin',
+      { delaiMs: DELAI_LECTURE_ACCES_SCORES_MS, budgetMs: BUDGET_LECTURE_ACCES_SCORES_MS });
     if (numero !== accesScoresSequence) return false;
     accesScoresCourant = etat;
     rendreAccesScores(etat);
@@ -1370,9 +1525,45 @@ async function chargerAccesScores() {
   } catch (err) {
     if (numero !== accesScoresSequence) return false;
     const message = document.getElementById('message-acces-saisie');
-    if (message) afficherMessage(message, '⚠️ État de l\'accès indisponible : ' + err.message, 'ko');
+    if (message) {
+      afficherMessage(message, '⚠️ État de l\'accès indisponible (' +
+        causeInconnuePublication(err, DELAI_LECTURE_ACCES_SCORES_MS) + '). Utilise « Rafraîchir » pour réessayer.', 'ko');
+    }
     return false;
   }
+}
+
+/**
+ * ⭐ L'ÉTAT JOINT À UNE RÉPONSE D'ÉCRITURE, PEINT À LA PLACE D'UNE RELECTURE (contrat ⑰ du backend :
+ * `changerAccesScores` + `renvoyer_etat: 'oui'` renvoie `acces`, EXACTEMENT ce que
+ * `getAccesScoresAdmin` renverrait, relu SOUS LE VERROU après l'écriture).
+ *
+ * ⛔ CE QUI EST PRÉSERVÉ MOT POUR MOT : l'écran peint un état RELU PAR LE SERVEUR, jamais un état
+ *   deviné ici. Aucune transition, aucune version, aucun lien n'est calculé dans le navigateur.
+ * ⭐ Elle passe par la FILE de la ressource (`appliquerRessourceAdmin`) : une lecture partie AVANT
+ *   l'écriture se termine d'abord, puis cet état — plus récent — la recouvre. ⛔ Sans la file, une
+ *   lecture de navigation en vol aurait pu repeindre l'état d'AVANT le geste, par-dessus.
+ * ⛔ Le compteur de séquence est incrémenté : une réponse de lecture encore en vol, plus ANCIENNE,
+ *   ne peut plus rien peindre.
+ * @return {Promise<boolean>} true si l'état a été appliqué (⛔ false s'il n'y en avait pas)
+ */
+function appliquerAccesScores(etat) {
+  if (!etat || typeof etat !== 'object') return Promise.resolve(false);
+  if (!document.getElementById('acces-saisie')) return Promise.resolve(false);
+  const poser = function () {
+    accesScoresSequence++;
+    accesScoresCourant = etat;
+    rendreAccesScores(etat);
+  };
+  if (typeof appliquerRessourceAdmin !== 'function') { poser(); return Promise.resolve(true); }
+  return appliquerRessourceAdmin('accesScores', poser).then(function () { return true; });
+}
+
+/** Relit l'état de l'accès APRÈS une écriture — par le registre, jamais par un appel direct :
+ *  ⛔ une lecture commencée avant l'écriture décrirait l'état d'avant. */
+function relireAccesScores() {
+  if (typeof rafraichirRessourceAdmin === 'function') return rafraichirRessourceAdmin('accesScores');
+  return Promise.resolve(chargerAccesScores());
 }
 
 /** Le texte d'avertissement du calcul de fin. ⛔ Il n'empêche jamais la pause manuelle. */
@@ -1638,7 +1829,38 @@ async function onClicGesteAccesScores(evenement) {
 
 async function creerConfirmationGeste(transition, versionLue) {
   return ecrireAdmin('creerConfirmationAccesScores',
-    { transition: transition, version_lue: versionLue, requete_id: nouvelIdRequeteAdmin() });
+    { transition: transition, version_lue: versionLue, requete_id: nouvelIdRequeteAdmin() },
+    { delaiMs: DELAI_ECRITURE_PUBLICATION_MS });
+}
+
+/* ⭐ LE GARDE D'OPÉRATION DE LA CARTE — un seul geste de publication ou d'accès à la fois.
+ *
+ * 🔬 LE DÉFAUT FERMÉ (lot « Publication »). Les deux gestes de cette carte ouvrent un dialogue de
+ * confirmation AVANT de griser quoi que ce soit — et un `await` rend la main au navigateur. Deux
+ * clics rapides ouvraient donc DEUX dialogues, et deux « Oui » lançaient DEUX séquences complètes :
+ * mesuré au banc, un double clic sur « Publier » émettait HUIT requêtes (deux enregistrements
+ * d'infos, deux publications, deux relectures de config, deux relectures d'accès) et reconstruisait
+ * deux fois l'instantané public. Sur un geste d'accès, la seconde demande était bien REFUSÉE par la
+ * version optimiste du serveur — la machine d'état tenait —, mais elle coûtait quand même une
+ * exécution, une ligne de registre d'idempotence et une ligne de journal, pour rien.
+ *
+ * ⛔ CE QUE CE GARDE N'EST PAS : un verrou de concurrence. Il ne remplace ni la version optimiste,
+ *   ni le registre d'idempotence, ni le verrou serveur — qui restent la seule vérité, et qui
+ *   protègent aussi de DEUX ONGLETS, que rien ici ne peut voir. Il évite un doublon né d'UN SEUL
+ *   clic de trop, dans UN SEUL onglet, et rien d'autre.
+ * ⛔ Il est relâché dans un `finally` : une panne ne doit jamais laisser la carte muette.
+ */
+let publicationGesteEnCours = '';
+
+/** Prend le garde pour ce geste, ou dit pourquoi il est refusé. */
+function prendreGestePublication(nom) {
+  if (publicationGesteEnCours) return false;
+  publicationGesteEnCours = String(nom);
+  return true;
+}
+
+function relacherGestePublication() {
+  publicationGesteEnCours = '';
 }
 
 /**
@@ -1651,8 +1873,38 @@ async function executerGesteAccesScores(action) {
   const etat = accesScoresCourant;
   const message = document.getElementById('message-acces-saisie');
   if (!etat || etat.disponible === false || (etat.actions_possibles || []).indexOf(action) === -1) return false;
+  /* ⭐ UN SEUL GESTE À LA FOIS — pris AVANT le premier dialogue, seul endroit où il protège : c'est
+     l'`await` du dialogue qui laissait passer le second clic. Voir `publicationGesteEnCours`. */
+  if (!prendreGestePublication('acces:' + action)) return false;
+  try {
+    return await executerGesteAccesScoresGarde(action, etat, message);
+  } finally {
+    relacherGestePublication();
+  }
+}
+
+/**
+ * ⭐ UN GESTE D'ORGANISATEUR. La version lue part avec la demande : un écran périmé est refusé par le
+ * serveur (jamais appliqué). Rotation, pause et clôture exigent une confirmation explicite ; quand le
+ * calcul de fin ne conclut pas, une confirmation renforcée est créée CÔTÉ SERVEUR, puis consommée.
+ * ⛔ Aucun réessai automatique : une panne se montre, et l'écran est relu dans tous les cas.
+ *
+ * ⭐ CE QUE CE LOT A CHANGÉ, ET SEULEMENT CELA :
+ *   · la demande porte `renvoyer_etat: 'oui'` ; la réponse rapporte alors `acces`, l'état RELU SOUS
+ *     LE VERROU par le serveur. L'écran le peint au lieu d'émettre une seconde requête — six gestes,
+ *     six relectures épargnées. ⛔ Sans `acces` (backend d'avant), on relit exactement comme avant ;
+ *   · l'attente est BORNÉE ;
+ *   · une issue INCONNUE (délai, réseau) n'est plus annoncée comme un échec certain.
+ * ⛔ CE QUI N'A PAS BOUGÉ D'UN CARACTÈRE : la machine d'état, la version optimiste, l'identifiant
+ *   d'idempotence, les confirmations, et la réconciliation prudente de la rotation.
+ */
+async function executerGesteAccesScoresGarde(action, etat, message) {
   const versionLue = String(etat.version);
-  const donnees = { transition: action, version_lue: versionLue, requete_id: nouvelIdRequeteAdmin() };
+  /* ⭐ `renvoyer_etat` — la DEMANDE explicite de l'état relu. ⛔ Elle ne change ni la transition, ni
+     la version envoyée, ni l'identifiant de demande : l'empreinte d'idempotence du serveur porte sur
+     la transition et la version, pas sur ce drapeau d'affichage. */
+  const donnees = { transition: action, version_lue: versionLue, requete_id: nouvelIdRequeteAdmin(),
+                    renvoyer_etat: 'oui' };
   const aviso = avertissementFinAcces(etat);
   const texteAviso = aviso ? aviso.texte : '';
 
@@ -1672,7 +1924,7 @@ async function executerGesteAccesScores(action) {
     if (!await dialogConfirmer(question, { ok: 'Mettre en pause', danger: renforcee })) return false;
     if (renforcee) {
       try { donnees.confirmation_id = (await creerConfirmationGeste('FIGER', versionLue)).confirmation_id; }
-      catch (err) { if (message) afficherMessage(message, '⚠️ ' + err.message, 'ko'); await chargerAccesScores(); return false; }
+      catch (err) { if (message) afficherMessage(message, messageEchecGesteAcces(err), 'ko'); await relireAccesScores(); return false; }
     }
   }
 
@@ -1686,7 +1938,7 @@ async function executerGesteAccesScores(action) {
           '\n\nClôturer quand même un tournoi peut-être seulement interrompu ?',
           { ok: 'Oui, clôturer', danger: true })) return false;
       try { donnees.confirmation_id = (await creerConfirmationGeste('CLOTURER', versionLue)).confirmation_id; }
-      catch (err) { if (message) afficherMessage(message, '⚠️ ' + err.message, 'ko'); await chargerAccesScores(); return false; }
+      catch (err) { if (message) afficherMessage(message, messageEchecGesteAcces(err), 'ko'); await relireAccesScores(); return false; }
     }
     donnees.confirme = true;
   }
@@ -1694,14 +1946,20 @@ async function executerGesteAccesScores(action) {
   const zone = document.getElementById('acces-saisie');
   if (zone) zone.querySelectorAll('[data-geste-acces]').forEach(function (b) { b.disabled = true; });
   let applique = false;
+  let inconnue = false;
   try {
-    const res = await ecrireAdmin('changerAccesScores', donnees);
+    const res = await ecrireAdmin('changerAccesScores', donnees, { delaiMs: DELAI_ECRITURE_PUBLICATION_MS });
     applique = true;
     if (message) afficherMessage(message, '✅ ' + (ACCES_SCORES_LIBELLES_ETAT[res.etat] || 'Accès mis à jour.'), 'ok');
+    /* ⭐ L'ÉTAT RELU PAR LE SERVEUR, s'il l'a joint : ⛔ une requête de moins, et pas un état deviné. */
+    if (!await appliquerAccesScores(res.acces)) await relireAccesScores();
   } catch (err) {
-    if (message) afficherMessage(message, '⚠️ ' + err.message, 'ko');
+    inconnue = issueInconnuePublication(err);
+    if (message) afficherMessage(message, messageEchecGesteAcces(err), 'ko');
+    /* ⛔ ON RELIT DANS TOUS LES CAS, et c'est une LECTURE, pas un rejeu : elle seule peut dire si
+       l'écriture a abouti sans que sa réponse revienne. La carte peint alors la vérité du serveur. */
+    await relireAccesScores();
   }
-  await chargerAccesScores();   // ⭐ l'écran suit le serveur, jamais l'inverse
   /* Google peut appliquer la rotation puis perdre sa réponse au second saut de la Web App (404).
      ⛔ On ne réémet jamais cette écriture. La réussite n'est réconciliée qu'après relecture, si le
      serveur montre EXACTEMENT l'incrément attendu et un nouveau lien pour la même édition. */
@@ -1714,6 +1972,12 @@ async function executerGesteAccesScores(action) {
     applique = true;
     if (message) afficherMessage(message, '✅ Lien et QR code renouvelés.', 'ok');
   }
+  /* ⭐ ISSUE INCONNUE NON RÉCONCILIÉE — ⛔ ne jamais la présenter comme un refus. L'état affiché
+     au-dessus vient d'être RELU : on renvoie l'organisateur à lui, sans rien réémettre. */
+  if (!applique && inconnue && message) {
+    afficherMessage(message, messageInconnuPublication('le geste « ' + libelleGesteAcces(action) +
+      ' » n’est pas confirmé', undefined, 'l’état affiché ci-dessus vient d’être relu sur le serveur'), 'ko');
+  }
   /* ⭐ CORR-ACCES-45MIN-DEMO — un accès OUVERT ou REPRIS alors que la saisie est déjà échue est aussitôt refermé
      par le serveur : le « ✅ Ouvert » ne doit pas rester affiché. ⛔ Les autres gestes (pause, renouvellement,
      clôture) ne « referment » rien : leur message reste celui du serveur. */
@@ -1723,6 +1987,20 @@ async function executerGesteAccesScores(action) {
       '« Reprendre la saisie » la rouvre pour 45 minutes.', 'ko');
   }
   return true;
+}
+
+/** Le libellé de bouton d'un geste, pour en parler dans un message. */
+function libelleGesteAcces(action) {
+  const trouve = ACCES_SCORES_GESTES.filter(function (g) { return g.action === action; })[0];
+  return trouve ? trouve.libelle : String(action);
+}
+
+/** Le message d'un geste qui n'a pas abouti : ⛔ un refus LISIBLE se dit tel quel, une issue
+ *  INCONNUE ne se dit jamais « échec ». */
+function messageEchecGesteAcces(err) {
+  if (!issueInconnuePublication(err)) return '⚠️ ' + err.message;
+  return messageInconnuPublication('le geste n’est pas confirmé', err,
+    'l’état de l’accès est relu à l’instant');
 }
 
 /* ---- Correction d'un score suite à un litige (organisateur seulement) ---- */
@@ -1864,6 +2142,24 @@ function dessinerQrSaisie() {
  * « Publier le tournoi » OU « Masquer ». À la publication, on enregistre d'abord
  * les infos saisies (nom/date/lieu/description) + l'affiche éventuelle, PUIS on publie.
  * Le masquage, lui, ne fait que dépublier.
+ *
+ * ⭐ CE QUE LE LOT « PUBLICATION » A CHANGÉ — et rien d'autre :
+ *   ① UN SEUL GESTE À LA FOIS (`prendreGestePublication`). Le dialogue de confirmation rendait la
+ *     main avant que le bouton soit grisé : deux clics rapides émettaient HUIT requêtes et
+ *     reconstruisaient deux fois l'instantané public. Mesuré au banc.
+ *   ② LA CONFIGURATION VIENT DE LA RÉPONSE. `publierTournoi` est passée au contrat d'écriture : sa
+ *     réponse porte la config RELUE SOUS LE VERROU. ⛔ Le `getConfigAdmin` qui suivait disparaît —
+ *     une exécution Apps Script entière par publication. Repli intact avec un backend d'avant.
+ *   ③ PLUS DE RELECTURE DE L'ACCÈS AUX SCORES. `majPublication()` la déclenchait ; publier ne change
+ *     RIEN à l'accès de la table de marque. ⛔ Ne jamais la réintroduire ici.
+ *   ④ ATTENTE BORNÉE, et un résultat INCONNU dit comme tel — jamais comme un échec certain.
+ *   ⑤ LE REPEINT EST SORTI DU `try` DE L'ÉCRITURE. Une panne d'affichage (un formulaire absent,
+ *     par exemple) s'affichait « ⚠️ <message technique> » alors que la publication avait RÉUSSI :
+ *     l'organisateur lisait un échec là où le classeur disait le contraire. Reproduit au banc.
+ *
+ * ⛔ CE QUI N'A PAS BOUGÉ : les deux questions posées, l'enregistrement préalable des infos (il est
+ *   ANNONCÉ dans la question, et le serveur ne réécrit que ce qui change), et le fait que masquer
+ *   ne touche NI l'adresse publique NI la page publique — seule la cellule `tournoi_publie` bouge.
  */
 async function onPublier() {
   const message = document.getElementById('message-publication');
@@ -1872,44 +2168,172 @@ async function onPublier() {
   const question = publier
     ? 'Publier le tournoi ?\n\nLe tournoi deviendra visible du public et le planning apparaîtra automatiquement dans les dossiers des clubs. Les infos saisies (nom, date, lieu, description, affiche) seront aussi enregistrées.'
     : 'Masquer le tournoi ? Les visiteurs reverront l\'écran « à venir » et le planning sera masqué dans les dossiers des clubs.';
-  if (!await dialogConfirmer(question, { ok: publier ? 'Publier' : 'Masquer' })) return;
-
-  bouton.disabled = true;
+  /* ⭐ LE GARDE EST PRIS AVANT LA QUESTION — c'est l'`await` de la question qui laissait passer le
+     second clic. ⛔ Et il est relâché dans le `finally` le plus extérieur. */
+  if (!prendreGestePublication(publier ? 'publier' : 'masquer')) return;
   try {
-    if (publier) {
-      afficherMessage(message, 'Enregistrement des infos…', 'ok');
-      // Filet « par sécurité » à la publication : on enregistre les infos SITE + la date/zone de la
-      // carte cadre (payload fusionné ; le backend n'écrit que les champs présents).
-      await ecrireAdmin('enregistrerInfosTournoi', Object.assign({}, lireInfosTournoi(), lireCadreTournoi()));
-      if (afficheDataURI) {
-        afficherMessage(message, 'Envoi de l\'affiche…', 'ok');
-        await ecrireAdmin('enregistrerAffiche', { affiche: afficheDataURI });
+    if (!await dialogConfirmer(question, { ok: publier ? 'Publier' : 'Masquer' })) return;
+    bouton.disabled = true;
+    let reponse = null;
+    try {
+      if (publier) {
+        afficherMessage(message, 'Enregistrement des infos…', 'ok');
+        // Filet « par sécurité » à la publication : on enregistre les infos SITE + la date/zone de la
+        // carte cadre (payload fusionné ; le backend n'écrit que les champs présents).
+        /* ⭐ LA BASE DE FUSION PART AVEC LA DEMANDE. C'est elle qui rend cet enregistrement
+           « au passage » inoffensif : un champ que l'organisateur n'a pas touché garde la valeur
+           du SERVEUR, même si un autre onglet l'a changée entre-temps. ⛔ Et un champ changé des
+           deux côtés différemment fait REFUSER l'ensemble — donc la publication aussi. */
+        await ecrireAdmin('enregistrerInfosTournoi',
+          avecBaseInfos(Object.assign({}, lireInfosTournoi(), lireCadreTournoi())),
+          { delaiMs: DELAI_ECRITURE_PUBLICATION_MS });
+        if (afficheDataURI) {
+          afficherMessage(message, 'Envoi de l\'affiche…', 'ok');
+          await ecrireAdmin('enregistrerAffiche', { affiche: afficheDataURI },
+            { delaiMs: DELAI_ECRITURE_PUBLICATION_MS });
+        }
+        afficherMessage(message, 'Publication…', 'ok');
+        reponse = await ecrireAdmin('publierTournoi', { publie: 'oui' },
+          { delaiMs: DELAI_ECRITURE_PUBLICATION_MS });
+      } else {
+        afficherMessage(message, 'Masquage…', 'ok');
+        reponse = await ecrireAdmin('publierTournoi', { publie: 'non' },
+          { delaiMs: DELAI_ECRITURE_PUBLICATION_MS });
       }
-      afficherMessage(message, 'Publication…', 'ok');
-      await ecrireAdmin('publierTournoi', { publie: 'oui' });
-    } else {
-      afficherMessage(message, 'Masquage…', 'ok');
-      await ecrireAdmin('publierTournoi', { publie: 'non' });
+    } catch (erreur) {
+      /* ⛔ L'ÉCRITURE, ET ELLE SEULE, EST DANS CE `try`. Un refus lisible du serveur se dit tel
+         quel ; une issue INCONNUE ne se dit jamais « échec » — on RELIT, et on peint la vérité. */
+      await conclurePublicationRatee(message, publier, erreur);
+      return;
+    } finally {
+      bouton.disabled = false;
     }
-    // On recharge la config pour refléter le nouvel état.
-    configCourante = await lireConfigAdmin();
-    majInfosTournoi();
-    document.getElementById('form-infos-tournoi').tournoi_affiche.value = ''; // vide le champ fichier
-    majPublication();
-    majTableauBord();
-    afficherMessage(message, publier
-      ? '✅ Tournoi publié. Le planning est maintenant visible dans les dossiers des clubs.'
-      : '✅ Tournoi masqué. Le planning est retiré des dossiers des clubs.', 'ok');
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+    // ⭐ L'état enregistré vient de la réponse (contrat d'écriture) ou, à défaut, d'une relecture.
+    await appliquerConfigEnregistree(reponse);
+    repeindreApresPublication();
+    const inchange = reponse && reponse.contrat === CONTRAT_ECRITURE &&
+      Array.isArray(reponse.modifies) && reponse.modifies.length === 0;
+    /* ⭐ RIEN N'A CHANGÉ : l'état demandé était DÉJÀ celui du classeur (un autre onglet, un second
+       clic). Le serveur n'a écrit aucune cellule ; le dire évite de laisser croire à une écriture. */
+    afficherMessage(message, inchange
+      ? (publier ? '✅ Déjà publié : rien n’a changé. Le planning est visible dans les dossiers des clubs.'
+                 : '✅ Déjà masqué : rien n’a changé. Le planning est retiré des dossiers des clubs.')
+      : (publier ? '✅ Tournoi publié. Le planning est maintenant visible dans les dossiers des clubs.'
+                 : '✅ Tournoi masqué. Le planning est retiré des dossiers des clubs.'), 'ok');
   } finally {
-    bouton.disabled = false;
-    // ⚠️ …puis on lui rend son état JUSTE, et cette ligne n'est pas décorative.
-    // `majPublication()` (donc le garde-fou) s'exécute plus haut, DANS le `try` : sans ce
-    // rappel, la réactivation ci-dessus l'écraserait systématiquement. Le cas concret :
-    // on masque un tournoi dont la préparation est incomplète → le bouton redevient
-    // « Publier le tournoi », et il resterait CLIQUABLE alors qu'il doit être grisé.
-    // ⛔ Aucune règle métier n'est touchée : on ne fait que recalculer un état VISUEL.
-    majVerrouPublier();
+    relacherGestePublication();
   }
+}
+
+/**
+ * Le repeint qui suit une publication ou un masquage aboutis.
+ * ⛔ HORS du `try` de l'écriture : une panne d'affichage ne doit PAS être annoncée comme une
+ *   publication ratée. Chaque appel est donc isolé — l'écriture, elle, est acquise.
+ * ⛔ AUCUNE requête : `majPublication` peint, `majTableauBord` peint, et l'accès à la table de
+ *   marque n'est pas touché (publier ne le concerne pas).
+ */
+function repeindreApresPublication() {
+  const essayer = function (faire) { try { faire(); } catch (e) { /* l'écriture reste acquise */ } };
+  /* ⭐ LE FORMULAIRE D'INFOS N'EST REPEINT QU'ICI — après un enregistrement CONFIRMÉ, donc depuis
+     une configuration relue sous le verrou. C'est aussi le moment où la base de fusion se
+     renouvelle (`majInfosTournoi` → `memoriserBaseInfos`). ⛔ JAMAIS sur un chemin d'échec : voir
+     `repeindreEtatPublication`. */
+  essayer(function () { if (typeof majInfosTournoi === 'function') majInfosTournoi(); });
+  essayer(function () {
+    const form = document.getElementById('form-infos-tournoi');
+    if (form && form.tournoi_affiche) form.tournoi_affiche.value = ''; // vide le champ fichier
+  });
+  repeindreEtatPublication();
+}
+
+/**
+ * Le repeint de l'ÉTAT DE PUBLICATION seul — sans jamais toucher au formulaire d'infos.
+ *
+ * ⛔ POURQUOI CETTE SÉPARATION EXISTE. Sur un chemin d'échec (refus du serveur, conflit, réponse
+ * perdue), repeindre le formulaire depuis `configCourante` DÉTRUIRAIT la saisie locale que
+ * l'organisateur vient de faire — et il la détruirait au pire moment, celui où on lui demande de
+ * décider quoi en faire. L'état de publication, lui, doit bien suivre le serveur.
+ * ⛔ AUCUNE requête : tout ce qui est appelé ici ne fait que peindre.
+ */
+function repeindreEtatPublication() {
+  const essayer = function (faire) { try { faire(); } catch (e) { /* l'écriture reste acquise */ } };
+  essayer(majPublication);
+  essayer(function () { if (typeof majTableauBord === 'function') majTableauBord(); });
+  // ⚠️ …puis le bouton retrouve son état JUSTE, et cette ligne n'est pas décorative.
+  // Le cas concret : on masque un tournoi dont la préparation est incomplète → le bouton redevient
+  // « Publier le tournoi », et il resterait CLIQUABLE alors qu'il doit être grisé.
+  // ⛔ Aucune règle métier n'est touchée : on ne fait que recalculer un état VISUEL.
+  essayer(majVerrouPublier);
+}
+
+/**
+ * Une publication ou un masquage qui n'a pas abouti.
+ * ⛔ REFUS LISIBLE du serveur → son message, tel quel : rien n'a été écrit, l'écran n'a rien à relire.
+ * ⭐ ISSUE INCONNUE (délai dépassé, réseau, HTTP) → l'exécution a pu aboutir CHEZ GOOGLE. On RELIT la
+ *   configuration — une LECTURE, ⛔ jamais un rejeu de l'écriture — et on peint ce que le serveur a
+ *   VRAIMENT. Puis on dit à l'organisateur que le résultat n'est pas confirmé, et que ce qu'il voit
+ *   vient d'être relu. C'est la seule façon honnête de ne pas transformer une réponse perdue en
+ *   échec certain — ni en succès.
+ */
+async function conclurePublicationRatee(message, publier, erreur) {
+  /* ⭐ LE CONFLIT DE FUSION A SON PROPRE MESSAGE : c'est le seul refus où l'organisateur doit
+     comparer deux versions, donc le seul qui mérite d'être détaillé champ par champ. */
+  const conflit = conflitInfosTournoi(erreur);
+  if (conflit) { rendreConflitInfosTournoi(message, conflit); return; }
+  if (!issueInconnuePublication(erreur)) {
+    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+    /* ⛔ PAS `repeindreApresPublication()` : un refus ne doit pas effacer la saisie locale. */
+    repeindreEtatPublication();
+    return;
+  }
+  let relu = false;
+  try { configCourante = await lireConfigAdmin(undefined, { delaiMs: DELAI_ECRITURE_PUBLICATION_MS }); relu = true; }
+  catch (e) { /* même la relecture est en panne : on ne prétendra rien de l'état */ }
+  /* ⛔ MÊME RÈGLE ICI, et elle compte davantage : la configuration vient d'être RELUE, donc
+     repeindre le formulaire remplacerait la saisie de l'organisateur par l'état distant, sans
+     qu'il l'ait demandé. On ne repeint que l'état de publication. */
+  repeindreEtatPublication();
+  afficherMessage(message, messageInconnuPublication(
+    (publier ? 'la publication' : 'le masquage') + ' n’est pas confirmé', erreur,
+    relu ? 'l’état de publication affiché ci-dessus vient d’être relu sur le serveur ; ta saisie des ' +
+           'infos est conservée telle quelle'
+         : 'l’état affiché n’a PAS pu être relu — recharge la page avant de recliquer'), 'ko');
+}
+
+/** Le refus est-il un CONFLIT DE FUSION des infos ? ⛔ Reconnu par son CODE, pas par son texte. */
+function conflitInfosTournoi(erreur) {
+  const r = erreur && erreur.reponse;
+  return (r && r.code === 'conflit_infos_tournoi' && Array.isArray(r.conflits) && r.conflits.length)
+    ? r : null;
+}
+
+/**
+ * Le rendu d'un conflit de fusion.
+ *
+ * ⭐ CE QU'IL FAIT : il NOMME les champs avec les libellés que le SERVEUR a fournis, montre côte à
+ * côte ce que l'écran voulait écrire et ce que le serveur porte, et dit les deux seules suites
+ * possibles — relire, ou reprendre sa saisie.
+ * ⛔ CE QU'IL NE FAIT PAS, et chaque point est une exigence :
+ *   · il ne repeint PAS le formulaire : la saisie locale est conservée, intacte ;
+ *   · il ne RENOUVELLE PAS la base de fusion : rien n'a été confirmé par le serveur, la base doit
+ *     donc rester celle du dernier état confirmé, sinon le prochain clic écraserait ;
+ *   · il ne publie PAS, et il ne réémet RIEN automatiquement ;
+ *   · il ne propose pas d'« écraser quand même » : ce serait redonner à l'aveugle ce que la fusion
+ *     vient d'empêcher. Pour imposer sa version, l'organisateur ressaisit le champ en connaissant
+ *     la valeur distante — qui est affichée ci-dessous.
+ */
+function rendreConflitInfosTournoi(message, refus) {
+  const lignes = refus.conflits.map(function (c) {
+    return '   • ' + (c.libelle || c.champ) + ' — sur cet écran : « ' + c.demande +
+      ' » · sur le serveur : « ' + c.serveur + ' »';
+  });
+  afficherMessage(message,
+    '⚠️ Ces informations ont changé ailleurs depuis que cet écran les a chargées :\n' +
+    lignes.join('\n') +
+    '\nRIEN n’a été enregistré et le tournoi n’a PAS été publié. Ta saisie est conservée.\n' +
+    'Deux suites possibles : « Rafraîchir » puis recharger la page pour repartir des valeurs du ' +
+    'serveur, ou reprendre ta saisie en tenant compte des valeurs ci-dessus, puis republier.', 'ko');
+  /* ⛔ L'état de publication, lui, n'a pas bougé : on ne le repeint même pas — aucune écriture
+     n'a eu lieu, et `majVerrouPublier` suffit à rendre le bouton à son état juste (le `finally`
+     d'`onPublier` s'en charge déjà). */
 }

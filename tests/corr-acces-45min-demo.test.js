@@ -149,6 +149,18 @@ function bancAdmin(options) {
     sessionStorage: memoire('session', { r92_cle_admin: CLE_ADMIN_FICTIVE }, journalStockage),
     localStorage: memoire('local', {}, journalStockage),
     crypto: { randomUUID: () => 'uuid-fictif-' + (++uuid) },
+    /* ⭐ Lot « Publication » — LES QUATRE GLOBALES QU'UN NAVIGATEUR A TOUJOURES EUES, et que ce
+       contexte simulé n'exposait pas. `chargerAccesScores` borne désormais son attente
+       (`delaiMs` / `budgetMs`, admin-infos-publication.js) : api.js crée alors un
+       `AbortController`, pose un minuteur et lit l'horloge. ⛔ Sans elles, la lecture échouait
+       sur « performance is not defined » — un artefact du banc, pas un comportement de l'écran.
+       ⚠️ Les minuteries sont celles de Node, non accélérées : ce banc n'éprouve pas les délais
+       (le banc de l'écran « Publication » le fait, avec un temps comprimé). Elles sont ici pour
+       que le chemin nominal existe. */
+    performance: performance,
+    AbortController: AbortController,
+    setTimeout: setTimeout,
+    clearTimeout: clearTimeout,
     fetch: (url, init) => {
       const corps = init && init.body ? JSON.parse(init.body) : { action: new URL(url).searchParams.get('action') };
       requetes.push({ corps: corps });

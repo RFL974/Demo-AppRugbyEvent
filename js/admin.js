@@ -520,6 +520,13 @@ function redimensionnerImage(fichier, maxDim, qualite, typeSortie, fondCouleur) 
    par quatre écrans, et mémoriser « l'écran Inviter est chargé » ferait redemander la même
    liste aux trois autres. Chaque fonction renvoie `true` UNIQUEMENT si la lecture a réussi. */
 const ADMIN_RESSOURCES = {
+  /* ⭐ Lot « Publication » — l'état de l'accès de la table de marque (clé admin, lecture SANS verrou).
+     ⛔ Le registre est le seul à inscrire « chargée » : `chargerAccesScores` LIT, peint et pose son
+       message d'erreur, rien de plus (voir son bandeau dans admin-infos-publication.js). */
+  accesScores: function () {
+    if (typeof chargerAccesScores !== 'function') return Promise.resolve(false);
+    return Promise.resolve(chargerAccesScores());
+  },
   clubsInvites: function () {
     if (typeof chargerClubsInvites !== 'function') return Promise.resolve(false);
     return Promise.resolve(chargerClubsInvites());
@@ -608,6 +615,18 @@ const ADMIN_ETAPES = {
      `onTelechargerPdfAutorisation` l'exige avant de générer — le PDF ne comptera donc jamais zéro
      club. ⚠️ `dossier` continue, lui, de la réclamer : son sélecteur de club en dépend vraiment. */
   autorisation: { ressources: ['dossierAutorisation'] },
+  /* ⭐ Lot « Publication » — L'ÉTAT DE L'ACCÈS À LA TABLE DE MARQUE EST UNE RESSOURCE D'ÉCRAN.
+     🔬 LE DÉFAUT FERMÉ. `majPublication()` appelait `chargerAccesScores()`, donc `getAccesScoresAdmin`
+     (8 lectures, 4 047 cellules). Or `majPublication()` est le repeint de la carte : il tourne à
+     l'OUVERTURE de l'administration — même quand l'organisateur ne vient jamais sur cet écran —, après
+     CHAQUE « Rafraîchir », et après CHAQUE publication ou masquage, alors que publier ne change
+     strictement RIEN à l'accès aux scores. Une lecture attachée à un repeint part autant de fois qu'on
+     repeint : c'est exactement le défaut que ce registre existe pour fermer.
+     ⭐ Désormais : `majPublication()` ne fait plus que peindre, et cette lecture-ci part à l'ARRIVÉE sur
+     l'écran (`ADMIN_ETAPES.publication`), une seule fois, partagée si elle est déjà en vol, et rendue
+     gratuite au retour. ⛔ Elle n'est pas SUPPRIMÉE, elle est DIFFÉRÉE — comme les partenaires et la
+     demande d'autorisation avant elle. */
+  publication: { ressources: ['accesScores'] },
   /* Partenaires : DEUX lectures indépendantes, mémorisées séparément — un échec partiel ne doit
      faire relire que celle qui a échoué. Le rendu, lui, n'est PAS parallélisable : le bilan lit
      les fiches, le peindre trop tôt afficherait « aucun relevé », un faux état vide. D'où
@@ -1387,6 +1406,14 @@ async function rafraichirAdmin() {
     const etatClubs = typeof etatRessourceAdmin === 'function' ? etatRessourceAdmin('clubsInvites') : null;
     const clubs = (etatClubs && (etatClubs.chargee || etatClubs.enVol) && typeof rafraichirRessourceAdmin === 'function')
       ? rafraichirRessourceAdmin('clubsInvites') : Promise.resolve(null);
+    /* ⭐ Lot « Publication » — MÊME RÈGLE pour l'état de l'accès à la table de marque : « Rafraîchir »
+       le relit dès qu'un écran l'a chargé, et RIEN sinon. ⛔ Sans cette ligne, l'écran « Publication »
+       aurait perdu son rafraîchissement le jour même où sa lecture a quitté `majPublication()` — c'est
+       le geste du jour du tournoi, celui qui va vérifier que la table de marque est bien ouverte. */
+    const etatAcces = typeof etatRessourceAdmin === 'function' ? etatRessourceAdmin('accesScores') : null;
+    const acces = (etatAcces && (etatAcces.chargee || etatAcces.enVol) && typeof rafraichirRessourceAdmin === 'function')
+      ? rafraichirRessourceAdmin('accesScores') : Promise.resolve(null);
+    acces.catch(function () { /* l'écran garde son message : une panne d'accès ne casse pas le reste */ });
     await rechargerEtRendre({ equipes: true, publication: true, heure: true });
     // Les cartes « Invitation initiale » et « Dossier final » suivent la configuration relue — une carte qui porte un
     // brouillon, ou le focus, n'est pas réécrite (seulement avec le module qui sait le garantir).

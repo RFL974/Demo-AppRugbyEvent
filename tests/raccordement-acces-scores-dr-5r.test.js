@@ -174,6 +174,18 @@ function contexte(options) {
     sessionStorage: memoire('session', o.session, journalStockage),
     localStorage: memoire('local', o.local, journalStockage),
     crypto: { randomUUID: () => 'uuid-fictif-' + (++uuid) },
+    /* ⭐ Lot « Publication » — LES QUATRE GLOBALES QU'UN NAVIGATEUR A TOUJOURES EUES, et que ce
+       contexte simulé n'exposait pas. `chargerAccesScores` borne désormais son attente
+       (`delaiMs` / `budgetMs`, admin-infos-publication.js) : api.js crée alors un
+       `AbortController`, pose un minuteur et lit l'horloge. ⛔ Sans elles, la lecture échouait
+       sur « performance is not defined » — un artefact du banc, pas un comportement de l'écran.
+       ⚠️ Les minuteries sont celles de Node, non accélérées : ce banc n'éprouve pas les délais
+       (le banc de l'écran « Publication » le fait, avec un temps comprimé). Elles sont ici pour
+       que le chemin nominal existe. */
+    performance: performance,
+    AbortController: AbortController,
+    setTimeout: setTimeout,
+    clearTimeout: clearTimeout,
     google: { script: { history: { replace: (etat, params) => historiqueAdresse.push(params) } } },
     fetch: (url, init) => {
       const methode = (init && init.method) || 'GET';
