@@ -54,7 +54,14 @@ function avecOperationPoules(geste) {
 function majDisponibilitePoules() {
   const occupe = operationPoulesEnCours();
   [['bouton-generer', true], ['bouton-recalculer-horaires', false],
-   ['bouton-modifier-poules', true], ['bouton-simuler-scores-matin', false]].forEach(function (paire) {
+   ['bouton-modifier-poules', true], ['bouton-simuler-scores-matin', false],
+   /* ⭐ Lot « Après-midi » : les TROIS boutons du bloc de classement rejoignent la garde.
+      ⛔ LE DÉFAUT MESURÉ. Pendant une génération de l'après-midi, « Générer les poules » se
+        fermait bien, mais « Générer l'après-midi », « Générer le dimanche » et « Appliquer les
+        scores de démo de l'après-midi » restaient cliquables : on pouvait empiler une seconde
+        écriture sur le MÊME onglet Matchs, pendant que la première le réécrivait. */
+   ['bouton-apresmidi', true], ['bouton-dimanche-scf', true],
+   ['bouton-simuler-scores-apresmidi', false]].forEach(function (paire) {
     const el = document.getElementById(paire[0]);
     if (!el) return;
     if (occupe) { el.dataset.poulesRouvrir = el.disabled ? '' : 'oui'; el.disabled = true; }
@@ -64,7 +71,16 @@ function majDisponibilitePoules() {
   if (enregistrer && !occupe && enregistrer.dataset.poulesRouvrir === 'oui') {
     enregistrer.disabled = false; delete enregistrer.dataset.poulesRouvrir;
   }
-  if (typeof majBoutonsScoresDemo === 'function' && !occupe) majBoutonsScoresDemo();
+  /* ⭐ À LA RÉOUVERTURE, LA DONNÉE TRANCHE, PAS LE DRAPEAU. Un bouton rouvert par
+     `poulesRouvrir` retrouverait son état d'AVANT le geste ; or le geste vient précisément de
+     changer l'état dont il dépend (des matchs d'après-midi existent maintenant, le matin peut
+     être redevenu incomplet). Les calculateurs repassent donc derrière la garde.
+     ⛔ `majDimancheScf` n'est PAS appelée ici : `majApresMidi` la termine déjà (les deux boutons
+     suivent le même cycle de vie). L'appeler en plus repeindrait le bloc deux fois par geste. */
+  if (!occupe) {
+    if (typeof majBoutonsScoresDemo === 'function') majBoutonsScoresDemo();
+    if (typeof majApresMidi === 'function') majApresMidi();
+  }
 }
 
 /* ⭐ DÉLAI NOMINAL DES QUATRE ÉCRITURES DE L'ÉCRAN.
@@ -574,66 +590,148 @@ function majDimancheScf() {
   }
 }
 
+/* ==========================================================================================
+ *  LES DEUX GÉNÉRATIONS DE LA PHASE DE CLASSEMENT — socle commun (lot APRESMIDI-DR)
+ * ==========================================================================================
+ *  ⛔ CE QUE CES DEUX GESTES N'AVAIENT PAS, et que les quatre autres écritures de l'écran
+ *    « Poules & planning » avaient acquis à leur lot : la garde d'opération, le délai borné,
+ *    l'état relu, la lecture honnête d'une réponse perdue et le focus rendu. Ils étaient restés
+ *    à l'écart parce qu'ils vivent dans le bloc « Après-midi », traité plus tard — le résultat
+ *    est qu'ils portaient à eux seuls TOUS les défauts déjà corrigés à côté.
+ *
+ *  ⛔ LES DÉFAUTS MESURÉS le 23/09/2026 :
+ *    · aucune garde : un double clic ouvrait DEUX fenêtres de confirmation, puis émettait DEUX
+ *      générations complètes, la seconde écrasant la première ;
+ *    · aucun délai : serveur muet ⇒ le bouton restait figé sur « Génération… » indéfiniment ;
+ *    · `rechargerEtRendre` ⇒ `getAll` PUIS `getConfigAdmin` après CHAQUE génération — 2 requêtes,
+ *      2 ouvertures de classeur, 35 951 cellules lues pour UN geste ;
+ *    · `'⚠️ ' + erreur.message` ⇒ une réponse PERDUE était annoncée comme un échec. Or la
+ *      génération a très bien pu aboutir côté Google : l'écran MENTAIT ;
+ *    · `dialogConfirmer` nu ⇒ le focus ne revenait pas au bouton.
+ *
+ *  ⭐ CE QUE LA CONFIRMATION NE FAIT PAS. Elle ne décide RIEN de destructif. L'écran ne sait pas
+ *    quels affrontements le nouveau tableau contiendra — seul le serveur le sait, et seulement
+ *    après avoir lu le classement sous le verrou. La perte est donc ARBITRÉE PAR LE SERVEUR, qui
+ *    refuse une première fois en NOMMANT les matchs menacés ; l'écran les montre ; et la seconde
+ *    requête reporte le compte que le SERVEUR vient d'annoncer. ⛔ Si un score tombe d'un autre
+ *    appareil entre les deux, le serveur recompte, voit l'écart et refuse encore.
+ * ======================================================================================== */
+
+/**
+ * Tronc commun des deux générations : même garde, même délai, même lecture de la réponse, même
+ * arbitrage de perte. Seuls les libellés et la forme du bilan changent.
+ * @param {Object} spec  { action, bouton, message, question, enCours, bilan }
+ */
+function genererPhaseClassement(spec) {
+  return avecOperationPoules(async function () {
+    const bouton  = document.getElementById(spec.bouton);
+    const message = document.getElementById(spec.message);
+    if (!bouton) return;
+    if (!await confirmerEnGardantLeFocus(spec.question, { ok: 'Générer' })) return;
+
+    const memoFocus = focusCourantPoules();
+    const texteBouton = bouton.textContent;
+    bouton.textContent = 'Génération…';
+    afficherMessage(message, spec.enCours, 'ok');
+
+    /* ⭐ UNE SEULE FONCTION D'ÉMISSION, réutilisée telle quelle pour la confirmation : la demande
+       confirmée est la MÊME, plus les deux champs d'arbitrage. */
+    const emettre = (extra) => ecrireAdmin(spec.action, Object.assign({}, extra || {}),
+      { delaiMs: DELAI_ECRITURE_POULES_MS });
+
+    try {
+      let res;
+      try {
+        res = await emettre();
+      } catch (erreur) {
+        const r = erreur && erreur.reponse;
+        /* ⭐ LE SEUL CAS OÙ L'ÉCRAN RENVOIE DE LUI-MÊME — et il n'est PAS un rejeu : c'est une
+           demande DIFFÉRENTE (elle porte la confirmation), émise après une réponse LUE qui
+           garantit que rien n'a été écrit. ⛔ Aucune réponse perdue n'arrive jamais ici. */
+        if (!r || r.code !== 'perte_scores_apresmidi') throw erreur;
+        const menaces = (r.matchs_perdus || []);
+        const accepte = await confirmerEnGardantLeFocus(
+          '⚠️ ' + r.scores_apresmidi_perdus + ' match(s) déjà joué(s) vont perdre leur score.\n\n' +
+          'Le nouveau tableau ne contient plus ces affrontements :\n• ' + menaces.join('\n• ') +
+          '\n\nLes autres scores de l’après-midi sont CONSERVÉS. Cette perte-là est définitive.',
+          { ok: 'Régénérer et perdre ces scores', annuler: 'Annuler' });
+        if (!accepte) {
+          afficherMessage(message, 'Rien n’a été modifié : les scores sont intacts.', 'ok');
+          return;
+        }
+        afficherMessage(message, spec.enCours, 'ok');
+        res = await emettre({ scores_aprem_confirmes: 'oui',
+          scores_aprem_vus: String(r.scores_apresmidi_perdus) });
+      }
+
+      /* ⭐ CE QUE L'ÉCRAN PEINT : ce que le SERVEUR dit avoir fait, jamais ce qui a été demandé. */
+      const avert = res && res.avertissements && res.avertissements.length;
+      let texte = spec.bilan(res);
+      if (res && res.scores_apresmidi_reportes > 0) {
+        texte += '\n🛡️ ' + res.scores_apresmidi_reportes + ' score(s) déjà saisi(s) conservé(s).';
+      }
+      /* ⭐ RIEN N'A CHANGÉ, ET C'EST DIT. `modifies` vide = le serveur n'a écrit aucune cellule :
+         le tableau était déjà celui-là. ⛔ Annoncer « N matchs générés » laisserait croire à une
+         écriture qui n'a pas eu lieu. */
+      if (res && Array.isArray(res.modifies) && res.modifies.length === 0) {
+        texte = '✅ Le tableau était déjà à jour — rien n’a été réécrit.' +
+          (res.scores_apresmidi_reportes > 0
+            ? '\n🛡️ ' + res.scores_apresmidi_reportes + ' score(s) déjà saisi(s) conservé(s).' : '');
+      }
+      if (avert) texte += '\n⚠️ ' + res.avertissements.join('\n⚠️ ');
+      afficherMessage(message, texte, avert ? 'ko' : 'ok');
+
+      /* ⭐ L'ÉTAT RELU SOUS LE VERROU remplace `getAll` + `getConfigAdmin` : deux requêtes de
+         moins par geste. ⛔ Repli exact sur la relecture si le backend est d'avant le contrat. */
+      await rafraichirPoulesDepuis(res, { reglages: true });
+    } catch (erreur) {
+      /* ⛔ UNE RÉPONSE PERDUE N'EST PAS UN ÉCHEC. La génération a peut-être abouti ; le dire
+         franchement, et ne JAMAIS renvoyer tout seul. */
+      const issue = erreurEcriturePoules(erreur, spec.quoi,
+        'Rafraîchis l’écran pour voir l’état réel avant de recliquer.');
+      afficherMessage(message, (issue.certain ? '⚠️ ' : '') + issue.message, 'ko');
+    } finally {
+      bouton.textContent = texteBouton;
+      rendreFocusPoules(memoFocus, spec.bouton);
+    }
+  });
+}
+
 /** Génère le brassage du dimanche (Super Challenge Phase 3) à partir du classement du samedi. */
-async function onGenererDimancheScf() {
-  if (!await dialogConfirmer('Générer le brassage du dimanche (Super Challenge Phase 3) ?\n\n' +
-               'Basé sur le classement du samedi. N\'efface PAS les triangulaires du samedi.', { ok: 'Générer' })) return;
-
-  const bouton  = document.getElementById('bouton-dimanche-scf');
-  const message = document.getElementById('message-dimanche-scf');
-  const texteBouton = bouton.textContent;
-  bouton.disabled = true;
-  bouton.textContent = 'Génération…';
-  afficherMessage(message, 'Génération du dimanche…', 'ok');
-
-  try {
-    const res = await ecrireAdmin('genererDimancheScf', {});
-    const nbM = (res && res.nb_matchs_dimanche != null) ? res.nb_matchs_dimanche : '?';
-    const avert = res && res.avertissements && res.avertissements.length;
-    let texte = '✅ ' + nbM + ' match(s) du dimanche générés.' +
-                (res.heure_fin_dimanche ? ' Fin : ' + res.heure_fin_dimanche + '.' : '');
-    if (avert) texte += '\n⚠️ ' + res.avertissements.join('\n⚠️ ');
-    afficherMessage(message, texte, avert ? 'ko' : 'ok');
-    await rechargerEtRendre({ reglages: true });
-  } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-  } finally {
-    bouton.disabled = false;
-    bouton.textContent = texteBouton;
-  }
+function onGenererDimancheScf() {
+  return genererPhaseClassement({
+    action: 'genererDimancheScf', bouton: 'bouton-dimanche-scf', message: 'message-dimanche-scf',
+    question: 'Générer le brassage du dimanche (Super Challenge Phase 3) ?\n\n' +
+      'Basé sur le classement du samedi. N\'efface PAS les triangulaires du samedi.',
+    enCours: 'Génération du dimanche…',
+    /* ⭐ Ce libellé s'insère dans le gabarit PARTAGÉ d'`erreurEcriturePoules` (« … a peut-être
+       été enregistré ») : il est choisi MASCULIN SINGULIER pour que la phrase s'accorde.
+       ⛔ Le gabarit appartient au lot « Poules & planning », clôturé : on ne le retouche pas. */
+    quoi: 'le brassage du dimanche',
+    bilan: function (res) {
+      const nbM = (res && res.nb_matchs_dimanche != null) ? res.nb_matchs_dimanche : '?';
+      return '✅ ' + nbM + ' match(s) du dimanche générés.' +
+        (res && res.heure_fin_dimanche ? ' Fin : ' + res.heure_fin_dimanche + '.' : '');
+    }
+  });
 }
 
 /** Génère la phase après-midi (classement croisé) à partir du classement du matin. */
-async function onGenererApresMidi() {
-  if (!await dialogConfirmer("Générer les matchs de l'après-midi (classement croisé) ?\n\n" +
-               "Basé sur le classement du matin. N'efface PAS les matchs du matin.", { ok: 'Générer' })) return;
-
-  const bouton  = document.getElementById('bouton-apresmidi');
-  const message = document.getElementById('message-apresmidi');
-  const texteBouton = bouton.textContent;
-  bouton.disabled = true;
-  bouton.textContent = 'Génération…';
-  afficherMessage(message, "Génération de l'après-midi…", 'ok');
-
-  try {
-    const res = await ecrireAdmin('genererApresMidi', {});
-    const nbM = (res && res.nb_matchs_aprem != null) ? res.nb_matchs_aprem : '?';
-    const avert = res && res.avertissements && res.avertissements.length;
-    let texte = '✅ ' + nbM + " match(s) d'après-midi générés." +
-                (res.heure_fin_aprem ? ' Fin : ' + res.heure_fin_aprem + '.' : '');
-    if (res.heure_fin_journee) texte += '\n🏁 Fin de la journée : ' + res.heure_fin_journee + '.';
-    if (avert) texte += '\n⚠️ ' + res.avertissements.join('\n⚠️ ');
-    afficherMessage(message, texte, avert ? 'ko' : 'ok');
-
-    // On recharge le planning (matin + après-midi) ET les réglages (l'heure de fin auto a changé).
-    await rechargerEtRendre({ reglages: true });
-  } catch (erreur) {
-    // Les garde-fous backend (scores du matin incomplets…) arrivent ici.
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
-  } finally {
-    bouton.disabled = false;
-    bouton.textContent = texteBouton;
-  }
+function onGenererApresMidi() {
+  return genererPhaseClassement({
+    action: 'genererApresMidi', bouton: 'bouton-apresmidi', message: 'message-apresmidi',
+    question: "Générer les matchs de l'après-midi (classement croisé) ?\n\n" +
+      "Basé sur le classement du matin. N'efface PAS les matchs du matin.",
+    enCours: "Génération de l'après-midi…",
+    quoi: 'le planning de l’après-midi',
+    bilan: function (res) {
+      const nbM = (res && res.nb_matchs_aprem != null) ? res.nb_matchs_aprem : '?';
+      let t = '✅ ' + nbM + " match(s) d'après-midi générés." +
+        (res && res.heure_fin_aprem ? ' Fin : ' + res.heure_fin_aprem + '.' : '');
+      if (res && res.heure_fin_journee) t += '\n🏁 Fin de la journée : ' + res.heure_fin_journee + '.';
+      return t;
+    }
+  });
 }
 
 /**
