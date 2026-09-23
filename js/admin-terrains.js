@@ -296,6 +296,9 @@ function injecterTerrains() {
        'd\'équipes</strong>, en gardant chaque catégorie groupée et en réservant la table des marques. ' +
        'Prévisualise la carte, puis applique.</p>';
   h += '<button type="button" class="bouton" id="bouton-repartir">' + svgIcone('terrain') + 'Répartir les terrains</button>';
+  // ⭐ La zone d'annonce vit HORS de `#repartition-resultat`, qui est réécrit à chaque geste : un
+  //   `aria-live` recréé en même temps que son texte n'est pas annoncé par les lecteurs d'écran.
+  h += '<p id="repart-annonce" class="cv-annonce" role="status" aria-live="polite"></p>';
   h += '<div id="repartition-resultat"><div class="cv-terrain-vide"><strong>Aperçu de la répartition</strong><p>Calculez la répartition pour voir les mini-terrains sur le plan.<br>Vous pourrez l’ajuster avant de l’appliquer.</p></div></div></section></div>';
 
   zone.innerHTML = h;
@@ -305,18 +308,36 @@ function injecterTerrains() {
   if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(zone);
 }
 
-/** Une ligne « grand terrain » (nom, type, longueur × largeur, supprimer). */
-function ligneTerrainPhysique(t, i) {
+/** La position enregistrée d'un terrain, en mètres, ou '' quand il n'en a pas encore. */
+function positionSaisie(t, axe) {
+  const memo = positionsTerrains[String(t.code || '')];
+  const v = memo ? memo[axe] : t[axe];
+  return Number.isFinite(parseFloat(v)) ? String(Math.round(parseFloat(v))) : '';
+}
+
+/** Une ligne « grand terrain » (nom, type, longueur × largeur, position, orientation, supprimer).
+ *  @param {boolean} [ouvert] force le dépliant ouvert (fiche qu'on vient d'ajouter). */
+function ligneTerrainPhysique(t, i, ouvert) {
   const opt=(v,lib,sel)=>'<option value="'+echapper(v)+'"'+(sel?' selected':'')+'>'+echapper(lib)+'</option>';
   const input=(cls,label,val,type)=>'<label>'+label+'<input class="'+cls+'" type="'+(type||'number')+'"'+(type==='text'?'':' min="0" step="1"')+' value="'+echapper(String(val==null?'':val))+'" aria-label="'+label+'"></label>';
   const code=String(t.code||codeTerrainAuto(t.nom,i));
-  return '<details class="cv-terrain-detail" name="terrain-physique"'+(i===0?' open':'')+'><summary>'+echapper(t.nom||'Nouveau terrain')+'<small><span class="terr-code">'+echapper(code)+'</span>'+(t.type==='foot'?'Football':'Rugby')+' · '+echapper(String(t.L||'—'))+' × '+echapper(String(t.W||'—'))+' m</small></summary>' +
+  return '<details class="cv-terrain-detail" name="terrain-physique"'+((ouvert||i===0)?' open':'')+'><summary>'+echapper(t.nom||'Nouveau terrain')+'<small><span class="terr-code">'+echapper(code)+'</span>'+(t.type==='foot'?'Football':'Rugby')+' · '+echapper(String(t.L||'—'))+' × '+echapper(String(t.W||'—'))+' m</small></summary>' +
     '<div class="terrain-ligne" data-i="'+i+'">'+input('tp-nom','Nom du terrain',t.nom,'text') +
     '<label>Sport<select class="tp-type" aria-label="Type de terrain">'+opt('rugby','Rugby',t.type!=='foot')+opt('foot','Football',t.type==='foot')+'</select></label>' +
     '<label>Surface<select class="tp-nature" aria-label="Nature du terrain (surface de jeu)">'+opt('','À préciser',!t.nature)+NATURES_TERRAIN.map(n=>opt(n,n,n===t.nature)).join('')+'</select></label>' +
     input('tp-l','Longueur (m)',t.L)+input('tp-w','Largeur (m)',t.W) +
     '<label>Code court<input class="tp-code" type="text" maxlength="6" value="'+echapper(String(t.code||codeTerrainAuto(t.nom,i)))+'" aria-label="Code court du terrain" placeholder="'+echapper(codeTerrainAuto(t.nom,i))+'"><span class="terr-aide">nomme les mini-terrains : '+echapper(String(t.code||codeTerrainAuto(t.nom,i)))+'-1, '+echapper(String(t.code||codeTerrainAuto(t.nom,i)))+'-2…</span></label>' +
     '<label>Orientation (°)<input class="tp-rot" type="number" min="0" max="359" step="1" value="'+echapper(String(angleTerrain(t)))+'" aria-label="Orientation du terrain sur le plan, en degrés"><span class="terr-aide">0 = horizontal. Se règle aussi à la poignée ⟲ sur le plan.</span></label>' +
+    // ⭐ POSITION SUR LE PLAN — une SAISIE, pas seulement un glisser (lot « Terrains »).
+    //   ⛔ CE QUI N'ALLAIT PAS. La position ne vivait que dans `positionsTerrains`, une mémoire du
+    //   module : le détecteur de « modifications non enregistrées » (assistant.js, qui ne regarde que
+    //   les champs) ne la voyait pas. On déplaçait ses terrains, on changeait d'écran, et le travail
+    //   partait sans un mot. Le plan n'était par ailleurs atteignable QU'À LA SOURIS.
+    //   ⭐ La fiche est désormais la source enregistrée de la position, exactement comme de
+    //   l'orientation juste au-dessus : le glisser écrit dans ces deux champs, et ils se règlent aussi
+    //   au clavier. ⚠️ `hidden` ne convenait pas : l'assistant ignore les champs cachés.
+    '<label>Position sur le plan — X (m)<input class="tp-x" type="number" step="1" value="'+echapper(positionSaisie(t,'x'))+'" aria-label="Position du terrain sur le plan, axe X, en mètres"></label>' +
+    '<label>Position sur le plan — Y (m)<input class="tp-y" type="number" step="1" value="'+echapper(positionSaisie(t,'y'))+'" aria-label="Position du terrain sur le plan, axe Y, en mètres"><span class="terr-aide">Se règle aussi en glissant la plaque de nom sur le plan. Vide = placement automatique.</span></label>' +
     // ⛔ L'ancien emplacement de la grille 3×3 n'est plus une saisie, mais il est CONSERVÉ : il
     //    sert de repli pour placer un terrain qui n'a pas encore de position sur le plan.
     '<input type="hidden" class="tp-pos" value="'+echapper(String(t.pos||''))+'">' +
@@ -374,6 +395,16 @@ function tableauCapaciteHTML(terrains, dims, couloir, cats) {
 }
 
 /* --- Lecture des saisies en cours (depuis le formulaire affiché) --- */
+
+/** Valeur numérique d'un champ, ou `undefined` s'il est vide. ⛔ Jamais 0 pour un champ vide :
+ *  « pas de position » et « position 0 » ne sont pas la même chose sur un plan. */
+function lireNombreOuVide(champ) {
+  const brut = champ ? String(champ.value).trim() : '';
+  if (brut === '') return undefined;
+  const v = parseFloat(brut);
+  return Number.isFinite(v) ? v : undefined;
+}
+
 function lireTerrainsDuFormulaire() {
   const out = [];
   document.querySelectorAll('#liste-terrains-physiques .terrain-ligne').forEach(function (row) {
@@ -388,6 +419,10 @@ function lireTerrainsDuFormulaire() {
       // Orientation sur le plan, en degrés. La fiche est la source enregistrée : la poignée ⟲
       // écrit dans ce champ, elle ne tient pas une valeur à part.
       rot:  parseFloat((row.querySelector('.tp-rot') || {}).value) || 0,
+      // Position sur le plan (m). ⭐ La FICHE est la source : le glisser y écrit, le clavier aussi.
+      //   Un champ vide reste vide (et non 0) : il déclenche le placement automatique.
+      x:    lireNombreOuVide(row.querySelector('.tp-x')),
+      y:    lireNombreOuVide(row.querySelector('.tp-y')),
       pos:  (row.querySelector('.tp-pos') || {}).value || ''
     });
   });
@@ -473,20 +508,86 @@ function onZoneTerrainsClick(evenement) {
   if (evenement.target.id === 'bouton-valider-placement') { onValiderPlacement(); return; }
   if (evenement.target.id === 'bouton-ajouter-terrain') { ajouterTerrainPhysique(); return; }
   const suppr = evenement.target.closest('.terr-suppr');
-  if (suppr) { suppr.closest('.cv-terrain-detail').remove(); recalculerCapacite(); return; }
+  if (suppr) { onSupprimerTerrainPhysique(suppr); return; }
   if (evenement.target.id === 'bouton-enregistrer-terrains') { onEnregistrerPlanTerrains(); return; }
   if (evenement.target.id === 'bouton-repartir') { onRepartir(); return; }
   if (evenement.target.id === 'bouton-appliquer-repartition') { onAppliquerRepartition(); return; }
+}
+
+/**
+ * Retire une fiche de grand terrain, APRÈS confirmation.
+ * ⛔ CE QUI N'ALLAIT PAS. Un clic retirait la fiche sur-le-champ, avec tout ce qui y était saisi et sans
+ *   aucun moyen de revenir en arrière — vérifié dans un vrai Chromium. Ce n'est pas une écriture serveur,
+ *   mais c'est bien une SAISIE perdue, et l'application demande confirmation partout ailleurs pour moins
+ *   que cela. ⭐ Le focus revient sur « + Ajouter un grand terrain » : la fiche qui le portait a disparu.
+ */
+async function onSupprimerTerrainPhysique(bouton) {
+  const fiche = bouton.closest('.cv-terrain-detail');
+  if (!fiche) return;
+  const ligne = fiche.querySelector('.terrain-ligne');
+  const nom = ((ligne && ligne.querySelector('.tp-nom')) || {}).value || '';
+  const ok = await dialogConfirmer('Retirer le grand terrain « ' + (nom.trim() || 'sans nom') + ' » de la liste ?\n\n' +
+    'Tout ce qui est saisi sur cette fiche sera perdu. Rien n’est enregistré tant que tu ne cliques pas ' +
+    'sur « Enregistrer les terrains ».', { ok: 'Retirer', danger: true });
+  if (!ok) return;
+  fiche.remove();
+  recalculerCapacite();
+  const ajouter = document.getElementById('bouton-ajouter-terrain');
+  if (ajouter && ajouter.focus) ajouter.focus();
 }
 
 function ajouterTerrainPhysique() {
   const liste = document.getElementById('liste-terrains-physiques');
   if (!liste) return;
   const i = liste.querySelectorAll('.terrain-ligne').length;
+  // ⭐ La nouvelle fiche s'ouvre et prend le focus (lot « Terrains »). ⛔ Elle arrivait REPLIÉE et le
+  //   focus restait sur le bouton : à la souris il fallait un second clic pour la déplier, et au
+  //   clavier l'organisateur ne savait pas où il venait d'atterrir.
   liste.insertAdjacentHTML('beforeend',
     ligneTerrainPhysique({ nom: 'Terrain ' + (i + 1), type: 'rugby', L: 100, W: 68, pos: '',
-      code: 'T' + (i + 1) }, i));
+      code: 'T' + (i + 1) }, i, true));
   recalculerCapacite();
+  // ⚠️ Les fiches forment un accordéon EXCLUSIF (`<details name="terrain-physique">`) : un navigateur
+  //   REFERME une fiche insérée déjà ouverte quand une autre du groupe l'est — vérifié dans Chrome, où
+  //   l'attribut `open` posé au balisage ne suffisait pas. On l'ouvre donc par la propriété, APRÈS
+  //   l'insertion : c'est ce chemin-là qui referme les autres, comme un clic de l'organisateur.
+  const fiches = liste.querySelectorAll('.cv-terrain-detail');
+  const fiche = fiches[fiches.length - 1];
+  if (fiche) fiche.open = true;
+  const champ = fiche && fiche.querySelector('.tp-nom');
+  if (champ && champ.focus) champ.focus();
+}
+
+/** Enregistre le plan des terrains (grands terrains + couloir + tailles de catégorie). */
+/* Délai NOMINAL des deux écritures de l'écran. ⛔ Sans lui, une réponse qui ne vient jamais laissait
+   « Enregistrer les terrains » sur « Enregistrement… » POUR TOUJOURS — vérifié dans un vrai Chromium,
+   bouton encore bloqué après 37 s. À échéance : le bouton se libère et le message dit que
+   l'enregistrement n'est pas confirmé. ⛔ Aucun renvoi automatique (api.js ne rejoue pas ces écritures). */
+const DELAI_ECRITURE_TERRAINS_MS = 30000;
+
+/* ⭐ UNE OPÉRATION À LA FOIS, fenêtre de confirmation COMPRISE — la protection acquise au lot
+   « Équipes ». Sans elle, `onAppliquerRepartition` était ré-entrante : un second déclenchement pendant
+   la question rouvrait une fenêtre et relançait toute la série d'écritures. */
+let terrainsOperationEnCours = false;
+function avecOperationTerrains(geste) {
+  if (terrainsOperationEnCours) return Promise.resolve(false);
+  terrainsOperationEnCours = true;
+  return Promise.resolve().then(geste).finally(function () { terrainsOperationEnCours = false; });
+}
+
+/**
+ * Échec d'une écriture de l'écran. Un refus du SERVEUR (réponse lue) reste tel quel : rien n'a été écrit.
+ * ⛔ Une réponse PERDUE (délai, connexion coupée, page illisible) peut cacher une écriture réussie :
+ *   jamais de renvoi automatique ; le message le dit, et la saisie reste à l'écran.
+ */
+function erreurEcritureTerrains(erreur, quoi) {
+  const perdue = erreur && !erreur.reponse && (erreur.name === 'AbortError' || erreur.name === 'TypeError' ||
+    erreur.name === 'SyntaxError' || /erreur \(\d{3}\)/.test(String(erreur.message || '')));
+  if (!perdue) return erreur;
+  const cause = erreur.name === 'AbortError' ? 'aucune réponse du serveur dans le délai'
+    : erreur.name === 'TypeError' ? 'connexion interrompue' : String(erreur.message || 'réponse illisible').replace(/\.$/, '');
+  return new Error('Enregistrement non confirmé (' + cause + '). ' + quoi + ' reste à l’écran : ' +
+    'un nouveau clic l’enregistre, sans risque de doublon.');
 }
 
 /** Enregistre le plan des terrains (grands terrains + couloir + tailles de catégorie). */
@@ -494,8 +595,10 @@ async function onEnregistrerPlanTerrains() {
   const message = document.getElementById('message-terrains');
   const bouton = document.getElementById('bouton-enregistrer-terrains');
   const terrains = lireTerrainsDuFormulaire().map(function (t) {
-    // La position sur le plan ne se saisit pas : elle vient du glisser. On la joint ici pour
-    // qu'elle soit enregistrée avec le reste, sinon le plan retomberait sur la grille au rechargement.
+    // ⭐ La position vient désormais de la FICHE (champs X / Y, remplis par le glisser comme au clavier).
+    //   La mémoire du module ne sert plus que de repli : un terrain placé par la grille automatique et
+    //   jamais déplacé garde ainsi exactement le comportement d'avant.
+    if (t.x !== undefined && t.y !== undefined) return t;
     const p = positionsTerrains[t.code];
     return p ? Object.assign({}, t, { x: p.x, y: p.y }) : t;
   });
@@ -517,8 +620,13 @@ async function onEnregistrerPlanTerrains() {
   const texte = bouton.textContent;
   bouton.disabled = true; bouton.textContent = 'Enregistrement…';
   try {
-    await ecrireAdmin('enregistrerPlanTerrains', data);
-    configCourante.global = Object.assign({}, configCourante.global, data);
+    let res;
+    try { res = await ecrireAdmin('enregistrerPlanTerrains', data, { delaiMs: DELAI_ECRITURE_TERRAINS_MS }); }
+    catch (erreur) { throw erreurEcritureTerrains(erreur, 'Ton plan'); }
+    // ⭐ L'écran suit ce que le SERVEUR a relu (contrat `ecriture-v1`) ; avec un backend d'avant le
+    //   contrat, les valeurs envoyées, exactement comme avant.
+    const relu = (res && res.contrat === 'ecriture-v1' && res.enregistre) ? res.enregistre : data;
+    configCourante.global = Object.assign({}, configCourante.global, data, relu);
     // Plan ENREGISTRÉ → l'assistant reprend sa photo de référence de la zone terrains.
     if (typeof assistantMarquerPropre === 'function') {
       assistantMarquerPropre(document.getElementById('zone-terrains'));
@@ -1142,7 +1250,11 @@ function afficherRepartition(res, cats) {
 
   h += '<div class="carte-outils">' +
          '<span class="carte-outils-titre">Plan du site</span>' +
-         '<span class="carte-aide">Glissez la <strong>plaque de nom</strong> pour déplacer un terrain, la poignée <strong>⟲</strong> pour l’orienter (pas de 15°, libre avec Alt), le badge <strong>⟳</strong> d’un mini-terrain pour le faire pivoter sur place.</span>' +
+         '<span class="carte-aide">Glissez la <strong>plaque de nom</strong> pour déplacer un terrain, la poignée <strong>⟲</strong> pour l’orienter (pas de 15°, libre avec Alt), le badge <strong>⟳</strong> d’un mini-terrain pour le faire pivoter sur place.<br>' +
+           '⌨️ <strong>Au clavier</strong> : <kbd>Tab</kbd> atteint chaque mini-terrain. Posé — <kbd>Entrée</kbd> le met de côté, ' +
+           '<kbd>R</kbd> le pivote, les <kbd>flèches</kbd> le déplacent de 1 m (5 m avec <kbd>Maj</kbd>). Mis de côté — ' +
+           '<kbd>Entrée</kbd> le pose, <kbd>R</kbd> le pivote, <kbd>T</kbd> change de grand terrain. ' +
+           '<kbd>Échap</kbd> annule le dernier geste.</span>' +
          '<span class="carte-zoom">' +
            '<button type="button" class="bouton-icone" id="carte-zoom-moins" aria-label="Réduire le plan">−</button>' +
            '<span id="carte-zoom-valeur">' + Math.round(carteZoom * 100) + ' %</span>' +
@@ -1169,14 +1281,14 @@ function afficherRepartition(res, cats) {
          'vérifiera à la génération du planning et proposera des pistes si l\'heure de fin est dépassée.</p>';
     h += '<div id="repart-tray" class="repart-tray" aria-label="Mini-terrains mis de côté">' +
       res.misDeCote.map(function (c, i) {
+        const ouverture = '<span class="repart-chip" data-chip="' + i + '" role="button" tabindex="0"' +
+          ' aria-label="' + echapper(nomAccessibleChip(c)) + '" style="border-color:' + c.color + '">';
         if (c.plein) {
-          return '<span class="repart-chip" data-chip="' + i + '" style="border-color:' + c.color + '">' +
-            '<span class="repart-puce" style="background:' + c.color + '"></span>' +
+          return ouverture + '<span class="repart-puce" style="background:' + c.color + '"></span>' +
             echapper(c.cat) + ' · terrain entier</span>';
         }
         const d = dimensionsChip(c);
-        return '<span class="repart-chip" data-chip="' + i + '" style="border-color:' + c.color + '">' +
-          '<span class="repart-puce" style="background:' + c.color + '"></span>' +
+        return ouverture + '<span class="repart-puce" style="background:' + c.color + '"></span>' +
           echapper(c.cat) + ' · ' + Math.round(d.w) + '×' + Math.round(d.h) + ' m' +
           '<button type="button" class="repart-chip-pivot" data-pivot="' + i + '" ' +
           'title="Pivoter (longueur ↔ largeur)" aria-label="Pivoter ce mini-terrain">⟳</button></span>';
@@ -1225,7 +1337,7 @@ function afficherRepartition(res, cats) {
 
   // Glisser-déposer des mini-terrains mis de côté (pointerdown : souris ET tactile).
   const tray = document.getElementById('repart-tray');
-  if (tray) tray.addEventListener('pointerdown', onChipPointerDown);
+  if (tray) { tray.addEventListener('pointerdown', onChipPointerDown); tray.addEventListener('keydown', onClavierPlan); }
   // ⭐ La carte étant réécrite en entier à chaque rendu, ses écouteurs se reposent ici — comme
   //    ceux des pastilles juste au-dessus. Posés sur le CONTENEUR, ils survivent aux redessins
   //    de la seule carte (`redessinerCarte`).
@@ -1237,6 +1349,8 @@ function afficherRepartition(res, cats) {
     else if (b.id === 'carte-zoom-plus') reglerZoomCarte(carteZoom * 1.25);
     else if (b.id === 'carte-zoom-ajuste') reglerZoomCarte(1);
   });
+  // ⭐ Le panneau vient d'être réécrit : on rend le focus au mini-terrain que le clavier suivait.
+  rendreFocusApresRendu();
 }
 
 /* ==========================================================================
@@ -1673,10 +1787,17 @@ function assurerPositionsTerrains(fields) {
   }).concat([100])) + TERRAIN_ECART_DEFAUT;
   const occ = {};
   fields.forEach(function (f, i) {
-    const memo = positionsTerrains[f.code];
-    if (memo) { f.x = memo.x; f.y = memo.y; }
+    // ⭐ ORDRE VOULU : la position SAISIE dans la fiche d'abord (c'est la source enregistrée, et
+    //   l'organisateur peut la taper), la mémoire du module ensuite, l'ancienne grille en dernier.
+    //   ⛔ L'inverse ignorait une valeur tapée au clavier tant qu'un glisser n'avait pas eu lieu.
+    if (!Number.isFinite(parseFloat(f.x)) || !Number.isFinite(parseFloat(f.y))) {
+      const memo = positionsTerrains[f.code];
+      if (memo) { f.x = memo.x; f.y = memo.y; }
+    }
     if (Number.isFinite(parseFloat(f.x)) && Number.isFinite(parseFloat(f.y))) {
-      f.x = parseFloat(f.x); f.y = parseFloat(f.y); return;
+      f.x = parseFloat(f.x); f.y = parseFloat(f.y);
+      positionsTerrains[f.code] = { x: f.x, y: f.y };
+      return;
     }
     const p = POS_GRILLE[f.pos] || [1, 1];
     let col = p[0]; const row = p[1];
@@ -1722,12 +1843,38 @@ function marquagesTerrain(type, fw, fh) {
   return g;
 }
 
+/**
+ * Le NOM ACCESSIBLE d'un mini-terrain POSÉ : sa catégorie, son identifiant, le grand terrain qui le
+ * porte, ses cotes, puis les touches disponibles. ⛔ C'est ce que lit un lecteur d'écran : sans lui,
+ * la carte n'était qu'un dessin muet.
+ */
+function nomAccessibleTuile(t, z, iField) {
+  const res = repartitionCalculee;
+  const fp = res && res.fieldsPlan && res.fieldsPlan[iField];
+  const terrain = fp && fp.field ? String(fp.field.nom || fp.code || '') : '';
+  return z.cat + ' · ' + t.id + ', posé sur ' + terrain + ', ' + Math.round(t.w) + ' sur ' + Math.round(t.h) +
+    ' mètres. Entrée pour le mettre de côté, R pour le pivoter, flèches pour le déplacer, Échap pour annuler.';
+}
+
+/** Le NOM ACCESSIBLE d'un mini-terrain MIS DE CÔTÉ (pastille). */
+function nomAccessibleChip(chip) {
+  if (chip.plein) {
+    return chip.cat + ', terrain entier, mis de côté. Entrée pour le poser, T pour changer de grand terrain, ' +
+      'Échap pour annuler.';
+  }
+  const d = dimensionsChip(chip);
+  return chip.cat + ', ' + Math.round(d.w) + ' sur ' + Math.round(d.h) + ' mètres, mis de côté. ' +
+    'Entrée pour le poser, R pour le pivoter, T pour changer de grand terrain, Échap pour annuler.';
+}
+
 /** Un mini-terrain : en-but hachuré, surface de jeu tracée, contour de catégorie, étiquette. */
 function tuileCarte(t, z, ppm, iField) {
   const x = t.x * ppm, yy = t.y * ppm, w = t.w * ppm, hh = t.h * ppm;
   const clipT = 'carte-clipt-' + iField + '-' + String(t.id).replace(/[^A-Za-z0-9_-]/g, '');
-  let g = '<g class="carte-tuile-g" data-field="' + iField + '" data-tuile="' + echapper(String(t.id)) + '">' +
-          '<title>Cliquer pour mettre ce mini-terrain de côté</title>';
+  const nom = nomAccessibleTuile(t, z, iField);
+  let g = '<g class="carte-tuile-g" data-field="' + iField + '" data-tuile="' + echapper(String(t.id)) + '"' +
+          ' role="button" tabindex="0" aria-label="' + echapper(nom) + '">' +
+          '<title>' + echapper(nom) + '</title>';
   // L'emprise entière, OPAQUE : elle masque les marquages du grand terrain en dessous.
   g += '<clipPath id="' + clipT + '"><rect x="' + x.toFixed(1) + '" y="' + yy.toFixed(1) +
        '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) + '" rx="2"/></clipPath>';
@@ -1945,6 +2092,16 @@ function redessinerCarte() {
   bloc.innerHTML = dessinerCarte(repartitionCalculee);
 }
 
+/** Reporte la position d'un terrain dans sa fiche (source enregistrée, et lue par l'assistant). */
+function ecrirePositionDansFiche(iField, x, y) {
+  const lignes = document.querySelectorAll('#liste-terrains-physiques .terrain-ligne');
+  const row = lignes[iField];
+  if (!row) return;
+  const cx = row.querySelector('.tp-x'), cy = row.querySelector('.tp-y');
+  if (cx) cx.value = String(Math.round(x));
+  if (cy) cy.value = String(Math.round(y));
+}
+
 /** Déplacement d'un grand terrain par sa plaque de nom. */
 function demarrerDeplacementTerrain(evenement, iField) {
   const res = repartitionCalculee;
@@ -1962,6 +2119,10 @@ function demarrerDeplacementTerrain(evenement, iField) {
     fp.field.x = x0 + (p.x - depart.x) / ppm;
     fp.field.y = y0 + (p.y - depart.y) / ppm;
     positionsTerrains[fp.field.code] = { x: fp.field.x, y: fp.field.y };
+    // ⭐ La fiche reste la source enregistrée — comme pour l'orientation. Sans ces deux lignes, le
+    //   détecteur de « modifications non enregistrées » ne voyait pas le déplacement et le laissait
+    //   se perdre en silence au changement d'écran.
+    ecrirePositionDansFiche(iField, fp.field.x, fp.field.y);
     redessinerCarte();
   }
   function finir() {
@@ -2048,6 +2209,297 @@ function pivoterMiniTerrain(iField, id) {
   }
 }
 
+
+/* ==========================================================================
+   TERRAINS — LE PLAN AU CLAVIER (lot « Terrains », 2ᵉ passage)
+   --------------------------------------------------------------------------
+   ⛔ CE QUI N'ALLAIT PAS. La carte offrait à la souris quatre fonctions — mettre de côté, reposer,
+   déplacer, pivoter — et AUCUNE n'était atteignable au clavier : la campagne Chromium relevait
+   « 0 élément focalisable » pour cinq mini-terrains dessinés. Un organisateur qui n'utilise pas la
+   souris ne pouvait donc pas composer son plan du tout.
+   ⭐ CE QUI EST FAIT ICI. Chaque mini-terrain — posé sur la carte ou mis de côté — est un bouton
+   focalisable, porteur d'un NOM ACCESSIBLE qui dit sa catégorie, son identifiant, et s'il est posé
+   (et où) ou mis de côté. Les gestes de la souris ont tous leur équivalent :
+
+     Sur un mini-terrain POSÉ          Sur une pastille MISE DE CÔTÉ
+     ─────────────────────────         ──────────────────────────────
+     Entrée / Espace : mettre de côté  Entrée / Espace : le poser sur le terrain visé
+     R              : pivoter sur place R              : pivoter (longueur ↔ largeur)
+     ← ↑ → ↓        : déplacer de 1 m   T              : changer de grand terrain d'accueil
+     Maj + flèche   : déplacer de 5 m
+     Échap          : annuler le dernier geste clavier (des deux côtés)
+
+   ⛔ Tout refus est ANNONCÉ avec sa raison (hors terrain, couloir non respecté, terrain occupé en
+   entier) et NE DÉPLACE RIEN : c'est la même règle que l'aperçu vert/rouge du glisser.
+   ⭐ Le focus est RENDU après chaque repeint : le panneau est réécrit en entier à chaque geste, et
+   sans cela le clavier retombait sur le début de la page à chaque touche.
+   ⛔ Aucun de ces gestes ne parle au serveur.
+   ========================================================================== */
+
+/* Le pas de déplacement au clavier, en mètres (Maj = pas long). */
+const PAS_CLAVIER_M = 1, PAS_CLAVIER_LONG_M = 5;
+
+/* Le grand terrain visé par « Entrée » depuis une pastille ; `T` en change. */
+let terrainViseClavier = 0;
+
+/* Le plan AVANT le dernier geste clavier — `{ etat: <JSON>, focus: <descripteur> }` — pour Échap.
+   ⭐ Le FOCUS d'alors est mémorisé avec l'état : annuler sans le rendre renverrait le clavier au début
+   de la page, exactement le défaut que ce lot corrige par ailleurs. */
+let etatAvantGesteClavier = null;
+
+/* Ce qu'il faut refocaliser après le prochain rendu : {type:'tuile', id} ou {type:'chip', index}. */
+let focusApresRendu = null;
+
+/** Le refus que l'écran vient d'afficher, sans son pictogramme — pour l'annoncer sans le redire. */
+function refusAffiche_() {
+  const zone = document.getElementById('message-repartition');
+  return String((zone && zone.textContent) || '').replace(/^⚠️\s*/, '').trim();
+}
+
+/** Annonce un résultat au lecteur d'écran (zone `aria-live` HORS du panneau réécrit). */
+function annoncerClavier(texte) {
+  const zone = document.getElementById('repart-annonce');
+  if (zone) zone.textContent = texte;
+}
+
+/** Ce que le clavier suit en ce moment : un mini-terrain posé, une pastille, ou rien. */
+function descripteurFocusPlan() {
+  const a = document.activeElement;
+  if (!a || !a.closest) return null;
+  const t = a.closest('g[data-tuile]');
+  if (t) return { type: 'tuile', id: t.getAttribute('data-tuile') };
+  const c = a.closest('.repart-chip');
+  if (c) return { type: 'chip', index: parseInt(c.getAttribute('data-chip'), 10) || 0 };
+  return null;
+}
+
+/** Mémorise l'état du plan ET le focus avant un geste clavier : Échap y revient. */
+function memoriserAvantGesteClavier() {
+  try { etatAvantGesteClavier = { etat: JSON.stringify(repartitionCalculee), focus: descripteurFocusPlan() }; }
+  catch (e) { etatAvantGesteClavier = null; }
+}
+
+/** Échap : revient à l'état d'avant le dernier geste clavier. Une seule fois. */
+function annulerGesteClavier() {
+  if (!etatAvantGesteClavier) { annoncerClavier('Rien à annuler.'); return; }
+  const memo = etatAvantGesteClavier;
+  let restaure = null;
+  try { restaure = JSON.parse(memo.etat); } catch (e) { restaure = null; }
+  etatAvantGesteClavier = null;
+  if (!restaure) { annoncerClavier('Rien à annuler.'); return; }
+  repartitionCalculee = restaure;
+  focusApresRendu = memo.focus;
+  afficherRepartition(repartitionCalculee, repartitionCalculee.ctxManuel.cats);
+  annoncerClavier('Dernier geste annulé.');
+}
+
+/** Rend le focus après un rendu du panneau (le panneau est réécrit en entier à chaque geste). */
+function rendreFocusApresRendu() {
+  const cible = focusApresRendu;
+  focusApresRendu = null;
+  if (!cible) return;
+  let el = null;
+  if (cible.type === 'tuile') {
+    const tous = document.querySelectorAll('#repartition-carte g[data-tuile]');
+    for (let i = 0; i < tous.length; i++) {
+      if (tous[i].getAttribute('data-tuile') === String(cible.id)) { el = tous[i]; break; }
+    }
+  } else if (cible.type === 'chip') {
+    const chips = document.querySelectorAll('#repart-tray .repart-chip');
+    el = chips[Math.min(cible.index, chips.length - 1)] || null;
+  } else if (cible.type === 'id') {
+    el = document.getElementById(cible.id);
+  }
+  if (el && el.focus) el.focus();
+}
+
+/** Le mini-terrain posé que désigne un identifiant : { fp, iField, zone, tuile } ou null. */
+function trouverTuilePosee(id) {
+  const res = repartitionCalculee;
+  if (!res) return null;
+  for (let i = 0; i < res.fieldsPlan.length; i++) {
+    const fp = res.fieldsPlan[i];
+    for (let zi = 0; zi < fp.zones.length; zi++) {
+      const t = fp.zones[zi].tiles.filter(function (x) { return String(x.id) === String(id); })[0];
+      if (t) return { fp: fp, iField: i, zone: fp.zones[zi], tuile: t };
+    }
+  }
+  return null;
+}
+
+/** Déplace un mini-terrain POSÉ de (dx, dy) mètres. Refus motivé, sans rien bouger. */
+function deplacerTuileClavier(id, dx, dy) {
+  const res = repartitionCalculee;
+  const trouve = trouverTuilePosee(id);
+  if (!trouve || !res.ctxManuel) return;
+  const t = trouve.tuile, fp = trouve.fp;
+  const spot = { x: t.x + dx, y: t.y + dy, w: t.w, h: t.h };
+  // Les AUTRES occupants : la tuile elle-même ne doit pas se gêner.
+  const autres = { zones: fp.zones.map(function (zz) {
+    return { tiles: zz.tiles.filter(function (x) { return x !== t; }), table: zz.table };
+  }), table: fp.table, field: fp.field };
+  const refus = refusPlacement(autres, spot, res.ctxManuel.m);
+  if (refus) { annoncerClavier(t.id + ' ne peut pas aller là : ' + refus + '.'); return; }
+  memoriserAvantGesteClavier();
+  t.x = spot.x; t.y = spot.y;
+  if (res.tablesPosees) retirerTablesMarques(res);
+  focusApresRendu = { type: 'tuile', id: t.id };
+  afficherRepartition(res, res.ctxManuel.cats);
+  annoncerClavier(t.id + ' déplacé en ' + Math.round(spot.x) + ' ; ' + Math.round(spot.y) + ' mètres.');
+}
+
+/** Le nom du grand terrain visé par « Entrée » depuis une pastille. */
+function nomTerrainVise() {
+  const res = repartitionCalculee;
+  const fp = res && res.fieldsPlan[terrainViseClavier % res.fieldsPlan.length];
+  return fp && fp.field ? String(fp.field.nom || fp.code || '') : '';
+}
+
+/** `T` : vise le grand terrain suivant, et l'annonce. */
+function changerTerrainViseClavier() {
+  const res = repartitionCalculee;
+  if (!res || !res.fieldsPlan.length) return;
+  terrainViseClavier = (terrainViseClavier + 1) % res.fieldsPlan.length;
+  annoncerClavier('Grand terrain d’accueil : ' + nomTerrainVise() +
+    ' (' + (terrainViseClavier + 1) + ' sur ' + res.fieldsPlan.length + ').');
+}
+
+/**
+ * `Entrée` sur une pastille : pose le mini-terrain sur le grand terrain VISÉ s'il y tient, sinon sur
+ * le premier suivant qui a la place — et le DIT. ⛔ Si aucun n'a de place, rien n'est posé et la
+ * raison du dernier refus est annoncée : jamais de placement silencieux ailleurs.
+ */
+function poserChipAuClavier(iChip) {
+  const res = repartitionCalculee;
+  const chip = res && (res.misDeCote || [])[iChip];
+  if (!chip || !res.ctxManuel) return;
+  const n = res.fieldsPlan.length;
+  // ⛔ Un geste REFUSÉ ne doit pas manger l'annulation du geste PRÉCÉDENT : on remet la mémoire
+  //   d'annulation telle qu'elle était si rien n'a pu être posé.
+  const memoPrecedent = etatAvantGesteClavier;
+  let premierRefus = '';
+  const noter = function (texte) { if (!premierRefus) premierRefus = texte; };
+  for (let k = 0; k < n; k++) {
+    const iField = (terrainViseClavier + k) % n;
+    const fp = res.fieldsPlan[iField];
+    const place = emplacementLibreClavier(fp, chip);
+    if (!place) { noter(fp.field.nom + ' : pas de place.'); continue; }
+    memoriserAvantGesteClavier();
+    const avant = (res.misDeCote || []).length;
+    if (!poserMiniTerrainSur(iField, iChip, place.x + place.w / 2, place.y + place.h / 2)) {
+      etatAvantGesteClavier = memoPrecedent;
+      noter(fp.field.nom + ' : ' + (refusAffiche_() || 'refusé'));
+      continue;
+    }
+    terrainViseClavier = iField;
+    // ⭐ Le focus suit le mini-terrain POSÉ : son identifiant n'existe qu'après la renumérotation,
+    //   on le retrouve donc par sa position, une fois le panneau réécrit.
+    const posee = posePresDe_(fp, place);
+    if (posee) focaliserTuile_(posee.id);
+    annoncerClavier(chip.cat + ' posé sur ' + fp.field.nom +
+      (posee ? ', mini-terrain ' + posee.id : '') + (k ? ', faute de place sur le terrain visé' : '') + '.');
+    return;
+  }
+  etatAvantGesteClavier = memoPrecedent;
+  annoncerClavier('Impossible de poser ' + chip.cat + ' : ' + (premierRefus || 'aucun grand terrain n’a la place.') +
+    ' R pour le pivoter, T pour viser un autre grand terrain.');
+}
+
+/** Le mini-terrain qui occupe (à 0,5 m près) l'emplacement qu'on vient de remplir. */
+function posePresDe_(fp, place) {
+  let trouve = null;
+  (fp.zones || []).forEach(function (z) {
+    (z.tiles || []).forEach(function (t) {
+      if (!trouve && Math.abs(t.x - place.x) < 0.5 && Math.abs(t.y - place.y) < 0.5) trouve = t;
+    });
+  });
+  return trouve;
+}
+
+/** Pose le focus sur un mini-terrain de la carte, maintenant (le panneau est déjà réécrit). */
+function focaliserTuile_(id) {
+  const tous = document.querySelectorAll('#repartition-carte g[data-tuile]');
+  for (let i = 0; i < tous.length; i++) {
+    if (tous[i].getAttribute('data-tuile') === String(id)) { if (tous[i].focus) tous[i].focus(); return; }
+  }
+}
+
+/** Un emplacement libre pour une pastille sur un grand terrain, ou null. Mêmes règles que le glisser. */
+function emplacementLibreClavier(fp, chip) {
+  const res = repartitionCalculee;
+  const ctx = res.ctxManuel;
+  const aTuiles = fp.zones.some(function (z) { return z.tiles.length; });
+  if (chip.plein) return aTuiles ? null : { x: 0, y: 0, w: fp.field.L, h: fp.field.W };
+  if (fp.mode === 'plein' && aTuiles) return null;
+  const d = dimensionsChip(chip);
+  return placerDansLibre(fp.field.L, fp.field.W, obstaclesDuTerrain(fp), d.w, d.h, ctx.m, 1)[0] || null;
+}
+
+/** Les touches du plan : sur un mini-terrain POSÉ (carte) ou sur une pastille MISE DE CÔTÉ. */
+function onClavierPlan(evenement) {
+  const res = repartitionCalculee;
+  if (!res || !res.ctxManuel) return;
+  const touche = evenement.key;
+  const cible = evenement.target;
+  const tuile = cible.closest && cible.closest('g[data-tuile]');
+  const chip = cible.closest && cible.closest('.repart-chip');
+  if (!tuile && !chip) return;
+  // ⛔ Le bouton ⟳ de la pastille est un VRAI bouton : on lui laisse Entrée et Espace.
+  if (cible.closest && cible.closest('.repart-chip-pivot') && (touche === 'Enter' || touche === ' ')) return;
+
+  if (touche === 'Escape') { evenement.preventDefault(); annulerGesteClavier(); return; }
+
+  if (tuile) {
+    const id = tuile.getAttribute('data-tuile');
+    const iField = parseInt(tuile.getAttribute('data-field'), 10);
+    if (touche === 'Enter' || touche === ' ') {
+      evenement.preventDefault();
+      memoriserAvantGesteClavier();
+      focusApresRendu = { type: 'chip', index: (res.misDeCote || []).length };
+      retirerMiniTerrain(iField, id);
+      annoncerClavier(id + ' mis de côté. Entrée pour le reposer.');
+      return;
+    }
+    if (touche === 'r' || touche === 'R') {
+      evenement.preventDefault();
+      memoriserAvantGesteClavier();
+      focusApresRendu = { type: 'tuile', id: id };
+      const avant = JSON.stringify(trouverTuilePosee(id));
+      pivoterMiniTerrain(iField, id);
+      const apres = JSON.stringify(trouverTuilePosee(id));
+      annoncerClavier(avant === apres ? (refusAffiche_() || id + ' n’a pas pu pivoter ici.') : id + ' pivoté.');
+      return;
+    }
+    const pas = evenement.shiftKey ? PAS_CLAVIER_LONG_M : PAS_CLAVIER_M;
+    const sens = { ArrowLeft: [-pas, 0], ArrowRight: [pas, 0], ArrowUp: [0, -pas], ArrowDown: [0, pas] }[touche];
+    if (sens) { evenement.preventDefault(); deplacerTuileClavier(id, sens[0], sens[1]); }
+    return;
+  }
+
+  const iChip = parseInt(chip.getAttribute('data-chip'), 10);
+  if (touche === 'Enter' || touche === ' ') {
+    evenement.preventDefault();
+    focusApresRendu = null;
+    poserChipAuClavier(iChip);
+    return;
+  }
+  if (touche === 'r' || touche === 'R') {
+    evenement.preventDefault();
+    memoriserAvantGesteClavier();
+    focusApresRendu = { type: 'chip', index: iChip };
+    pivoterChip(iChip);
+    const c = (repartitionCalculee.misDeCote || [])[iChip];
+    annoncerClavier(c ? c.cat + ' pivoté : ' + Math.round(dimensionsChip(c).w) + ' sur ' +
+      Math.round(dimensionsChip(c).h) + ' mètres.' : 'Pivoté.');
+    return;
+  }
+  if (touche === 't' || touche === 'T') {
+    evenement.preventDefault();
+    focusApresRendu = { type: 'chip', index: iChip };
+    changerTerrainViseClavier();
+  }
+}
+
 /** Zoom du plan : molette sur la carte, boutons, ou remise à l'ajusté. */
 function reglerZoomCarte(valeur) {
   carteZoom = Math.min(CARTE_ZOOM_MAX, Math.max(CARTE_ZOOM_MIN, valeur));
@@ -2078,10 +2530,17 @@ function brancherPlanLibre() {
     ev.preventDefault();
     reglerZoomCarte(carteZoom * (ev.deltaY < 0 ? 1.12 : 1 / 1.12));
   }, { passive: false });
+  // Le plan AU CLAVIER : même conteneur, mêmes règles que le glisser (voir onClavierPlan).
+  bloc.addEventListener('keydown', onClavierPlan);
+}
+
+/** « Appliquer aux catégories » : l'opération s'ouvre AVANT la question (garde acquise au lot « Équipes »). */
+function onAppliquerRepartition() {
+  return avecOperationTerrains(appliquerRepartition_);
 }
 
 /** Applique la répartition : écrit le champ « Terrains » de chaque catégorie. */
-async function onAppliquerRepartition() {
+async function appliquerRepartition_() {
   if (!repartitionCalculee) return;
   const message = document.getElementById('message-repartition');
   const par = repartitionCalculee.parCategorie;
@@ -2138,19 +2597,33 @@ async function onAppliquerRepartition() {
 
   const bouton = document.getElementById('bouton-appliquer-repartition');
   if (bouton) { bouton.disabled = true; bouton.textContent = 'Application…'; }
-  try {
-    for (let k = 0; k < noms.length; k++) {
-      const nom = noms[k];
-      const catObj = (configCourante.categories || []).find(function (c) { return String(c.categorie) === nom; });
-      if (!catObj) continue;
-      const data = Object.assign({}, catObj, { terrains: par[nom].join(',') });
-      await ecrireAdmin('enregistrerCategorie', data);
-      const idx = configCourante.categories.findIndex(function (c) { return String(c.categorie) === nom; });
-      if (idx >= 0) configCourante.categories[idx] = data;
-    }
-    // Mémorise la composition des grands terrains (pour le filtre de la page Saisie).
-    const compositionJson = JSON.stringify(composition);
-    await ecrireAdmin('enregistrerPlanTerrains', { repartition_grands_terrains: compositionJson });
+  const compositionJson = JSON.stringify(composition);
+  // ⭐ Ce qui est DÉJÀ ACQUIS quand une panne survient en cours de SÉRIE (repli seulement) : sans ce
+  //   relevé, le message d'échec ne disait rien de ce que le serveur avait pourtant enregistré.
+  const acquises = [];
+  const avertis = [];      // « modifié entre-temps ailleurs, valeur enregistrée gardée » (fusion)
+  /** La demande d'une catégorie : sa ligne chargée, le terrain à écrire, et la `base` de la fusion. */
+  const demandeCategorie = function (nom) {
+    const catObj = (configCourante.categories || []).find(function (c) { return String(c.categorie) === nom; });
+    if (!catObj) return null;
+    // ⭐ FUSION À TROIS VOIES (contrat d'écriture, comme la carte « Catégories »).
+    //   ⛔ CE QUI N'ALLAIT PAS. L'envoi partait SANS `mode` ni `base` : le serveur réécrivait alors la
+    //   ligne ENTIÈRE avec la copie que l'écran avait en mémoire. Un réglage changé entre-temps sur un
+    //   autre écran (nombre de poules, temps de jeu, présence…) était donc silencieusement ramené à sa
+    //   valeur d'avant. Mesuré : nb_poules 4 → 2 et durée de mi-temps 10 → 8, sans un mot.
+    const base = {};
+    Object.keys(catObj).forEach(function (c) { base[c] = catObj[c] == null ? '' : String(catObj[c]); });
+    return Object.assign({}, catObj, { terrains: par[nom].join(','), mode: 'modifier', base: base });
+  };
+  /** L'écran suit la ligne RELUE par le serveur, jamais la copie envoyée. */
+  const suivreLigne = function (nom, relue) {
+    const idx = configCourante.categories.findIndex(function (c) { return String(c.categorie) === nom; });
+    if (idx < 0) return;
+    const catObj = configCourante.categories[idx];
+    configCourante.categories[idx] = relue || Object.assign({}, catObj, { terrains: par[nom].join(',') });
+  };
+  /** Ce que l'écran fait une fois l'application ACQUISE, quel que soit le chemin. */
+  const conclure = async function (texte) {
     configCourante.global = Object.assign({}, configCourante.global,
       { repartition_grands_terrains: compositionJson });
     injecterReglages(configCourante.global, configCourante.categories); // les cartes catégories montrent les nouveaux terrains
@@ -2160,11 +2633,154 @@ async function onAppliquerRepartition() {
     repartitionCalculee = null;
     document.getElementById('repartition-resultat').innerHTML = '';
     majEtatAvancement(); // le fil ET le verrou suivent immédiatement
-    await dialogAlerter('✅ Terrains appliqués aux catégories en mode Auto (' + noms.join(', ') + ').' +
+    await dialogAlerter(texte +
       (ignorees.length ? '\nLaissées en Manuel : ' + ignorees.join(', ') + '.' : '') +
+      (avertis.length ? '\n\n⚠️ ' + avertis.join('\n⚠️ ') : '') +
       '\nIls seront utilisés à la prochaine génération du planning.');
+  };
+
+  try {
+    /* ------------------------------------------------------------------ ① L'ÉCRITURE GROUPÉE
+       UNE requête, UNE exécution serveur, UN verrou, et tout ou rien : le serveur valide les N
+       catégories et la composition avant la première écriture, et n'en écrit aucune s'il y a conflit. */
+    let groupee = null;
+    const demandes = noms.map(demandeCategorie).filter(Boolean);
+    try {
+      // ⭐ Une fois le refus constaté, on ne redemande plus : le serveur ne changera pas de version en
+      //   cours de session. Le second « Appliquer » d'un backend d'avant coûte donc les 4 requêtes
+      //   historiques, sans la requête de détection.
+      if (backendSansGroupeeConstate) throw refusGroupeeConstate_();
+      groupee = await ecrireAdmin('appliquerRepartitionTerrains', {
+        categories: JSON.stringify(demandes),
+        repartition_grands_terrains: compositionJson
+      }, { delaiMs: DELAI_ECRITURE_TERRAINS_MS });
+    } catch (erreur) {
+      // ⛔ REPLI, et il est EXPLICITE. Un backend d'avant ce lot ne connaît pas l'action : il le DIT
+      //   (« Action inconnue »), il ne peut pas ignorer les catégories en silence. Dans ce cas
+      //   SEULEMENT, on retombe sur les écritures historiques, une par catégorie puis la composition.
+      //   ⛔ Tout autre refus (conflit, demande invalide, verrou occupé, panne) remonte tel quel :
+      //   rejouer la série après un vrai refus écrirait ce que le serveur venait d'écarter.
+      if (!backendSansEcritureGroupee(erreur)) throw erreur;
+      backendSansGroupeeConstate = true;
+      groupee = null;
+    }
+
+    if (groupee) {
+      (groupee.avertissements || []).forEach(function (a) { avertis.push(a.message); });
+      (groupee.categories || []).forEach(function (c) { suivreLigne(c.categorie, c.enregistre); });
+      if (groupee.config && Array.isArray(groupee.config.categories)) {
+        configCourante.categories = groupee.config.categories;
+        configCourante.global = Object.assign({}, configCourante.global, groupee.config.global || {});
+      }
+      const rienAFaire = Array.isArray(groupee.modifies) && groupee.modifies.length === 0;
+      await conclure(rienAFaire
+        ? '✅ Déjà appliqué : le serveur avait déjà exactement ces terrains (' + noms.join(', ') + '). Rien n’a été réécrit.'
+        : '✅ Terrains appliqués aux catégories en mode Auto (' + noms.join(', ') + ').');
+      return;
+    }
+
+    /* ------------------------------------------------------------------ ② LE REPLI (backend d'avant)
+       Le comportement historique, mot pour mot : une écriture par catégorie, puis la composition. */
+    for (let k = 0; k < noms.length; k++) {
+      const nom = noms[k];
+      const data = demandeCategorie(nom);
+      if (!data) continue;
+      const res = await ecrireAdmin('enregistrerCategorie', data, { delaiMs: DELAI_ECRITURE_TERRAINS_MS });
+      acquises.push(nom);
+      const enregistre = (res && res.contrat === 'ecriture-v1' && res.enregistre) ? res.enregistre : null;
+      suivreLigne(nom, enregistre);
+      (((res || {}).avertissements) || []).forEach(function (a) { avertis.push(nom + ' : ' + a.message); });
+    }
+    // Mémorise la composition des grands terrains (pour le filtre de la page Saisie).
+    await ecrireAdmin('enregistrerPlanTerrains', { repartition_grands_terrains: compositionJson },
+      { delaiMs: DELAI_ECRITURE_TERRAINS_MS });
+    await conclure('✅ Terrains appliqués aux catégories en mode Auto (' + noms.join(', ') + ').');
   } catch (erreur) {
-    afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
+    // ⭐ Une application PARTIELLE rapporte l'état RELU : l'écran s'aligne dessus, sinon sa `base`
+    //   serait fausse au rejeu et la fusion à trois voies perdrait sa raison d'être.
+    const partielle = (erreur && erreur.reponse) || null;
+    if (partielle && partielle.code === 'application_partielle' && partielle.config &&
+        Array.isArray(partielle.config.categories)) {
+      configCourante.categories = partielle.config.categories;
+      configCourante.global = Object.assign({}, configCourante.global, partielle.config.global || {});
+    }
+    afficherMessage(message, '⚠️ ' + messageEchecApplication(erreur, noms, acquises), 'ko');
     if (bouton) { bouton.disabled = false; bouton.textContent = '✅ Appliquer aux catégories'; }
   }
+}
+
+/**
+ * Le serveur ne connaît-il PAS l'écriture groupée ? C'est le MARQUEUR DE COMPATIBILITÉ du lot.
+ * ⛔ Un backend d'avant refuse EXPLICITEMENT une action qu'il ne connaît pas (`doPost`, branche par
+ *   défaut) : il ne peut pas l'accepter en n'écrivant que la moitié. Tout autre message — conflit,
+ *   demande invalide, verrou occupé, panne réseau — n'autorise AUCUN repli : rejouer la série
+ *   écrirait ce que le serveur venait justement d'écarter.
+ */
+/* Le serveur a DÉJÀ refusé l'écriture groupée dans cette session : inutile de la redemander. */
+let backendSansGroupeeConstate = false;
+/** Le refus que l'on se sert à soi-même quand la capacité est déjà connue absente (aucune requête). */
+function refusGroupeeConstate_() {
+  const e = new Error('Action inconnue : appliquerRepartitionTerrains');
+  e.reponse = { error: e.message };
+  return e;
+}
+
+function backendSansEcritureGroupee(erreur) {
+  return !!(erreur && erreur.reponse && /^Action inconnue/.test(String(erreur.message || '')));
+}
+
+/**
+ * Le message d'un « Appliquer » qui n'a pas abouti. Il distingue quatre issues, parce qu'elles
+ * n'appellent pas la même conduite :
+ *   · CONFLIT — le serveur a tout écarté : il faut décider, pas réessayer ;
+ *   · RÉSULTAT NON CONFIRMÉ (réponse perdue, silence) — l'écriture a pu passer : recliquer est sans danger ;
+ *   · APPLICATION PARTIELLE (repli seulement) — on dit ce qui est acquis et ce qui reste ;
+ *   · REFUS SERVEUR — rien n'a été écrit, le message du serveur suffit.
+ */
+function messageEchecApplication(erreur, noms, acquises) {
+  const reponse = (erreur && erreur.reponse) || null;
+  // ⭐ APPLICATION PARTIELLE ÉTABLIE PAR LE SERVEUR. Il a relu le classeur sous le verrou : il ne
+  //   suppose rien, il dit ce qui est écrit et ce qui manque. ⛔ Jamais un succès, même partiel.
+  if (reponse && reponse.code === 'application_partielle' && reponse.etabli === false) {
+    // ⛔ Le serveur n'a même pas pu relire : on n'invente aucune liste.
+    return 'Résultat NON CONFIRMÉ — l’enregistrement a été interrompu et le serveur n’a pas pu relire ' +
+      'le classeur.\n➡️ Reclique « Appliquer » : la reprise ne réécrit que ce qui manque, sans écraser ' +
+      'ce qui aurait changé entre-temps.';
+  }
+  if (reponse && reponse.code === 'application_partielle') {
+    const faites = (reponse.categories || []).filter(function (c) { return c.appliquee; })
+      .map(function (c) { return c.categorie; });
+    const reste = (reponse.reste || []).filter(function (n) { return n !== 'composition'; });
+    const compositionManque = (reponse.reste || []).indexOf('composition') !== -1;
+    const rienEcrit = (reponse.modifies || []).length === 0;
+    return (rienEcrit
+      ? 'Enregistrement interrompu — le serveur a relu le classeur : AUCUNE modification n’a été enregistrée.'
+      : 'Application PARTIELLE — l’enregistrement a été interrompu.') +
+      (faites.length ? '\n✅ Déjà enregistrées : ' + faites.join(', ') + '.' : '') +
+      (reste.length ? '\n⏳ Restent à appliquer : ' + reste.join(', ') + '.' : '') +
+      (compositionManque ? '\n⏳ Reste à mémoriser la composition des grands terrains.' : '') +
+      '\n➡️ Reclique « Appliquer » : la reprise ne réécrit pas ce qui est déjà conforme, elle complète ce qui manque.';
+  }
+  if (reponse && reponse.code === 'modification_concurrente') {
+    return erreur.message +
+      '\n➡️ Recharge l’écran pour voir les réglages actuels, puis décide — réappliquer écraserait ' +
+      'ce qui a été changé entre-temps.';
+  }
+  const perdue = erreur && !reponse && (erreur.name === 'AbortError' || erreur.name === 'TypeError' ||
+    erreur.name === 'SyntaxError' || /erreur \(\d{3}\)/.test(String(erreur.message || '')));
+  const partielle = acquises.length
+    ? '\n✅ Déjà enregistrées : ' + acquises.join(', ') + '.' +
+      (noms.filter(function (n) { return acquises.indexOf(n) === -1; }).length
+        ? '\n⏳ Restent à appliquer : ' + noms.filter(function (n) { return acquises.indexOf(n) === -1; }).join(', ') + '.'
+        : '\n⏳ Reste à mémoriser la composition des grands terrains.')
+    : '';
+  if (perdue) {
+    const cause = erreur.name === 'AbortError' ? 'aucune réponse du serveur dans le délai'
+      : erreur.name === 'TypeError' ? 'connexion interrompue'
+      : String(erreur.message || 'réponse illisible').replace(/\.$/, '');
+    return 'Application NON CONFIRMÉE (' + cause + ').' + partielle +
+      '\n➡️ Reclique « Appliquer » : ce qui est déjà enregistré ne sera pas écrit deux fois.';
+  }
+  return erreur.message + (partielle ||
+    (acquises.length ? '' : '\n⛔ Aucune catégorie n’a été modifiée.'));
 }

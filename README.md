@@ -162,6 +162,35 @@ relance) ; « Suivi des clubs » dit « Chargement… » ou l'échec (avec « R�
 serveur ne note plus de « dernière relance » à cette date-là ; une vraie relance garde `relance: 'oui'` et son comportement. Un cache mêlant
 anciens et nouveaux fichiers reste correct, simplement sans ces protections.
 
+Le lot « Terrains » (22 septembre 2026, local, non publié) touche **les deux dépôts**, sans ajouter ni retirer d'action backend.
+L'écriture du plan (`enregistrerPlanTerrains`) passe au contrat d'écriture du backend : une demande vide ou un réglage illisible est
+refusé **avant** le verrou, le plan n'est réécrit que s'il change, et l'instantané public n'est plus reconstruit pour des réglages
+qui ne figurent dans aucune vue publique (il l'est toujours pour la composition des grands terrains, que la table de marque lit).
+**Les deux sens fonctionnent** : un backend d'avant répond `{ ok: true }` et le frontend s'en contente ; un frontend d'avant ignore
+les champs supplémentaires de la réponse. Côté écran, « Appliquer aux catégories » n'écrase plus un réglage de catégorie modifié
+entre-temps ailleurs (il envoie `mode` et sa `base`, et relaie l'avertissement du serveur) — une protection qui fonctionne déjà avec
+l'ancien backend ; un double clic sur « Appliquer » n'ouvre plus qu'une fenêtre et n'envoie plus qu'une série d'écritures ; les deux
+écritures de l'écran sont bornées à 30 s, si bien qu'un serveur muet ne laisse plus le bouton sur « Enregistrement… » indéfiniment.
+La **position de chaque grand terrain sur le plan** est devenue un champ de sa fiche (comme son orientation) : le glisser l'y écrit,
+elle se règle aussi au clavier, et le garde-fou « modifications non enregistrées » la voit enfin — elle se perdait auparavant en
+silence au changement d'écran. Ajouter un grand terrain ouvre sa fiche et y pose le focus ; en retirer un demande confirmation.
+Le **2ᵉ passage du même lot** (23 septembre 2026) ajoute **une action backend**, `appliquerRepartitionTerrains` : « Appliquer
+aux catégories » n'envoie plus qu'**une seule requête** au lieu d'une par catégorie plus une pour la composition. Le serveur
+valide tout avant d'écrire, garde la protection contre l'écrasement d'un réglage changé ailleurs, et **n'écrit aucune catégorie
+si une seule est en conflit**. ⚠️ Cette garantie « rien du tout » vaut pour la **validation et les conflits**, pas pour une panne :
+Google Sheets n'offre aucune annulation automatique, et le verrou ne défait rien. Si le serveur est interrompu **pendant** les
+écritures, une partie peut être enregistrée — il **relit alors le classeur** et dit exactement ce qui est fait et ce qui reste
+(ou, s'il ne peut même pas relire, que le résultat n'est **pas confirmé**). Dans tous les cas, **recliquer « Appliquer » est sans
+danger** : la reprise ne réécrit pas ce qui est déjà conforme, complète ce qui manque, et un clic de plus une fois tout appliqué
+n'écrit rien. ⚠️ **Le backend doit donc être publié avant ce frontend** — c'était déjà le cas depuis le lot
+« Inviter un club ». Si ce n'est pas fait, rien n'est perdu : un backend d'avant **refuse explicitement** l'action inconnue, et
+l'écran retombe de lui-même sur les écritures d'avant, une par catégorie. ⛔ Ce repli ne se déclenche QUE sur ce refus-là :
+un conflit, une demande invalide ou une panne ne relancent jamais la série. Le même passage rend enfin le **plan des terrains
+utilisable au clavier** : chaque mini-terrain est un bouton nommé (catégorie, identifiant, posé ou mis de côté) que l'on
+déplace aux flèches, pivote avec `R`, met de côté ou repose avec `Entrée`, et dont on annule le dernier geste avec `Échap` —
+chaque résultat, y compris un refus et sa raison, étant annoncé aux lecteurs d'écran.
+L'ordre de publication ci-dessus ne change pas, et aucune combinaison de versions ne casse.
+
 Le seul point d'attention à la publication est le **cache du navigateur**. Chaque CSS et chaque JS
 modifié par cette livraison est appelé avec une version unique, `?v=refonte-ciel-verre-20260920`,
 pour qu'un visiteur déjà venu ne garde pas un ancien fichier. `tests/cache-busting-refonte.test.js`

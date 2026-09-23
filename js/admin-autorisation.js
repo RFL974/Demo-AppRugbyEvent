@@ -351,6 +351,10 @@ var ACTIONS_AUTORISATION_CROCHET = {
   supprimerCategorie:            'A.3, B.2',
   appliquerValeursFFR:           'A.3, B.2 (durées et forme de jeu écrites dans la catégorie)',
   enregistrerPlanTerrains:       'B.1 nombre de terrains et nature de la surface',
+  // Lot « Terrains » : l'écriture groupée d'« Appliquer aux catégories » touche les MÊMES données que
+  // `enregistrerCategorie` et `enregistrerPlanTerrains` réunies. ⛔ Absente de cette liste, elle aurait
+  // laissé la feuille FFR se croire à jour après avoir changé les catégories.
+  appliquerRepartitionTerrains:  'A.3, B.1, B.2 (terrains des catégories + composition des grands terrains)',
   enregistrerContactsSecurite:   'B.4 responsable sécurité, antenne de secours',
   enregistrerInvitation:         'B.5 droits d\'inscription (tarif_engagement_*)',
   enregistrerSurPlace:           'B.5 goûter de fin de tournoi (prix par personne)',

@@ -178,7 +178,11 @@ let clubsInvitesCourants = [];
  * sont désormais inventoriées et verrouillées par le contrôle G-J
  * (tests/frontend-autorisation-sync.test.js) : toute NOUVELLE écriture doit passer par ici. */
 async function ecrireAdmin(action, data, options) {
-  const changeCategories = ['enregistrerCategorie', 'supprimerCategorie'].indexOf(action) !== -1;
+  // ⭐ Toute action qui touche une LIGNE de catégorie doit figurer ici, sans quoi l'écran « Catégories »
+  //   garderait une lecture périmée sans le savoir. `appliquerRepartitionTerrains` (lot « Terrains »)
+  //   écrit le champ « Terrains » de N catégories d'un coup : elle en fait partie.
+  const changeCategories = ['enregistrerCategorie', 'supprimerCategorie',
+    'appliquerRepartitionTerrains'].indexOf(action) !== -1;
   const invalider = function () {
     if (changeCategories && typeof invaliderLecturesCategories === 'function') invaliderLecturesCategories();
   };

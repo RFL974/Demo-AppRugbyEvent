@@ -2065,6 +2065,24 @@ body.theme-clair {
   background: #ffffff; color: var(--cv-texte); border: 1.5px solid rgba(12, 28, 46, .35);
 }
 
+/* ⭐ LE PLAN AU CLAVIER (lot « Terrains »). Un mini-terrain est un bouton : il doit se VOIR quand le
+   clavier l'atteint. ⛔ `outline` sur un élément SVG n'est pas rendu de façon fiable : on dessine la
+   bague avec le trait de l'élément lui-même, qui suit exactement sa forme, rotation comprise. */
+.carte-tuile-g { cursor: pointer; }
+.carte-tuile-g:focus { outline: none; }
+.carte-tuile-g:focus-visible { outline: none; }
+.carte-tuile-g:focus-visible .carte-tuile-cadre {
+  stroke: var(--cv-action, #0b5fa5); stroke-width: 5; stroke-dasharray: 7 4;
+}
+.repart-chip:focus-visible { outline: 3px solid var(--cv-action, #0b5fa5); outline-offset: 3px; }
+
+/* Zone d'annonce du plan : lue par les lecteurs d'écran, invisible à l'œil.
+   ⛔ Jamais `display:none` ni `visibility:hidden` : ils retirent le texte de l'arbre d'accessibilité. */
+.cv-annonce {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
 /* Champ « Table des marques » (longueur × largeur) dans la carte terrains */
 .tm-taille { display: inline-flex; align-items: center; gap: 6px; }
 .tm-taille input { width: 64px; text-align: center; }
