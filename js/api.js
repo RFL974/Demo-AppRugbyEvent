@@ -124,27 +124,56 @@ async function envoyerAvecRejeu404(emettre, rejouable, abandon, suivi) {
  * @param {number} [delaiMs] délai nominal de CHAQUE tentative
  * @return {Promise<*>}
  */
-async function executerAvecRejeuAbandon(executer, rejouable, delaiMs) {
+/* ⭐ Marge minimale de budget sous laquelle un second essai n'a plus de sens : lancer une tentative
+ *  qui expirerait aussitôt coûterait une requête au serveur pour rien. */
+const MARGE_REJEU_BUDGET_MS = 1000;
+
+async function executerAvecRejeuAbandon(executer, rejouable, delaiMs, budgetMs) {
   const suivi = { emissions: 0 };
+  /* ⭐ `budgetMs` (OPTIONNEL) — LA BORNE D'ATTENTE TOTALE, rejeu compris.
+   *
+   * 🔬 LE DÉFAUT QU'IL FERME. `delaiMs` borne UNE TENTATIVE, et le second essai reçoit un délai
+   * NEUF : avec `delaiMs: 30000`, l'attente réelle d'une lecture rejouable pouvait approcher
+   * 60 s — deux fois ce que l'écran annonçait. Un écran qui promet « 30 s » et fait patienter une
+   * minute ment, même sans le vouloir.
+   * ⭐ Avec un budget, chaque tentative reçoit `min(delaiMs, temps restant)`, et le rejeu est refusé
+   * quand il ne reste plus de quoi tenter utilement. L'attente totale est donc bornée par `budgetMs`.
+   * ⛔ ADDITIF ET SANS EFFET PAR DÉFAUT : `budgetMs` absent ⇒ comportement STRICTEMENT inchangé pour
+   * les 40 appels existants d'`apiGet` / `apiPost` / `apiPostProtege`, qui n'en passent aucun.
+   * ⚠️ Comme `delaiMs`, ce budget borne l'ATTENTE DU NAVIGATEUR. ⛔ Il n'annule pas l'exécution
+   * Apps Script, qui se poursuit chez Google et peut aboutir après l'abandon. */
+  /* ⛔ `performance` N'EST TOUCHÉ QUE SI UN BUDGET EST DEMANDÉ. Sans cette garde, la seule présence
+     du mécanisme exigerait `performance` de tout appelant — y compris ceux qui n'ont jamais passé
+     le moindre délai. C'est le sens strict de « additif » : le code d'avant ne doit pas seulement
+     se comporter pareil, il ne doit rien réclamer de plus. */
+  const depart = budgetMs ? performance.now() : 0;
+  const restant = function () {
+    return budgetMs ? Math.max(0, budgetMs - (performance.now() - depart)) : Infinity;
+  };
 
   async function tenter() {
-    const controleur = delaiMs ? new AbortController() : null;
+    const delaiTentative = budgetMs
+      ? Math.min(delaiMs || budgetMs, restant())
+      : delaiMs;
+    const controleur = delaiTentative ? new AbortController() : null;
     const abandon = controleur
-      ? { signal: controleur.signal, echeance: performance.now() + delaiMs, reveiller: null,
+      ? { signal: controleur.signal, echeance: performance.now() + delaiTentative, reveiller: null,
           expirationInterne: false }
       : null;
     const minuteur = controleur ? setTimeout(function () {
       abandon.expirationInterne = true;
       controleur.abort();
       if (abandon.reveiller) abandon.reveiller();
-    }, delaiMs) : null;
+    }, delaiTentative) : null;
 
     try {
       return await executer(controleur, abandon, suivi);
     } catch (err) {
-      const rejeu404 = rejouable && err && err.rejeuLecture404 === true && suivi.emissions < 2;
+      // ⛔ Budget épuisé : plus de second essai, l'erreur remonte — l'attente reste sous la borne.
+      const budgetRestant = !budgetMs || restant() > MARGE_REJEU_BUDGET_MS;
+      const rejeu404 = rejouable && err && err.rejeuLecture404 === true && suivi.emissions < 2 && budgetRestant;
       const expirationRejouable = rejouable && abandon && abandon.expirationInterne &&
-        err && err.name === 'AbortError' && suivi.emissions < 2;
+        err && err.name === 'AbortError' && suivi.emissions < 2 && budgetRestant;
       if (!rejeu404 && !expirationRejouable) throw err;
     } finally {
       if (minuteur) clearTimeout(minuteur);
@@ -194,6 +223,8 @@ async function apiGet(action, params, options) {
 
   // Délai NOMINAL optionnel, appliqué séparément à chaque tentative autorisée.
   const delaiMs = options && options.delaiMs;
+  // ⭐ Borne d'attente TOTALE optionnelle, rejeu compris (voir executerAvecRejeuAbandon).
+  const budgetMs = options && options.budgetMs;
   const adresse = url.toString();
 
   return executerAvecRejeuAbandon(async function (controleur, abandon, suivi) {
@@ -217,7 +248,7 @@ async function apiGet(action, params, options) {
     }
 
     return donnees;
-  }, rejouable, delaiMs);
+  }, rejouable, delaiMs, budgetMs);
 }
 
 /**
@@ -254,6 +285,8 @@ async function apiPost(action, data, options) {
 
   // Délai NOMINAL optionnel, appliqué séparément à chaque tentative autorisée.
   const delaiMs = options && options.delaiMs;
+  // ⭐ Borne d'attente TOTALE optionnelle, rejeu compris (voir executerAvecRejeuAbandon).
+  const budgetMs = options && options.budgetMs;
 
   return executerAvecRejeuAbandon(async function (controleur, abandon, suivi) {
     const reglages = {
@@ -287,7 +320,7 @@ async function apiPost(action, data, options) {
     }
 
     return donnees;
-  }, rejouable, delaiMs);
+  }, rejouable, delaiMs, budgetMs);
 }
 
 /* ============================================================================

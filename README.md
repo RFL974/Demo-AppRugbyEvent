@@ -191,6 +191,48 @@ déplace aux flèches, pivote avec `R`, met de côté ou repose avec `Entrée`, 
 chaque résultat, y compris un refus et sa raison, étant annoncé aux lecteurs d'écran.
 L'ordre de publication ci-dessus ne change pas, et aucune combinaison de versions ne casse.
 
+Le lot « Demande d'autorisation » (23 septembre 2026, local, non publié) touche **les deux dépôts**, sans ajouter ni retirer
+d'action backend. ⛔ **Le défaut principal n'était pas le serveur, c'était l'attente devant une page vide.** Le formulaire de
+cet écran ne dépend que de la configuration, déjà chargée à l'ouverture de l'administration ; il n'était pourtant rendu
+qu'**après** la réponse de `getDossierAutorisation` — une lecture qui relit six onglets — parce qu'elle sert à masquer deux ou
+trois questions auxquelles l'app répond déjà. Toute la page attendait donc une donnée **secondaire** dont le seul effet est
+d'en **retirer**. Le formulaire s'affiche désormais **tout de suite et complet** (exactement ce que l'écran montrait déjà
+quand le réseau échouait), la feuille annonce son chargement au lieu de rester blanche, et l'arrivée du dossier ne repeint
+le formulaire **que s'il change réellement**, en reposant le focus et le curseur. Une saisie commencée pendant l'attente
+n'est jamais effacée. La lecture est en outre **bornée** : elle ne l'était pas du tout — un serveur muet laissait l'écran
+indéfiniment sur « en cours de rechargement… », sans message ni moyen de réessayer. ⚠️ La borne est **globale** :
+15 s par tentative et **30 s d'attente totale nominale**, relance comprise. ⚠️ Nominale : une mise en veille, un
+onglet suspendu ou des minuteries retardées peuvent différer le dénouement — aucune borne murale absolue n'est garantie. Sans cela, l'unique relance recevant un délai
+neuf, l'attente réelle pouvait approcher **60 s** — le double de ce que l'écran annonçait. Le message affiche
+désormais le temps réellement attendu, et offre « Réessayer ». ⛔ Une borne côté navigateur **n'annule jamais**
+l'exécution Apps Script, qui se poursuit chez Google et peut aboutir après l'abandon ; pour cette lecture, qui
+ne prend aucun verrou et n'écrit rien, cette poursuite est sans effet observable.
+⭐ **Deux sessions ne s'écrasent plus en silence.** Le formulaire postant ses 36 champs à chaque clic, une session
+ouverte avant une autre repostait l'ancienne valeur d'un champ qu'elle n'avait pas touché. L'écran joint
+désormais son **état de départ** et le serveur applique la **fusion à trois voies** déjà utilisée par l'écran
+« Catégories » : un champ non modifié localement garde la valeur concurrente (et l'organisateur en est averti),
+un même changement des deux côtés passe, un conflit réel **refuse tout le geste avant la moindre écriture** en
+nommant les champs, sans toucher à la saisie en cours. ⚠️ Les six champs de B.5 **pré-remplis** depuis une autre
+carte (tarif d'engagement, repas, goûters) envoient DEUX états — ce qui est affiché et ce qui est enregistré — sans
+quoi un préremplissage normal passerait pour une modification concurrente. Un préremplissage que l'on ne touche pas
+**n'est pas gravé** dans les champs `org_*` : il reste dérivé de sa source, pour qu'un changement ultérieur des
+modalités continue d'atteindre la feuille de report. Le modifier réellement l'enregistre, en un seul clic. ⛔ Aucune requête de plus. ⚠️ Avec un **frontend d'avant**,
+qui n'envoie pas d'état de départ, le dernier arrivé gagne comme auparavant : la protection n'existe que dans la
+combinaison nouveau frontend / nouveau backend. Enfin, une panne survenant **après** la première cellule écrite
+annonce désormais honnêtement un état **incertain** — recliquer reste sans danger, le rejeu ne réécrit rien.
+**Côté requêtes** : l'arrivée sur l'écran passe de **2 requêtes à 1** (la liste des clubs n'était lue que pour le PDF ; le
+serveur joint désormais les comptes à la feuille), et « Enregistrer les champs saisis » de **3 requêtes à 1** (l'écriture
+passe au contrat d'écriture : sa réponse porte la configuration ET la feuille relues sous le verrou). L'écriture ne
+reconstruit plus l'instantané public sous le verrou — aucun champ `org_*` n'apparaît dans une vue publique — et ne réécrit
+plus les valeurs inchangées. **Les deux sens fonctionnent** : un backend d'avant ne renvoie ni comptes ni configuration, et
+le frontend reprend alors exactement le chemin d'avant (le PDF va chercher la liste des clubs avant de générer, il ne compte
+donc jamais zéro club) ; un frontend d'avant ignore les champs supplémentaires. L'ordre de publication ci-dessus ne change
+pas, et aucune combinaison de versions ne casse. ⚠️ Une **correction de fond** accompagne ce lot : le PDF officiel
+recalculait dans le navigateur les participants et les éducateurs que le serveur calculait déjà pour la feuille affichée —
+deux calculs pour un seul fait, et ils pouvaient **diverger** (le serveur déduit les effectifs des équipes retirées après la
+réponse d'un club, le navigateur non). Le PDF reprend désormais les comptes du serveur : le document déposé ne contredit
+plus l'écran.
+
 Le seul point d'attention à la publication est le **cache du navigateur**. Chaque CSS et chaque JS
 modifié par cette livraison est appelé avec une version unique, `?v=refonte-ciel-verre-20260920`,
 pour qu'un visiteur déjà venu ne garde pas un ancien fichier. `tests/cache-busting-refonte.test.js`

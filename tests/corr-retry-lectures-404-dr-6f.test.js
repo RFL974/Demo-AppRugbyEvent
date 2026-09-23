@@ -1186,7 +1186,13 @@ critere('F.5', 'js/api.js ne pose AUCUN écouteur (ni addEventListener, ni onabo
   async (src) => ({ code: sansCommentaires(src) }),
   (o) => o.code.indexOf('addEventListener') === -1 && !/\.on[a-z]+\s*=/.test(o.code) && !/\bconsole\s*\./.test(o.code) &&
     (o.code.match(/Date\.now\(\)/g) || []).length === 1 && /url\.searchParams\.set\('_', String\(Date\.now\(\)\)\);/.test(o.code) &&
-    /echeance: performance\.now\(\) \+ delaiMs/.test(o.code));
+    /* ⚠️ PRÉMISSE ADAPTÉE — jamais assouplie — par le lot « Demande d'autorisation » : l'échéance d'une
+       tentative se calcule sur `delaiTentative`, qui VAUT `delaiMs` tant qu'aucun budget global n'est
+       demandé, et `min(delaiMs, temps restant)` quand il l'est. Ce qui est exigé reste le même : c'est
+       `performance.now()` — et lui seul — qui date l'échéance, `Date.now()` restant réservé à
+       l'anti-cache. On exige EN PLUS que le délai de la tentative dérive bien de `delaiMs`. */
+    /echeance: performance\.now\(\) \+ delaiTentative/.test(o.code) &&
+    /const delaiTentative = budgetMs[\s\S]{0,120}delaiMs/.test(o.code));
 
 /* ⭐ PRÉMISSE ADAPTÉE (lot « Poules & planning »), et le contrôle MORD DANS LES DEUX SENS.
    L'égalité d'origine présumait que les 11 actions rejouables étaient TOUTES appelées. Depuis que
@@ -1234,7 +1240,10 @@ critere('F.6', 'recensement : TOUTE action GET appelée est classée et en litt�
 const ANCRES = {
   test404: '  if (!rejouable || reponse.status !== 404 || suivi.emissions >= 2) return reponse;',
   expiration: '      const expirationRejouable = rejouable && abandon && abandon.expirationInterne &&',
-  plafondExpiration: "        err && err.name === 'AbortError' && suivi.emissions < 2;",
+  /* ⚠️ ANCRE ADAPTÉE par le lot « Demande d'autorisation » : la condition de rejeu après expiration
+     porte désormais aussi `budgetRestant` (borne d'attente TOTALE optionnelle). Le plafond de DEUX
+     émissions, lui, est inchangé — c'est toujours lui que ce mutant tente de lever. */
+  plafondExpiration: "        err && err.name === 'AbortError' && suivi.emissions < 2 && budgetRestant;",
   expirationInterne: 'abandon.expirationInterne &&',
   increment: '    suivi.emissions++;',
   classementGet: "const rejouable = ACTIONS_GET_REJOUABLES.indexOf(url.searchParams.get('action')) !== -1;",
@@ -1277,7 +1286,7 @@ const MUTANTS = [
   ['aucun rejeu après expiration', [[ANCRES.expiration, '      const expirationRejouable = false &&']], ['C.18', 'C.19', 'C.20']],
   ['AbortError extérieur accepté', [[ANCRES.expirationInterne, 'true &&']], ['C.23']],
   ['plafond d\'expiration porté à trois', [[ANCRES.plafondExpiration,
-    "        err && err.name === 'AbortError' && suivi.emissions < 3;"]], ['C.12']],
+    "        err && err.name === 'AbortError' && suivi.emissions < 3 && budgetRestant;"]], ['C.12']],
   ['compteur d\'émissions supprimé', [[ANCRES.increment, '    // compteur supprimé']], ['C.21', 'C.22']],
   ['minuteur d\'abandon non effacé', [["      if (minuteur) clearTimeout(minuteur);",
     '      // effacement retiré']], ['C.18', 'C.19', 'C.20']],

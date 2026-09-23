@@ -538,6 +538,13 @@ const ADMIN_RESSOURCES = {
     //   `revision-depassee`, la ressource reste « à relire », et la visite suivante la relit.
     const options = Object.assign({}, opt || {});
     if (options.revisionCible === undefined && cible !== null) options.revisionCible = cible;
+    // ⭐ AFFICHAGE PRÉCOCE — posé ICI, et NULLE PART AILLEURS. Le registre est le seul appelant dont
+    //   on sait que `configCourante` vient d'être rafraîchie : l'arrivée sur l'écran (la config est
+    //   celle de l'ouverture de session) et le rafraîchissement forcé de `onReinitialiser` (qui
+    //   vient d'appeler `rechargerEtRendre`). ⛔ Les autres chemins de `majAutorisation` ne
+    //   l'obtiennent pas : ils ne doivent jamais peindre un formulaire depuis une config dont la
+    //   fraîcheur n'est pas établie — c'est exactement le défaut B2-0.3.
+    if (options.afficherTot === undefined) options.afficherTot = true;
     return Promise.resolve(majAutorisation(options)).then(function (bilan) {
       const ok = !!(bilan && bilan.ok);
       if (ok && cible !== null) autorisationRevisionLue = cible;
@@ -570,7 +577,16 @@ const ADMIN_ETAPES = {
       if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
     }
   },
-  autorisation: { ressources: ['clubsInvites', 'dossierAutorisation'] },
+  /* ⭐ LOT « DEMANDE D'AUTORISATION » — `clubsInvites` N'EST PLUS RÉCLAMÉE À L'ARRIVÉE, et ce n'est
+     pas un relâchement du garde-fou : c'est la disparition de la raison qui le rendait nécessaire.
+     Cet écran ne lisait la liste des clubs QUE pour le PDF officiel, qui y recalculait les clubs
+     acceptés, les participants et les éducateurs — un second calcul du même fait, déjà fait par le
+     serveur pour la feuille de report, et qui pouvait s'en écarter. Depuis ce lot, le serveur joint
+     ces COMPTES à `getDossierAutorisation` : la lecture des clubs n'alimente plus rien à l'ouverture.
+     ⛔ Elle n'est pas SUPPRIMÉE, elle est DIFFÉRÉE : avec un backend d'avant (pas de `comptes`),
+     `onTelechargerPdfAutorisation` l'exige avant de générer — le PDF ne comptera donc jamais zéro
+     club. ⚠️ `dossier` continue, lui, de la réclamer : son sélecteur de club en dépend vraiment. */
+  autorisation: { ressources: ['dossierAutorisation'] },
   /* Partenaires : DEUX lectures indépendantes, mémorisées séparément — un échec partiel ne doit
      faire relire que celle qui a échoué. Le rendu, lui, n'est PAS parallélisable : le bilan lit
      les fiches, le peindre trop tôt afficherait « aucun relevé », un faux état vide. D'où

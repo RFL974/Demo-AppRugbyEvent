@@ -314,6 +314,7 @@ function rendreFeuilleAutorisation(dossier) {
  * ⛔ Cette fonction n'invente aucune donnée et n'interroge personne : elle EFFACE, c'est tout.
  */
 function invaliderAutorisationAffichee() {
+  autorisationComptes = null;                       // même raison qu'en B2-0.5 : ils décrivent la feuille effacée
   const zoneSaisie = document.getElementById('autorisation-saisie');
   const zoneFeuille = document.getElementById('autorisation-feuille');
   if (zoneFeuille) {
@@ -440,6 +441,43 @@ var autorisationRevisionLue = 0;
 var autorisationRelectureEnCours = null;
 /* Photo du formulaire org_* tel qu'il a été RENDU (voir autorisationSaisieModifiee). */
 var autorisationSaisiePhoto = null;
+
+/* ⭐ BORNE DE LA LECTURE DE LA FEUILLE.
+ *  🔬 LE DÉFAUT FERMÉ ICI : `getDossierAutorisation` était la DERNIÈRE lecture admin émise SANS
+ *  aucun délai. Un serveur muet (Apps Script en file derrière une autre exécution, réseau qui ne
+ *  rend jamais la main) laissait donc l'écran sur « Feuille de report en cours de rechargement… »
+ *  INDÉFINIMENT : aucun message, aucun échec, aucun moyen de réessayer autrement qu'en rechargeant
+ *  la page. ⭐ Avec la borne, api.js abandonne, retente UNE fois (l'action est dans sa liste fermée
+ *  de lectures rejouables), puis l'échec est AFFICHÉ avec son bouton « Réessayer ».
+ *  ⛔ Un délai côté client n'ANNULE PAS le backend : l'exécution Apps Script se poursuit chez
+ *  Google. Comme cette action est une LECTURE (aucun verrou, aucune écriture), cette poursuite
+ *  n'a aucun effet observable — c'est précisément ce qui rend l'abandon sûr ici.
+ *  ⚠️ DEUX NOMBRES, ET ILS NE DISENT PAS LA MÊME CHOSE. `delaiMs` borne UNE TENTATIVE ; `budgetMs`
+ *  borne l'ATTENTE TOTALE, rejeu compris. Sans budget, une lecture rejouable à 30 s par tentative
+ *  pouvait faire patienter près de 60 s — le double de ce que l'écran annonçait. On borne donc le
+ *  total à 30 s, en deux tentatives de 15 s : le message affiché dit le temps RÉELLEMENT attendu.
+ *  ⛔ Ni l'un ni l'autre n'annule l'exécution Apps Script : elle se poursuit chez Google. */
+var DELAI_LECTURE_AUTORISATION_MS = 15000;
+var BUDGET_LECTURE_AUTORISATION_MS = 30000;
+
+/* ⭐ LES COMPTES BRUTS renvoyés par le serveur avec la feuille (clubs, équipes, participants,
+ *  éducateurs). Ils remplacent, pour le PDF officiel, un SECOND calcul fait dans le navigateur à
+ *  partir de `clubsInvitesCourants` — donc aussi la lecture `listerClubsInvites` qui l'alimentait.
+ *  ⛔ `null` = le serveur ne les a pas fournis (backend d'avant ce lot, ou lecture en échec) : le
+ *  PDF reprend alors EXACTEMENT le chemin d'avant, liste des clubs comprise. */
+var autorisationComptes = null;
+
+/* ⭐ LE SERVEUR JOINT-IL LA CONFIG À LA FEUILLE ? Observé sur la dernière lecture RÉUSSIE ; `null`
+ *  tant qu'aucune n'a abouti. Sert au seul rattrapage d'obsolescence, qui émettait un
+ *  `getConfigAdmin` AVANT chaque relecture — une exécution Apps Script entière pour un onglet que
+ *  la lecture suivante relisait de toute façon.
+ *  ⛔ CE N'EST PAS UNE DEVINETTE DE VERSION : c'est le constat d'une réponse déjà reçue. Un backend
+ *  d'avant laisse le drapeau à `false` et la relecture de config reste émise, exactement comme avant.
+ *  ⚠️ SEULE FENÊTRE D'ERREUR : un backend REVENU EN ARRIÈRE pendant la session. Le premier rattrapage
+ *  suivant sauterait la relecture, puis remettrait le drapeau à `false` — le suivant la ferait. La
+ *  conséquence est bornée et ne touche AUCUNE valeur `org_*` : aucune action du crochet n'en écrit
+ *  (voir B2-0.5 §3), seule la liste des catégories des récompenses pourrait être d'un tour en retard. */
+var autorisationServeurPorteConfig = null;
 /* ⛔ Borne dure du rattrapage : on ne boucle jamais sans fin, même si une écriture arrive à
    chaque tour. Au-delà, la dette RESTE et sera reprise à la prochaine ouverture. */
 var AUTORISATION_TOURS_MAX = 5;
@@ -449,6 +487,10 @@ var AUTORISATION_TOURS_MAX = 5;
  *  ⚠️ À ne pas confondre avec `invaliderAutorisationAffichee` (B2-0.3), qui efface LES DEUX
  *  parce qu'une réinitialisation, elle, vide réellement 26 champs `org_*`. */
 function invaliderFeuilleAutorisationAffichee() {
+  // ⛔ Les COMPTES tombent avec la feuille : ils viennent du MÊME assemblage et décrivent le même
+  //   instant. Les garder alimenterait le PDF avec des nombres que la feuille ne montre plus —
+  //   exactement le mensonge silencieux que l'invalidation existe pour empêcher.
+  autorisationComptes = null;
   const zoneFeuille = document.getElementById('autorisation-feuille');
   if (zoneFeuille) {
     zoneFeuille.innerHTML = '<div class="ffr-bloc ffr-neutre">Feuille de report en cours de ' +
@@ -463,6 +505,49 @@ function autorisationPhotographierSaisie() {
   const form = document.getElementById('form-autorisation');
   autorisationSaisiePhoto = (form && typeof assistantSerialiser === 'function')
     ? assistantSerialiser(form) : null;
+  autorisationPhotographierBase();
+}
+
+/* ⭐ L'ÉTAT DE DÉPART DU FORMULAIRE — le troisième terme de la fusion à trois voies du serveur.
+ *
+ * 🔬 LE DÉFAUT QU'IL FERME. Le formulaire poste ses 36 champs à chaque clic, y compris ceux que
+ * l'organisateur n'a pas touchés. Deux sessions ouvertes sur le même tournoi : A change le code club
+ * et enregistre ; B, qui avait ouvert son écran AVANT, change seulement le nombre d'arbitres et
+ * enregistre ensuite. Sans état de départ, B repostait l'ANCIEN code club, et le serveur — qui
+ * voyait simplement une valeur différente de celle enregistrée — l'écrivait. ⛔ Le travail de A
+ * disparaissait SANS UN MOT.
+ *
+ * ⭐ Ce que l'on photographie, c'est ce que l'organisateur A SOUS LES YEUX : les valeurs telles que
+ * le formulaire vient d'être rendu, lues dans le DOM — donc exactement ce que le submit enverra si
+ * l'on ne touche à rien. ⛔ Pas `configCourante` : le formulaire affiche aussi des valeurs
+ * PRÉ-REMPLIES depuis d'autres cartes (tarifs, repas, goûters), et la base doit décrire l'écran,
+ * pas le classeur.
+ * ⚠️ Les champs GRISÉS y figurent aussi : `form.elements` les envoie, ils doivent donc être protégés
+ * comme les autres. */
+/* Valeurs BRUTES `org_*` telles que `Config` les portait au moment du rendu. */
+var autorisationBase = null;
+/* Valeurs AFFICHÉES à l'organisateur au moment du rendu. */
+var autorisationBaseAffichee = null;
+
+/* ⛔ DEUX PHOTOS, ET NON UNE. Six champs de B.5 sont PRÉ-REMPLIS depuis une autre carte : l'écran
+   affiche `60` là où `Config` peut ne rien porter, ou porter `50`. Une photo unique, prise dans le
+   DOM, faisait donc comparer au serveur une valeur AFFICHÉE à une valeur ENREGISTRÉE : un
+   préremplissage parfaitement normal passait pour une modification concurrente.
+     · `autorisationBaseAffichee` — ce que l'organisateur A SOUS LES YEUX ⇒ « a-t-il touché ? » ;
+     · `autorisationBase` — ce que `Config` PORTAIT ⇒ « quelqu'un d'autre l'a-t-il changé ? ». */
+function autorisationPhotographierBase() {
+  const form = document.getElementById('form-autorisation');
+  if (!form) { autorisationBase = null; autorisationBaseAffichee = null; return; }
+  const g = (typeof configCourante !== 'undefined' && configCourante && configCourante.global) || {};
+  const affichee = {}, brute = {};
+  Array.prototype.forEach.call(form.elements, function (el) {
+    if (!el.name || el.name.indexOf('org_') !== 0) return;
+    affichee[el.name] = String(el.value == null ? '' : el.value).trim();
+    // ⛔ La valeur BRUTE vient de la config qui a servi à rendre ce formulaire, jamais du DOM.
+    brute[el.name] = String(g[el.name] == null ? '' : g[el.name]).trim();
+  });
+  autorisationBaseAffichee = affichee;
+  autorisationBase = brute;
 }
 
 /** Le formulaire org_* porte-t-il une saisie NON ENREGISTRÉE ?
@@ -474,6 +559,53 @@ function autorisationSaisieModifiee() {
   if (typeof assistantSerialiser !== 'function') return true;  // ⛔ dans le doute, on garde
   if (autorisationSaisiePhoto == null) return true;            // ⛔ idem
   return assistantSerialiser(form) !== autorisationSaisiePhoto;
+}
+
+/** Le formulaire porte-t-il une saisie DÉMONTRÉE — et non « peut-être » ?
+ *  ⭐ Le miroir STRICT d'`autorisationSaisieModifiee` : celle-ci répond « oui » dans le doute pour
+ *  conserver ; celle-là n'affirme que sur preuve. ⛔ Les deux sont nécessaires, et pour des rôles
+ *  opposés : la première PROTÈGE un chemin qui avait le droit de reconstruire, la seconde OUVRE une
+ *  protection nouvelle sans modifier la conduite d'aucun chemin existant. */
+function autorisationFrappeProuvee() {
+  if (!document.getElementById('form-autorisation')) return false;
+  if (typeof assistantSerialiser !== 'function') return false;
+  if (autorisationSaisiePhoto == null) return false;
+  return autorisationSaisieModifiee();
+}
+
+/** Remplace le formulaire en REPOSANT le focus et le curseur là où ils étaient.
+ *  🔬 Sans cela, l'arrivée du dossier — jusqu'à 30 s après l'affichage du formulaire — arrachait le
+ *  focus du champ en cours de lecture, au clavier comme au lecteur d'écran. ⛔ Le champ peut avoir
+ *  DISPARU (c'est tout l'objet du masque) : on ne repose alors rien plutôt que de deviner. */
+function remplacerSaisieAutorisation(zone, html) {
+  const actif = document.activeElement;
+  const dansForm = !!(actif && actif.name && actif.closest && actif.closest('#form-autorisation'));
+  const nom = dansForm ? actif.name : null;
+  let debut = null, fin = null;
+  if (dansForm) { try { debut = actif.selectionStart; fin = actif.selectionEnd; } catch (e) { debut = null; } }
+  zone.innerHTML = html;
+  if (!nom) return;
+  const sel = (window.CSS && CSS.escape) ? CSS.escape(nom) : nom;
+  const cible = zone.querySelector('#form-autorisation [name="' + sel + '"]');
+  if (!cible || cible.disabled) return;
+  cible.focus();
+  if (debut != null && typeof cible.setSelectionRange === 'function') {
+    try { cible.setSelectionRange(debut, fin); } catch (e) { /* type sans sélection (select, number) */ }
+  }
+}
+
+/** Les comptes du serveur, ou `null` s'ils ne sont pas EXPLOITABLES.
+ *  ⛔ Un compte manquant ou non numérique rend l'objet ENTIER inutilisable : on ne mélange jamais
+ *  une moitié de comptes serveur avec une moitié recalculée dans le navigateur — le PDF afficherait
+ *  alors une addition qui n'a été faite nulle part. Tout ou rien, et le repli est complet. */
+function comptesAutorisationValides(c) {
+  if (!c || typeof c !== 'object') return null;
+  const cles = ['nbClubsAcceptes', 'nbClubsEquipes', 'nbEquipes', 'nbParticipants', 'nbEducateurs'];
+  for (let i = 0; i < cles.length; i++) {
+    const v = c[cles[i]];
+    if (typeof v !== 'number' || !isFinite(v) || v < 0) return null;
+  }
+  return c;
 }
 
 /** La feuille est-elle SOUS LES YEUX de l'organisateur en ce moment ?
@@ -557,18 +689,72 @@ async function majAutorisation(opt) {
   const depassee = function () {
     return opt.revisionCible != null && opt.revisionCible !== autorisationRevision;
   };
+  /* ⭐ LE PREMIER AFFICHAGE UTILE PART AVANT LE RÉSEAU — et c'est le cœur de ce lot.
+   *
+   * 🔬 LE DÉFAUT MESURÉ. Le formulaire de saisie ne dépend QUE de `configCourante`, déjà chargée à
+   * l'ouverture de l'administration. Il était pourtant rendu APRÈS la réponse de
+   * `getDossierAutorisation` — parce que `questionsDejaRepondues` a besoin du dossier pour masquer
+   * deux ou trois questions auxquelles l'app répond déjà. Résultat : en arrivant sur l'écran,
+   * l'organisateur regardait une page VIDE (les deux zones sont vides dans le HTML) pendant tout
+   * l'aller-retour serveur — une lecture qui relit Config, Equipes, Clubs, Participations, Matchs
+   * et le référentiel. Toute la page attendait une donnée SECONDAIRE dont le seul effet est de
+   * RETIRER des questions.
+   *
+   * ⭐ LA CORRECTION : on rend le formulaire TOUT DE SUITE, sans masque — c'est-à-dire COMPLET.
+   * ⛔ Ce n'est pas un affichage « approximatif » corrigé après coup : c'est exactement ce que la
+   * fonction affiche déjà quand le réseau échoue (« aucun masquage sans certitude »). Le pire cas
+   * reste « on pose une question de plus », jamais « on affiche du faux ». Et la feuille, elle,
+   * annonce honnêtement qu'elle charge au lieu de rester blanche.
+   * ⚠️ DEUX CONDITIONS, et les deux comptent :
+   *   · `afficherTot` — posé par le REGISTRE seul (`ADMIN_RESSOURCES.dossierAutorisation`, admin.js),
+   *     c'est-à-dire par les deux chemins dont on SAIT que `configCourante` vient d'être rafraîchie :
+   *     l'arrivée sur l'écran et le rafraîchissement forcé après une réinitialisation. ⛔ Sans lui,
+   *     les autres chemins gardent leur comportement exact — on ne peindra jamais un formulaire
+   *     depuis une config dont on ne peut pas affirmer qu'elle est à jour (défaut B2-0.3) ;
+   *   · zone VIDE — on ne repeint jamais par-dessus un formulaire déjà là, ni une saisie en cours. */
+  const saisieVide = !zoneSaisie.innerHTML;
+  if (opt.afficherTot && saisieVide) {
+    zoneSaisie.innerHTML = rendreSaisieAutorisation({});
+    if (typeof autorisationPhotographierSaisie === 'function') autorisationPhotographierSaisie();
+    if (!zoneFeuille.innerHTML) {
+      zoneFeuille.innerHTML = '<div class="ffr-bloc ffr-neutre">Feuille de report en cours de ' +
+        'chargement…</div>';
+    }
+  }
   let dossier = null;
   let reseauOk = true;
+  let echec = null;
   try {
-    const rep = await apiPostProtege('getDossierAutorisation', {}, 'admin', 'admin');
+    const rep = await apiPostProtege('getDossierAutorisation', {}, 'admin', 'admin',
+      { delaiMs: DELAI_LECTURE_AUTORISATION_MS, budgetMs: BUDGET_LECTURE_AUTORISATION_MS });
     if (depassee()) return { ok: false, motif: 'revision-depassee' };
     dossier = (rep && rep.dossier) || null;
+    // ⭐ Les comptes du serveur : ils dispensent le PDF de la lecture `listerClubsInvites`.
+    //   ⛔ Absents (backend d'avant), ils restent `null` — le PDF reprend le chemin d'avant.
+    autorisationComptes = comptesAutorisationValides(rep && rep.comptes);
+    // ⭐ La config voyage avec la feuille depuis ce lot : le rattrapage d'obsolescence n'a plus à
+    //   émettre un `getConfigAdmin` séparé. ⛔ Absente (backend d'avant) : rien n'est touché, et
+    //   l'appelant garde sa relecture — voir `majAutorisationSiObsolete`.
+    const configFournie = !!(rep && rep.config && rep.config.global && Array.isArray(rep.config.categories));
+    if (configFournie) configCourante = rep.config;
+    autorisationServeurPorteConfig = configFournie;
     zoneFeuille.innerHTML = rendreFeuilleAutorisation(dossier);
   } catch (e) {
     if (depassee()) return { ok: false, motif: 'revision-depassee' };
     reseauOk = false;
-    zoneFeuille.innerHTML = '<div class="ffr-bloc ffr-neutre">Feuille de report indisponible ' +
-      '(connecte-toi avec la clé admin).</div>';
+    autorisationComptes = null;
+    // ⛔ On ne dit plus « connecte-toi avec la clé admin » quoi qu'il arrive : c'était la seule
+    //   explication proposée, et elle était FAUSSE dans le cas le plus fréquent — un serveur lent
+    //   ou muet. Le motif réel est nommé, et « Réessayer » relance la lecture sans recharger.
+    // ⭐ On annonce le BUDGET TOTAL, pas le délai d'une tentative : c'est ce que l'organisateur
+    //   a réellement attendu (deux tentatives de 15 s). ⛔ Annoncer « 15 s » après 30 s d'attente
+    //   serait faux ; annoncer « 30 s » alors qu'on pouvait patienter 60 s l'était aussi.
+    echec = (e && e.name === 'AbortError')
+      ? 'aucune réponse en ' + Math.round(BUDGET_LECTURE_AUTORISATION_MS / 1000) + ' s (2 tentatives)'
+      : String((e && e.message) || 'erreur réseau').replace(/\.\s*$/, '');
+    zoneFeuille.innerHTML = '<div class="ffr-bloc ffr-orange">⚠️ Feuille de report indisponible : ' +
+      echapper(echec) + '. <button type="button" class="bouton bouton-secondaire" ' +
+      'id="bouton-reessayer-autorisation">Réessayer</button></div>';
   }
   // ⭐ SYNCHRONISATION AUTOMATIQUE (preserverSaisie) — deux cas où l'on NE reconstruit PAS :
   //   · une saisie org_* est en cours : la reconstruire l'effacerait ;
@@ -582,9 +768,27 @@ async function majAutorisation(opt) {
   } else if (opt.preserverSaisie && typeof autorisationSaisieModifiee === 'function' &&
              autorisationSaisieModifiee()) {
     saisie = 'preservee-saisie-en-cours';
+  } else if (autorisationFrappeProuvee()) {
+    /* ⭐ LA CONTREPARTIE OBLIGATOIRE DE L'AFFICHAGE PRÉCOCE. Le formulaire existant désormais AVANT
+     *   la réponse du serveur, l'organisateur peut y taper pendant l'attente ; le reconstruire à
+     *   l'arrivée du dossier effacerait ce qu'il vient d'écrire — une fenêtre de perte de saisie
+     *   que l'ancien code n'avait pas, faute de formulaire à remplir.
+     * ⛔ Ce contrôle-ci est STRICT, là où `autorisationSaisieModifiee` répond « oui » dans le doute :
+     *   il exige une PREUVE (outil de photo présent, photo prise, contenu différent). Sans preuve,
+     *   on retombe exactement sur la règle d'avant — aucun chemin existant ne change de conduite. */
+    saisie = 'preservee-saisie-en-cours';
   } else {
-    zoneSaisie.innerHTML = rendreSaisieAutorisation(questionsDejaRepondues(dossier));
-    if (typeof autorisationPhotographierSaisie === 'function') autorisationPhotographierSaisie();
+    const voulu = rendreSaisieAutorisation(questionsDejaRepondues(dossier));
+    if (voulu === zoneSaisie.innerHTML) {
+      /* ⭐ RIEN À CHANGER, DONC ON NE TOUCHE PAS AU DOM. Le cas ORDINAIRE depuis l'affichage
+       *   précoce : le dossier n'a aucune question à masquer, le formulaire rendu d'avance est
+       *   déjà le bon. ⛔ Le réécrire à l'identique détruirait quand même le focus et la position
+       *   du curseur — une régression clavier invisible à l'œil. */
+      saisie = 'inchangee';
+    } else {
+      remplacerSaisieAutorisation(zoneSaisie, voulu);
+      if (typeof autorisationPhotographierSaisie === 'function') autorisationPhotographierSaisie();
+    }
   }
   // ⛔ AUCUNE INSCRIPTION ICI (R2). Cette fonction est une lecture BRUTE : c'est le registre
   //   qui retient, et lui seul — sinon une lecture ancienne pourrait remettre « chargée » une
@@ -650,7 +854,11 @@ async function majAutorisationSiObsolete() {
     while (autorisationRevision !== autorisationRevisionLue && tours < AUTORISATION_TOURS_MAX) {
       tours++;
       const cible = autorisationRevision;              // ⭐ capturée AVANT toute attente
-      if (typeof lireConfigAdmin === 'function') {
+      // ⭐ La config VOYAGE désormais avec la feuille : quand la dernière lecture réussie l'a
+      //   apportée, ce `getConfigAdmin` est une requête pour rien — `majAutorisation` l'adopte
+      //   elle-même, avant de rendre le formulaire. ⛔ Drapeau à `false` ou inconnu (backend
+      //   d'avant, aucune lecture encore aboutie) : on relit, exactement comme avant.
+      if (autorisationServeurPorteConfig !== true && typeof lireConfigAdmin === 'function') {
         // La config est relue ICI : `rendreSaisieAutorisation` lit `configCourante`, et
         // l'appelant ne l'a pas forcément encore rafraîchie.
         // ⭐ On la lit dans une VARIABLE LOCALE : un instantané pris pour une cible entre-temps
@@ -686,6 +894,94 @@ async function majAutorisationSiObsolete() {
   finally { autorisationRelectureEnCours = null; }
 }
 
+/* ⭐ BORNE DE L'ÉCRITURE — 30 s par tentative, comme les deux écritures de l'écran « Terrains ».
+ *  ⛔ Une ÉCRITURE n'est JAMAIS rejouée par api.js (elle n'est dans aucune liste fermée) : la borne
+ *  ne sert qu'à rendre la main à l'organisateur et à libérer le bouton. ⚠️ Elle n'ANNULE RIEN côté
+ *  Google — l'exécution peut aboutir après l'abandon. C'est pourquoi le message ne dit jamais que
+ *  rien n'a été écrit : il dit que l'issue est incertaine, et un nouveau clic est sans danger
+ *  (rejouer le MÊME formulaire n'écrit rien de plus, `modifies: []`). */
+var DELAI_ECRITURE_AUTORISATION_MS = 30000;
+
+/** Applique la réponse d'une écriture AU CONTRAT : la config et la feuille relues par le serveur.
+ *  @return {boolean} vrai si la réponse était exploitable et a été appliquée — faux sinon, et
+ *    l'appelant reprend alors le chemin de relecture d'avant, sans rien avoir touché.
+ *  ⛔ TOUT OU RIEN : on n'adopte la config que si la feuille suit, et inversement. Une réponse à
+ *    moitié exploitable laisserait l'écran avec un formulaire d'aujourd'hui et une feuille d'hier. */
+function appliquerEnregistrementAutorisation(res) {
+  const contrat = (typeof CONTRAT_ECRITURE === 'string') ? CONTRAT_ECRITURE : 'ecriture-v1';
+  if (!res || res.contrat !== contrat) return false;
+  const cfg = res.config;
+  const dossier = res.dossier;
+  if (!cfg || !cfg.global || typeof cfg.global !== 'object' || !Array.isArray(cfg.categories)) return false;
+  if (!dossier || !Array.isArray(dossier.sections)) return false;
+  const zoneSaisie = document.getElementById('autorisation-saisie');
+  const zoneFeuille = document.getElementById('autorisation-feuille');
+  if (!zoneSaisie || !zoneFeuille) return false;
+  configCourante = cfg;
+  autorisationComptes = comptesAutorisationValides(res.comptes);
+  autorisationServeurPorteConfig = true;
+  zoneFeuille.innerHTML = rendreFeuilleAutorisation(dossier);
+  // ⭐ Le formulaire est reconstruit sur la config RELUE — et seulement s'il change réellement,
+  //   avec le focus reposé : après « Enregistrer », le focus est sur le bouton (hors formulaire),
+  //   mais un organisateur au clavier peut l'avoir déjà ramené dans un champ.
+  const voulu = rendreSaisieAutorisation(questionsDejaRepondues(dossier));
+  if (voulu !== zoneSaisie.innerHTML) {
+    remplacerSaisieAutorisation(zoneSaisie, voulu);
+    if (typeof autorisationPhotographierSaisie === 'function') autorisationPhotographierSaisie();
+  } else if (typeof autorisationPhotographierSaisie === 'function') {
+    // ⛔ La photo doit suivre l'ENREGISTREMENT, même sans reconstruction : sans cela le formulaire
+    //   resterait marqué « modifié » et le rattrapage suivant refuserait de le rafraîchir.
+    autorisationPhotographierSaisie();
+  }
+  return true;
+}
+
+/** Applique le REFUS pour conflit de concurrence : la feuille passe à l'état relu, la base aussi,
+ *  ⛔ et le formulaire n'est PAS touché — la saisie de l'organisateur lui appartient.
+ *  @param {Object} r la réponse `modification_concurrente` du serveur (config, dossier, conflits) */
+function appliquerConflitAutorisation(r, revisionAvant) {
+  /* ⭐ CONTRÔLE DE FRAÎCHEUR — la MÊME discipline que pour une réponse de LECTURE.
+   * 🔬 Le défaut fermé ici : ce chemin appliquait la réponse et soldait la dette sans regarder si
+   * une AUTRE écriture était survenue pendant le trajet. Or un refus de concurrence décrit un état lu
+   * à l'instant du refus ; si le classeur a changé depuis, cet état est déjà dépassé. Le peindre
+   * remettrait à l'écran une valeur que le classeur n'a plus, et — bien pire — en faire la nouvelle
+   * BASE armerait le prochain clic avec du passé.
+   * ⛔ DÉPASSÉE ⇒ ON NE TOUCHE À RIEN : ni la feuille, ni la config, ni la base, ni la dette. Le
+   * rattrapage normal passe par la file de la ressource — aucune requête concurrente, aucune boucle.
+   * @return {boolean} vrai si la réponse était fraîche et a été appliquée */
+  if (revisionAvant != null && autorisationRevision !== revisionAvant) {
+    if (typeof majAutorisationSiObsolete === 'function') {
+      majAutorisationSiObsolete().catch(function () { /* la feuille garde son message */ });
+    }
+    return false;
+  }
+  const zoneFeuille = document.getElementById('autorisation-feuille');
+  if (r.config && r.config.global && Array.isArray(r.config.categories)) configCourante = r.config;
+  autorisationComptes = comptesAutorisationValides(r.comptes);
+  if (zoneFeuille && r.dossier && Array.isArray(r.dossier.sections)) {
+    zoneFeuille.innerHTML = rendreFeuilleAutorisation(r.dossier);
+  }
+  /* ⭐ LA BASE BRUTE SUIT L'ÉTAT RELU — mais UNIQUEMENT pour les champs EN CONFLIT.
+     ⛔ La rafraîchir partout armerait le second clic avec « plus personne n'a rien changé » sur des
+     champs où une autre session vient justement d'écrire : un écrasement involontaire, offert par la
+     correction elle-même. Les champs non conflictuels gardent donc leur base d'origine, et une
+     modification concurrente y reste détectable au clic suivant.
+     ⛔ `autorisationBaseAffichee` n'est PAS touchée : le DOM n'a pas changé, l'organisateur a toujours
+     les mêmes valeurs sous les yeux. */
+  if (autorisationBase && r.config && r.config.global) {
+    const g = r.config.global;
+    (r.conflits || []).forEach(function (c) {
+      if (c && c.champ && Object.prototype.hasOwnProperty.call(autorisationBase, c.champ)) {
+        autorisationBase[c.champ] = String(g[c.champ] == null ? '' : g[c.champ]).trim();
+      }
+    });
+  }
+  // ⛔ Le serveur n'a rien écrit, mais la feuille affichée vient d'être remplacée par l'état relu :
+  //   la dette est donc soldée pour CETTE révision-là — celle d'avant l'envoi, pas une plus récente.
+  autorisationRevisionLue = revisionAvant != null ? revisionAvant : autorisationRevision;
+  return true;
+}
+
 /** Enregistre les champs saisis (org_*), puis recharge la config et la feuille.
  *
  *  ⚠️ C'est un CHEMIN PROPRE (catégorie B) : le crochet commun de `ecrireAdmin` ignore
@@ -710,15 +1006,67 @@ async function onEnregistrerAutorisation() {
   Array.prototype.forEach.call(form.elements, function (el) {
     if (el.name && el.name.indexOf('org_') === 0) data[el.name] = String(el.value == null ? '' : el.value).trim();
   });
+  /* ⭐ L'ÉTAT DE DÉPART VOYAGE AVEC LA DEMANDE : c'est lui qui permet au serveur de distinguer
+     « l'utilisateur a changé ce champ » de « il n'y a pas touché », et donc de ne pas écraser le
+     travail d'une autre session. ⛔ Absent (premier rendu impossible à photographier), on n'invente
+     rien : on n'envoie pas de base, et le serveur retombe sur le comportement historique. */
+  if (autorisationBase) data.base = JSON.stringify(autorisationBase);
+  if (autorisationBaseAffichee) data.base_affichee = JSON.stringify(autorisationBaseAffichee);
   const bouton = document.getElementById('bouton-enregistrer-autorisation');
   await avecBoutonOccupe(bouton, message, async function () {
-    await ecrireAdmin('enregistrerDossierAutorisation', data);
+    // ⭐ La révision D'AVANT L'ENVOI : elle sert à savoir si une AUTRE écriture est survenue
+    //   pendant que celle-ci voyageait. C'est le même contrôle de fraîcheur que `revisionCible`,
+    //   transposé à une réponse d'écriture — qui, elle, ne peut pas être « rejouée » plus tard.
+    const revisionAvant = autorisationRevision;
+    let res;
+    try {
+      res = await ecrireAdmin('enregistrerDossierAutorisation', data,
+        { delaiMs: DELAI_ECRITURE_AUTORISATION_MS });
+    } catch (erreur) {
+      /* ⭐ CONFLIT DE CONCURRENCE — le seul refus que cet écran traite lui-même. Le serveur n'a RIEN
+         écrit et nomme les champs que quelqu'un d'autre a changés entre-temps.
+         ⛔ ON NE RECONSTRUIT PAS LE FORMULAIRE : la saisie de l'organisateur est préservée telle
+         quelle — il doit pouvoir comparer, puis décider. On repeint la FEUILLE avec l'état relu, et
+         l'on déplace la BASE sur cet état : un second clic, donné en connaissance de cause, imposera
+         alors sa valeur. ⛔ Rien n'est jamais écrasé en silence — le premier clic a été refusé et
+         les champs ont été nommés. */
+      const r = erreur && erreur.reponse;
+      if (!r || r.code !== 'modification_concurrente') throw erreur;
+      if (!appliquerConflitAutorisation(r, revisionAvant)) {
+        /* ⛔ Réponse de conflit DÉPASSÉE : on ne la présente pas comme l'état courant. L'écriture a
+           bien été refusée (rien n'est écrit) et la saisie est conservée ; le rattrapage déjà lancé
+           remettra la feuille à jour. */
+        afficherMessage(message, '⚠️ Rien n\'a été enregistré : un autre enregistrement est passé ' +
+          'entre-temps. Ta saisie est conservée ; la feuille se remet à jour, puis reclique ' +
+          '« Enregistrer ».', 'ko');
+        return;
+      }
+      afficherMessage(message, '⚠️ Modifié entre-temps ailleurs : ' +
+        (r.conflits || []).map(function (c) { return c.libelle; }).join(', ') +
+        '. ⛔ Rien n\'a été enregistré. La feuille ci-dessous montre les valeurs actuelles ; ' +
+        'ta saisie est conservée. Recliquer « Enregistrer » imposera tes valeurs.', 'ko');
+      return;
+    }
     // ⭐ L'écriture a réussi : la feuille affichée est FAUSSE à cet instant. On l'efface et on
     //   note la dette AVANT de tenter le chemin propre — si celui-ci échoue, elle subsistera.
     signalerAutorisationObsolete();
     const cible = autorisationRevision;
     let relueOk = false, cibleDepassee = false;
-    try {
+    /* ⭐ CONTRAT D'ÉCRITURE — UN GESTE, UNE REQUÊTE. Le serveur a relu SOUS SON VERROU la config ET
+     *   la feuille, et les a jointes à sa réponse : ce sont l'état RÉELLEMENT APPLIQUÉ, pas l'état
+     *   demandé. Les deux lectures que ce chemin émettait ensuite (`getConfigAdmin` puis
+     *   `getDossierAutorisation`, deux exécutions Apps Script) n'ont plus d'objet.
+     * ⛔ UNE AUTRE ÉCRITURE EST SURVENUE PENDANT LE VOL : la réponse décrit un classeur que cette
+     *   écriture-là a déjà changé. On l'AFFICHE quand même — elle est plus récente que l'écran —
+     *   mais on ne solde PAS la dette : le rattrapage normal relira. ⛔ C'est exactement ce que
+     *   `revisionCible` fait pour une lecture ; une réponse d'écriture ne peut pas être jetée,
+     *   alors on la peint et on retient qu'il reste à lire.
+     * ⛔ REPLI INTÉGRAL : un backend d'avant le contrat répond `{ ok: true }` seul — on relit alors
+     *   exactement comme avant, dans le même ordre, avec le même contrôle de cible. */
+    if (appliquerEnregistrementAutorisation(res)) {
+      if (autorisationRevision === revisionAvant + 1) relueOk = true;   // rien d'autre n'est passé
+      else cibleDepassee = true;
+    } else try {
       // La config a changé : on la recharge (source de vérité pour la saisie), puis on ré-assemble.
       // ⭐ MÊME PRINCIPE DE CIBLE que dans `majAutorisationSiObsolete`, et pour la même raison :
       //   ce chemin attend lui aussi le réseau, donc une autre écriture peut le doubler.
@@ -746,10 +1094,17 @@ async function onEnregistrerAutorisation() {
     if (cibleDepassee && typeof majAutorisationSiObsolete === 'function') {
       majAutorisationSiObsolete().catch(function () { /* la feuille garde son message */ });
     }
+    /* ⭐ CE QUE LA FUSION A GARDÉ DE L'AUTRE SESSION EST DIT. Un champ que l'organisateur n'avait
+       pas touché, mais que quelqu'un d'autre avait changé, a conservé la valeur concurrente : son
+       formulaire ne portait plus la dernière valeur, et il doit le savoir. ⛔ Jamais en silence. */
+    const gardes = ((res && res.avertissements) || [])
+      .filter(function (a) { return a && a.code === 'modifiee_ailleurs'; })
+      .map(function (a) { return a.message; }).join(' ');
     // ⛔ Dans TOUS ces cas l'écriture serveur est acquise : on ne laisse jamais croire l'inverse.
-    afficherMessage(message, (relueOk || cibleDepassee) ? '✅ Champs enregistrés.'
+    afficherMessage(message, ((relueOk || cibleDepassee) ? '✅ Champs enregistrés.'
       : '✅ Champs enregistrés. ⚠️ La feuille n\'a pas pu être relue (réseau) : elle se remettra ' +
-        'à jour toute seule à la prochaine ouverture de cet écran.', 'ok');
+        'à jour toute seule à la prochaine ouverture de cet écran.') +
+      (gardes ? ' ⚠️ ' + gardes : ''), 'ok');
   });
 }
 
@@ -1422,6 +1777,17 @@ async function onTelechargerPdfAutorisation() {
     if (!resp.ok) throw new Error('Modèle PDF introuvable (modeles/demande-autorisation-ffr.pdf).');
     const bytes = await resp.arrayBuffer();
     const g = (typeof configCourante !== 'undefined' && configCourante && configCourante.global) || {};
+    /* ⭐ LES COMPTES VIENNENT DU SERVEUR QUAND IL LES DONNE — et c'est une correction de fond, pas
+     *   seulement une économie de requête. Le navigateur REFAISAIT ici la cascade §4.2 en parallèle
+     *   du serveur ; deux calculs pour un seul fait, qui pouvaient DIVERGER : le serveur DÉDUIT les
+     *   joueurs et éducateurs des équipes retirées après la réponse d'un club (`effectifsClubAjustes`),
+     *   le navigateur non. La feuille de report affichée à l'écran et le PDF officiel téléchargé
+     *   pouvaient donc annoncer deux nombres différents pour A.4 et B.3 — sur un document qu'on dépose.
+     * ⛔ REPLI COMPLET (backend d'avant, ou feuille invalidée) : on s'assure d'abord que la liste des
+     *   clubs est chargée, puis on refait le calcul d'avant, à l'identique. */
+    if (!autorisationComptes && typeof assurerRessourceAdmin === 'function') {
+      await assurerRessourceAdmin('clubsInvites');
+    }
     // Comptes — CASCADE §4.2, miroir EXACT de la feuille de report backend :
     //   nb d'équipes     = équipes chargées ;
     //   nb de clubs      = clubs invités ACCEPTÉS s'il y en a (source 1, la plus fiable), sinon
@@ -1429,7 +1795,7 @@ async function onTelechargerPdfAutorisation() {
     //   nb participants  = somme des joueurs DÉCLARÉS par les clubs acceptés (nb_joueurs_total) ;
     //     0 ⇒ le plan retombe sur org_nb_participants (saisi).
     const eqs = (typeof equipesCourantes !== 'undefined' && equipesCourantes) ? equipesCourantes : [];
-    const nbEquipes = eqs.length;
+    let nbEquipes = eqs.length;
     const clubs = (typeof clubsInvitesCourants !== 'undefined' && clubsInvitesCourants) ? clubsInvitesCourants : [];
     let nbClubsAcceptes = 0, nbParticipants = 0, nbEducateurs = 0;
     clubs.forEach(function (c) {
@@ -1451,7 +1817,15 @@ async function onTelechargerPdfAutorisation() {
     if (effEq.educateurs != null) nbEducateurs += effEq.educateurs;
     const setClubs = {};
     eqs.forEach(function (e) { const c = clubDeAut(e.nom_equipe); if (c) setClubs[c] = true; });
-    const nbClubs = nbClubsAcceptes > 0 ? nbClubsAcceptes : Object.keys(setClubs).length;
+    let nbClubs = nbClubsAcceptes > 0 ? nbClubsAcceptes : Object.keys(setClubs).length;
+    if (autorisationComptes) {
+      // ⭐ La MÊME règle de cascade que la feuille, mais décidée une seule fois — au serveur.
+      nbClubs = autorisationComptes.nbClubsAcceptes > 0
+        ? autorisationComptes.nbClubsAcceptes : autorisationComptes.nbClubsEquipes;
+      nbEquipes = autorisationComptes.nbEquipes;
+      nbParticipants = autorisationComptes.nbParticipants;
+      nbEducateurs = autorisationComptes.nbEducateurs;
+    }
     const cats = (typeof configCourante !== 'undefined' && configCourante && configCourante.categories) || [];
     // Matchs groupés par catégorie (pour le format sportif) — depuis le planning déjà chargé.
     const matchs = (typeof matchsCourants !== 'undefined' && matchsCourants) ? matchsCourants : [];
@@ -1498,6 +1872,21 @@ document.addEventListener('DOMContentLoaded', function () {
     if (e.target.closest('#bouton-enregistrer-autorisation')) { e.preventDefault(); onEnregistrerAutorisation(); }
     else if (e.target.closest('#bouton-pdf-autorisation')) { e.preventDefault(); onTelechargerPdfAutorisation(); }
     else if (e.target.closest('#bouton-imprimer-autorisation')) { e.preventDefault(); window.print(); }
+    // ⭐ « Réessayer » : la lecture de la feuille est bornée depuis ce lot, elle peut donc ÉCHOUER
+    //   visiblement — il faut un moyen de la relancer sans recharger la page. Le rafraîchissement
+    //   FORCÉ passe par le registre : il refuse de réutiliser une lecture commencée avant, et une
+    //   seule part même si l'on clique plusieurs fois.
+    else if (e.target.closest('#bouton-reessayer-autorisation')) {
+      e.preventDefault();
+      const zoneFeuille = document.getElementById('autorisation-feuille');
+      if (zoneFeuille) {
+        zoneFeuille.innerHTML = '<div class="ffr-bloc ffr-neutre">Feuille de report en cours de ' +
+          'chargement…</div>';
+      }
+      if (typeof rafraichirRessourceAdmin === 'function') {
+        rafraichirRessourceAdmin('dossierAutorisation').catch(function () { /* la feuille garde son message */ });
+      }
+    }
   });
   section.addEventListener('change', onChangeAutorisation);
 });

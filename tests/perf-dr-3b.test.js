@@ -130,10 +130,25 @@ const SRC_CLES = [
 
 const F_AUTORISATION = 'js/admin-autorisation.js';
 
-/* La VRAIE feuille d'autorisation : c'est elle qui porte le contrôle de fraîcheur. */
+/* La VRAIE feuille d'autorisation : c'est elle qui porte le contrôle de fraîcheur.
+   ⚠️ PRÉMISSE ADAPTÉE — jamais assouplie — par le lot « Demande d'autorisation » : `majAutorisation`
+   s'appuie désormais sur des briques NOMMÉES (borne de la lecture, comptes du serveur, preuve de
+   frappe, remplacement qui repose le focus). Elles sont extraites avec elle ; le contrôle de
+   fraîcheur testé ici, lui, est exactement le même. */
 const SRC_AUTORISATION = [
   ligne(F_AUTORISATION, 'var autorisationRevision'),
   ligne(F_AUTORISATION, 'var autorisationRevisionLue'),
+  ligne(F_AUTORISATION, 'var autorisationSaisiePhoto'),
+  ligne(F_AUTORISATION, 'var DELAI_LECTURE_AUTORISATION_MS'),
+  ligne(F_AUTORISATION, 'var BUDGET_LECTURE_AUTORISATION_MS'),
+  ligne(F_AUTORISATION, 'var autorisationBase'),
+  ligne(F_AUTORISATION, 'var autorisationBaseAffichee'),
+  bloc(F_AUTORISATION, 'function autorisationPhotographierBase(', '{'),
+  ligne(F_AUTORISATION, 'var autorisationComptes'),
+  ligne(F_AUTORISATION, 'var autorisationServeurPorteConfig'),
+  bloc(F_AUTORISATION, 'function autorisationFrappeProuvee(', '{'),
+  bloc(F_AUTORISATION, 'function remplacerSaisieAutorisation(', '{'),
+  bloc(F_AUTORISATION, 'function comptesAutorisationValides(', '{'),
   bloc(F_AUTORISATION, 'async function majAutorisation(', '{')
 ].join('\n');
 
@@ -143,7 +158,17 @@ const SRC_REVISIONS = [
   ligne(F_AUTORISATION, 'var autorisationRevisionLue')
 ].join('\n');
 const SRC_RELIRE = bloc(F_AUTORISATION, 'async function relireAutorisation(', '{');
-const SRC_ENREGISTRER = bloc(F_AUTORISATION, 'async function onEnregistrerAutorisation(', '{');
+/* ⚠️ PRÉMISSE ADAPTÉE par le lot « Demande d'autorisation » : l'écriture est BORNÉE (30 s) et sait
+   exploiter la réponse au contrat. Les deux briques sont extraites avec elle ; ce que ce scénario
+   contrôle — la relecture passe par la file — est inchangé. */
+const SRC_ENREGISTRER = [
+  ligne(F_AUTORISATION, 'var DELAI_ECRITURE_AUTORISATION_MS'),
+  ligne(F_AUTORISATION, 'var autorisationBase'),
+  ligne(F_AUTORISATION, 'var autorisationBaseAffichee'),
+  bloc(F_AUTORISATION, 'function appliquerConflitAutorisation(', '{'),
+  bloc(F_AUTORISATION, 'function appliquerEnregistrementAutorisation(', '{'),
+  bloc(F_AUTORISATION, 'async function onEnregistrerAutorisation(', '{')
+].join('\n');
 
 const SRC_DEPART = bloc(F_ECRANS, 'function ecransEcranDeDepart(', '{');
 const SRC_ENVOI = bloc(F_FEUILLE, 'async function onEnvoyerFeuilleJour(', '{');
@@ -744,6 +769,7 @@ async function controles() {
     const ctx = {
       console, document: doc,
       configCourante: { global: {}, categories: [] },
+      echapper: (s) => String(s == null ? '' : s),
       chargerClubsInvites: () => Promise.resolve(true),
       lireFichesSponsors: () => Promise.resolve(true),
       lireRelevesSponsors: () => Promise.resolve(true),
@@ -774,11 +800,18 @@ async function controles() {
     aTranquille.document.getElementById('autorisation-feuille').innerHTML === '<feuille/>' &&
     aTranquille.ressourceAdminChargee('dossierAutorisation') === true);
 
+  /* ⚠️ PRÉMISSE ADAPTÉE par le lot « Demande d'autorisation », et RENFORCÉE plutôt qu'assouplie :
+     la zone n'est plus VIDE pendant l'attente, elle porte le squelette « en cours de chargement… »
+     (c'est tout l'objet de l'affichage précoce). Ce qui est exigé ici reste le point essentiel —
+     la réponse DÉPASSÉE n'est pas peinte — et le contrôle est désormais DOUBLE : ni la feuille
+     dépassée, ni autre chose que le squelette. ⛔ Un `!== '<feuille/>'` seul aurait laissé passer
+     n'importe quel contenu ; on nomme donc l'état attendu. */
   const aBousculee = bancAutorisation(true);
   await aBousculee.assurerRessourceAdmin('dossierAutorisation');
-  verifier('14.15', 'écriture pendant le trajet : AUCUNE réponse dépassée n\'est peinte',
-    aBousculee.document.getElementById('autorisation-feuille').innerHTML === '',
-    'contenu peint : ' + JSON.stringify(aBousculee.document.getElementById('autorisation-feuille').innerHTML));
+  const peintBouscule = aBousculee.document.getElementById('autorisation-feuille').innerHTML;
+  verifier('14.15', 'écriture pendant le trajet : AUCUNE réponse dépassée n\'est peinte (squelette conservé)',
+    peintBouscule !== '<feuille/>' && /en cours de chargement/.test(peintBouscule),
+    'contenu peint : ' + JSON.stringify(peintBouscule));
   verifier('14.16', 'écriture pendant le trajet : la ressource reste « à relire »',
     aBousculee.ressourceAdminChargee('dossierAutorisation') === false);
 
