@@ -35,6 +35,48 @@ let sponsorsConsolide = null;    // relevés de TOUS les appareils, consolidés 
 let sponsorLogoDataURI = null;   // logo choisi mais pas encore enregistré
 let sponsorLogoRetirer = false;  // l'utilisateur a demandé à retirer le logo existant
 
+/* ==========================================================================
+   ÉTAT DE LA FUSION À TROIS VOIES ET DE L'IDEMPOTENCE
+   --------------------------------------------------------------------------
+   ⭐ `sponsorsBaseFiche` — les valeurs BRUTES telles que le SERVEUR les a renvoyées pour la fiche
+   en cours de modification. ⛔ JAMAIS celles du formulaire : celui-ci NORMALISE à l'affichage
+   (couleur vide → « #0c1c2e », poids vide → « 1 », ordre vide → « 100 », emplacements réordonnés,
+   JSON réécrit). Comparer l'affiché à la base produirait un conflit sur presque toutes les fiches
+   anciennes — un conflit FAUX, que l'utilisateur ne pourrait ni comprendre ni résoudre.
+
+   ⭐ `sponsorsChampsTouches` — ce que l'utilisateur a RÉELLEMENT modifié. Un champ absent de cette
+   liste n'entre pas dans l'intention : le serveur conserve alors sa valeur actuelle telle quelle,
+   y compris des emplacements hérités qu'il ne sait plus interpréter.
+
+   ⭐ `sponsorsRequeteId` — l'intention de CRÉATION. Il naît avec le formulaire vide, SURVIT à un
+   silence, un délai dépassé, une réponse perdue ou un état incertain, et n'est renouvelé qu'après
+   un succès confirmé ou une nouvelle intention explicite. C'est lui qui empêche qu'un second clic
+   après une réponse perdue ne crée une seconde fiche.
+   ========================================================================== */
+let sponsorsBaseFiche = null;        // { champ: valeur brute } — null en création
+let sponsorsChampsTouches = {};      // { champ: true }
+let sponsorsRequeteId = '';          // intention de création en cours
+let sponsorsDerniereIntention = null;// saisie conservée pour « réessayer » après un conflit
+
+/** Identifiant d'intention : aléatoire, sans dépendance à `crypto` (vieux navigateurs compris). */
+function sponsorsNouvelleIntention() {
+  return 'sp' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+}
+
+/* ⭐ Le backend en service connaît-il le chargement groupé ? `null` = pas encore su.
+   ⛔ Le repli n'est décidé QUE sur la réponse « Action inconnue » : une panne réseau, un 500 ou un
+   délai dépassé ne doivent JAMAIS être pris pour un backend ancien — on retenterait alors le
+   chemin long à chaque visite, en masquant la vraie panne. */
+let sponsorsBackendGroupe = null;
+/** Journée affichée par le bilan (vide = journée en cours). */
+let sponsorsJourBilan = '';
+/** Journées pour lesquelles des relevés existent : { 'AAAA-MM-JJ': nb }. */
+let sponsorsJoursDisponibles = {};
+/** Avertissements d'intégrité renvoyés par la lecture (identifiants inexploitables…). */
+let sponsorsAvertissements = [];
+/** Vrai quand la dernière lecture des relevés a ÉCHOUÉ (à distinguer d'un bilan réellement vide). */
+let sponsorsRelevesEnPanne = false;
+
 // Un seul geste métier à la fois. Les écritures ne sont jamais rejouées après une panne.
 let sponsorsOperationEnCours = false;
 const DELAI_SPONSORS_MS = 20000;
@@ -148,6 +190,8 @@ function initAdminSponsors() {
   document.getElementById('bouton-retirer-sponsor-logo').addEventListener('click', onRetirerLogoSponsor);
 
   document.getElementById('bouton-rafraichir-bilan').addEventListener('click', chargerMesuresSponsors);
+  const selJour = document.getElementById('bilan-journee');
+  if (selJour) selJour.addEventListener('change', onChoisirJourBilan);
   document.getElementById('bouton-imprimer-bilan').addEventListener('click', function () { window.print(); });
   document.getElementById('bouton-exporter-bilan').addEventListener('click', onExporterBilanCsv);
   document.getElementById('bouton-vider-bilan').addEventListener('click', onViderBilan);
@@ -219,26 +263,134 @@ function mettreAJourResumeSponsors() {
  * le bilan avant que `sponsorsAdmin` soit rempli. Ne jamais rejeter : l'échec est déjà traduit en
  * `sponsorsConsolide = null`, que `afficherBilanSponsors` sait interpréter (repli appareil).
  */
-async function lireRelevesSponsors() {
+/** Range dans l'état de l'écran les relevés d'une réponse (groupée ou non). */
+function appliquerRelevesSponsors(r) {
+  sponsorsConsolide = sponsorsConsolider(r.releves);
+  sponsorsConsolide.jour = r.jour;
+  sponsorsConsolide.totalToutesJournees = r.total || 0;
+  sponsorsConsolide.jours = r.jours || {};
+  sponsorsJoursDisponibles = r.jours || {};
+  sponsorsRelevesEnPanne = false;
+}
+
+async function lireRelevesSponsors(opt) {
   const zone = document.getElementById('bilan-sponsors');
   if (zone) zone.innerHTML = '<div class="message">Lecture des relevés…</div>';
+  const demande = {};
+  const jour = (opt && opt.jour !== undefined) ? opt.jour : sponsorsJourBilan;
+  if (jour) demande.jour = jour;
   try {
-    const r = verifierReponseSponsors(await apiPostProtege('lireMesuresSponsors', {}, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
-    if (Array.isArray(r.releves)) {
-      sponsorsConsolide = sponsorsConsolider(r.releves);
-      sponsorsConsolide.jour = r.jour;
-      sponsorsConsolide.totalToutesJournees = r.total || 0;
-      sponsorsConsolide.jours = r.jours || {};
-    } else {
-      throw new SyntaxError('Réponse invalide');
-    }
+    const r = verifierReponseSponsors(await apiPostProtege('lireMesuresSponsors', demande, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+    if (!Array.isArray(r.releves)) throw new SyntaxError('Réponse invalide');
+    appliquerRelevesSponsors(r);
     return true;
   } catch (err) {
     sponsorsConsolide = null;
     // ⛔ Le repli « compteurs de cet appareil » n'est PAS une lecture réussie : le registre
     //   en fera une ressource « à relire », pour qu'une visite ultérieure retente vraiment.
+    //   ⭐ Et l'écran doit pouvoir dire « illisible » plutôt que « vide » — deux faits différents.
+    sponsorsRelevesEnPanne = true;
     return false;
   }
+}
+
+/** Le serveur en service ne connaît-il PAS cette action ? ⛔ Rien d'autre ne vaut « backend ancien » :
+ *  une panne réseau, un 500 ou un délai dépassé sont des pannes, et doivent le rester. */
+function estActionInconnue(err) {
+  return /Action inconnue/i.test(String((err && err.message) || ''));
+}
+
+/* ⭐ LA REQUÊTE GROUPÉE EN COURS, partagée par les deux ressources du registre.
+   ⛔ Elle n'est PAS une troisième ressource : le registre continue de mémoriser `fichesSponsors` et
+   `relevesSponsors` séparément, pour qu'« Actualiser la liste » et « Rafraîchir les chiffres »
+   relisent chacun sa part et qu'un échec partiel ne fasse relire que ce qui a échoué. */
+let sponsorsGroupePromesse = null;
+/** Ce qui reste à servir par la requête groupée en cours. ⭐ Une ressource ne la consomme QU'UNE
+ *  fois : un rafraîchissement ultérieur (« Actualiser la liste », « Rafraîchir les chiffres ») doit
+ *  émettre sa propre lecture, sinon il resservirait un état ANTÉRIEUR à l'écriture qui l'a demandé. */
+let sponsorsGroupeRestant = {};
+
+/**
+ * La requête groupée encore disponible pour cette ressource, ou `null`.
+ * ⛔ Un appel la CONSOMME : `assurerRessourceAdmin` s'y raccroche une fois, jamais deux.
+ */
+function sponsorsGroupeEnVol(id) {
+  if (!sponsorsGroupePromesse) return null;
+  const cle = id || 'fichesSponsors';
+  if (!sponsorsGroupeRestant[cle]) return null;
+  sponsorsGroupeRestant[cle] = false;
+  return sponsorsGroupePromesse;
+}
+
+/**
+ * Lance LA requête groupée de l'arrivée sur l'écran. Appelée par `ADMIN_ETAPES.sponsors.avant`,
+ * donc de façon SYNCHRONE, avant que les deux ressources ne partent : c'est ce qui leur permet
+ * toutes deux de s'y raccrocher au lieu d'émettre chacune la sienne.
+ */
+function demarrerChargementGroupeSponsors(opt) {
+  sponsorsGroupeRestant = { fichesSponsors: true, relevesSponsors: true };
+  sponsorsGroupePromesse = Promise.resolve(chargerEcranPartenairesFrontend(opt))
+    .catch(function () { return { sponsors_ok: false, releves_ok: false }; });
+  return sponsorsGroupePromesse;
+}
+
+/**
+ * ⭐ CHARGEMENT GROUPÉ DE L'ÉCRAN — une exécution Apps Script au lieu de deux.
+ *
+ * ⛔ CE QU'IL NE FAIT PAS : promettre un gain d'attente. Les deux lectures historiques partaient
+ * DÉJÀ en parallèle ; ce qui se gagne, c'est une exécution — son démarrage, son ouverture de
+ * classeur, et sa place sous le plafond d'exécutions simultanées, partagé le jour du tournoi avec
+ * la saisie des scores.
+ *
+ * ⭐ REPLI SUR L'ANCIEN BACKEND, mémorisé pour la session : le premier appel sonde, et si le
+ * serveur répond « Action inconnue », on repasse définitivement aux deux lectures historiques.
+ * ⛔ Une panne quelconque n'entraîne JAMAIS ce repli : elle masquerait la vraie cause et ferait
+ * payer le chemin long à chaque visite.
+ * @return {Promise<{sponsors_ok: boolean, releves_ok: boolean}>}
+ */
+async function chargerEcranPartenairesFrontend(opt) {
+  const zoneListe = document.getElementById('liste-sponsors');
+  const zoneBilan = document.getElementById('bilan-sponsors');
+  if (zoneListe) zoneListe.innerHTML = '<p class="vide">Chargement des partenaires…</p>';
+  if (zoneBilan) zoneBilan.innerHTML = '<div class="message">Lecture des relevés…</div>';
+
+  const jour = (opt && opt.jour !== undefined) ? opt.jour : sponsorsJourBilan;
+
+  if (sponsorsBackendGroupe !== false) {
+    const demande = {};
+    if (jour) demande.jour = jour;
+    try {
+      const r = verifierReponseSponsors(await apiPostProtege('chargerEcranPartenaires', demande,
+        'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+      if (!Array.isArray(r.sponsors)) throw new SyntaxError('Réponse invalide');
+      sponsorsBackendGroupe = true;
+      sponsorsAdmin = r.sponsors;
+      sponsorsAvertissements = r.avertissements || [];
+      if (r.releves_ok && Array.isArray(r.releves)) {
+        appliquerRelevesSponsors(r);
+      } else {
+        sponsorsConsolide = null;
+        sponsorsRelevesEnPanne = true;    // ⭐ succès PARTIEL, annoncé comme tel
+      }
+      return { sponsors_ok: true, releves_ok: !!r.releves_ok };
+    } catch (err) {
+      if (!estActionInconnue(err)) {
+        // Panne réelle : on NE replie PAS, et l'écran le dit.
+        if (zoneListe) {
+          zoneListe.innerHTML = '<p class="vide">Erreur de chargement des partenaires : ' +
+            echapper(messageErreurSponsors(err, false)) + '</p>';
+        }
+        sponsorsConsolide = null;
+        sponsorsRelevesEnPanne = true;
+        return { sponsors_ok: false, releves_ok: false };
+      }
+      sponsorsBackendGroupe = false;      // backend d'avant ce lot : repli, une fois pour la session
+    }
+  }
+
+  // ⭐ CHEMIN HISTORIQUE, inchangé : les deux lectures, en parallèle.
+  const [fiches, releves] = await Promise.all([lireFichesSponsors(), lireRelevesSponsors({ jour: jour })]);
+  return { sponsors_ok: !!fiches, releves_ok: !!releves };
 }
 
 /**
@@ -249,9 +401,18 @@ async function lireRelevesSponsors() {
 async function chargerMesuresSponsors() {
   // ⭐ R2 — même règle : « Rafraîchir le bilan » et la fin de `onViderBilan` suivent une
   //   action, la relecture passe donc par le registre (et s'y regroupe si on insiste).
-  if (typeof rafraichirRessourceAdmin === 'function') await rafraichirRessourceAdmin('relevesSponsors');
-  else await lireRelevesSponsors();
+  if (typeof rafraichirRessourceAdmin === 'function') await rafraichirRessourceAdmin('relevesSponsors', { jour: sponsorsJourBilan });
+  else await lireRelevesSponsors({ jour: sponsorsJourBilan });
   afficherBilanSponsors();
+}
+
+/** Change la journée affichée par le bilan, puis relit CETTE journée. Le backend renvoie déjà la
+ *  liste des journées disponibles : l'écran n'a rien à deviner. */
+async function onChoisirJourBilan() {
+  const select = document.getElementById('bilan-journee');
+  if (!select) return;
+  sponsorsJourBilan = select.value || '';
+  await chargerMesuresSponsors();
 }
 
 /* ==========================================================================
@@ -310,17 +471,49 @@ async function onEnregistrerReglagesSponsors() {
   }
 
   await avecActionSponsors(document.getElementById('bouton-enregistrer-sponsors-reglages'), message, async function () {
-    verifierReponseSponsors(await apiPostProtege('enregistrerReglagesSponsors', data, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
-    Object.keys(data).forEach(function (cle) { configCourante.global[cle] = data[cle]; });
+    const r = verifierReponseSponsors(await apiPostProtege('enregistrerReglagesSponsors', data, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+
+    /* ⭐ ON PEINT CE QUI A ÉTÉ APPLIQUÉ, JAMAIS CE QU'ON A DEMANDÉ.
+       Le serveur BORNE (durée 3–10 s, « Passer » 0–10 s, repos 1–240 min, rotation 0–60 s) et RABOTE
+       « Passer » sous la durée de fermeture. L'écran recopiait sa propre saisie : il annonçait donc
+       un succès à « 500 s » pendant que le classeur retenait 10, et le formulaire continuait
+       d'afficher une valeur qui n'existait nulle part.
+       ⛔ Repli sur la demande UNIQUEMENT si le backend est d'avant ce lot (pas de `reglages`). */
+    const appliques = (r && r.reglages) ? r.reglages : data;
+    Object.keys(appliques).forEach(function (cle) { configCourante.global[cle] = appliques[cle]; });
+    injecterReglagesSponsors(configCourante.global);
     mettreAJourResumeSponsors();
+
+    const corriges = [].concat((r && r.bornes) || [], (r && r.rabote) || []);
     const actifs = sponsorsAdmin.filter(function (s) { return String(s.actif || '').toLowerCase() === 'oui'; }).length;
-    afficherMessage(message, data.sponsors_actifs === 'oui'
-      ? (actifs
+    let texte;
+    if (r && Array.isArray(r.modifies) && !r.modifies.length) {
+      texte = '✅ Rien à enregistrer — les réglages étaient déjà ceux-là.';
+    } else if (String(appliques.sponsors_actifs) === 'oui') {
+      texte = actifs
         ? '✅ Publication enregistrée — les partenaires sont visibles sur la page publique.'
-        : '⚠️ Publication activée, mais aucun partenaire actif n’est encore visible.')
-      : '✅ Réglages enregistrés — les partenaires restent masqués (interrupteur général sur « non »).', 'ok');
+        : '⚠️ Publication activée, mais aucun partenaire actif n’est encore visible.';
+    } else {
+      texte = '✅ Réglages enregistrés — les partenaires restent masqués (interrupteur général sur « non »).';
+    }
+    if (corriges.length) {
+      // Dire CE QUI a été corrigé, pas seulement QU'il y a eu correction : sans les valeurs, la
+      // phrase laisserait chercher laquelle des neuf a bougé.
+      texte += ' ⚠️ Valeur(s) ramenée(s) dans les limites : ' +
+        corriges.map(function (cle) { return LIBELLES_REGLAGES_SPONSORS[cle] || cle; }).join(', ') +
+        ' (retenu : ' + corriges.map(function (cle) { return appliques[cle]; }).join(', ') + ').';
+    }
+    afficherMessage(message, texte, 'ok');
   });
 }
+
+/** Noms lisibles des réglages, pour annoncer une valeur ramenée dans ses limites. */
+const LIBELLES_REGLAGES_SPONSORS = {
+  sponsor_rotation_s: 'durée de rotation',
+  sponsor_interstitiel_duree_s: 'durée du message plein écran',
+  sponsor_interstitiel_skip_s: 'délai avant « Passer »',
+  sponsor_interstitiel_repos_min: 'période de repos'
+};
 
 /**
  * Aperçu du message plein écran, avec les réglages COURANTS du formulaire (même ceux qui ne
@@ -441,14 +634,74 @@ function construireEmplacements() {
     '</div>';
   }).join('');
 
-  // Les réglages d'un emplacement n'ont de sens que s'il est coché ; et tout changement
-  // se voit tout de suite dans l'aperçu — c'est lui qui répond à « pourquoi mon texte
-  // n'apparaît pas ? » sans avoir à enregistrer puis recharger le dossier.
+  /* Les réglages d'un emplacement n'ont de sens que s'il est coché ; et tout changement se voit
+     tout de suite dans l'aperçu — c'est lui qui répond à « pourquoi mon texte n'apparaît pas ? »
+     sans avoir à enregistrer puis recharger le dossier.
+     ⛔ CET ÉCOUTEUR NE RAFRAÎCHIT PLUS L'APERÇU, et la zone n'écoute plus `input` : les deux
+     faisaient DOUBLE EMPLOI avec l'écouteur `input` posé sur le formulaire entier (la zone est à
+     l'intérieur, l'événement y remonte). Chaque frappe et chaque case redessinait donc les six
+     aperçus DEUX fois. Ici on ne fait plus que déplier ou replier le bloc. */
   zone.addEventListener('change', function (e) {
     if (e.target && /^emp_/.test(e.target.name || '')) majReglagesEmplacement(e.target);
-    rafraichirApercusEmplacements();
   });
-  zone.addEventListener('input', rafraichirApercusEmplacements);
+}
+
+/* ==========================================================================
+   AVERTISSEMENTS : EMPLACEMENTS HÉRITÉS ET IDENTIFIANTS INEXPLOITABLES
+   ========================================================================== */
+
+/** Prévient AVANT la perte : cette fiche porte des emplacements que le code ne connaît plus, et ils
+ *  disparaîtront si — et seulement si — l'utilisateur touche à ce champ. */
+function avertirEmplacementsHistoriques(s) {
+  const zone = document.getElementById('avertissement-emplacements');
+  if (!zone) return;
+  const connus = SPONSORS_EMPLACEMENTS;
+  const inconnus = String((s && s.emplacements) || '').split(',')
+    .map(function (x) { return x.trim(); })
+    .filter(function (x) { return x && connus.indexOf(x.toLowerCase()) === -1; });
+  if (!inconnus.length) { masquerAvertissementEmplacements(); return; }
+  zone.hidden = false;
+  zone.textContent = '⚠️ Cette fiche porte des emplacements inconnus (' + inconnus.join(', ') +
+    ') qui ne correspondent à aucun encart : ce partenaire n\'apparaît nulle part. ' +
+    'Ils seront supprimés si tu modifies les emplacements ci-dessous ; tant que tu n\'y touches pas, ' +
+    'ils sont conservés tels quels.';
+}
+
+function masquerAvertissementEmplacements() {
+  const zone = document.getElementById('avertissement-emplacements');
+  if (zone) { zone.hidden = true; zone.textContent = ''; }
+}
+
+/** Les avertissements d'intégrité renvoyés par la lecture (identifiant trop court pour être mesuré). */
+function afficherAvertissementsSponsors() {
+  const zone = document.getElementById('avertissements-sponsors');
+  if (!zone) return;
+  if (!sponsorsAvertissements.length) { zone.hidden = true; zone.innerHTML = ''; return; }
+  zone.hidden = false;
+  zone.innerHTML = '<ul>' + sponsorsAvertissements.map(function (a) {
+    return '<li>' + echapper(a.message || a.code) + '</li>';
+  }).join('') + '</ul>';
+}
+
+/** Remplit la liste des journées à partir de ce que le serveur a DÉJÀ renvoyé — l'écran ne devine
+ *  rien et ne va rien chercher de plus. */
+function majSelecteurJourBilan() {
+  const select = document.getElementById('bilan-journee');
+  if (!select) return;
+  const jours = Object.keys(sponsorsJoursDisponibles || {}).sort().reverse();
+  const courant = sponsorsJourBilan || (sponsorsConsolide && sponsorsConsolide.jour) || '';
+  let html = '<option value="">Journée en cours</option>';
+  jours.forEach(function (j) {
+    html += '<option value="' + echapper(j) + '"' + (j === sponsorsJourBilan ? ' selected' : '') + '>' +
+      echapper(j) + ' (' + sponsorsJoursDisponibles[j] + ' relevé' +
+      (sponsorsJoursDisponibles[j] > 1 ? 's' : '') + ')</option>';
+  });
+  select.innerHTML = html;
+  select.value = sponsorsJourBilan || '';
+  const bloc = document.getElementById('bilan-journee-bloc');
+  // Un seul jour connu : le sélecteur n'apprend rien, on ne l'impose pas.
+  if (bloc) bloc.hidden = jours.length < 2 && !sponsorsJourBilan;
+  if (courant && select.options.length) select.title = 'Journée affichée : ' + (sponsorsJourBilan || courant);
 }
 
 /** Déplie ou replie les réglages d'un emplacement selon sa case. */
@@ -578,15 +831,43 @@ function injecterReglagesEmplacements(s) {
    2. FICHES PARTENAIRES
    ========================================================================== */
 
-/** Fiches actives, au format attendu par le moteur d'affichage (sponsors.js). */
+/** Normalise une fiche au format attendu par le moteur d'affichage (sponsors.js). */
+function normaliserFicheSponsor(s) {
+  const c = {};
+  Object.keys(s).forEach(function (k) { c[k] = (s[k] === null || s[k] === undefined) ? '' : String(s[k]); });
+  return c;
+}
+
+/** Fiches ACTIVES — ce que la page publique sert. ⭐ À conserver pour les APERÇUS et le contrôle
+ *  « ce que reçoit le public » : là, seuls les partenaires réellement publiés ont un sens. */
 function sponsorsActifsAdmin() {
   return sponsorsAdmin
     .filter(function (s) { return String(s.actif || '').toLowerCase() === 'oui'; })
-    .map(function (s) {
-      const c = {};
-      Object.keys(s).forEach(function (k) { c[k] = (s[k] === null || s[k] === undefined) ? '' : String(s[k]); });
-      return c;
-    });
+    .map(normaliserFicheSponsor);
+}
+
+/**
+ * TOUTES les fiches — c'est ce qu'il faut au BILAN, et la distinction n'est pas cosmétique.
+ *
+ * 🔬 Le bilan ne filtrait pas : il itère sur les RELEVÉS et ne se sert de la liste que pour
+ * retrouver les noms. En ne lui passant que les fiches actives, un partenaire désactivé après le
+ * tournoi — le geste que la confirmation de suppression recommande justement — perdait son nom et
+ * n'apparaissait plus que sous son identifiant technique, dans le document envoyé au partenaire.
+ */
+function sponsorsToutesAdmin() {
+  return sponsorsAdmin.map(normaliserFicheSponsor);
+}
+
+/** Comment nommer un partenaire dans le bilan, selon ce qu'il est devenu depuis la mesure. */
+function etatPartenaireBilan(id) {
+  const fiche = sponsorsAdmin.filter(function (s) { return String(s.id_sponsor) === String(id); })[0];
+  if (!fiche) {
+    // ⛔ AUCUN NOM INVENTÉ. La fiche a disparu : son nom n'existe plus nulle part, et le dire est la
+    //   seule chose honnête. L'identifiant est conservé — c'est lui qui relie au relevé.
+    return { libelle: 'Partenaire supprimé (' + String(id) + ')', mention: 'fiche supprimée', supprime: true };
+  }
+  const actif = String(fiche.actif || '').toLowerCase() === 'oui';
+  return { libelle: String(fiche.nom || id), mention: actif ? '' : 'masqué aujourd’hui', supprime: false };
 }
 
 /**
@@ -604,6 +885,7 @@ async function lireFichesSponsors() {
     const r = verifierReponseSponsors(await apiPostProtege('listerSponsors', {}, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
     if (!Array.isArray(r.sponsors)) throw new SyntaxError('Réponse invalide');
     sponsorsAdmin = r.sponsors;
+    sponsorsAvertissements = r.avertissements || [];   // ⭐ absent d'un backend d'avant : tableau vide
     return true;
   } catch (err) {
     zone.innerHTML = '<p class="vide">Erreur de chargement des partenaires : ' + echapper(messageErreurSponsors(err, false)) + '</p>';
@@ -635,6 +917,7 @@ async function chargerSponsors() {
 function afficherListeSponsors() {
   const zone = document.getElementById('liste-sponsors');
   mettreAJourResumeSponsors();
+  afficherAvertissementsSponsors();
   if (!sponsorsAdmin.length) {
     zone.innerHTML = '<p class="vide">Aucun partenaire pour l\'instant. Utilise « Ajouter un partenaire » pour commencer.</p>';
     return;
@@ -743,6 +1026,36 @@ function synchroniserPresetVisibilite() {
   document.getElementById('sponsor-emplacements-personnalises').hidden = preset !== 'personnalise';
 }
 
+/** Les 10 champs métier du formulaire, dans la forme où ils partent au serveur. Sert DEUX fois :
+ *  pour l'instantané pris juste après le remplissage, et à l'enregistrement. ⭐ La même fonction des
+ *  deux côtés : c'est ce qui rend le « champ touché » fiable, sans écouteur ni drapeau à tenir. */
+function lireFormulaireSponsor() {
+  const form = document.getElementById('form-sponsor');
+  return {
+    nom: form.nom.value.trim(),
+    accroche: form.accroche.value.trim(),
+    url: form.url.value.trim(),
+    couleur: form.couleur.value,
+    emplacements: SPONSORS_EMPLACEMENTS.filter(function (e) { return form['emp_' + e].checked; }).join(','),
+    poids: form.poids.value,
+    ordre: form.ordre.value,
+    logo_zoom: form.logo_zoom.value,
+    reglages_emplacements: JSON.stringify(lireReglagesEmplacements()),
+    actif: form.actif.checked ? 'oui' : 'non'
+  };
+}
+
+/** L'état du formulaire tel qu'il vient d'être rempli. Tout écart avec lui est une modification
+ *  VOULUE ; tout le reste n'entre pas dans l'intention envoyée au serveur. */
+let sponsorsFormInitial = null;
+
+/** Les champs que l'utilisateur a réellement modifiés depuis le remplissage. */
+function champsTouchesSponsor() {
+  const courant = lireFormulaireSponsor();
+  if (!sponsorsFormInitial) return Object.keys(courant);     // création : tout est intentionnel
+  return Object.keys(courant).filter(function (c) { return courant[c] !== sponsorsFormInitial[c]; });
+}
+
 function remplirFormSponsor(id) {
   if (sponsorsOperationEnCours) return;
   const s = sponsorsAdmin.filter(function (x) { return String(x.id_sponsor) === String(id); })[0];
@@ -770,6 +1083,16 @@ function remplirFormSponsor(id) {
   sponsorLogoDataURI = null;
   sponsorLogoRetirer = false;
   majApercuLogoSponsor(s.logo_id ? urlAffiche(s.logo_id, 320) : '');
+
+  /* ⭐ LA BASE EST BRUTE, prise sur la fiche du SERVEUR — jamais sur le formulaire, qui vient de
+     normaliser la couleur, le poids, l'ordre, le zoom et l'ordre des emplacements. */
+  sponsorsBaseFiche = {};
+  Object.keys(s).forEach(function (c) {
+    sponsorsBaseFiche[c] = (s[c] === null || s[c] === undefined) ? '' : String(s[c]);
+  });
+  sponsorsFormInitial = lireFormulaireSponsor();
+  sponsorsRequeteId = '';                     // ⛔ une modification n'est pas une création
+  avertirEmplacementsHistoriques(s);
 
   document.getElementById('titre-form-sponsor').textContent = 'Modifier « ' + s.nom + ' »';
   document.getElementById('bouton-annuler-sponsor').hidden = false;
@@ -800,6 +1123,17 @@ function reinitialiserFormSponsor() {
   sponsorLogoDataURI = null;
   sponsorLogoRetirer = false;
   majApercuLogoSponsor('');
+
+  /* ⭐ NOUVELLE INTENTION DE CRÉATION — et donc un `requete_id` NEUF.
+     ⛔ Il ne doit surtout pas être renouvelé ailleurs : c'est son maintien à travers un silence, un
+     délai dépassé ou une réponse perdue qui empêche qu'un second clic ne crée une seconde fiche.
+     ⚠️ Et il DOIT l'être ici : sans cela, le partenaire suivant serait pris pour un rejeu du
+     précédent, et refusé. */
+  sponsorsBaseFiche = null;
+  sponsorsFormInitial = null;
+  sponsorsRequeteId = sponsorsNouvelleIntention();
+  sponsorsDerniereIntention = null;
+  masquerAvertissementEmplacements();
 
   document.getElementById('titre-form-sponsor').textContent = 'Ajouter un partenaire';
   document.getElementById('bouton-annuler-sponsor').hidden = true;
@@ -853,48 +1187,169 @@ function onRetirerLogoSponsor() {
     'Logo retiré — clique « Enregistrer le partenaire » pour confirmer.', 'ok');
 }
 
-async function onEnregistrerSponsor() {
-  if (sponsorsOperationEnCours) return;
+/** Le corps de la requête d'enregistrement, avec ses trois voies. `null` si la saisie est refusée
+ *  ici (le message est alors déjà posé). */
+function construireIntentionSponsor(message) {
   const form = document.getElementById('form-sponsor');
-  const message = document.getElementById('message-sponsor');
+  const valeurs = lireFormulaireSponsor();
+  const touches = champsTouchesSponsor();
+  const creation = !form.id_sponsor.value;
 
-  const nom = form.nom.value.trim();
-  if (!nom) { afficherMessage(message, '⚠️ Le nom du partenaire est obligatoire.', 'ko'); return; }
-
-  if (form.url.value.trim() && !/^https?:\/\/[^\s]+$/i.test(form.url.value.trim())) {
+  if (creation && !valeurs.nom) { afficherMessage(message, '⚠️ Le nom du partenaire est obligatoire.', 'ko'); return null; }
+  if (!creation && touches.indexOf('nom') !== -1 && !valeurs.nom) {
+    afficherMessage(message, '⚠️ Le nom du partenaire est obligatoire.', 'ko'); return null;
+  }
+  if (valeurs.url && !/^https?:\/\/[^\s]+$/i.test(valeurs.url)) {
     afficherMessage(message, '⚠️ Indique une adresse de site commençant par https:// ou http://.', 'ko');
     form.url.focus();
-    return;
+    return null;
   }
-  const emplacements = SPONSORS_EMPLACEMENTS.filter(function (e) { return form['emp_' + e].checked; });
-  if (!emplacements.length) {
+  /* ⭐ LE GARDE-FOU « coche au moins un emplacement » NE S'APPLIQUE PLUS QU'À UNE INTENTION RÉELLE.
+     ⛔ Il bloquait AUSSI une fiche ancienne dont les emplacements portent des jetons que le code ne
+     connaît plus : pour corriger une simple accroche, l'organisateur était CONTRAINT de cocher une
+     case — et perdait ses jetons historiques sans l'avoir voulu. Champ non touché ⇒ pas d'intention
+     ⇒ le serveur conserve la valeur brute telle quelle. */
+  const emplacementsTouches = touches.indexOf('emplacements') !== -1;
+  if ((creation || emplacementsTouches) && !valeurs.emplacements) {
     afficherMessage(message, '⚠️ Coche au moins un emplacement.', 'ko');
-    return;
+    return null;
   }
 
-  const data = {
-    id_sponsor: form.id_sponsor.value,
-    nom: nom,
-    accroche: form.accroche.value.trim(),
-    url: form.url.value.trim(),
-    couleur: form.couleur.value,
-    emplacements: emplacements.join(','),
-    poids: form.poids.value,
-    ordre: form.ordre.value,
-    logo_zoom: form.logo_zoom.value,
-    reglages_emplacements: JSON.stringify(lireReglagesEmplacements()),
-    actif: form.actif.checked ? 'oui' : 'non'
-  };
+  const data = { id_sponsor: form.id_sponsor.value };
+  if (creation) {
+    Object.keys(valeurs).forEach(function (c) { data[c] = valeurs[c]; });
+    // ⭐ L'INTENTION DE CRÉATION, stable à travers les pannes : c'est elle qui rend un second clic
+    //   inoffensif après une réponse perdue.
+    data.requete_id = sponsorsRequeteId || (sponsorsRequeteId = sponsorsNouvelleIntention());
+  } else {
+    // ⭐ Les trois voies : la base BRUTE reçue du serveur, l'intention nommée, les valeurs voulues.
+    touches.forEach(function (c) { data[c] = valeurs[c]; });
+    if (sponsorsBaseFiche) {
+      data.base = JSON.stringify(sponsorsBaseFiche);
+      data.champs_touches = JSON.stringify(touches);
+    }
+  }
   if (sponsorLogoDataURI) data.logo = sponsorLogoDataURI;
   if (sponsorLogoRetirer) data.logo_retirer = 'oui';
+  return data;
+}
+
+/** Applique à l'écran la liste renvoyée par une écriture. ⭐ Plus aucune seconde requête : la liste
+ *  a été relue SOUS LE VERROU, elle est donc postérieure à l'écriture par construction.
+ *  ⛔ Repli sur une relecture si le backend est d'avant ce lot (pas de champ `sponsors`). */
+function appliquerListeSponsors(r) {
+  if (!r || !Array.isArray(r.sponsors)) { actualiserSponsorsApresEcriture(); return; }
+  if (typeof appliquerRessourceAdmin === 'function') {
+    appliquerRessourceAdmin('fichesSponsors', function () {
+      sponsorsAdmin = r.sponsors;
+      afficherListeSponsors();
+    });
+  } else {
+    sponsorsAdmin = r.sponsors;
+    afficherListeSponsors();
+  }
+}
+
+/** Ce que le serveur a corrigé ou conservé, dit en clair — jamais en silence. */
+function messageSuitesSponsor(r) {
+  let suite = '';
+  if (r && (r.conserves || []).length) {
+    suite += ' Une autre session avait modifié ' + (r.conserves.length > 1 ? 'des champs' : 'un champ') +
+      ' que tu n\'avais pas touché' + (r.conserves.length > 1 ? 's' : '') + ' : sa version a été conservée.';
+  }
+  if (r && (r.emplacements_abandonnes || []).length) {
+    suite += ' ⚠️ Emplacement(s) hérité(s) supprimé(s) : ' +
+      r.emplacements_abandonnes.join(', ') + ' — ils ne correspondaient à aucun encart.';
+  }
+  return suite;
+}
+
+/**
+ * Envoie l'intention, et traite le CONFLIT autrement que par un message d'erreur.
+ * ⭐ Deux choix explicites, jamais d'écrasement automatique :
+ *   ① recharger la version actuelle — la saisie est abandonnée, sciemment ;
+ *   ② réessayer avec sa saisie — l'état actuel devient la NOUVELLE base, et la même intention
+ *      repart. Si une troisième session intervient entre-temps, un nouveau conflit est produit :
+ *      la protection ne se désarme pas après une confirmation.
+ */
+async function envoyerIntentionSponsor(data, message) {
+  let r;
+  try {
+    r = verifierReponseSponsors(await apiPostProtege('enregistrerSponsor', data, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+  } catch (err) {
+    const rep = (err && err.reponse) || {};
+    if (rep.code === 'conflit_fiche') return traiterConflitSponsor(rep, data, message);
+    if (rep.code === 'fiche_supprimee') {
+      afficherMessage(message, '⚠️ Cette fiche a été supprimée pendant ta saisie. Tes valeurs sont ' +
+        'conservées à l\'écran : utilise « Ajouter un partenaire » pour la recréer.', 'ko');
+      return false;
+    }
+    throw err;
+  }
+  if (!r.id_sponsor) throw new SyntaxError('Réponse invalide');
+
+  const liste = document.getElementById('message-sponsors-liste');
+  const rejeu = r.deja_appliquee === true;
+  reinitialiserFormSponsor();
+  afficherMessage(liste, (rejeu
+    ? '✅ Partenaire déjà enregistré — ta demande précédente avait bien abouti, aucune fiche en double.'
+    : '✅ Partenaire enregistré.') + messageSuitesSponsor(r), 'ok');
+  liste.focus();
+  appliquerListeSponsors(r);
+  return true;
+}
+
+/** Le conflit, présenté champ par champ, avec les deux issues possibles. */
+async function traiterConflitSponsor(rep, data, message) {
+  const champs = (rep.champs_en_conflit || []).map(function (c) { return LIBELLES_CHAMPS_SPONSOR[c] || c; });
+  const detail = (rep.conflits || []).map(function (c) {
+    return '· ' + (LIBELLES_CHAMPS_SPONSOR[c.champ] || c.champ) +
+      ' — la tienne : « ' + c.souhaite +' », celle enregistrée : « ' + c.actuel + ' »';
+  }).join('\n');
+  const reprendre = await dialogConfirmer(
+    'Une autre session a modifié cette fiche pendant ta saisie.\n\n' +
+    (detail || champs.join(', ')) + '\n\n' +
+    'Que veux-tu faire ? Tes saisies sont conservées dans les deux cas.',
+    { ok: 'Garder ma version', annuler: 'Recharger la version enregistrée' });
+
+  if (!reprendre) {
+    // ① On recharge l'état actuel : la fiche est repeinte depuis ce que le serveur a joint au refus.
+    if (rep.actuel && rep.actuel.id_sponsor) {
+      const i = sponsorsAdmin.findIndex(function (s) { return String(s.id_sponsor) === String(rep.actuel.id_sponsor); });
+      if (i >= 0) sponsorsAdmin[i] = rep.actuel;
+      afficherListeSponsors();
+      remplirFormSponsor(rep.actuel.id_sponsor);
+    }
+    afficherMessage(message, 'Version enregistrée rechargée. Reprends ta modification si besoin.', 'ok');
+    return false;
+  }
+  // ② L'état actuel devient la NOUVELLE base, la même intention repart. ⛔ Si une autre session
+  //    intervient encore, un nouveau conflit sera produit — aucun écrasement automatique.
+  sponsorsBaseFiche = {};
+  Object.keys(rep.actuel || {}).forEach(function (c) {
+    sponsorsBaseFiche[c] = (rep.actuel[c] === null || rep.actuel[c] === undefined) ? '' : String(rep.actuel[c]);
+  });
+  const reprise = Object.assign({}, data, { base: JSON.stringify(sponsorsBaseFiche) });
+  return envoyerIntentionSponsor(reprise, message);
+}
+
+/** Noms lisibles des champs d'une fiche, pour un message de conflit compréhensible. */
+const LIBELLES_CHAMPS_SPONSOR = {
+  nom: 'nom', accroche: 'accroche', url: 'adresse du site', couleur: 'couleur',
+  emplacements: 'emplacements', poids: 'poids', ordre: 'ordre d\'affichage',
+  logo_zoom: 'taille du logo', reglages_emplacements: 'réglages par emplacement',
+  actif: 'partenaire visible', logo_id: 'logo', visuel_id: 'visuel'
+};
+
+async function onEnregistrerSponsor() {
+  if (sponsorsOperationEnCours) return;
+  const message = document.getElementById('message-sponsor');
+  const data = construireIntentionSponsor(message);
+  if (!data) return;
+  sponsorsDerniereIntention = data;
 
   await avecActionSponsors(document.getElementById('bouton-enregistrer-sponsor'), message, async function () {
-    const r = verifierReponseSponsors(await apiPostProtege('enregistrerSponsor', data, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
-    if (!r.id_sponsor) throw new SyntaxError('Réponse invalide');
-    reinitialiserFormSponsor();
-    afficherMessage(document.getElementById('message-sponsors-liste'), '✅ Partenaire enregistré.', 'ok');
-    document.getElementById('message-sponsors-liste').focus();
-    actualiserSponsorsApresEcriture();
+    await envoyerIntentionSponsor(data, message);
   });
 }
 
@@ -905,12 +1360,22 @@ async function onSupprimerSponsor(id, bouton) {
   const message = document.getElementById('message-sponsors-liste');
   await avecActionSponsors(bouton, message, async function () {
     const ok = await dialogConfirmer('Supprimer « ' + s.nom + ' » ?\n\n' +
-      'Sa fiche et son logo seront supprimés. Pour conserver sa fiche, décoche plutôt « Partenaire actif ».',
+      'Sa fiche et son logo seront supprimés.\n\n' +
+      // ⭐ Dire la conséquence QUI SE VOIT PLUS TARD : les relevés de visibilité déjà mesurés
+      //   survivent à la fiche, mais plus son NOM — le bilan d'après tournoi n'afficherait alors
+      //   qu'un identifiant technique. La désactivation, elle, garde tout.
+      '⚠️ Son nom disparaîtra aussi des bilans de visibilité déjà mesurés : ils ne pourront plus ' +
+      'l\'afficher que sous son identifiant.\n\n' +
+      'Pour conserver sa fiche ET cet historique, décoche plutôt « Partenaire actif ».',
       { ok: 'Supprimer', danger: true });
     if (!ok) { afficherMessage(message, 'Suppression annulée.', 'ok'); return; }
-    verifierReponseSponsors(await apiPostProtege('supprimerSponsor', { id_sponsor: id }, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
-    afficherMessage(message, '✅ Partenaire supprimé.', 'ok');
-    actualiserSponsorsApresEcriture();
+    const r = verifierReponseSponsors(await apiPostProtege('supprimerSponsor', { id_sponsor: id }, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+    // ⭐ `deja_absent` : la fiche n'était plus là — demande rejouée, ou supprimée par une autre
+    //   session. L'état visé EST atteint : ce n'est pas une erreur, et on ne le présente pas comme telle.
+    afficherMessage(message, r.deja_absent
+      ? '✅ Ce partenaire était déjà supprimé.'
+      : '✅ Partenaire supprimé.', 'ok');
+    appliquerListeSponsors(r);
   }, 'Suppression…');
 }
 
@@ -1181,9 +1646,27 @@ function afficherBilanSponsors() {
   const zone = document.getElementById('bilan-sponsors');
   if (!zone) return;
 
+  /* ⛔ NE JAMAIS PEINDRE LE BILAN SANS LES FICHES. Il itère sur les relevés et ne lit la liste que
+     pour retrouver les noms : peint trop tôt, il affichait des identifiants techniques à la place
+     des partenaires — en donnant à croire que c'est ce que le classeur contient. */
+  if (typeof ressourceAdminChargee === 'function' && !ressourceAdminChargee('fichesSponsors')) {
+    zone.innerHTML = '<p class="vide">Les fiches partenaires n\'ont pas pu être lues : le bilan ne ' +
+      'peut pas nommer les partenaires. Utilise « Actualiser la liste » avant de revenir ici.</p>';
+    return;
+  }
+  majSelecteurJourBilan();
+
+  /* ⭐ « ILLISIBLE » N'EST PAS « VIDE ». Une lecture en panne et une journée sans aucun relevé
+     produisent le même tableau vide ; seule la première demande de réessayer. */
+  if (sponsorsRelevesEnPanne) {
+    zone.innerHTML = '<p class="vide">Les relevés de visibilité n\'ont pas pu être lus. Les fiches, ' +
+      'elles, sont à jour. Clique « Rafraîchir les chiffres » pour réessayer.</p>';
+    return;
+  }
+
   // Consolidé si des relevés sont remontés, sinon les compteurs du seul appareil courant.
   const consolide = !!(sponsorsConsolide && sponsorsConsolide.sessions);
-  const bilan = sponsorsBilan(sponsorsActifsAdmin(), consolide ? sponsorsConsolide : null);
+  const bilan = sponsorsBilan(sponsorsToutesAdmin(), consolide ? sponsorsConsolide : null);
   const facteur = facteurProjection();
   const projection = facteur > 1;
 
@@ -1236,9 +1719,15 @@ function ficheSponsor(s, facteur, projection, totalExpo) {
     ? sponsorsConsolide.appareils + ' appareil(s), ' + sponsorsConsolide.sessions + ' visite(s)'
     : 'mesure sur 1 appareil';
 
-  let h = '<article class="fiche-sponsor">' +
+  // ⭐ Le nom vient de l'ÉTAT COURANT de la fiche, pas du relevé : un partenaire désactivé garde son
+  //   nom (plus une mention), un partenaire supprimé est annoncé comme tel — jamais un nom inventé.
+  const etat = etatPartenaireBilan(s.id);
+
+  let h = '<article class="fiche-sponsor' + (etat.supprime ? ' est-supprime' : '') + '">' +
     '<header class="fs-tete">' +
-      '<span class="fs-marque">' + echapper(s.nom) + '</span>' +
+      '<span class="fs-marque">' + echapper(etat.libelle) +
+        (etat.mention ? ' <span class="sp-tag sp-tag-off">' + echapper(etat.mention) + '</span>' : '') +
+      '</span>' +
       '<span class="fs-qui"><b>' + echapper(nomTournoi) + '</b>' +
         '<span>Fiche de visibilité — ' + echapper(projection ? 'projection' : portee) + '</span></span>' +
     '</header>' +
@@ -1341,13 +1830,16 @@ function courbeVisibilite(s, facteur) {
 /** Export CSV : le tableur du partenaire, ou le tien pour comparer les éditions. */
 function onExporterBilanCsv() {
   const consolide = !!(sponsorsConsolide && sponsorsConsolide.sessions);
-  const bilan = sponsorsBilan(sponsorsActifsAdmin(), consolide ? sponsorsConsolide : null);
+  // ⭐ TOUTES les fiches, comme à l'écran : un partenaire désactivé garde son nom dans le tableur.
+  const bilan = sponsorsBilan(sponsorsToutesAdmin(), consolide ? sponsorsConsolide : null);
   const facteur = facteurProjection();
-  const lignes = [['partenaire', 'exposition_secondes', 'affichages', 'clics', 'part_de_voix_pct',
+  const lignes = [['partenaire', 'etat_fiche', 'exposition_secondes', 'affichages', 'clics', 'part_de_voix_pct',
                    'plein_ouverts', 'plein_secondes', 'plein_passes', 'mesure']];
   bilan.sponsors.forEach(function (s) {
+    const etat = etatPartenaireBilan(s.id);
     lignes.push([
-      s.nom,
+      etat.libelle,
+      etat.supprime ? 'supprimee' : (etat.mention ? 'masquee' : 'active'),
       Math.round(s.expo * facteur),
       Math.round(s.affichages * facteur),
       Math.round(s.clics * facteur),
@@ -1374,12 +1866,23 @@ async function onViderBilan() {
     const ok = await dialogConfirmer('Effacer TOUS les relevés de visibilité ?\n\n' +
       'Cette action est définitive. Les fiches partenaires sont conservées.', { ok: 'Effacer', danger: true });
     if (!ok) { afficherMessage(message, 'Effacement annulé.', 'ok'); return; }
-    verifierReponseSponsors(await apiPostProtege('viderMesuresSponsors', {}, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
+    const r = verifierReponseSponsors(await apiPostProtege('viderMesuresSponsors', {}, 'admin', 'admin', { delaiMs: DELAI_SPONSORS_MS }));
     sponsorsRemettreAZero();
-    afficherMessage(message, '✅ Relevés effacés.', 'ok');
-    chargerMesuresSponsors().catch(function () {
-      afficherMessage(message, 'Relevés effacés. Actualise les chiffres pour vérifier le bilan.', 'ko');
-    });
+    afficherMessage(message, '✅ Relevés effacés' + (r.effaces ? ' (' + r.effaces + ').' : '.'), 'ok');
+    /* ⭐ PLUS DE SECONDE REQUÊTE. L'état vide est PROUVÉ par le serveur sous le verrou et joint à la
+       réponse ; l'écran le pose directement. ⛔ Repli sur une relecture si le backend est d'avant ce
+       lot (réponse sans `releves`). */
+    if (Array.isArray(r.releves)) {
+      appliquerRelevesSponsors(r);
+      sponsorsJourBilan = '';
+      majSelecteurJourBilan();
+      if (typeof marquerRessourceAdmin === 'function') marquerRessourceAdmin('relevesSponsors', true);
+      afficherBilanSponsors();
+    } else {
+      chargerMesuresSponsors().catch(function () {
+        afficherMessage(message, 'Relevés effacés. Actualise les chiffres pour vérifier le bilan.', 'ko');
+      });
+    }
   }, 'Effacement…');
 }
 

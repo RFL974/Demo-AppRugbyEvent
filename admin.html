@@ -332,6 +332,9 @@
         </div>
         <span class="message-form" id="message-sponsors-liste" role="status" aria-live="polite" tabindex="-1"></span>
         <button type="button" class="bouton-lien" id="bouton-actualiser-sponsors">Actualiser la liste</button>
+        <!-- Contrôle d'intégrité : un identifiant de partenaire trop court empêche la remontée des
+             mesures. Le dire ici évite de chercher une panne de déploiement qui n'existe pas. -->
+        <div class="message-form sponsors-avertissements" id="avertissements-sponsors" role="status" aria-live="polite" hidden></div>
         <div id="liste-sponsors" aria-live="polite"><div class="message">Chargement des partenaires…</div></div>
 
         <form id="form-sponsor" class="sponsors-formulaire" hidden>
@@ -361,6 +364,10 @@
             Sans logo, le partenaire s'affiche sous forme de pastille à son nom, sur sa couleur
             de marque. Utile pour un commerçant qui n'a pas de fichier exploitable.
           </p>
+
+          <!-- Prévenir AVANT la perte : une fiche ancienne peut porter des emplacements que le code
+               ne connaît plus. Ils sont conservés tant que ce champ n'est pas touché. -->
+          <p class="message-form ko" id="avertissement-emplacements" role="status" aria-live="polite" hidden></p>
 
           <fieldset class="sponsors-visibilite">
             <legend>Visibilité</legend>
@@ -412,6 +419,15 @@
           <button type="button" class="bouton" id="bouton-rafraichir-bilan">Rafraîchir les chiffres</button>
           <button type="button" class="bouton-lien" id="bouton-imprimer-bilan">Imprimer / PDF</button>
           <button type="button" class="bouton-lien" id="bouton-exporter-bilan">Exporter en CSV</button>
+        </div>
+        <!-- Le bilan ne montrait QUE la journée en cours, sans aucun moyen d'en changer : dès le
+             lendemain du tournoi, il était vide. Le serveur renvoie déjà les journées qui portent
+             des relevés — il suffisait de les proposer. Masqué tant qu'il n'y a qu'une journée. -->
+        <div class="reglage" id="bilan-journee-bloc" hidden>
+          <label for="bilan-journee"><span class="r-libelle">Journée affichée</span></label>
+          <select class="r-input" id="bilan-journee">
+            <option value="">Journée en cours</option>
+          </select>
         </div>
         <div id="bilan-sponsors"><div class="message">Chargement du bilan…</div></div>
         <details class="sponsors-options-avancees" id="ligne-projection">

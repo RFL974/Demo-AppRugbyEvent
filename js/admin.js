@@ -551,13 +551,34 @@ const ADMIN_RESSOURCES = {
       return ok;
     });
   },
+  /* ⭐ Lot « Partenaires » — L'ARRIVÉE SUR L'ÉCRAN NE COÛTE PLUS QU'UNE EXÉCUTION APPS SCRIPT,
+   * SANS TOUCHER À LA SÉMANTIQUE DU REGISTRE.
+   *
+   * L'écran réclame toujours DEUX ressources, et c'est indispensable : « Actualiser la liste » et
+   * « Rafraîchir les chiffres » doivent pouvoir relire chacun SA part, et un échec partiel ne doit
+   * faire relire que ce qui a échoué. ⛔ Les fondre en une seule ressource aurait fait perdre les
+   * deux propriétés à la fois.
+   * ⭐ Ce qui change est ailleurs : `ADMIN_ETAPES.sponsors.avant` lance UNE requête groupée, et les
+   * deux ressources se contentent d'attendre SON résultat. Deux ressources, une seule requête.
+   * ⛔ Quand aucun chargement groupé n'est en vol — « Actualiser la liste », « Rafraîchir les
+   * chiffres », backend d'avant ce lot — chacune reprend sa lecture historique, inchangée. */
   fichesSponsors: function () {
     if (typeof lireFichesSponsors !== 'function') return Promise.resolve(false);
+    if (typeof sponsorsGroupeEnVol === 'function') {
+      var groupe = sponsorsGroupeEnVol('fichesSponsors');
+      if (groupe) return groupe.then(function (b) { return !!(b && b.sponsors_ok); });
+    }
     return Promise.resolve(lireFichesSponsors());
   },
-  relevesSponsors: function () {
+  relevesSponsors: function (opt) {
     if (typeof lireRelevesSponsors !== 'function') return Promise.resolve(false);
-    return Promise.resolve(lireRelevesSponsors());
+    if (typeof sponsorsGroupeEnVol === 'function') {
+      var groupe = sponsorsGroupeEnVol('relevesSponsors');
+      // ⛔ Un succès PARTIEL ne marque pas les relevés : la ressource reste « à relire », et le
+      //   prochain retour — ou « Rafraîchir » — retentera CELLE-LÀ seule, pas tout l'écran.
+      if (groupe) return groupe.then(function (b) { return !!(b && b.releves_ok); });
+    }
+    return Promise.resolve(lireRelevesSponsors(opt));
   }
 };
 
@@ -597,6 +618,18 @@ const ADMIN_ETAPES = {
       if (!document.getElementById('bloc-sponsors-liste')) return;
       if (typeof injecterReglagesSponsors === 'function' && typeof configCourante !== 'undefined') {
         injecterReglagesSponsors((configCourante && configCourante.global) || {});
+      }
+      /* ⭐ LE CHARGEMENT GROUPÉ EST LANCÉ ICI, et c'est le seul endroit où il peut l'être.
+         `avant` s'exécute de façon SYNCHRONE juste avant que les deux ressources ne partent ; les
+         lectures, elles, sont mises en file et démarrent plus tard. Poser la requête groupée depuis
+         l'une des deux ressources arriverait donc trop tard pour que l'autre la voie.
+         ⛔ Jamais quand la clé admin n'a pas été acceptée : une simple navigation rouvrirait une
+         demande de clé — l'inverse d'un verrouillage. */
+      // ⛔ Et jamais quand les deux ressources sont DÉJÀ chargées : un simple retour sur l'écran
+      //   paierait alors une requête pour rien — exactement ce que le registre existe pour éviter.
+      if (adminConnecte && typeof demarrerChargementGroupeSponsors === 'function' &&
+          (!ressourceAdminChargee('fichesSponsors') || !ressourceAdminChargee('relevesSponsors'))) {
+        demarrerChargementGroupeSponsors();
       }
     },
     apres: function () {
