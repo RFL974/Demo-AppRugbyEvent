@@ -374,7 +374,11 @@ async function apiPostProtege(action, data, role, libelle, options) {
   let cle = lireCleLocale(role);
   const neuve = !cle;   // tapée maintenant : le serveur ne l'a pas encore acceptée
   if (neuve) cle = await demanderCle(role, 'Entre la clé ' + libelle + ' :');
-  if (cle == null) throw new Error('Action annulée.');
+  /* ⭐ `resultatCertain` (lot « Saisie des scores ») : l'abandon de l'utilisateur est une issue
+     CERTAINE — rien n'a été émis. ⛔ Le marqueur reste DANS cette fonction, sans fonction nouvelle :
+     les bancs qui extraient `apiPostProtege` par son bloc l'emportent donc avec elle. Purement
+     additif — aucun appelant existant ne lit ce champ, et le message ne change pas d'un caractère. */
+  if (cle == null) throw Object.assign(new Error('Action annulée.'), { resultatCertain: true });
   try {
     const res = await apiPost(action, Object.assign({}, data, { cle: cle }), options);
     if (neuve) definirCleLocale(role, cle);      // ⭐ rangée APRÈS la réussite confirmée, pas avant
@@ -384,7 +388,7 @@ async function apiPostProtege(action, data, role, libelle, options) {
     if (estRefusCle(err.message)) {
       definirCleLocale(role, '');                // ⛔ refusée : effacée AVANT la redemande (champ vide, rien si on annule)
       const nouvelle = await demanderCle(role, 'Clé ' + libelle + ' incorrecte. Réessaie :');
-      if (nouvelle == null) throw new Error('Action annulée.');
+      if (nouvelle == null) throw Object.assign(new Error('Action annulée.'), { resultatCertain: true });
       const res = await apiPost(action, Object.assign({}, data, { cle: nouvelle }), options);
       definirCleLocale(role, nouvelle);          // ⭐ rangée après la réussite du rejeu, pas avant
       return res;

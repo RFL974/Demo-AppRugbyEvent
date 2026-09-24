@@ -19,13 +19,20 @@ let capacitesCat = {};          // { catégorie: { tir_au_but: bool } } — serv
 let categoriesSaisie = [];      // config.categories (contexte_tournoi/scf_phase) — vocabulaire Super Challenge
 let categorieActiveSaisie = '';
 let terrainActifSaisie = '';    // nom du grand terrain filtré ('' = tous les terrains)
-const CLE_CAT_SAISIE = 'r92_saisie_cat';
-const CLE_TERRAIN_SAISIE = 'r92_saisie_terrain';
-/* ⛔ AUCUNE MÉMORISATION POUR CE FILTRE. La page de saisie est protégée : le contrôle G.4 de
-   `sec-cle-stockage-dr-5b` exige que `localStorage` ne soit JAMAIS touché pendant son
-   parcours — une lecture au chargement suffisait à le mettre en défaut. Le choix vit donc
-   dans le module, pour la durée de la session : la table de marque reste ouverte toute la
-   journée, elle n'a pas besoin qu'on se souvienne d'elle d'une fois sur l'autre. */
+/* ⛔ AUCUNE MÉMORISATION POUR CES DEUX FILTRES, ET LE CODE LE FAIT VRAIMENT (lot « Saisie des
+   scores »). Le bandeau l'affirmait déjà — « le choix vit dans le module » —, mais quatre lignes
+   disaient le contraire : `peuplerFiltreCat` et `peuplerFiltreTerrain` LISAIENT `localStorage`
+   (`r92_saisie_cat`, `r92_saisie_terrain`) et les deux écouteurs de `<select>` l'ÉCRIVAIENT.
+   🔬 POURQUOI PERSONNE NE LE VOYAIT : le contrôle G.4 de `sec-cle-stockage-dr-5b` pose ses cartes
+   de match à la main et n'appelle jamais `afficherMatchs()` — il ne traversait donc aucune des
+   quatre lignes. ⛔ Il n'a PAS été modifié : la couverture manquante est apportée par un banc
+   NEUF, `tests/scores-table-marque-dr-8a.test.js` (contrôles A.4 et K.4), qui déroule le parcours
+   protégé RÉEL, rendu compris, et exige que `localStorage` n'y soit ni lu ni écrit.
+   ⚠️ CE QUE CELA CHANGEAIT VRAIMENT : un choix de catégorie SURVIVAIT à la fermeture de l'onglet et
+   se partageait entre deux tournois servis par la même origine — un état local persistant qui
+   décidait de ce que la table voit. ⛔ Le choix vit désormais dans le module, pour la durée de la
+   page : la table de marque reste ouverte toute la journée, elle n'a pas besoin qu'on se souvienne
+   d'elle d'une fois sur l'autre. */
 let statutSaisie = 'asaisir';  // 'asaisir' | 'termines' | 'tous'
 /* Ce que la passerelle protégée envoie de la Config. ⛔ Aujourd'hui `tournoi_nom` SEUL :
    la charge utile est délibérément minimale (aucune donnée du tournoi avant la clé). Le
@@ -59,7 +66,6 @@ async function initSaisie() {
   const sel = document.getElementById('select-cat-saisie');
   if (sel) sel.addEventListener('change', function (e) {
     categorieActiveSaisie = e.target.value;
-    localStorage.setItem(CLE_CAT_SAISIE, categorieActiveSaisie);
     afficherMatchs();
   });
 
@@ -67,7 +73,6 @@ async function initSaisie() {
   const selTerrain = document.getElementById('select-terrain-saisie');
   if (selTerrain) selTerrain.addEventListener('change', function (e) {
     terrainActifSaisie = e.target.value;
-    localStorage.setItem(CLE_TERRAIN_SAISIE, terrainActifSaisie);
     afficherMatchs();
   });
 
@@ -272,8 +277,8 @@ function peuplerFiltreCat() {
   matchs.forEach(function (m) { if (cats.indexOf(m.categorie) < 0) cats.push(m.categorie); });
   cats.sort(comparerCategorie);
 
-  const memo = localStorage.getItem(CLE_CAT_SAISIE) || '';
-  categorieActiveSaisie = (cats.indexOf(memo) >= 0) ? memo : (cats[0] || '');
+  // Le choix courant s'il existe toujours, la première catégorie sinon. ⛔ Aucun stockage consulté.
+  categorieActiveSaisie = (cats.indexOf(categorieActiveSaisie) >= 0) ? categorieActiveSaisie : (cats[0] || '');
 
   sel.innerHTML = cats.map(function (c) {
     return '<option value="' + echapper(c) + '"' + (c === categorieActiveSaisie ? ' selected' : '') + '>' +
@@ -344,10 +349,10 @@ function peuplerFiltreTerrain() {
   bloc.hidden = (options.length < 2);
   if (bloc.hidden) { terrainActifSaisie = ''; return; }
 
-  // ⛔ Un terrain mémorisé qui n'existe pas pour CETTE catégorie ne doit pas la vider :
-  //    on retombe sur « Tous les terrains ».
-  const memo = localStorage.getItem(CLE_TERRAIN_SAISIE) || '';
-  terrainActifSaisie = options.some(function (o) { return o.cle === memo; }) ? memo : '';
+  // ⛔ Un terrain choisi qui n'existe pas pour CETTE catégorie ne doit pas la vider :
+  //    on retombe sur « Tous les terrains ». ⛔ Aucun stockage consulté.
+  const choisi = terrainActifSaisie;
+  terrainActifSaisie = options.some(function (o) { return o.cle === choisi; }) ? choisi : '';
 
   sel.innerHTML = '<option value="">Tous les terrains</option>' + options.map(function (o) {
     return '<option value="' + echapper(o.cle) + '"' + (o.cle === terrainActifSaisie ? ' selected' : '') +
@@ -907,10 +912,68 @@ document.addEventListener('input', function (e) {
   else if (e.target.classList.contains('score')) { majAlerteEcart(carte); }
 });
 
+/* ==========================================================================
+   L'ISSUE D'UN ENVOI DE SCORE — quatre cas, et le quatrième n'est pas un échec
+   --------------------------------------------------------------------------
+   ⭐ CE QUE CE LOT AJOUTE, ET POURQUOI. Le contrat serveur distingue déjà une réussite confirmée,
+   un refus métier confirmé et une erreur certaine ; l'écran, lui, les affichait toutes de la même
+   façon — le message brut de l'erreur, bouton « Valider » aussitôt réutilisable.
+   🔬 LE DÉFAUT : quand la réponse ne revient PAS (coupure, délai, 502, redirection perdue, JSON
+   illisible), la requête a pu être traitée. Écrire « Le serveur a répondu avec une erreur (502). »
+   laisse croire que rien n'a été enregistré — et invite à revalider sans avoir relu l'état réel.
+   C'est un mensonge par omission sur le seul cas où l'on ne sait pas.
+   ⭐ LA RÈGLE, ET ELLE TIENT EN UNE PHRASE : le serveur a-t-il RÉPONDU ?
+     · réponse JSON sans `error`            → RÉUSSITE confirmée ;
+     · réponse JSON avec `error`            → REFUS ou ERREUR confirmés — rien n'a été écrit…
+     · …SAUF `refus: 'ETAT_A_RELIRE'`, par lequel le serveur dit LUI-MÊME qu'il ne peut pas conclure ;
+     · aucune réponse exploitable           → RÉSULTAT INCONNU.
+   ⛔ Les erreurs que l'écran fabrique lui-même (annulation, accès fermé constaté, clé refusée par le
+   serveur, conflit de version) portent `resultatCertain` : elles ne sont pas des inconnues.
+   ⛔ RIEN N'EST JAMAIS RÉÉMIS AUTOMATIQUEMENT : voir `marquerResultatInconnu`.
+   ========================================================================== */
+
+/** Le message d'un résultat inconnu. ⛔ Il n'affirme NI la réussite, NI l'échec. */
+const MESSAGE_RESULTAT_INCONNU = '⚠️ Réponse non reçue : on ne sait pas si ce score a été ' +
+  'enregistré. Rien n\'a été renvoyé automatiquement. Clique « 🔄 Rafraîchir » pour relire l\'état ' +
+  'du serveur, puis vérifie ce match avant toute nouvelle saisie.';
+
+/**
+ * L'issue de cet envoi est-elle INCONNUE ? ⛔ Dans le doute, OUI : c'est le sens sûr de l'erreur ici.
+ * @param {Error} err l'erreur remontée par l'envoi
+ * @return {boolean} vrai si la mutation a PU avoir lieu sans que la réponse soit connue
+ */
+function resultatEnvoiInconnu(err) {
+  if (!err) return false;
+  if (err.resultatCertain === true) return false;          // fabriquée ICI, après une réponse serveur
+  const rep = err.reponse;
+  // Une réponse JSON du serveur est une PREUVE — sauf quand elle dit elle-même qu'elle ne conclut pas.
+  if (rep && typeof rep === 'object') return String(rep.refus || '') === 'ETAT_A_RELIRE';
+  return true;                                             // ⛔ pas de réponse : on ne sait pas
+}
+
+/**
+ * ⛔ APRÈS UN RÉSULTAT INCONNU, CETTE CARTE NE PEUT PLUS ÉCRIRE. Les champs et le bouton sont
+ * verrouillés jusqu'à une RELECTURE (« 🔄 Rafraîchir »), qui ne mute rien et rend la carte à l'état
+ * serveur autoritaire. ⛔ Aucune réémission, aucune minuterie, aucune reconstruction optimiste.
+ */
+function marquerResultatInconnu(carte, msg, err) {
+  carte.classList.add('match-inconnu');
+  carte.classList.remove('match-edition');
+  carte.querySelectorAll('.score, .det-input, .det-pas').forEach(function (i) { i.disabled = true; });
+  const bouton = carte.querySelector('.bouton-valider');
+  if (bouton) { bouton.disabled = true; bouton.textContent = 'Relire avant de revalider'; }
+  const detail = (err && err.message) ? '\n\nDétail technique : ' + err.message : '';
+  if (msg) afficherMessage(msg, MESSAGE_RESULTAT_INCONNU + detail, 'ko');
+}
+
 /** Un seul écouteur pour tous les boutons « Valider / Corriger » (délégation d'événement). */
 document.addEventListener('click', async function (evenement) {
   const bouton = evenement.target.closest('.bouton-valider');
   if (!bouton) return;
+  /* ⛔ DOUBLE CLIC : un bouton désactivé n'émet pas de clic dans un navigateur, mais on ne fait pas
+     reposer « une seule mutation par intention » sur cette règle-là. Le garde est ICI, explicite,
+     comme pour les compteurs « − / + ». */
+  if (bouton.disabled) return;
 
   const carte = bouton.closest('.match');
   const msg = carte.querySelector('.message-form');
@@ -978,6 +1041,7 @@ document.addEventListener('click', async function (evenement) {
   }
 
   bouton.disabled = true;
+  let issueInconnue = false;
   try {
     let res;
     try {
@@ -1016,7 +1080,10 @@ document.addEventListener('click', async function (evenement) {
     }
 
     verrouiller(carte);
-    afficherMessage(msg, 'Score enregistré ✓', 'ok');
+    /* ⭐ Le serveur dit quand l'état autoritaire était DÉJÀ celui demandé : on ne prétend pas avoir
+       enregistré ce qui n'a pas été écrit à l'instant. Le résultat, lui, est bien celui affiché. */
+    afficherMessage(msg, res && res.score_inchange === true
+      ? 'Score déjà enregistré, inchangé ✓' : 'Score enregistré ✓', 'ok');
     majAccordeonPhase(carte); // compteur à jour + repli auto dès le dernier score de la phase
 
     // Cohérence après-midi : corriger un score du MATIN alors que l'après-midi est déjà généré
@@ -1031,9 +1098,13 @@ document.addEventListener('click', async function (evenement) {
         'Préviens l\'organisateur : il doit RÉGÉNÉRER l\'après-midi (page admin) pour rétablir les bons niveaux.');
     }
   } catch (err) {
-    afficherMessage(msg, err.message, 'ko');
+    issueInconnue = resultatEnvoiInconnu(err);
+    if (issueInconnue) marquerResultatInconnu(carte, msg, err);
+    else afficherMessage(msg, err.message, 'ko');
   } finally {
-    bouton.disabled = false;
+    // ⛔ Résultat inconnu : le bouton RESTE fermé — une nouvelle intention d'écriture exige d'abord
+    //    un état serveur autoritaire (« 🔄 Rafraîchir »).
+    if (!issueInconnue) bouton.disabled = false;
   }
 });
 

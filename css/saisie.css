@@ -60,6 +60,14 @@
 /* Un match laissé à saisir pour la démonstration : même repère que sur les cartes. */
 .table-saisie tr.match-demo td { background:#fff8e8; }
 
+/* --- RÉSULTAT INCONNU : la réponse n'est pas revenue, l'écriture a PU avoir lieu -----------
+   ⛔ Ce repère ne dit ni « enregistré » ni « échoué » : il dit que cette ligne attend une
+   relecture. Les champs et le bouton sont déjà fermés par le script — le style le rend visible
+   au bord du terrain, où l'on lit vite et de loin. */
+.match-inconnu, .table-saisie tr.match-inconnu td { background:#fff4e5; }
+.match-inconnu { border-color:#e0a23a; }
+.match-inconnu .message-form { color:#8a5200; }
+
 /* --- Pied : ce que la validation déclenche, et l'état de la liaison ------- */
 .cv-saisie-pied { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,280px),1fr));
   gap:18px; align-items:center; margin-top:24px; }

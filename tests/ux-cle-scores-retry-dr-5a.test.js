@@ -688,8 +688,20 @@ async function controles() {
   verifier('M9.2', 'elle n\'est jamais rejouée — ni toute seule, ni par un dialogue « Réessayer »',
     bM.reseau.metier().length === 1 && bM.reseau.imprevus.length === 0 &&
     bM.dom.stats.dialogues.every((d) => d.libelles.indexOf('Réessayer') === -1));
-  verifier('M9.3', 'le bouton est rendu : un NOUVEL envoi reste la décision de l\'utilisateur',
-    carteM.bouton.disabled === false && dialogue(bM) === null);
+  /* ⚠️ CONTRÔLE RECENTRÉ PAR LE LOT « SAISIE DES SCORES » (24/09/2026) — L'INVARIANT EST PLUS FORT,
+     jamais plus faible. Il exigeait jusqu'ici que le bouton soit RENDU après une panne d'écriture :
+     « un nouvel envoi reste la décision de l'utilisateur ». C'était vrai du rejeu automatique — que
+     M9.2 protège toujours —, mais cela autorisait une SECONDE INTENTION D'ÉCRITURE sans que l'on
+     sache si la première avait abouti : la réponse s'est perdue, la mutation a PU être appliquée.
+     ⭐ Désormais la carte se ferme jusqu'à une RELECTURE non mutante (« 🔄 Rafraîchir »), et le
+     message ne prétend ni « enregistré » ni « échoué ». ⛔ Ce que M9.3 protégeait reste protégé :
+     rien ne repart tout seul, et aucun dialogue ne s'ouvre pour proposer de réessayer. */
+  verifier('M9.3', 'l\'issue est INCONNUE : la carte se ferme jusqu\'à une relecture, et rien ne repart seul',
+    carteM.bouton.disabled === true && dialogue(bM) === null &&
+    carteM.carte.classList.contains('match-inconnu') &&
+    /on ne sait pas si ce score a été enregistré/.test(carteM.msg.textContent) &&
+    carteM.sA.disabled === true && carteM.sB.disabled === true,
+    JSON.stringify({ bouton: carteM.bouton.disabled, message: carteM.msg.textContent }));
 
   /* ---- ⑩ — une clé REFUSÉE est oubliée, jamais mémorisée ------------------ */
   console.log('\n⑩ Clé refusée : oubliée sur-le-champ, jamais rangée');

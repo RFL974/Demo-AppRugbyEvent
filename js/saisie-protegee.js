@@ -22,7 +22,10 @@
  *    · chaque enregistrement porte un `requete_id` neuf et la `version_lue` du match ;
  *      ⛔ aucun enregistrement n'est jamais renvoyé automatiquement ;
  *    · SCORE_MODIFIE → message clair et rechargement AVANT toute nouvelle saisie ;
- *    · accès fermé (gel, clôture, rotation) → contexte vidé, interface fermée.
+ *    · accès fermé (gel, clôture, rotation) → contexte vidé, interface fermée ;
+ *    · ⭐ RÉSULTAT INCONNU (lot « Saisie des scores ») : une erreur dont l'issue est CERTAINE porte
+ *      `resultatCertain`. Sans ce marqueur, l'issue est inconnue — la mutation a pu avoir lieu —,
+ *      et `saisie.js` ferme la carte jusqu'à une relecture. ⛔ Aucune réémission automatique.
  * ============================================================================
  */
 
@@ -77,6 +80,21 @@ function nouvelIdRequete() {
 }
 
 function reponseDe(err) { return (err && err.reponse) || {}; }
+
+/**
+ * ⭐ UNE ERREUR DONT L'ISSUE EST CERTAINE. Toutes les erreurs fabriquées dans ce fichier le sont :
+ * elles naissent soit d'une réponse du serveur (accès fermé, conflit de version, clé refusée), soit
+ * d'une décision locale prise AVANT toute émission (annulation, accès déjà fermé dans cet onglet).
+ * ⛔ Sans ce marqueur, `resultatEnvoiInconnu` (saisie.js) les classerait « inconnues » — elles n'ont
+ * plus de `reponse` attachée une fois reformulées — et l'écran bloquerait la carte pour rien.
+ * ⚠️ Ne JAMAIS le poser sur une erreur née d'une panne de transport : c'est exactement le cas où
+ * la mutation a pu avoir lieu.
+ */
+function erreurCertaine(message) {
+  const e = new Error(message);
+  e.resultatCertain = true;
+  return e;
+}
 
 /** ⛔ FERMETURE : jeton, clé et données oubliés ; plus rien n'est saisissable dans cet onglet. */
 function fermerInterfaceSaisie() {
@@ -247,13 +265,13 @@ async function confirmerCleCorrectionProtegee(idMatch) {
  * ⛔ UN SEUL envoi : ni réessai automatique après une panne, ni renvoi après un refus de clé.
  */
 async function envoyerScoreProtege(data) {
-  if (saisieAccesFerme || !saisieJeton) throw new Error(SAISIE_MESSAGE_FERME);
+  if (saisieAccesFerme || !saisieJeton) throw erreurCertaine(SAISIE_MESSAGE_FERME);
   const cle = lireCleTable();
   if (!cle) {
     const recharge = await connexionTable();
-    if (!recharge) throw new Error('Action annulée.');
+    if (!recharge) throw erreurCertaine('Action annulée.');
     appliquerDonneesSaisie(recharge);
-    throw new Error('Clé scores vérifiée : les matchs ont été rechargés. Vérifie le score puis valide à nouveau.');
+    throw erreurCertaine('Clé scores vérifiée : les matchs ont été rechargés. Vérifie le score puis valide à nouveau.');
   }
   const m = matchs.find(function (x) { return x.id_match === data.id_match; });
   const corps = Object.assign({}, data, {
@@ -263,15 +281,18 @@ async function envoyerScoreProtege(data) {
     return await apiPost('enregistrerScore', corps);
   } catch (err) {
     const rep = reponseDe(err);
-    if (rep.acces_ferme === true) { fermerInterfaceSaisie(); throw new Error(SAISIE_MESSAGE_FERME); }
+    if (rep.acces_ferme === true) { fermerInterfaceSaisie(); throw erreurCertaine(SAISIE_MESSAGE_FERME); }
     if (rep.refus === 'SCORE_MODIFIE') {
       await rechargerApresConflit(data.id_match);
-      throw new Error(SAISIE_MESSAGE_MODIFIE);
+      throw erreurCertaine(SAISIE_MESSAGE_MODIFIE);
     }
     if (estRefusCleExplicite(err)) {
       definirCleTable('');
-      throw new Error('Clé scores refusée : clique « Rafraîchir » pour la saisir de nouveau, puis valide à nouveau.');
+      throw erreurCertaine('Clé scores refusée : clique « Rafraîchir » pour la saisir de nouveau, puis valide à nouveau.');
     }
+    /* ⛔ TOUT LE RESTE REMONTE TEL QUEL, sans marqueur : une panne de transport, un statut HTTP
+       inattendu ou un corps illisible laissent l'issue INCONNUE — la mutation a pu avoir lieu.
+       C'est `resultatEnvoiInconnu` (saisie.js) qui en tire les conséquences à l'écran. */
     throw err;
   }
 }
