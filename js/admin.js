@@ -1349,7 +1349,15 @@ async function rechargerEtRendre(opt) {
   //   doublons repartait de données anciennes.
   const jeton = (typeof prendreJetonEquipes === 'function') ? prendreJetonEquipes() : null;
 
-  const data = await apiGet('getAll', null, budget); // équipes / poules / matchs (config = vue live, ignorée ici)
+  /* ⭐ Lot « Réinitialiser » — L'ÉTAT DÉJÀ RELU PAR LE SERVEUR REMPLACE LES DEUX LECTURES.
+     ⛔ CE N'EST PAS UNE RECONSTRUCTION OPTIMISTE : `opt.etat` ne peut venir que d'une réponse
+     d'écriture, où le serveur a relu SOUS SON VERROU — c'est la même autorité que `getAll` +
+     `getConfigAdmin`, arrivée une requête plus tôt. ⛔ Rien n'est déduit, rien n'est deviné, et
+     rien n'est posé tant que la réponse n'est pas là. Absent (backend d'avant, issue incertaine),
+     le chemin réseau historique reprend au caractère près. */
+  const data = opt.etat
+    ? { equipes: opt.etat.equipes || [], poules: opt.etat.poules || [], matchs: opt.etat.matchs || [] }
+    : await apiGet('getAll', null, budget); // équipes / poules / matchs (config = vue live, ignorée ici)
 
   // La config COMPLÈTE vient de getConfigAdmin (clé admin), JAMAIS de la vue live de getAll (qui
   // écraserait les contacts). On ne la recharge que si un rendu qui en dépend est demandé — sinon
@@ -1358,7 +1366,9 @@ async function rechargerEtRendre(opt) {
   //   puis cette seconde lecture pouvait échouer : la mémoire était à jour, l'écran ne l'était pas,
   //   et rien ne le disait. Les deux lectures aboutissent d'abord ; on ne modifie l'état qu'ensuite.
   const besoinConfig = !!(opt.reglages || opt.selectCats || opt.terrains || opt.infos || opt.publication);
-  const cfg = besoinConfig ? await lireConfigAdmin(undefined, budget) : null;
+  const cfg = !besoinConfig ? null
+    : (opt.etat && opt.etat.config) ? opt.etat.config            // ⭐ relue sous le verrou, voir ci-dessus
+    : await lireConfigAdmin(undefined, budget);
   if (revisionCats !== null && revisionCats !== versionCategoriesCourante()) {
     throw new Error('Les catégories ont changé pendant la lecture. Relance le rafraîchissement.');
   }
@@ -1562,63 +1572,200 @@ function rechargerLaPage() {
 
 /* ⭐ Lot « Inviter un club », 4ᵉ passage — la réinitialisation est BORNÉE. Sans délai client, une réponse muette laissait
    « Réinitialisation… » pour toujours ; une réponse perdue (404 après exécution) affichait « erreur » sur un classeur déjà
-   vidé, et l'ancienne édition restait à l'écran. 3 min : près de trois fois l'estimation haute du modèle de coût (64,6 s),
-   sous la limite d'une exécution Apps Script (6 min). ⛔ Geste destructif, non rejouable : JAMAIS renvoyé. Issue inconnue
-   (délai, réseau, HTTP) : l'écran oublie ce qui serait faux et relit le serveur exactement comme après un succès ; le
-   message dit que rien n'est confirmé, puis ce que la relecture a trouvé. Refus lisible du serveur : rien n'a été effacé. */
+   vidé, et l'ancienne édition restait à l'écran. 3 min : sous la limite d'une exécution Apps Script (6 min). ⛔ Geste
+   destructif, non rejouable : JAMAIS renvoyé. Issue inconnue (délai, réseau, HTTP) : l'écran oublie ce qui serait faux et
+   relit le serveur exactement comme après un succès ; le message dit que rien n'est confirmé, puis ce que la relecture a
+   trouvé. Refus lisible du serveur : rien n'a été effacé. */
 const DELAI_REINITIALISATION_MS = 180000;
+/** La PRÉPARATION est une lecture : elle est bornée comme les autres lectures de l'administration. */
+const DELAI_PREPARATION_REINITIALISATION_MS = 30000;
 function reinitialisationIncertaine(erreur) {
   if (typeof issueIncertaine === 'function') return issueIncertaine(erreur);
   return !(erreur && erreur.reponse && typeof erreur.reponse === 'object') && !/^Action annulée/.test(String((erreur && erreur.message) || ''));
+}
+
+/* ⭐ GARDE D'OPÉRATION — POSÉE AU PREMIER CLIC, ⛔ PAS APRÈS LES CONFIRMATIONS.
+ *
+ * 🔬 LE DÉFAUT FERMÉ, et il était réel : `bouton.disabled = true` ne venait qu'APRÈS les deux
+ * `await dialogConfirmer`. Entre le premier clic et la première réponse de l'organisateur, le
+ * bouton restait actif : un second clic ouvrait une SECONDE chaîne de confirmations, et deux
+ * « Oui, tout effacer » lançaient DEUX réinitialisations.
+ * ⭐ Le drapeau est posé avant tout `await` — donc avant la PRÉPARATION elle-même : un double clic
+ * n'émet même pas deux préparations. ⛔ Et il est rendu dans un `finally`, sur TOUS les chemins.
+ */
+let reinitialisationEnCours = false;
+
+/**
+ * ⭐ LA PRÉPARATION SERVEUR — ce que l'écran doit obtenir AVANT de faire confirmer.
+ *
+ * 🔬 LE DÉFAUT FERMÉ (contre-épreuve). Le premier passage fabriquait sa précondition DEPUIS SA
+ * MÉMOIRE : quatre comptes lus dans `configCourante`, `equipesCourantes`, `planningPoules`,
+ * `planningMatchs`. Une égalité de comptes n'est pas une égalité d'état — neuf changements de
+ * contenu sur dix passaient inaperçus, et l'écran annonçait « ✅ Tournoi réinitialisé » en ayant
+ * détruit un score saisi entre-temps.
+ * ⭐ Désormais le navigateur ne FABRIQUE plus rien : il DEMANDE au serveur un jeton opaque, calculé
+ * sur le contenu réel de tout ce que la réinitialisation détruit, et le renverra TEL QUEL.
+ * ⛔ Cette lecture ne prend aucun verrou et n'écrit rien (`ACTIONS_LECTURE`).
+ *
+ * @return {Promise<{jeton, comptes, acces_ouvert, identites_demo, fichiers_drive} | {ancien:true} | {panne:Error}>}
+ */
+async function preparerReinitialisation() {
+  try {
+    const rep = await apiPostProtege('preparerReinitialisation', {}, 'admin', 'admin',
+      { delaiMs: DELAI_PREPARATION_REINITIALISATION_MS });
+    if (!rep || !rep.jeton_etat) return { ancien: true };
+    return { jeton: rep.jeton_etat, comptes: rep.comptes || {}, acces_ouvert: !!rep.acces_ouvert,
+             identites_demo: Number(rep.identites_demo) || 0, fichiers_drive: Number(rep.fichiers_drive) || 0 };
+  } catch (erreur) {
+    /* ⭐ DEUX ISSUES À NE PAS CONFONDRE :
+       · le serveur ne CONNAÎT PAS l'action (backend d'avant ce lot) → on continue, mais SANS jeton,
+         donc SANS promettre une protection qu'on n'a pas ;
+       · la lecture a ÉCHOUÉ (réseau, délai, serveur occupé) → ⛔ on n'enchaîne PAS : confirmer sans
+         jeton alors que le serveur sait en donner un reviendrait à se priver de la protection par
+         accident, exactement sur le geste qui détruit. */
+    if (erreur && erreur.reponse && /Action inconnue/.test(String(erreur.message || ''))) return { ancien: true };
+    return { panne: erreur };
+  }
+}
+
+/** « 5 catégorie(s), 21 équipe(s), 8 poule(s) et 34 match(s) » — ⭐ des comptes du SERVEUR. */
+function resumeComptesReinitialisation(c) {
+  const n = (v) => (Number(v) || 0);
+  return n(c.categories) + ' catégorie(s), ' + n(c.equipes) + ' équipe(s), ' + n(c.poules) +
+    ' poule(s) et ' + n(c.matchs) + ' match(s)';
+}
+
+/** Les avertissements structurés du serveur, repris TELS QUELS — ⛔ jamais tus. */
+function avertissementsReinitialisation(res) {
+  const liste = [];
+  if (!res) return liste;
+  if (res.avertissement_drive) liste.push(res.avertissement_drive);
+  /* ⭐ LE PROTOCOLE EN TROIS PHASES A SA PROPRE ISSUE PARTIELLE, et elle doit se dire : les fichiers
+     SONT à la corbeille, mais le classeur les désigne encore parce que le verrou de réconciliation
+     n'a pas pu être repris (ou qu'une nouvelle référence a été enregistrée entre-temps).
+     ⛔ Taire cela laisserait croire à un ménage complet ; ⛔ et rien n'est réémis automatiquement. */
+  if (res.avertissement_reconciliation) liste.push('⚠️ ' + res.avertissement_reconciliation);
+  /* ⭐ LA PROPAGATION PUBLIQUE A TROIS ISSUES QUI NE SONT PAS DES SUCCÈS, et l'écran les dit TOUTES
+     par le même canal — le texte du serveur, repris TEL QUEL :
+       · `relais: 'echec'`   — la poussée n'est pas partie (relais injoignable) ;
+       · `relais: 'differe'` — elle est partie, mais une autre écriture est arrivée pendant l'envoi :
+         le serveur REFUSE de dire qu'elle a propagé, parce qu'il ne peut pas le prouver ;
+       · `relais: 'sans_objet'` — aucun relais configuré : rien à dire, et rien n'est dit.
+     ⛔ DANS LES DEUX PREMIERS CAS, `etat_complet` vaut faux et le message passe en « ko » : l'écran
+     n'annonce JAMAIS une page publique à jour qu'il ne peut pas garantir. ⛔ Et rien n'est relancé
+     automatiquement — la prochaine écriture remettra le relais à jour.
+     ⭐ POURQUOI UN SEUL CANAL : le texte exact appartient au serveur, qui SEUL sait ce qu'il a
+     constaté. Un écran qui réécrirait ces phrases à partir du code `relais` en inventerait la moitié. */
+  if (res.avertissement_relais) liste.push('⚠️ ' + res.avertissement_relais);
+  if (res.avertissement_acces) liste.push(res.avertissement_acces);
+  if (res.avertissement_edition) {
+    /* ⛔ UNE BASCULE D'ÉDITION IMPOSSIBLE NE DOIT PAS LAISSER CROIRE que l'ancien lien est mort :
+       c'est l'édition ACTIVE qui rend un jeton de table de marque valide. */
+    liste.push('⚠️ L\'édition n\'a pas pu être renouvelée (' + res.avertissement_edition + ') : ' +
+      'l\'ancien lien d\'accès à la table de marque peut donc être ENCORE VALABLE. ' +
+      'Vérifie l\'onglet Editions avant de communiquer un nouveau lien.');
+  }
+  return liste;
 }
 
 async function onReinitialiser() {
   const message = document.getElementById('message-reinitialisation');
   const bouton = document.getElementById('bouton-reinitialiser');
 
-  // Double confirmation : l'action est irréversible.
-  // ⚠️ Le texte ANNONCE ce qui part. Depuis M1-B (D-043), la réinitialisation efface aussi les
-  // données de la demande d'autorisation propres à l'édition : les taire rendrait la perte
-  // invisible. L'ancienne phrase « Seul l'historique de saison est conservé » a été retirée : elle
-  // était fausse (le carnet des clubs et les partenaires survivent, comme les 10 champs permanents
-  // du club). ⛔ On n'annonce donc PAS une liste exhaustive des conservations — d'où « notamment ».
-  // ⚠️ La ligne « clubs invités » suit reinitialiserPhase2Clubs À LA LETTRE. Depuis M1-B2 / B2-0,
-  // sur les 17 colonnes de ClubsInvites, 12 sont remises à zéro (tout l'ENGAGEMENT : statut,
-  // categories_engagees, dossier_envoye, invitation_envoyee, club_token, date_reponse,
-  // nb_equipes_par_categorie, nb_joueurs_total, alerte_ecart, detail_effectifs,
-  // nb_educateurs_total, selection_enregistree) et 5 sont conservées (le CONTACT).
-  // ⚠️ Ce commentaire annonçait « 8 remises à zéro, 9 conservées » et disait que `statut`,
-  // `detail_effectifs` et `nb_educateurs_total` SURVIVENT : vrai jusqu'à B2-0, faux depuis.
-  // ⭐ Le texte ci-dessous a suivi : il annonce désormais que la RÉPONSE du club est effacée —
-  // taire une perte la rendrait invisible, c'est la même règle que pour D-043.
-  if (!await dialogConfirmer('Réinitialiser le tournoi ?\n\n' +
-               'CE QUI EST SUPPRIMÉ — des données de CETTE ÉDITION, notamment :\n' +
-               '• les catégories, les équipes, les poules, les matchs (planning et scores) ;\n' +
-               '• les infos du tournoi (affiche comprise) et les horaires de la journée ;\n' +
-               '• côté clubs invités : leur RÉPONSE à cette édition (accepté / décliné), ce ' +
-               'qu\'ils ont engagé (catégories, équipes, joueurs, éducateurs), les marques ' +
-               'd\'envoi et de suivi, les alertes, et leurs liens d\'accès ;\n' +
-               '• dans la demande d\'autorisation : médecin, secours, arbitrage, terrain et ' +
-               'vestiaires utilisés, hébergement, repas, goûters, récompenses…\n\n' +
-               'CE QUI EST CONSERVÉ, notamment :\n' +
-               '• les informations PERMANENTES de votre club dans la demande d\'autorisation ' +
-               '(nom et code du club, label, président, représentant) ;\n' +
-               '• l\'historique de saison (page Perfs) ;\n' +
-               '• le carnet d\'adresses des clubs invités — noms, contacts, emails — et vos ' +
-               'partenaires. Les clubs restent dans la liste : ils redeviennent invitables.',
-               { ok: 'Continuer', danger: true })) return;
-  if (!await dialogConfirmer('Confirmer la remise à zéro ? Cette action est IRRÉVERSIBLE.',
-               { ok: 'Oui, tout effacer', danger: true })) return;
-
+  // ⛔ UNE SEULE CHAÎNE À LA FOIS — voir le bandeau de `reinitialisationEnCours`.
+  if (reinitialisationEnCours) return;
+  reinitialisationEnCours = true;
   const texteBouton = bouton.textContent;
   bouton.disabled = true;
-  bouton.textContent = 'Réinitialisation…';
-  afficherMessage(message, 'Réinitialisation en cours…', 'ok');
 
   try {
+    // ① LA PRÉPARATION SERVEUR, AVANT LA PREMIÈRE QUESTION.
+    bouton.textContent = 'Vérification…';
+    afficherMessage(message, 'Lecture de l’état du tournoi…', 'ok');
+    const prep = await preparerReinitialisation();
+    if (prep.panne) {
+      afficherMessage(message, '⚠️ Impossible de lire l’état du tournoi (' +
+        String((prep.panne && prep.panne.message) || 'erreur réseau').replace(/\.$/, '') +
+        ') : la réinitialisation n’a PAS été lancée et rien n’a été effacé. Réessaie.', 'ko');
+      return;
+    }
+    const protege = !prep.ancien;
+    const comptes = protege ? prep.comptes : null;
+    bouton.textContent = texteBouton;
+    afficherMessage(message, '', 'ok');
+
+    // ② LA PREMIÈRE CONFIRMATION — ce qui part, ce qui reste.
+    // ⚠️ Le texte ANNONCE ce qui part. Depuis M1-B (D-043), la réinitialisation efface aussi les
+    // données de la demande d'autorisation propres à l'édition : les taire rendrait la perte
+    // invisible. ⛔ On n'annonce PAS une liste exhaustive — d'où « notamment ».
+    // ⚠️ La ligne « clubs invités » suit reinitialiserPhase2Clubs À LA LETTRE.
+    // ⭐ CORRECTIONS DE VÉRACITÉ (contre-épreuve) — trois affirmations étaient fausses ou trop larges :
+    //   · le carnet n'est PAS conservé en entier : les identités du JEU DE DÉMONSTRATION en sont
+    //     retirées. Le texte le dit maintenant, et le serveur en donne le NOMBRE ;
+    //   · « les horaires de la journée » n'étaient pas tous effacés : `heure_fin_mode` et
+    //     `pause_echelonnee` survivent. Le texte ne prétend plus le contraire ;
+    //   · les fichiers Drive sont NOMMÉS (affiche, photo du parking) : « affiche comprise » taisait
+    //     la seconde, qui part elle aussi à la corbeille.
+    if (!await dialogConfirmer('Réinitialiser le tournoi ?\n\n' +
+                 'CE QUI EST SUPPRIMÉ — des données de CETTE ÉDITION, notamment :\n' +
+                 '• les catégories, les équipes, les poules, les matchs (planning et scores) ;\n' +
+                 '• les infos du tournoi et la plupart des horaires de la journée (le MODE de calcul ' +
+                 'de l\'heure de fin et l\'option de pause échelonnée, eux, sont conservés) ;\n' +
+                 '• les contacts & sécurité, le dossier d\'invitation (modalités, tarifs, parking, ' +
+                 'encadrement, assurance) et la config « Sur place » ;\n' +
+                 '• sur le Drive : l\'AFFICHE du tournoi et la PHOTO du parking sont mises à la corbeille' +
+                 (protege && prep.fichiers_drive ? ' (' + prep.fichiers_drive + ' fichier(s) actuellement)' : '') + ' ;\n' +
+                 '• côté clubs invités : leur RÉPONSE à cette édition (accepté / décliné), ce ' +
+                 'qu\'ils ont engagé (catégories, équipes, joueurs, éducateurs), les marques ' +
+                 'd\'envoi et de suivi, les alertes, et leurs liens d\'accès ;\n' +
+                 '• dans la demande d\'autorisation : médecin, secours, arbitrage, terrain et ' +
+                 'vestiaires utilisés, hébergement, repas, goûters, récompenses…\n\n' +
+                 'CE QUI EST CONSERVÉ, notamment :\n' +
+                 '• les informations PERMANENTES de votre club dans la demande d\'autorisation ' +
+                 '(nom et code du club, label, président, représentant) ;\n' +
+                 '• l\'historique de saison (page Perfs) et vos partenaires ;\n' +
+                 '• le carnet d\'adresses des clubs RÉELS — noms, contacts, emails : ils restent dans ' +
+                 'la liste et redeviennent invitables.\n' +
+                 '⚠️ EXCEPTION : les clubs issus du JEU DE DÉMONSTRATION sont, eux, RETIRÉS du carnet' +
+                 (protege ? ' (' + prep.identites_demo + ' actuellement)' : '') + '.',
+                 { ok: 'Continuer', danger: true })) return;
+
+    /* ③ LA SECONDE CONFIRMATION — ⭐ LA PROMESSE DE REFUS N'EST FAITE QUE SI LE JETON EXISTE.
+       🔬 LE DÉFAUT FERMÉ : ce texte promettait, SANS RÉSERVE, « si le tournoi a changé […] la remise
+       à zéro sera REFUSÉE sans rien effacer ». C'était faux pour tout changement à nombre constant.
+       ⭐ Avec un jeton (nouveau backend), la promesse est VRAIE et tenue par le serveur, qui compare
+       une empreinte du contenu sous son verrou. ⛔ Sans jeton (backend d'avant), on n'écrit PAS la
+       phrase : on dit au contraire, noir sur blanc, que la protection ne s'appliquera pas. */
+    const lignes = ['Confirmer la remise à zéro ? Cette action est IRRÉVERSIBLE.', ''];
+    if (protege) {
+      lignes.push('Seront supprimés, tels que le SERVEUR les voit à l\'instant :',
+        '• ' + resumeComptesReinitialisation(comptes) + '.', '');
+    }
+    lignes.push('Le tournoi repassera en masqué.');
+    lignes.push(protege && prep.acces_ouvert
+      ? 'L\'accès de la table de marque est actuellement OUVERT : il sera CLÔTURÉ, et l\'ancien lien cessera de fonctionner.'
+      : 'Un nouveau lien d\'accès à la table de marque sera nécessaire — l\'ancien cessera de fonctionner.');
+    lignes.push('');
+    lignes.push(protege
+      ? 'Si le tournoi a changé depuis cette lecture — même sans changer le NOMBRE d\'équipes, de ' +
+        'poules ou de matchs —, la remise à zéro sera REFUSÉE sans rien effacer, et il faudra relire ' +
+        'puis reconfirmer.'
+      : '⚠️ Ce serveur ne sait pas encore vérifier que le tournoi n\'a pas changé depuis cette ' +
+        'lecture : si quelqu\'un travaille en parallèle, son travail sera effacé SANS avertissement.');
+    if (!await dialogConfirmer(lignes.join('\n'), { ok: 'Oui, tout effacer', danger: true })) return;
+
+    bouton.textContent = 'Réinitialisation…';
+    afficherMessage(message, 'Réinitialisation en cours…', 'ok');
+
     let res = null, incertaine = null;
-    try { res = await ecrireAdmin('reinitialiserTournoi', {}, { delaiMs: DELAI_REINITIALISATION_MS }); }
-    catch (erreur) {
+    try {
+      /* ⭐ LE JETON EST RENVOYÉ TEL QUEL — ⛔ le navigateur ne le recalcule, ne le complète et ne le
+         tronque jamais. `renvoyer_etat` demande l'état relu sous le verrou, ce qui supprime les deux
+         lectures que l'écran émettait avant ce lot. */
+      const demande = { renvoyer_etat: 'oui' };
+      if (protege) demande.jeton_etat = prep.jeton;
+      res = await ecrireAdmin('reinitialiserTournoi', demande, { delaiMs: DELAI_REINITIALISATION_MS });
+    } catch (erreur) {
       if (!reinitialisationIncertaine(erreur)) throw erreur;      // refus lisible : rien n'a été effacé
       incertaine = erreur;                                        // ⛔ jamais renvoyée : l'écran relit le serveur
     }
@@ -1628,33 +1775,19 @@ async function onReinitialiser() {
     // ① `rechargerEtRendre` s'appuie sur `getAll`, qui ne contient PAS les clubs invités (ils
     //    portent des emails : leur seule lecture est `listerClubsInvites`, protégée par la clé
     //    admin). Sans relecture, `clubsInvitesCourants` garderait l'engagement de l'édition
-    //    EFFACÉE : cartes « Accepté », anciens effectifs, anciens liserés — et surtout l'export
-    //    PDF de la demande d'autorisation, qui lit cette même liste EN MÉMOIRE, partirait à la
-    //    Ligue avec les clubs et les effectifs de l'an dernier.
+    //    EFFACÉE — et surtout l'export PDF de la demande d'autorisation, qui lit cette même liste
+    //    EN MÉMOIRE, partirait à la Ligue avec les clubs de l'an dernier.
     // ② L'oubli vient AVANT la relecture, et c'est le point de sûreté : `chargerClubsInvites`
-    //    ABSORBE ses erreurs (à raison — voir sa doc). Sans cet oubli, une coupure réseau à cet
-    //    instant précis laisserait l'ancienne liste intacte en mémoire ALORS QUE le serveur a
-    //    déjà tout effacé — exactement l'état incohérent que ce lot supprime. ⭐ Vider d'abord
-    //    rend le pire cas SÛR : on affiche moins, jamais du faux. Le serveur a raison, pas nous.
+    //    ABSORBE ses erreurs. Sans cet oubli, une coupure réseau à cet instant précis laisserait
+    //    l'ancienne liste intacte en mémoire ALORS QUE le serveur a déjà tout effacé.
+    //    ⭐ Vider d'abord rend le pire cas SÛR : on affiche moins, jamais du faux.
     // ③ Le tout vient AVANT `rechargerEtRendre`, qui recalcule ensuite `majDossier` et
-    //    `majTableauBord` : ces deux-là lisent cette liste, une relecture après arriverait trop tard.
+    //    `majTableauBord` : ces deux-là lisent cette liste.
     // ⛔ AUCUNE règle du backend n'est recopiée ici : on OUBLIE, puis on RELIT le serveur.
     //
-    // ⭐ B2-0.4 — L'OUBLI DE CE QUI EST DANGEREUX, PUIS UN FILET DE SECOURS.
-    //
-    // ⚠️ Constaté EN RÉEL le 2026-08-25 : l'écran « Demande d'autorisation » montrait encore le
-    // tournoi précédent (3 clubs, 12 équipes, 117 participants, 38 éducateurs) sur un classeur
-    // pourtant vidé — parce que `majAutorisation` n'est appelée qu'au chargement de la page.
-    // ⛔ C'est le document destiné à la LIGUE : il ne doit jamais afficher une édition close.
-    //
     // ⛔ CE QU'ON NE FAIT SURTOUT PAS : vider `configCourante` puis repeindre les formulaires
-    //    avec. Ce serait ouvrir un trou plus grave que celui qu'on ferme — le formulaire
-    //    « Réponse » afficherait `email_expediteur` VIDE, alors que le reset le CONSERVE. Il
-    //    suffirait ensuite que l'organisateur saisisse un contact pour que la validation passe
-    //    et que l'enregistrement écrase ce réglage permanent par une chaîne vide.
-    //    🔬 Vérifié de bout en bout : `onEnregistrerReponse` envoie `email_expediteur` tel quel,
-    //    `enregistrerReponseInvitation` ne contrôle son format QUE s'il est non vide, et
-    //    `ecrireChampsConfig` écrit les valeurs vides. La perte serait donc réelle et silencieuse.
+    //    avec. Le formulaire « Réponse » afficherait `email_expediteur` VIDE, alors que le reset le
+    //    CONSERVE — et le prochain enregistrement l'écraserait par une chaîne vide.
     clubsInvitesCourants = [];
     if (typeof invaliderAutorisationAffichee === 'function') invaliderAutorisationAffichee();
     if (typeof invaliderConformiteFFRAffichee === 'function') invaliderConformiteFFRAffichee();
@@ -1662,44 +1795,29 @@ async function onReinitialiser() {
     const clubsRelus = (typeof rafraichirRessourceAdmin === 'function') &&
       await rafraichirRessourceAdmin('clubsInvites');
 
-    // ⭐ LE FILET DE SECOURS, et c'est la garantie de fond de ce lot.
-    //
-    // `rechargerEtRendre` commence par `apiGet('getAll')` puis `lireConfigAdmin()`. Une coupure
-    // réseau à cet instant laisse une page ENTIÈRE peinte avec l'édition que le serveur vient
-    // d'effacer : catégories, équipes, poules, planning, infos du tournoi, dossier, tableau de
-    // bord, formes FFR des cartes. ⛔ Aucun rattrapage partiel ne peut couvrir tout cela.
-    //
-    // ⭐ Alors on ne rattrape pas : ON RECHARGE LA PAGE. Le navigateur repart du serveur, et
-    //    `initAdmin` affiche soit l'état réel, soit sa propre erreur — jamais l'ancienne édition.
-    // ⛔ PAS DE BOUCLE POSSIBLE : ce chemin ne s'atteint que par un clic sur « Réinitialiser » ;
-    //    une page rechargée ne réinitialise rien toute seule.
-    // ⭐ Et l'on SORT immédiatement : ⛔ aucun rendu n'est tenté depuis une config vide.
+    // ⭐ LE FILET DE SECOURS. Une coupure réseau pendant le rendu laisserait une page ENTIÈRE peinte
+    //    avec l'édition que le serveur vient d'effacer. ⛔ Aucun rattrapage partiel ne couvre cela :
+    //    ON RECHARGE LA PAGE, et l'on SORT immédiatement.
+    // ⛔ PAS DE BOUCLE POSSIBLE : ce chemin ne s'atteint que par un clic sur « Réinitialiser ».
+    // ⭐ Ces deux lectures n'ont plus lieu quand le serveur a joint son état relu.
     try {
       await rechargerEtRendre({ reglages: true, terrains: true, selectCats: true,
-                                equipes: true, infos: true, publication: true });
+                                equipes: true, infos: true, publication: true,
+                                etat: (res && res.etat) || null });
     } catch (erreurRendu) {
       rechargerLaPage();
       return;
     }
 
     // ── À PARTIR D'ICI, LA RELECTURE A RÉUSSI : `configCourante` est celle du serveur. ──
-    //
-    // ⚠️ LE PIÈGE À CONNAÎTRE : `rechargerEtRendre` ne ré-affiche qu'un SOUS-ENSEMBLE de ce que
-    // `initAdmin` construit au chargement. Le delta a été établi FONCTION PAR FONCTION — il en
-    // compte DIX, dont CINQ portent des données d'édition et sont donc rappelées ici :
-    //   · majAutorisation      → la feuille FFR — celle prise en défaut en réel ;
-    //   · majSurPlace          → buvette / sandwicherie / boutique (CHAMPS_SURPLACE, effacés) ;
-    //   · majReponse           → date limite et contact de réponse (effacés) ;
-    //   · majApercuInvitation  → l'aperçu de l'email, construit depuis la config d'invitation ;
-    //   · majConformiteFFR     → le verdict de conformité, calculé sur la date et les catégories.
-    // ⛔ Les CINQ autres n'ont rien à voir avec l'édition : `chargerClubsInvites` (déjà relue plus
-    //    haut), `injecterIcones` (décoration), `majBarreConnexion` (état de connexion),
-    //    `majFormesCategories` (rappelée par `majConformiteFFR`, et ses cartes viennent d'être
-    //    reconstruites) et les lectures PARTENAIRES — elles SURVIVENT délibérément au reset.
-    // ⛔ Aucune règle du backend n'est recopiée ici : on relit, on repeint.
+    // ⚠️ `rechargerEtRendre` ne ré-affiche qu'un SOUS-ENSEMBLE de ce que `initAdmin` construit. Le
+    // delta a été établi FONCTION PAR FONCTION : cinq portent des données d'édition et sont
+    // rappelées ici (majAutorisation, majSurPlace, majReponse, majApercuInvitation, majConformiteFFR).
+    // ⛔ Les cinq autres n'ont rien à voir avec l'édition. Aucune règle du backend n'est recopiée.
     let ecranComplet = true;
     try {
-      if (typeof rafraichirRessourceAdmin === 'function') await rafraichirRessourceAdmin('dossierAutorisation');
+      if (typeof rafraichirRessourceAdmin === 'function' &&
+          !await rafraichirRessourceAdmin('dossierAutorisation')) ecranComplet = false;
       if (typeof majSurPlace === 'function') majSurPlace();
       if (typeof majReponse === 'function') majReponse();
       if (typeof majApercuInvitation === 'function') majApercuInvitation();
@@ -1707,9 +1825,12 @@ async function onReinitialiser() {
     } catch (erreurEcrans) {
       ecranComplet = false;
     }
-    // Après le rechargement (comme avant le refactor) : en cas d'erreur réseau,
-    // l'affichage — pistes d'arbitrage comprises — reste intact.
+    // Après le rechargement (comme avant le refactor) : en cas d'erreur réseau, l'affichage reste intact.
     document.getElementById('arbitrages').innerHTML = '';
+
+    const toutRelu = clubsRelus && ecranComplet;
+    const finEcran = toutRelu ? '' : ' ⚠️ L\'écran n\'a pas pu être entièrement rafraîchi (réseau) : ' +
+      'recharge la page pour le voir à jour.';
 
     if (incertaine) {
       // La relecture dit ce qui s'est passé : un tournoi vidé (ni catégorie, ni équipe) → elle a eu lieu.
@@ -1721,28 +1842,79 @@ async function onReinitialiser() {
         'Rien n’est renvoyé automatiquement. ' + (faite
         ? 'Relecture faite : le tournoi est vide — elle a bien eu lieu.'
         : 'Relecture faite : le tournoi est toujours là — elle n’a pas eu lieu ; tu peux recommencer.') +
-        ((clubsRelus && ecranComplet) ? '' : ' ⚠️ L\'écran n\'a pas pu être entièrement rafraîchi (réseau) : recharge la page.'),
-        faite ? 'ok' : 'ko');
+        finEcran, faite ? 'ok' : 'ko');
       return;
     }
 
+    /* ⭐ LES AVERTISSEMENTS DU SERVEUR SONT AFFICHÉS, et ils ne dégradent pas un succès partiel en
+       succès total. ⛔ `avertissement_drive`, `avertissement_acces` et `avertissement_edition`
+       étaient auparavant ignorés en silence — l'organisateur pouvait croire l'ancien lien invalidé
+       alors que l'édition n'avait pas tourné. */
+    const alertes = avertissementsReinitialisation(res);
     const nbC = (res && res.nb_categories != null) ? res.nb_categories : '?';
     const nbE = (res && res.nb_equipes != null) ? res.nb_equipes : '?';
     const nbP = (res && res.nb_poules != null) ? res.nb_poules : '?';
     const nbM = (res && res.nb_matchs != null) ? res.nb_matchs : '?';
-    // ⚠️ Si une relecture a échoué, la réinitialisation a bel et bien eu lieu côté serveur : on le
-    // dit, et on dit aussi que l'écran, lui, est incomplet — jamais l'inverse.
-    const toutRelu = clubsRelus && ecranComplet;
-    afficherMessage(message,
-      '✅ Tournoi réinitialisé. Supprimés : ' + nbC + ' catégorie(s), ' + nbE +
-      ' équipe(s), ' + nbP + ' poule(s), ' + nbM + ' match(s). Tournoi masqué.' +
-      (toutRelu ? '' : ' ⚠️ L\'écran n\'a pas pu être entièrement rafraîchi (réseau) : ' +
-       'recharge la page pour le voir à jour.'), toutRelu ? 'ok' : 'ko');
+    /* ⭐ LE MESSAGE DIT CE QUE LE SERVEUR A FAIT, pas ce qu'on lui a demandé. Un classeur DÉJÀ
+       réinitialisé ne produit plus « ✅ Supprimés : 0 catégorie(s)… ». ⭐ Et `deja_reinitialise` ne
+       vaut désormais vrai QUE si AUCUN effet n'a eu lieu — clôture d'accès et rotation d'édition
+       comprises (contre-épreuve). */
+    const corps = (res && res.deja_reinitialise)
+      ? 'ℹ️ Le tournoi était déjà réinitialisé : rien n’a été effacé, aucun accès n’a été clôturé et ' +
+        'aucune nouvelle édition n’a été ouverte. Le classeur est bien vide.'
+      : '✅ Tournoi réinitialisé. Supprimés : ' + nbC + ' catégorie(s), ' + nbE + ' équipe(s), ' + nbP +
+        ' poule(s), ' + nbM + ' match(s). Tournoi masqué.' +
+        /* ⭐ LE COMPTE DIT DEUX CHOSES DISTINCTES, et les confondre serait mentir : combien de
+           fichiers sont RÉELLEMENT à la corbeille, et combien de références le classeur a pu
+           effacer ensuite (phase C). ⛔ Un fichier jeté dont la référence survit n'est pas un
+           nettoyage réussi — l'avertissement de réconciliation le dit juste après. */
+        (res && res.drive
+          ? ' Fichiers Drive mis à la corbeille : ' + res.drive.corbeille + '/' + res.drive.planifies +
+            (res.drive.references_effacees !== res.drive.corbeille
+              ? ' (références effacées : ' + res.drive.references_effacees + ').'
+              : '.')
+          : '');
+    afficherMessage(message, corps + (alertes.length ? ' ' + alertes.join(' ') : '') + finEcran,
+      (alertes.length || !toutRelu) ? 'ko' : 'ok');
   } catch (erreur) {
+    /* ⭐ L'ÉTAT PÉRIMÉ — un refus, pas une panne, et il se dit autrement.
+       ⛔ RIEN n'a été effacé (le serveur refuse avant sa première écriture) : le message le DIT en
+       premier, nomme le conflit, et ⛔ ne propose AUCUN écrasement automatique ni aucun renvoi.
+       ⭐ L'écran est ensuite RELU — c'est la condition d'une reprise honnête : le clic suivant
+       repartira d'une NOUVELLE PRÉPARATION, donc d'un jeton frais. */
+    const refus = erreur && erreur.reponse;
+    if (refus && refus.code === 'etat_perime') {
+      let relu = false;
+      try {
+        clubsInvitesCourants = [];
+        if (typeof invaliderAutorisationAffichee === 'function') invaliderAutorisationAffichee();
+        if (typeof invaliderConformiteFFRAffichee === 'function') invaliderConformiteFFRAffichee();
+        if (typeof rafraichirRessourceAdmin === 'function') await rafraichirRessourceAdmin('clubsInvites');
+        await rechargerEtRendre({ reglages: true, terrains: true, selectCats: true,
+                                  equipes: true, infos: true, publication: true });
+        relu = true;
+      } catch (erreurRelecture) { relu = false; }
+      /* ⛔ Le message du serveur DIT DÉJÀ que rien n'a été effacé : le préfixer le répéterait. */
+      afficherMessage(message, '⛔ ' + erreur.message +
+        (relu ? ' L’écran vient d’être relu : il montre maintenant le tournoi tel qu’il est.'
+              : ' ⚠️ L’écran n’a PAS pu être relu (réseau) : recharge la page avant de recommencer.'), 'ko');
+      return;
+    }
+    /* ⛔ UNE ERREUR APRÈS LE DÉBUT D'UNE MUTATION N'EST PAS UNE ERREUR CERTAINE : le serveur l'avoue
+       (`etat_incertain`), et l'écran doit le répéter au lieu de laisser croire que rien n'a bougé. */
+    if (refus && refus.etat_incertain === true) {
+      afficherMessage(message, '⚠️ ' + erreur.message + ' L’effacement avait COMMENCÉ : l’état du ' +
+        'tournoi est peut-être PARTIEL. Rien n’est renvoyé automatiquement — recharge la page pour ' +
+        'voir l’état réel, puis relance la réinitialisation si nécessaire.', 'ko');
+      return;
+    }
     afficherMessage(message, '⚠️ ' + erreur.message, 'ko');
   } finally {
+    // ⛔ SUR TOUS LES CHEMINS — succès, annulation, refus, erreur, délai : le bouton redevient
+    //    cliquable et la garde est rendue. Un bouton mort serait un écran inutilisable.
     bouton.disabled = false;
     bouton.textContent = texteBouton;
+    reinitialisationEnCours = false;
   }
 }
 

@@ -1882,10 +1882,15 @@ async function principal() {
       surMesure: async function () {
         /* ⚠️ Pas de redéclaration du budget : `const` partage la portée lexicale du contexte vm,
            et la fonction mutée y résout donc la constante d'origine. */
+        /* ⭐ Lot « Réinitialiser » (24/09/2026) — L'ANCRE SUIT LE CODE, LA MUTATION NE BOUGE PAS.
+           `rechargerEtRendre` accepte désormais un état DÉJÀ relu par le serveur (`opt.etat`), et
+           sa ligne de config s'écrit sur trois lignes. ⛔ Le mutant est le MÊME au caractère près :
+           écrire `equipesCourantes` AVANT la seconde lecture, donc laisser une réussite partielle
+           silencieuse. ⛔ Rien n'est assoupli — seule l'ancre textuelle est réalignée. */
         const MUTANT = substituer(bloc(F_ADMIN, 'async function rechargerEtRendre('),
-            '  const cfg = besoinConfig ? await lireConfigAdmin(undefined, budget) : null;',
+            '  const cfg = !besoinConfig ? null',
             '  equipesCourantes = data.equipes;\n' +
-            '  const cfg = besoinConfig ? await lireConfigAdmin(undefined, budget) : null;', 'mutant Z.13');
+            '  const cfg = !besoinConfig ? null', 'mutant Z.13');
         const b = bac();
         vm.runInContext(MUTANT, b.ctx);
         b.ctx.equipesCourantes = [{ id_equipe: 'AVANT' }];

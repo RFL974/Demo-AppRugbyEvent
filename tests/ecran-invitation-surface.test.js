@@ -761,7 +761,10 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
     [r2.resume, ligne(b, 'CLAMART')]);
     const r3 = await reinit(b);
     const classeur = json(['ClubsInvites', 'Equipes'].map((o) => b.srv.appeler('lireOngletSimple', b.srv.classeur, o)));
-    t.vrai(r3.attendues[0].action === 'reinitialiserTournoi' && !ligne(b, 'CLAMART').club_nom && classeur.indexOf('demo-racing-') === -1 &&
+    /* ⭐ CORRECTION DU LOT « RÉINITIALISER » : une PRÉPARATION en lecture seule précède désormais
+       l'écriture. ⛔ Ce que ce contrôle protège est inchangé : le club fictif et toutes ses données
+       disparaissent, le club réel garde son contact. On cherche donc l'ÉCRITURE, pas la première émission. */
+    t.vrai(r3.attendues.some((q) => q.action === 'reinitialiserTournoi') && !ligne(b, 'CLAMART').club_nom && classeur.indexOf('demo-racing-') === -1 &&
       classeur.indexOf('example.invalid') === -1 && classeur.indexOf('modifie.example.org') === -1 && b.srv.equipes().length === 0 &&
       !ecrans(b).clubs.some((c) => c.nom === 'CLAMART') && ligne(b, 'CLUB REEL').club_contact_email === 'contact@club-reel.example.org',
     'J.4 réinitialisation depuis l\'écran : le club fictif et toutes ses données ont disparu ; le club réel reste, contact intact',
@@ -830,7 +833,7 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
     const r = await b.jouer(() => b.global('onReinitialiser')());
     const v = ecrans(b);
     const fictifs = (json(['Clubs', 'Participations', 'Equipes'].map((o) => b.srv.appeler('lireOngletSimple', b.srv.classeur, o))).match(/example\.invalid/g) || []).length;
-    t.vrai(avantReset.equipes.length === 21 && avantReset.clubs.length === 12 && r.attendues[0].action === 'reinitialiserTournoi' && v.clubs.length === 0 && v.suivi.length === 0 && v.equipes.length === 0 &&
+    t.vrai(avantReset.equipes.length === 21 && avantReset.clubs.length === 12 && r.attendues[0].action === 'preparerReinitialisation' && r.attendues.some((q) => q.action === 'reinitialiserTournoi') && v.clubs.length === 0 && v.suivi.length === 0 && v.equipes.length === 0 &&
       b.srv.equipes().length === 0 && fictifs === 0, 'R.1 réinitialiser depuis l\'écran : Clubs invités, Suivi, Équipes vides ; plus aucune donnée fictive du jeu dans le classeur',
     [r.resume, v.clubs.length, v.equipes.length, fictifs]);
     // ⭐ 4ᵉ passage : réinitialisation BORNÉE (3 min), jamais renvoyée ; issue inconnue → relecture complète, message honnête.
@@ -854,8 +857,9 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
       [z.rr.resume, z.emissions.map((q) => q.delaiMs), z.msg, z.x.srv.equipes().length, z.e.equipes.length]);
     }
     const occupe = await resetAvecPanne('verrou-occupe');
-    t.vrai(actions(occupe.rr).join() === 'reinitialiserTournoi' && /occupé/.test(occupe.msg) && occupe.x.srv.equipes().length === 21 && occupe.e.equipes.length === 21,
-      'R.5 refus lisible (verrou occupé) : rien effacé, message du serveur tel quel, aucune relecture', [occupe.rr.resume, occupe.msg]);
+    t.vrai(actions(occupe.rr).join() === 'preparerReinitialisation,reinitialiserTournoi' && /occupé/.test(occupe.msg) &&
+      occupe.x.srv.equipes().length === 21 && occupe.e.equipes.length === 21,
+      'R.5 refus lisible (verrou occupé) : rien effacé, message du serveur tel quel, aucune relecture — ⭐ et la PRÉPARATION, qui ne prend aucun verrou, a bien précédé', [occupe.rr.resume, occupe.msg]);
   });
 
   /* ============================== Q — la réponse porte ce que l'écran relisait (4ᵉ passage) ============================== */
@@ -900,7 +904,13 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
       t.vrai(actions(rc).filter((a) => a !== action).join() === relecture && visible(c) && etatEcran(c) === etatServeur(c),
         code + '.R même geste, réponse SANS les listes (backend d\'avant) : relecture comme avant (' + relecture.split(',').join(' + ') + '), même état final', rc.resume);
     }
-    // Réinitialisation : hors du mécanisme (le verrou d'une réinitialisation n'est pas allongé) — sa relecture ne change pas.
+    /* Réinitialisation : HORS DU MÉCANISME DE CE LOT-CI, et elle l'est restée.
+       ⭐ LE FAIT NOUVEAU (lot « Réinitialiser », 24/09/2026) : `onReinitialiser` demande désormais SON
+       état relu (`renvoyer_etat`) et envoie sa précondition. ⛔ Ce que ce lot-ci exige n'est PAS que
+       sa demande soit figée — c'est que la LISTE DES CLUBS continue d'être RELUE par une requête à
+       part, et exactement UNE fois : la joindre à la réponse allongerait le verrou d'une
+       réinitialisation sans épargner une requête que quiconque attende. Le contrôle porte donc sur ce
+       qu'il protège, et énonce le reste tel qu'il est. */
     const reset = async (panne) => {
       const b = await banc({ panne });
       await b.demo();
@@ -910,10 +920,16 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
       return { b, r };
     };
     const z = await reset();
-    t.vrai(actions(z.r)[0] === 'reinitialiserTournoi' && z.r.requetes[0].corps.renvoyer_etat === undefined &&
+    /* ⭐ CORRECTION DU LOT « RÉINITIALISER » (24/09/2026) : la chaîne commence désormais par une
+       PRÉPARATION en lecture seule (le jeton d'état, qui remplace une précondition cardinale
+       aveugle au contenu). ⛔ Ce que ce lot-ci protège n'en dépend pas : la LISTE DES CLUBS ne doit
+       jamais être jointe à une réponse de réinitialisation, et rester relue par UNE requête à part. */
+    const ecritureReset = z.r.requetes.filter((q) => (q.corps || {}).action === 'reinitialiserTournoi')[0];
+    t.vrai(actions(z.r)[0] === 'preparerReinitialisation' && !!ecritureReset &&
+      ecritureReset.reponse.clubs === undefined && ecritureReset.reponse.equipes === undefined &&
       actions(z.r).filter((a) => a === 'listerClubsInvites').length === 1 && z.b.clubsAffiches().length === 0 &&
       json(z.b.global('clubsInvitesCourants')) === json(z.b.srv.clubs()),
-    'Q.7 réinitialiser : inchangé (la demande n\'est pas envoyée, la liste des clubs est relue comme avant)', z.r.resume);
+    'Q.7 réinitialiser : ⛔ la liste des clubs n\'est JAMAIS jointe à sa réponse — elle est relue par UNE requête à part, comme avant', z.r.resume);
   });
 
   /* ============================== Y — e-mails hors verrou (5ᵉ passage) ============================== */
