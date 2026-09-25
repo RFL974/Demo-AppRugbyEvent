@@ -103,6 +103,57 @@ function planTerrainsPourDossier(plan) {
   };
 }
 
+/**
+ * Aligne l'instantané du dossier sur les grands terrains que l'organisateur vient d'enregistrer.
+ *
+ * Les mini-terrains restent ceux du dernier placement validé ; leur repère est celui du grand
+ * terrain. Modifier X, Y ou l'orientation du grand terrain déplace donc le même ensemble dans le
+ * dossier, sans recalculer ni réinventer la répartition et sans second appel réseau.
+ */
+function synchroniserPlanTerrainsDossier(planExistant, terrains, reglages) {
+  let ancien = planExistant;
+  if (typeof ancien === 'string') {
+    try { ancien = ancien.trim() ? JSON.parse(ancien) : null; } catch (e) { ancien = null; }
+  }
+  const anciens = ancien && Number(ancien.version) === 1 && Array.isArray(ancien.fields)
+    ? ancien.fields : [];
+  // Tant qu'aucune répartition n'a été appliquée, il n'existe pas encore de plan club à publier.
+  // Enregistrer seulement les caractéristiques des grands terrains ne doit pas fabriquer un plan
+  // vide qui apparaîtrait prématurément dans le dossier.
+  if (!anciens.length) return null;
+  const utilises = {};
+  const cle = function (v) { return String(v || '').trim().toLocaleLowerCase('fr'); };
+  const prendreAncien = function (terrain, index) {
+    const code = cle(terrain && terrain.code), nom = cle(terrain && terrain.nom);
+    let trouve = -1;
+    anciens.some(function (fp, i) {
+      if (utilises[i]) return false;
+      const f = (fp && fp.field) || {};
+      if ((code && (cle(fp.code) === code || cle(f.code) === code)) || (nom && cle(f.nom) === nom)) {
+        trouve = i; return true;
+      }
+      return false;
+    });
+    if (trouve < 0 && anciens[index] && !utilises[index]) trouve = index;
+    if (trouve < 0) return null;
+    utilises[trouve] = true;
+    return anciens[trouve];
+  };
+  const fieldsPlan = (Array.isArray(terrains) ? terrains : []).map(function (terrain, index) {
+    const precedent = prendreAncien(terrain, index) || {};
+    return {
+      code: String((terrain && terrain.code) || ''),
+      field: Object.assign({}, terrain || {}),
+      zones: Array.isArray(precedent.zones) ? precedent.zones : []
+    };
+  });
+  const r = reglages || {};
+  return planTerrainsPourDossier({
+    fieldsPlan: fieldsPlan,
+    ctxManuel: { m: r.couloir, tmL: r.tmL, tmW: r.tmW }
+  });
+}
+
 function echapperPackTerrains_(valeur) {
   if (typeof echapper === 'function') return echapper(String(valeur == null ? '' : valeur));
   return String(valeur == null ? '' : valeur).replace(/[&<>"']/g, function (c) {
@@ -197,6 +248,11 @@ function couleurPdfTerrains_(PDFLib, valeur, repli) {
   if (!m) return repli;
   const n = parseInt(m[1], 16);
   return PDFLib.rgb(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+}
+
+function anglePdfTerrains_(valeur) {
+  const n = nombrePackTerrains_(valeur);
+  return ((n % 360) + 360) % 360;
 }
 
 function metadonneesPackTerrains_() {
@@ -311,14 +367,25 @@ function dessinerPlanCotePackTerrains_(doc, fonts, meta, fp, plan, lib) {
     x: 36, y: hauteur - 92, size: 22, font: fonts.bold, color: lib.rgb(0.04, 0.12, 0.22)
   });
   page.drawText(textePdfTerrains_((fp.code || f.code || '') + ' - ' + nombrePackTerrains_(f.L) + ' x ' +
-    nombrePackTerrains_(f.W) + ' m'), { x: 36, y: hauteur - 113, size: 11, font: fonts.normal,
+    nombrePackTerrains_(f.W) + ' m - orientation ' + anglePdfTerrains_(f.rot) + ' degres'),
+  { x: 36, y: hauteur - 113, size: 11, font: fonts.normal,
     color: lib.rgb(0.31, 0.39, 0.47) });
 
   const zone = { x: 36, y: 68, w: 594, h: 382 };
-  const echelle = Math.min(zone.w / Math.max(1, Number(f.L)), zone.h / Math.max(1, Number(f.W)));
+  const angle = anglePdfTerrains_(f.rot), radians = angle * Math.PI / 180;
+  const cos = Math.cos(radians), sin = Math.sin(radians);
+  const boiteW = Math.abs(Number(f.L) * cos) + Math.abs(Number(f.W) * sin);
+  const boiteH = Math.abs(Number(f.L) * sin) + Math.abs(Number(f.W) * cos);
+  const echelle = Math.min(zone.w / Math.max(1, boiteW), zone.h / Math.max(1, boiteH));
   const fw = Number(f.L) * echelle, fh = Number(f.W) * echelle;
-  const cadre = { x: zone.x + (zone.w - fw) / 2, y: zone.y + (zone.h - fh) / 2,
-    w: fw, h: fh, hM: Number(f.W) };
+  const centreX = zone.x + zone.w / 2, centreY = zone.y + zone.h / 2;
+  const translationX = centreX - cos * fw / 2 + sin * fh / 2;
+  const translationY = centreY - sin * fw / 2 - cos * fh / 2;
+  const cadre = { x: 0, y: 0, w: fw, h: fh, hM: Number(f.W) };
+  // Le PDF utilise le même angle que la carte et le dossier. Une matrice unique englobe le grand
+  // terrain, ses mini-terrains, la table et les cotes : aucune sortie ne peut diverger localement.
+  page.pushOperators(lib.pushGraphicsState(),
+    lib.concatTransformationMatrix(cos, sin, -sin, cos, translationX, translationY));
   page.drawRectangle({ x: cadre.x, y: cadre.y, width: fw, height: fh,
     color: lib.rgb(0.20, 0.49, 0.28), borderColor: lib.rgb(0.04, 0.12, 0.22), borderWidth: 1.4 });
   (fp.zones || []).forEach(function (z) {
@@ -342,6 +409,7 @@ function dessinerPlanCotePackTerrains_(doc, fonts, meta, fp, plan, lib) {
     thickness: 0.8, color: lib.rgb(0.12, 0.18, 0.23) });
   page.drawText(nombrePackTerrains_(f.W) + ' m', { x: cadre.x - 31, y: cadre.y + fh / 2,
     size: 9, rotate: lib.degrees(90), font: fonts.bold, color: lib.rgb(0.12, 0.18, 0.23) });
+  page.pushOperators(lib.popGraphicsState());
 
   const panneauX = 660;
   page.drawRectangle({ x: panneauX, y: 68, width: 146, height: 382, color: lib.rgb(0.96, 0.98, 1),
@@ -357,7 +425,7 @@ function dessinerPlanCotePackTerrains_(doc, fonts, meta, fp, plan, lib) {
   };
   ligneInfo('Surface', f.nature || f.type || 'Non précisée');
   ligneInfo('Couloir', nombrePackTerrains_((plan.ctxManuel || {}).m) + ' m entre mini-terrains');
-  ligneInfo('Orientation', nombrePackTerrains_(f.rot) + ' degrés sur le plan du site');
+  ligneInfo('Orientation', angle + ' degrés sur le plan du site');
   const toutes = [];
   (fp.zones || []).forEach(function (z) { (z.tiles || []).forEach(function (t) { toutes.push({ z: z, t: t }); }); });
   ligneInfo('Mini-terrains', String(toutes.length));
@@ -567,6 +635,7 @@ if (typeof module !== 'undefined' && module.exports) {
     htmlSortiesTerrains: htmlSortiesTerrains,
     genererPackTerrainsPdf: genererPackTerrainsPdf,
     planTerrainsPourDossier: planTerrainsPourDossier,
+    synchroniserPlanTerrainsDossier: synchroniserPlanTerrainsDossier,
     dataUriEnOctets: dataUriEnOctets_
   };
 }

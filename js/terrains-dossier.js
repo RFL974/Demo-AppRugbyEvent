@@ -34,7 +34,11 @@
         x: nombre(f.x), y: nombre(f.y), rot: nombre(f.rot)
       }, zones: zones };
     }).filter(Boolean);
-    return fields.length ? { version: 1, fields: fields } : null;
+    const optionNombre = function (nom) {
+      return Object.prototype.hasOwnProperty.call(plan, nom) ? Math.max(0, nombre(plan[nom])) : null;
+    };
+    return fields.length ? { version: 1, fields: fields,
+      couloir: optionNombre('couloir'), tableL: optionNombre('tableL'), tableW: optionNombre('tableW') } : null;
   }
 
   function texteCentreSvg_(texte, x, y, taille, classe) {
@@ -51,15 +55,21 @@
   /** Plan coté : le viewBox conserve exactement le rapport physique L/W. */
   function planSvg_(fp, index) {
     const f = fp.field, marge = Math.max(7, Math.min(f.L, f.W) * .12);
-    const vbW = f.L + marge * 2, vbH = f.W + marge * 2, motif = 'd-gazon-' + index;
+    const sourceW = f.L + marge * 2, sourceH = f.W + marge * 2;
+    const angle = ((nombre(f.rot) % 360) + 360) % 360, radians = angle * Math.PI / 180;
+    const vbW = nombre(Math.abs(sourceW * Math.cos(radians)) + Math.abs(sourceH * Math.sin(radians)));
+    const vbH = nombre(Math.abs(sourceW * Math.sin(radians)) + Math.abs(sourceH * Math.cos(radians)));
+    const motif = 'd-gazon-' + index;
     let svg = '<svg class="d-plan-svg" viewBox="0 0 ' + vbW + ' ' + vbH + '" role="img" '
       + 'aria-labelledby="d-plan-titre-' + index + ' d-plan-desc-' + index + '" preserveAspectRatio="xMidYMid meet">'
       + '<title id="d-plan-titre-' + index + '">' + esc('Plan coté — ' + f.nom) + '</title>'
       + '<desc id="d-plan-desc-' + index + '">' + esc('Grand terrain de ' + f.L + ' par ' + f.W + ' mètres avec '
-        + nbMini_(fp) + ' mini-terrain(s) validé(s).') + '</desc>'
+        + nbMini_(fp) + ' mini-terrain(s) validé(s), orientation ' + angle + ' degrés.') + '</desc>'
       + '<defs><linearGradient id="' + motif + '" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#79a967"/>'
       + '<stop offset="1" stop-color="#4f874f"/></linearGradient><pattern id="' + motif + '-bandes" width="18" height="18" '
       + 'patternUnits="userSpaceOnUse"><rect width="9" height="18" fill="#fff" opacity=".035"/></pattern></defs>'
+      + '<g class="d-plan-orientation" transform="translate(' + nombre(vbW / 2) + ' ' + nombre(vbH / 2) + ') rotate('
+      + angle + ') translate(' + nombre(-sourceW / 2) + ' ' + nombre(-sourceH / 2) + ')">'
       + '<rect class="d-plan-fond" x="' + marge + '" y="' + marge + '" width="' + f.L + '" height="' + f.W
       + '" rx="1.4" fill="url(#' + motif + ')"/><rect x="' + marge + '" y="' + marge + '" width="' + f.L
       + '" height="' + f.W + '" fill="url(#' + motif + '-bandes)"/>'
@@ -94,7 +104,7 @@
       + '<line class="d-plan-cote" x1="' + (marge - 3) + '" y1="' + marge + '" x2="' + (marge - 3) + '" y2="'
       + (marge + f.W) + '"/><text x="' + (marge - 5.2) + '" y="' + (marge + f.W / 2) + '" text-anchor="middle" '
       + 'font-size="3.5" class="d-plan-cote-label" transform="rotate(-90 ' + (marge - 5.2) + ' ' + (marge + f.W / 2)
-      + ')">' + esc(f.W + ' m') + '</text></svg>';
+      + ')">' + esc(f.W + ' m') + '</text></g></svg>';
     return svg;
   }
 
@@ -145,7 +155,8 @@
   }
 
   function articlePlan_(fp, index, classe) {
-    const f = fp.field, meta = [f.type, f.nature].filter(Boolean), categories = categories_(fp);
+    const f = fp.field, angle = ((nombre(f.rot) % 360) + 360) % 360;
+    const meta = [f.type, f.nature, 'Orientation ' + angle + '°'].filter(Boolean), categories = categories_(fp);
     return '<article class="d-plan-terrain' + (classe ? ' ' + classe : '') + '"><header class="d-plan-entete">'
       + '<button type="button" class="d-plan-retour no-print" data-plan-retour>←&nbsp; Vue globale</button>'
       + '<div class="d-plan-identite"><h3 id="d-plan-detail-titre-' + index + '">' + esc((f.code ? f.code + ' · ' : '') + f.nom

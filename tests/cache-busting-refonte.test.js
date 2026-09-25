@@ -53,12 +53,13 @@ function vrai(valeur, message) { assert.ok(valeur, message); controles++; }
 
 const VERSION = 'refonte-ciel-verre-20260920';
 const VERSIONS_PROPRES = {
+  'css/styles.css': 'refonte-ciel-verre-20260920-terrain-orientation1',
   'css/dossier.css': 'refonte-ciel-verre-20260925-dossier-final4',
   'css/theme-r92.css': 'refonte-ciel-verre-20260925-dossier-final1',
   'js/admin-autorisation.js': VERSION + '-participants3-dps1-municipal1',
   'js/admin-dps.js': VERSION + '-dps2',
-  'js/admin-terrains.js': 'refonte-ciel-verre-20260925-dossier-plans1',
-  'js/admin-terrains-pdf.js': 'refonte-ciel-verre-20260925-dossier-plans2',
+  'js/admin-terrains.js': 'refonte-ciel-verre-20260925-terrain-orientation1',
+  'js/admin-terrains-pdf.js': 'refonte-ciel-verre-20260925-terrain-orientation1',
   'js/admin-invitations.js': 'refonte-ciel-verre-20260925-dossier-final2',
   'js/admin-suivi-clubs.js': VERSION + '-participants2',
   'js/admin.js': VERSION + '-participants3-municipal1',
@@ -68,7 +69,7 @@ const VERSIONS_PROPRES = {
   'js/admin-municipal.js': VERSION + '-municipal2',
   'js/reponse.js': VERSION + '-participants2-reponse1',
   'js/dossier.js': 'refonte-ciel-verre-20260925-dossier-final5',
-  'js/terrains-dossier.js': 'refonte-ciel-verre-20260925-plans2'
+  'js/terrains-dossier.js': 'refonte-ciel-verre-20260925-terrain-orientation1'
 };
 
 /** Le recensement des fichiers livrés par la refonte. */
@@ -180,8 +181,8 @@ const PUBLIQUES = ['index.html', 'tournoi.html', 'perfs.html'];
 const EPINGLES = [
   ['css/sponsors.css', '?v=refonte-ciel-verre-20260920',
     'f68723568bbd8145e9d9c2a28c88a2306cbdabfb46eba54d6e116ba1dd375545'],
-  ['css/styles.css', '?v=refonte-ciel-verre-20260920',
-    '5be9e18c803daed289b26b45ea1ddc54ed91fd3fbb71227fe8e9bf68bc22b9e7'],
+  ['css/styles.css', '?v=refonte-ciel-verre-20260920-terrain-orientation1',
+    '582991130ac28417eadd42a9558758a91a23ff694aa763089a7be8b2c15b320f'],
   ['css/tokens.css', '?v=refonte-ciel-verre-20260920',
     '59609c6375098bc54a7fe6d8fd706f5e2e9150b91b52461944203fe43ffa13dc'],
   ['css/tournoi-public.css', '?v=refonte-ciel-verre-20260920',

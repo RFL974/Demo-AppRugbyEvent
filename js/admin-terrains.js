@@ -303,6 +303,11 @@ function injecterTerrains() {
 
   zone.innerHTML = h;
 
+  // Une répartition appliquée ne doit pas disparaître quand on revient sur l'onglet. Elle est
+  // restaurée depuis le même instantané que le dossier final : mêmes grands terrains, mêmes
+  // mini-terrains, mêmes positions et mêmes orientations, sans aucune lecture réseau de plus.
+  restaurerRepartitionEnregistree();
+
   // Zone (re)construite depuis l'état ENREGISTRÉ → nouvelle référence pour le
   // détecteur de « modifications non enregistrées » de l'assistant.
   if (typeof assistantMarquerPropre === 'function') assistantMarquerPropre(zone);
@@ -623,6 +628,15 @@ async function onEnregistrerPlanTerrains() {
     tm_longueur_m:          String(tm.l),
     tm_largeur_m:           String(tm.w)
   };
+  // Une seule source de vérité : le même clic qui enregistre position et orientation des grands
+  // terrains réaligne l'instantané du dossier. Les mini-terrains restent dans le repère local de
+  // leur grand terrain ; déplacer ou tourner celui-ci les déplace donc partout de la même façon.
+  if (typeof synchroniserPlanTerrainsDossier === 'function') {
+    const planDossier = synchroniserPlanTerrainsDossier(
+      (configCourante.global || {}).plan_terrains_visuel, terrains,
+      { couloir: couloir, tmL: tm.l, tmW: tm.w });
+    if (planDossier) data.plan_terrains_visuel = JSON.stringify(planDossier);
+  }
   const texte = bouton.textContent;
   bouton.disabled = true; bouton.textContent = 'Enregistrement…';
   try {
@@ -1083,6 +1097,71 @@ function onRepartir() {
   afficherRepartition(repartitionCalculee, cats);
 }
 
+/**
+ * Recharge la dernière répartition APPLIQUÉE dans l'éditeur Terrains.
+ *
+ * `plan_terrains_visuel` était déjà enregistré pour le dossier, mais l'éditeur ne le relisait pas :
+ * revenir sur l'onglet montrait donc un cadre vide et « Répartir » recalculait une autre disposition.
+ * On reconstruit ici l'état éditable depuis cet instantané, puis on recrée seulement les tables de
+ * marque (elles ne sont volontairement jamais exposées au dossier club).
+ */
+function restaurerRepartitionEnregistree() {
+  if (typeof lirePlanTerrainsDossier !== 'function') return false;
+  const g = configCourante.global || {};
+  const plan = lirePlanTerrainsDossier(g.plan_terrains_visuel);
+  if (!plan || !plan.fields.length) return false;
+
+  const courants = lireTerrainsDuFormulaire();
+  const parCode = {};
+  courants.forEach(function (f) { parCode[String(f.code || '').trim().toUpperCase()] = f; });
+  const dims = lireDimensionsDuFormulaire(), teams = equipesParCategorie();
+  const cats = categoriesPresentes().map(function (nom) {
+    return { name: nom, teams: teams[nom] || 0, tile: gabaritCategorie(dims[nom]) };
+  }).filter(function (c) { return c.tile && (c.tile.plein || (c.tile.l > 0 && c.tile.w > 0)); });
+  const parCategorie = {}, couleurs = {};
+  cats.forEach(function (c, i) { parCategorie[c.name] = []; couleurs[c.name] = PALETTE_CAT[i % PALETTE_CAT.length]; });
+
+  const fieldsPlan = plan.fields.map(function (fp, index) {
+    const champ = Object.assign({}, fp.field || {});
+    const actuel = parCode[String(fp.code || champ.code || '').trim().toUpperCase()] || courants[index];
+    // Pour les anciens instantanés, la fiche enregistrée gagne déjà sur l'ancienne position :
+    // l'écran et le dossier convergent dès le prochain clic « Enregistrer les terrains ».
+    if (actuel) Object.assign(champ, actuel);
+    const zones = (fp.zones || []).map(function (z, zi) {
+      const couleur = String(z.color || couleurs[z.cat] || PALETTE_CAT[zi % PALETTE_CAT.length]);
+      couleurs[z.cat] = couleur;
+      if (!parCategorie[z.cat]) parCategorie[z.cat] = [];
+      const tiles = (z.tiles || []).map(function (t) {
+        const copie = Object.assign({}, t, { label: String(t.label || t.id || '') });
+        parCategorie[z.cat].push(String(copie.id || ''));
+        return copie;
+      });
+      return { cat: z.cat, color: couleur, tiles: tiles, table: null };
+    });
+    const categorie = zones.length === 1
+      ? cats.find(function (c) { return c.name === zones[0].cat; }) : null;
+    return { code: String(fp.code || champ.code || ''), field: champ,
+      mode: zones.length > 1 ? 'split' : (categorie && categorie.tile.plein ? 'plein' : 'solo'), zones: zones };
+  });
+  repartitionCalculee = {
+    fieldsPlan: fieldsPlan, parCategorie: parCategorie, couleur: couleurs, avert: [],
+    ctxManuel: { cats: cats, m: nombrePlanTerrain_(plan.couloir, lireCouloir()),
+      tmL: nombrePlanTerrain_(plan.tableL, lireTailleTM().l), tmW: nombrePlanTerrain_(plan.tableW, lireTailleTM().w) },
+    misDeCote: [], restauree: true
+  };
+  initialiserTablesMarquesLibres(repartitionCalculee);
+  empreintePlacementTerrainsValide = '';
+  afficherRepartition(repartitionCalculee, cats);
+  return true;
+}
+
+/** Nombre positif du plan, avec repli explicite sur la configuration courante. */
+function nombrePlanTerrain_(valeur, repli) {
+  if (valeur == null || valeur === '') return repli;
+  const n = Number(valeur);
+  return Number.isFinite(n) && n >= 0 ? n : repli;
+}
+
 /** Une table par grand terrain, visible immédiatement et indépendante du packing des mini-terrains. */
 function initialiserTablesMarquesLibres(res) {
   const ctx = res.ctxManuel || {};
@@ -1125,6 +1204,12 @@ function afficherRepartition(res, cats) {
   }
   const teams = equipesParCategorie();
   let h = '<h3 class="terr-titre">Résultat de la répartition</h3>';
+
+  if (res.restauree) {
+    h += '<p class="repart-enregistree"><strong>Répartition enregistrée restaurée.</strong> ' +
+      'Les grands terrains et les mini-terrains reprennent le placement et l’orientation appliqués. ' +
+      'Valide le placement avant de l’appliquer à nouveau.</p>';
+  }
 
   h += '<ul class="repart-resume">';
   cats.forEach(function (c) {

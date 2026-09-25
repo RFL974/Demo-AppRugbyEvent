@@ -6,7 +6,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const racine = path.join(__dirname, '..');
 const lire = rel => fs.readFileSync(path.join(racine, rel), 'utf8');
-const { planTerrainsPourDossier } = require('../js/admin-terrains-pdf.js');
+const { planTerrainsPourDossier, synchroniserPlanTerrainsDossier } = require('../js/admin-terrains-pdf.js');
 const { lirePlanTerrainsDossier, htmlPlansTerrainsDossier } = require('../js/terrains-dossier.js');
 
 let controles = 0;
@@ -47,9 +47,27 @@ vrai(publie.fields[0].zones[0].tiles[0].eb === 5 && !('table' in publie.fields[0
 vrai(!('misDeCote' in publie) && !('ctxManuel' in publie) && !('poignées' in publie.fields[0]),
   'aucun état interne de l’éditeur ne sort dans le dossier');
 
+const synchronise = synchroniserPlanTerrainsDossier(JSON.stringify(publie), [
+  { nom: 'Rugby 1', code: 'RUG1', type: 'rugby', nature: 'Gazon', L: 115, W: 70, x: 44, y: 51, rot: 97 },
+  { nom: 'Foot 1', code: 'FOO1', type: 'football', nature: 'Synthétique', L: 105, W: 68, x: 180, y: 80, rot: 15 }
+], { couloir: 4, tmL: 3, tmW: 2 });
+vrai(synchronise.fields.length === 2 && synchronise.fields[0].field.x === 44 &&
+  synchronise.fields[0].field.y === 51 && synchronise.fields[0].field.rot === 97,
+  'enregistrer les grands terrains réaligne position, orientation, ajout et retrait dans le dossier');
+vrai(synchronise.fields[0].zones[0].tiles[0].id === 'RUG1-1' &&
+  synchronise.fields[0].zones[0].tiles[0].w === 40 && synchronise.fields[0].zones[0].tiles[0].h === 30,
+  'la synchronisation conserve les mini-terrains dans le repère local de leur grand terrain');
+vrai(synchronise.couloir === 4 && synchronise.tableL === 3 && synchronise.tableW === 2,
+  'le plan partagé conserve aussi les réglages nécessaires à sa restauration dans Terrains');
+vrai(synchroniserPlanTerrainsDossier('', [{ nom: 'Rugby 1', code: 'RUG1', L: 115, W: 70 }], {}) === null,
+  'enregistrer les grands terrains ne publie pas de plan vide avant la première répartition appliquée');
+
 const relu = lirePlanTerrainsDossier(JSON.stringify(publie));
 vrai(relu && relu.fields.length === 3 && relu.fields[2].field.nom === 'Foot 2',
   'le dossier relit la projection enregistrée');
+const ancienSansReglages = lirePlanTerrainsDossier(JSON.stringify({ version: 1, fields: publie.fields }));
+vrai(ancienSansReglages.couloir === null && ancienSansReglages.tableL === null && ancienSansReglages.tableW === null,
+  'un ancien instantané sans réglages reste identifiable afin que Terrains reprenne les valeurs courantes');
 vrai(lirePlanTerrainsDossier('') === null && lirePlanTerrainsDossier('{') === null,
   'une donnée absente ou illisible ne fabrique aucun terrain par défaut');
 
@@ -62,6 +80,8 @@ vrai(!html.includes('Table de marque') && !html.includes('>TM<'),
   'aucune table de marque ne sort dans la vue club ni dans le PDF');
 vrai(html.includes('115 × 70 m') && html.includes('40 × 30 m') && html.includes('preserveAspectRatio="xMidYMid meet"'),
   'les proportions physiques et les dimensions des mini-terrains restent explicites');
+vrai(html.includes('class="d-plan-orientation"') && html.includes('rotate(12)') && html.includes('Orientation 12°'),
+  'le grand plan détaillé et ses mini-terrains gardent l’orientation exacte de l’onglet Terrains');
 vrai(!htmlPlansTerrainsDossier(''), 'aucune section visuelle sans placement enregistré');
 
 const dossier = lire('js/dossier.js');
@@ -75,6 +95,13 @@ vrai(dossier.includes("sectionPlansTerrains(g)") && dossier.includes('brancherPl
 vrai(adminTerrains.includes('plan_terrains_visuel: planDossierJson') &&
   (adminTerrains.match(/plan_terrains_visuel: planDossierJson/g) || []).length >= 2,
   'le même clic Appliquer enregistre composition et géométrie, y compris au repli explicite');
+vrai(adminTerrains.includes('synchroniserPlanTerrainsDossier') &&
+  /data\.plan_terrains_visuel\s*=\s*JSON\.stringify\(planDossier\)/.test(adminTerrains),
+  'Enregistrer les terrains met à jour le même plan de dossier, sans requête supplémentaire');
+vrai(adminTerrains.includes('restaurerRepartitionEnregistree();') &&
+  adminTerrains.includes('Répartition enregistrée restaurée.') &&
+  adminTerrains.includes('plan_terrains_visuel: planDossierJson'),
+  'la répartition appliquée est enregistrée puis restaurée dans l’onglet Terrains');
 vrai(email.includes('grands plans cotés') && email.includes('export PDF'),
   'l’e-mail annonce précisément où trouver les grands plans');
 vrai(css.includes('.d-plan-site-terrain') && css.includes('.d-plan-vue-detail') &&

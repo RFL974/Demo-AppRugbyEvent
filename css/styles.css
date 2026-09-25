@@ -2007,6 +2007,10 @@ body.theme-clair {
   margin: 10px 0; padding: 8px 10px; border-radius: var(--rayon);
   background: rgba(214, 141, 20, .14); color: #b26a00; line-height: 1.5;
 }
+.repart-enregistree {
+  margin: 10px 0; padding: 10px 12px; border: 1px solid rgba(22, 134, 93, .28);
+  border-radius: var(--rayon); background: rgba(22, 134, 93, .09); color: #136c4d; line-height: 1.5;
+}
 .repart-carte-wrap { overflow-x: auto; margin: 10px 0; }
 .carte-svg { width: 100%; display: block; height: auto; }
 .carte-terrain { fill: #eef4ec; stroke: #9bb3a6; stroke-width: 1.5; }
