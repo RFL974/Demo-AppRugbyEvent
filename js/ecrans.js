@@ -43,16 +43,15 @@ const ECRANS_DEF = [
   { id: 'invitation',  titre: 'Inviter un club',   icone: 'courrier', blocs: ['bloc-clubs-invites', 'bloc-invitation-initiale', 'bloc-dossier-final'], cles: [], libre: true },
   { id: 'suivi-clubs', titre: 'Suivi des clubs',   icone: 'suivi',    blocs: ['bloc-suivi-clubs'], cles: [], libre: true },
   { id: 'equipes',     titre: 'Équipes',           icone: 'equipe',   blocs: ['bloc-equipes'],            cles: ['equipes'] },
-  { id: 'terrains',    titre: 'Terrains',          icone: 'terrain',  blocs: ['bloc-terrains'],           cles: ['terrains'] },
-  { id: 'poules',      titre: 'Poules & planning', icone: 'poules',   blocs: ['bloc-generation'],         cles: ['poules'] },
+  /* Les démarches d'autorisation ouvrent le groupe « Organiser ». Elles restent libres d'accès :
+     les informations de planning sont réutilisées dès qu'elles existent, sans conditionner l'écran. */
+  { id: 'autorisation', titre: 'Demande d\'autorisation', icone: 'dossier', blocs: ['bloc-autorisation'], cles: [], libre: true },
   /* Le dimensionnement du secours est un chantier opérationnel distinct de l'autorisation FFR.
      Il réutilise la même lecture administrative mémorisée : l'écran dédié n'ajoute aucun appel. */
   { id: 'dps', titre: 'Demande de DPS', icone: 'secours', blocs: ['bloc-dps'], cles: [], libre: true },
   { id: 'municipal', titre: 'Demande municipale', icone: 'mairie', blocs: ['bloc-municipal'], cles: [], libre: true },
-  /* Demande d'autorisation (feuille de report du formulaire FFR) : APRÈS Poules & planning —
-     elle exploite le planning généré (phases, terrains, prédictions de phase 2) — et AVANT la
-     Publication (on dépose la demande avant d'annoncer). Libre : jamais verrouillée. */
-  { id: 'autorisation', titre: 'Demande d\'autorisation', icone: 'dossier', blocs: ['bloc-autorisation'], cles: [], libre: true },
+  { id: 'terrains',    titre: 'Terrains',          icone: 'terrain',  blocs: ['bloc-terrains'],           cles: ['terrains'] },
+  { id: 'poules',      titre: 'Poules & planning', icone: 'poules',   blocs: ['bloc-generation'],         cles: ['poules'] },
   /* Partenaires (sponsors de la page publique) : réglages d'affichage, fiches, puis fiche de
      visibilité à renvoyer. Placé AVANT la Publication — on prépare l'habillage de la page
      avant de la mettre en ligne. Libre : jamais verrouillé, on prépare les partenaires quand
@@ -212,7 +211,7 @@ function construireEcrans() {
             '<span class="ecr-marque-sous">Démo Racing</span>' +
           '</div>' +
           '<ul class="ecr-liste">';
-  const groupes = { infos: 'Préparer', terrains: 'Organiser', sponsors: 'Diffuser', apresmidi: 'Jour J' };
+  const groupes = { infos: 'Préparer', autorisation: 'Organiser', sponsors: 'Diffuser', apresmidi: 'Jour J' };
   ECRANS_DEF.forEach(function (e) {
     if (groupes[e.id]) h += '<li class="ecr-groupe">' + groupes[e.id] + '</li>';
     h += '<li><button type="button" class="ecr-onglet' + (e.danger ? ' est-danger' : '') +

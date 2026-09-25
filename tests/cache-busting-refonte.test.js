@@ -64,7 +64,7 @@ const VERSIONS_PROPRES = {
   'js/admin-suivi-clubs.js': VERSION + '-participants2',
   'js/admin.js': VERSION + '-participants3-municipal1',
   'js/assistant.js': VERSION + '-participants3-municipal1',
-  'js/ecrans.js': VERSION + '-participants3-municipal1-invitation-ordinateur2',
+  'js/ecrans.js': VERSION + '-participants3-municipal1-invitation-ordinateur2-organiser1',
   'css/municipal.css': VERSION + '-municipal2',
   'js/admin-municipal.js': VERSION + '-municipal2',
   'js/reponse.js': VERSION + '-participants2-reponse1',

@@ -21,9 +21,13 @@ vrai(html.includes('id="bloc-municipal"') && html.includes('id="municipal-racine
 vrai(html.includes('css/municipal.css?v=refonte-ciel-verre-20260920-municipal2') &&
   html.includes('js/admin-municipal.js?v=refonte-ciel-verre-20260920-municipal2'),
   'les nouvelles ressources ont une URL de cache dédiée');
+const ordreOrganiser = ['autorisation', 'dps', 'municipal', 'terrains', 'poules']
+  .map((id) => ecrans.indexOf("id: '" + id + "'"));
 vrai(ecrans.includes("id: 'municipal'") && ecrans.includes("icone: 'mairie'") &&
-  ecrans.indexOf("id: 'municipal'") < ecrans.indexOf("id: 'autorisation'"),
-  'la demande municipale est placée avant la demande fédérale');
+  ordreOrganiser.every((position, index) => position >= 0 && (!index || position > ordreOrganiser[index - 1])),
+  'Organiser suit l’ordre autorisation, DPS, municipal, terrains, poules et planning');
+vrai(ecrans.includes("autorisation: 'Organiser'") && !ecrans.includes("terrains: 'Organiser'"),
+  'le titre du groupe Organiser est placé avant la demande d’autorisation');
 vrai(assistant.includes("id: 'municipal'") && assistant.includes("titre: 'Mairie'"),
   'le parcours mobile expose la même étape');
 vrai(/municipal:\s*\{\s*ressources:\s*\['dossierAutorisation'\]/.test(admin) &&
