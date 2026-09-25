@@ -62,11 +62,19 @@ const JETON_FACTICE = 'JETON-FACTICE-6F-table';
 const MARQUE_DONNEE = 'DONNEE-FACTICE-6F';
 const SECRETS = [CLE_FACTICE, CLE_SECONDE, CLE_MEMO, JETON_FACTICE, MARQUE_DONNEE];
 
-/** Décision 6F-R3 : les ONZE GET rejouables. */
-const GET_ATTENDUES = ['getAll', 'getRefFFR', 'getConfig', 'getEquipes', 'getMatchs', 'getConformiteFFR',
-  'datesCompatiblesFFR', 'getCapacitesCategories', 'getConfigClub', 'getClubDossier', 'getReponseInvitation'];
+/** Décision 6F-R3, prolongée par le lot « Pages publiques du tournoi » : les DOUZE GET rejouables.
+ *  ⭐ `getPublic` entre ici, et à la place EXACTE qu'occupe sa déclaration dans `js/api.js` (l'ordre
+ *  est vérifié, pas seulement l'appartenance). C'est une LECTURE PURE, servie par un cache qu'elle
+ *  peut reconstruire : ni verrou, ni écriture de classeur, ni propriété persistante. */
+const GET_ATTENDUES = ['getAll', 'getPublic', 'getRefFFR', 'getConfig', 'getEquipes', 'getMatchs',
+  'getConformiteFFR', 'datesCompatiblesFFR', 'getCapacitesCategories', 'getConfigClub',
+  'getClubDossier', 'getReponseInvitation'];
 
-/** GET exclue : doGet → lireHistorique → assurerOngletHistorique → creerOngletAvecEntetes. */
+/** GET exclue : elle passait par `assurerOngletHistorique` → `creerOngletAvecEntetes`.
+ *  ⚠️ LE LOT « PAGES PUBLIQUES » A FERMÉ CETTE ÉCRITURE (`lireHistorique` ne crée plus l'onglet),
+ *  si bien que l'action serait aujourd'hui sûre à rejouer. ⛔ On l'y laisse pourtant EXCLUE : le
+ *  rejeu est une tolérance qu'on accorde à une action quand on en a BESOIN, pas une récompense.
+ *  `getHistorique` n'est appelée que par `perfs.html`, où un échec se retente au tour suivant. */
 const GET_EXCLUE = 'getHistorique';
 
 /** GET non retenues par la décision (non appelées par le frontend). */
@@ -76,7 +84,10 @@ const GET_NON_RETENUES = ['getPoules', 'getClassement'];
 const GET_PIEGES = ['actionInconnue', '', 'getall', 'GETALL', 'GetAll', ' getAll', 'getAll ', 'get All', 'getAll2',
   'getHistoriques', 'ping', 'constructor', '__proto__', 'toString', 'hasOwnProperty', 'length', '0', undefined, null,
   'getConfigAdmin', 'getDossierAutorisation', 'lireMesuresSponsors', 'listerClubsInvites', 'getAccesScoresAdmin',
-  'getMatchsLitige', 'getSaisieScores', 'listerSponsors'];
+  /* ⭐ `getInstantaneAdmin` est un PIÈGE GET, et c'est essentiel : elle n'existe QUE sur `doPost`.
+     ⛔ Si elle devenait rejouable en GET, la clé admin voyagerait dans une URL — exactement ce que
+     le bandeau d'`ACTIONS_LECTURE` interdit. */
+  'getMatchsLitige', 'getSaisieScores', 'listerSponsors', 'getInstantaneAdmin'];
 
 /** Paramètres fictifs des GET qui en portent (dont un jeton, pour la journalisation). */
 const PARAMS_GET = {
@@ -87,9 +98,14 @@ const PARAMS_GET = {
   datesCompatiblesFFR: { mois: '2026-09', categories: 'U8', zone: 'fictive' }
 };
 
-/** Décision 6F-R3 : les SEPT POST rejouables. */
-const POST_ATTENDUES = ['getConfigAdmin', 'getDossierAutorisation', 'lireMesuresSponsors',
-  'listerClubsInvites', 'getAccesScoresAdmin', 'getMatchsLitige', 'getSaisieScores'];
+/** Décision 6F-R3, prolongée par le lot « Pages publiques du tournoi » : les HUIT POST rejouables.
+ *  ⭐ `getInstantaneAdmin` entre ici, à la place EXACTE qu'occupe sa déclaration dans `js/api.js`.
+ *  C'est la lecture SOUS CLÉ ADMIN qui remplace, pour les écrans d'administration, l'appel ANONYME
+ *  à `getAll` — désormais réservé au tournoi PUBLIÉ. Rejouable au même titre que `getConfigAdmin` :
+ *  elle ne prend pas le verrou, n'écrit ni dans le classeur, ni dans Drive, ni dans une propriété. */
+const POST_ATTENDUES = ['getConfigAdmin', 'getInstantaneAdmin', 'getDossierAutorisation',
+  'lireMesuresSponsors', 'listerClubsInvites', 'getAccesScoresAdmin', 'getMatchsLitige',
+  'getSaisieScores'];
 
 /** Exception d'écriture : sûre à rejouer grâce à l'idempotence garantie côté serveur. */
 const POST_ECRITURES_IDEMPOTENTES_ATTENDUES = ['ajouterEquipe'];
@@ -528,7 +544,7 @@ function critere(id, intitule, jouer, ok, detail) {
 }
 
 /* ---- A — GET ------------------------------------------------------------ */
-section('A — GET : liste fermée de onze lectures rejouables, tout le reste à une émission');
+section('A — GET : liste fermée de douze lectures rejouables, tout le reste à une émission');
 
 GET_ATTENDUES.forEach(function (action, i) {
   const params = PARAMS_GET[action] || null;
@@ -543,14 +559,14 @@ GET_ATTENDUES.forEach(function (action, i) {
     (o) => json({ oui: o.oui.b.appels.length, inv: o.oui.b.parInvocation(), non: o.non.b.appels.length, invNon: o.non.b.parInvocation() }));
 });
 
-critere('A.12', 'getAll avec délai (usage de tournoi.js, 12 000 ms) : 404→200 → contrôleur et délai neufs, aucun résidu',
+critere('A.13', 'getAll avec délai (usage de tournoi.js, 12 000 ms) : 404→200 → contrôleur et délai neufs, aucun résidu',
   (src, suivi) => getFlux(src, suivi, 'getAll', null, [R(404), OK({ ok: true })], { delaiMs: 12000 }),
   (o) => o.b.appels.length === 2 && getIdentiquesSignalNeuf(o.b, 'getAll', null) &&
     json(o.b.minuteries.map((m) => m.ms)) === json([12000, D, 12000]) &&
     o.b.minuteries.filter((m) => m.ms === 12000).every((m) => m.etat === 'effacee') && succes(o.s) && o.s.enAttente === 0,
   (o) => json({ appels: o.b.appels.length, signal: !!(o.b.appels[0] && o.b.appels[0].signal), minuteries: o.b.minuteries.map((m) => [m.ms, m.etat]) }));
 
-critere('A.13', 'getHistorique (exclue : peut créer l\'onglet) : 404 puis 200 prévu → UNE émission, erreur 404, réponse suivante non consommée ; 404 puis 404 → UNE émission',
+critere('A.14', 'getHistorique (exclue : peut créer l\'onglet) : 404 puis 200 prévu → UNE émission, erreur 404, réponse suivante non consommée ; 404 puis 404 → UNE émission',
   async (src, suivi) => ({
     a: await getFlux(src, suivi, GET_EXCLUE, null, [R(404), OK({ ok: true })]),
     b: await getFlux(src, suivi, GET_EXCLUE, null, [R(404), R(404)])
@@ -559,7 +575,7 @@ critere('A.13', 'getHistorique (exclue : peut créer l\'onglet) : 404 puis 200 p
     o.b.b.appels.length === 1 && erreurHttp(o.b.s, 404),
   (o) => json({ a: o.a.b.appels.length, b: o.b.b.appels.length }));
 
-critere('A.14', 'getPoules et getClassement (non retenues) : 404 → UNE émission',
+critere('A.15', 'getPoules et getClassement (non retenues) : 404 → UNE émission',
   async (src, suivi) => {
     const r = {};
     for (const a of GET_NON_RETENUES) r[a] = await getFlux(src, suivi, a, null, [R(404), OK()]);
@@ -568,7 +584,7 @@ critere('A.14', 'getPoules et getClassement (non retenues) : 404 → UNE émissi
   (o) => GET_NON_RETENUES.every((a) => o[a].b.appels.length === 1 && erreurHttp(o[a].s, 404) && o[a].b.minuteries.length === 0),
   (o) => json(GET_NON_RETENUES.map((a) => [a, o[a].b.appels.length])));
 
-critere('A.15', 'GET inconnue, vide, casse différente, espaces, ressemblante, prototype (' + GET_PIEGES.length + ') : 404 → UNE émission',
+critere('A.16', 'GET inconnue, vide, casse différente, espaces, ressemblante, prototype (' + GET_PIEGES.length + ') : 404 → UNE émission',
   async (src, suivi) => {
     const fautifs = [];
     for (const a of GET_PIEGES) {
@@ -579,7 +595,7 @@ critere('A.15', 'GET inconnue, vide, casse différente, espaces, ressemblante, p
   },
   (fautifs) => fautifs.length === 0, (fautifs) => json(fautifs));
 
-critere('A.16', 'classement sur l\'action RÉELLEMENT envoyée : getAll écrasée en getHistorique par les paramètres → une émission ; l\'inverse → deux',
+critere('A.17', 'classement sur l\'action RÉELLEMENT envoyée : getAll écrasée en getHistorique par les paramètres → une émission ; l\'inverse → deux',
   async (src, suivi) => ({
     versExclue: await getFlux(src, suivi, 'getAll', { action: GET_EXCLUE }, [R(404), OK()]),
     versListe: await getFlux(src, suivi, GET_EXCLUE, { action: 'getAll' }, [R(404), OK({ ok: true })])
@@ -597,7 +613,7 @@ const ISSUES_UNE_EMISSION = [
   ['HTTP 200 { error }', [OK({ error: 'Erreur serveur pendant la lecture.' }), OK()], (s) => !!(s.erreur && s.erreur.message === 'Erreur serveur pendant la lecture.')]
 ];
 
-critere('A.17', 'GET rejouables (getAll, getConfigClub) : autre statut, rejet réseau, JSON illisible, erreur applicative → UNE émission, aucune pause',
+critere('A.18', 'GET rejouables (getAll, getConfigClub) : autre statut, rejet réseau, JSON illisible, erreur applicative → UNE émission, aucune pause',
   async (src, suivi) => {
     const fautifs = [];
     for (const action of ['getAll', 'getConfigClub']) {
@@ -610,12 +626,12 @@ critere('A.17', 'GET rejouables (getAll, getConfigClub) : autre statut, rejet r�
   },
   (fautifs) => fautifs.length === 0, (fautifs) => json(fautifs));
 
-critere('A.18', 'témoin : GET 200 du premier coup → une émission, aucune pause',
+critere('A.19', 'témoin : GET 200 du premier coup → une émission, aucune pause',
   (src, suivi) => getFlux(src, suivi, 'getAll', null, [OK({ ok: true }), OK()]),
   (o) => o.b.appels.length === 1 && succes(o.s) && o.b.minuteries.length === 0);
 
 /* ---- B — POST ----------------------------------------------------------- */
-section('B — POST : liste fermée de sept lectures rejouables, listerSponsors et écritures à une émission');
+section('B — POST : liste fermée de huit lectures rejouables, listerSponsors et écritures à une émission');
 
 const DONNEES_LECTURE = () => ({ cle: CLE_FACTICE, jeton: JETON_FACTICE, marque: MARQUE_DONNEE, liste: [1, 2] });
 
@@ -1203,7 +1219,7 @@ critere('F.5', 'js/api.js ne pose AUCUN écouteur (ni addEventListener, ni onabo
        ① aucune action appelée hors des listes classées (apparition non classée → échec) ;
        ② toutes en littéral (un nom calculé échapperait au classement) ;
        ③ et la liste des déclarées NON appelées est EXACTEMENT celle des retraits volontaires,
-         aujourd'hui `['getMatchs']` — une disparition inattendue la fait grossir, et le test
+         aujourd'hui aux retraits nommés ci-dessous — une disparition inattendue la fait grossir, et le test
          échoue.
    ⭐ LE RETRAIT VOLONTAIRE, NOMMÉ : `getMatchs` a été retiré par le lot « Poules & planning ».
      L'écran comptait les scores avec cette lecture avant d'ouvrir sa confirmation ; il les compte
@@ -1211,7 +1227,18 @@ critere('F.5', 'js/api.js ne pose AUCUN écouteur (ni addEventListener, ni onabo
      (`genererPoulesEtPlanningContrat_`, refus `scores_presents` / `scores_apparus`). Remettre
      `getMatchs` dans le code ferait échouer ce contrôle — ce qui est voulu : la lecture préalable
      ne doit pas revenir sans décision. */
-var GET_RETIREES_VOLONTAIREMENT = ['getMatchs'];
+/* ⭐ Les GET DÉCLARÉES rejouables qu'aucune page n'appelle plus. Elles restent classées : le jour
+   où un écran les rappelle, le rejeu doit être déjà décidé, pas improvisé.
+   · `getMatchs` — retrait historique ;
+   · `getEquipes` — retrait du lot « Pages publiques du tournoi » (24/09/2026). L'écran « Équipes »
+     de l'administration l'appelait ANONYMEMENT, et elle livrait les équipes d'un tournoi jamais
+     publié ou masqué, effectifs compris. Il lit désormais `getInstantaneAdmin`, sous clé. ⛔ La
+     porte `getEquipes` existe toujours côté serveur, mais elle est publication-gardée et plus
+     personne ne la sollicite depuis le frontend ;
+   · `getConformiteFFR` et `datesCompatiblesFFR` — mêmes données et mêmes usages, mais transportées
+     en POST sous clé d'administration afin que la configuration d'un tournoi non publié ne soit
+     jamais révélée par une route anonyme. */
+var GET_RETIREES_VOLONTAIREMENT = ['datesCompatiblesFFR', 'getConformiteFFR', 'getEquipes', 'getMatchs'];
 critere('F.6', 'recensement : TOUTE action GET appelée est classée et en littéral, et les seules classées non appelées sont les retraits volontaires (' + GET_RETIREES_VOLONTAIREMENT.join(', ') + ')',
   async () => {
     const appelees = new Set();
@@ -1249,7 +1276,11 @@ const ANCRES = {
   classementGet: "const rejouable = ACTIONS_GET_REJOUABLES.indexOf(url.searchParams.get('action')) !== -1;",
   listeGet: "'getConfigClub', 'getClubDossier', 'getReponseInvitation'",
   classementPost: 'ACTIONS_POST_REJOUABLES.indexOf(corps.action) !== -1',
-  listePost: "  'getConfigAdmin', 'getDossierAutorisation', 'lireMesuresSponsors',",
+  /* ⚠️ ANCRE RÉALIGNÉE le 24/09/2026 : la liste des POST rejouables s'ouvre désormais sur
+     `getConfigAdmin', 'getInstantaneAdmin'` (lot « Pages publiques du tournoi »). ⛔ La MUTATION
+     est la même au caractère près — réintroduire `listerSponsors`, qui peut écrire —, et le mutant
+     reste détecté. */
+  listePost: "  'getConfigAdmin', 'getInstantaneAdmin', 'getDossierAutorisation',",
   reveil: '    if (abandon.reveiller) abandon.reveiller();\n',
   gardeAvant: '  if (abandon && performance.now() + DELAI_REJEU_404_MS >= abandon.echeance) {',
   effacerPause: '  clearTimeout(pause);\n',
@@ -1269,15 +1300,15 @@ const ANCRES = {
 const MUTANTS = [
   ['aucun rejeu 404', [[ANCRES.test404, '  return reponse;']], ['A.1', 'B.1']],
   ['tout statut d\'erreur rejoué', [[ANCRES.test404,
-    '  if (!rejouable || reponse.ok || suivi.emissions >= 2) return reponse;']], ['A.17', 'B.3', 'C.30']],
-  ['rejeu de tous les GET', [[ANCRES.classementGet, 'const rejouable = true;']], ['A.13', 'A.14', 'C.24']],
-  ['réintroduction de getHistorique', [[ANCRES.listeGet, ANCRES.listeGet + ", 'getHistorique'"]], ['A.13', 'F.1', 'C.24']],
+    '  if (!rejouable || reponse.ok || suivi.emissions >= 2) return reponse;']], ['A.18', 'B.3', 'C.30']],
+  ['rejeu de tous les GET', [[ANCRES.classementGet, 'const rejouable = true;']], ['A.14', 'A.15', 'C.24']],
+  ['réintroduction de getHistorique', [[ANCRES.listeGet, ANCRES.listeGet + ", 'getHistorique'"]], ['A.14', 'F.1', 'C.24']],
   ['action GET inconnue rendue rejouable par liste noire', [[ANCRES.classementGet,
-    "const rejouable = ['getHistorique', 'getPoules', 'getClassement'].indexOf(url.searchParams.get('action')) === -1;"]], ['A.15', 'C.24']],
+    "const rejouable = ['getHistorique', 'getPoules', 'getClassement'].indexOf(url.searchParams.get('action')) === -1;"]], ['A.16', 'C.24']],
   ['classement GET sur l\'argument au lieu de l\'action envoyée',
-    [[ANCRES.classementGet, 'const rejouable = ACTIONS_GET_REJOUABLES.indexOf(action) !== -1;']], ['A.16', 'C.25']],
+    [[ANCRES.classementGet, 'const rejouable = ACTIONS_GET_REJOUABLES.indexOf(action) !== -1;']], ['A.17', 'C.25']],
   ['classement GET déduit du nom', [[ANCRES.classementGet,
-    "const rejouable = /^get/.test(String(url.searchParams.get('action')));"]], ['A.13', 'A.14', 'C.24']],
+    "const rejouable = /^get/.test(String(url.searchParams.get('action')));"]], ['A.14', 'A.15', 'C.24']],
   ['réintroduction de listerSponsors', [[ANCRES.listePost,
     "  'getConfigAdmin', 'getDossierAutorisation', 'listerSponsors', 'lireMesuresSponsors',"]], ['B.4', 'F.2', 'C.24']],
   ['rejeu de toute écriture', [[ANCRES.classementPost, 'true']], ['B.5', 'B.12', 'C.24']],
@@ -1292,7 +1323,7 @@ const MUTANTS = [
     '      // effacement retiré']], ['C.18', 'C.19', 'C.20']],
   ['pause 404 non réveillée par l\'abandon', [[ANCRES.reveil, '']], ['C.5', 'C.6']],
   ['signal de la tentative perdu', [[ANCRES.emissionGet,
-    'return fetch(adresse, { cache: reglages.cache });']], ['A.12', 'C.4', 'C.18']],
+    'return fetch(adresse, { cache: reglages.cache });']], ['A.13', 'C.4', 'C.18']],
   ['garde avant pause retirée', [[ANCRES.gardeAvant, '  if (false) {']], ['C.2']],
   ['garde avant pause en « > »', [[ANCRES.gardeAvant,
     ANCRES.gardeAvant.replace('>= abandon.echeance', '> abandon.echeance')]], ['C.3']],

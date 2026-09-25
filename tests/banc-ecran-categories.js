@@ -43,6 +43,21 @@ const lecteurJs = (dossier) => (f) => fs.readFileSync(path.join(dossier || path.
 /** Lecteur mêlant deux versions (cache du navigateur) : `avant` = fichiers servis dans leur version d'avant. */
 const lecteurMele = (avant) => (f) => (avant.indexOf(f) !== -1 ? JS_AVANT(f) : lecteurJs()(f));
 
+/* ⭐ LES REJETS NON GÉRÉS SONT OBSERVÉS, PLUS SUBIS.
+ * 🔬 LE DÉFAUT DU HARNAIS (24/09/2026). Les écouteurs des écrans sont `async` : le vrai navigateur
+ * ignore la promesse qu'ils rendent, Node la transforme en rejet NON GÉRÉ et TUE la passe entière.
+ * Tant qu'aucun écouteur ne rejetait, personne ne le voyait. ⛔ Depuis que `getAll` refuse un
+ * tournoi non publié (lot « Pages publiques du tournoi »), un frontend FIGÉ rejoué contre le
+ * backend courant rejette pour de BONNES raisons — et un banc doit alors CONSTATER, pas mourir.
+ * ⭐ Les rejets sont retenus et consultables (`rejets()`), ce qui rend le fait ASSERTABLE au lieu
+ * de simplement toléré. ⛔ Aucun contrôle n'est assoupli : un test qui attend un succès continue
+ * d'échouer si la promesse qu'il ATTEND rejette — seules les promesses que personne n'attend, et
+ * que le navigateur ignorerait aussi, cessent d'abattre le processus. */
+const REJETS = [];
+process.on('unhandledRejection', (e) => { REJETS.push(String((e && e.message) || e)); });
+const rejets = () => REJETS.slice();
+const viderRejets = () => { REJETS.length = 0; };
+
 const tour = async () => { for (let i = 0; i < 25; i++) await Promise.resolve(); };
 function extrait(source, nom) {
   const debut = source.indexOf('function ' + nom + '(');
@@ -448,4 +463,5 @@ function compteur() {
 }
 
 module.exports = { banc, serveur, navigateur, creerDocument, compteur, extrait, lecteurJs, lecteurMele, tour, git,
+  rejets, viderRejets,
   BACKEND, RACINE, BACKEND_AVANT, JS_AVANT, FRONTEND_AVANT_REV, BACKEND_AVANT_REV, CLE_ADMIN };

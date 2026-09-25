@@ -193,6 +193,22 @@ function navigateur(srv, lireJs, options) {
     apiPostProtege: (action, data, role, lib, opts) => transport('POST', Object.assign({}, data, { action, cle: CLE_ADMIN }), opts),
     apiPost: (action, data, opts) => transport('POST', Object.assign({}, data, { action }), opts),
     apiGet: (action, params, opts) => transport('GET', Object.assign({ action }, params || {}), opts),
+    /* ⭐ LA LECTURE DE L'ADMINISTRATION EST UN POST SOUS CLÉ (lot « Pages publiques du tournoi ») :
+       `getAll` était une porte ANONYME, désormais réservée au tournoi PUBLIÉ. Ce banc ne charge pas
+       `js/api.js` — il simule le transport — : la doublure reproduit donc `lireInstantaneAdmin`
+       telle qu'elle est, jusqu'au contrôle de complétude qui refuse une réponse tronquée. */
+    lireInstantaneAdmin: async (cle, opts) => {
+      const r = await transport('POST', { action: 'getInstantaneAdmin', cle: cle || CLE_ADMIN }, opts);
+      if (!r || !r.instantane || !Array.isArray(r.instantane.equipes) ||
+          !Array.isArray(r.instantane.poules) || !Array.isArray(r.instantane.matchs)) {
+        throw new Error('Instantané du tournoi incomplet ; aucune modification ne peut être validée.');
+      }
+      return r.instantane;
+    },
+    /* ⭐ `…OuVide` est la porte employée par l'ouverture ET par `rechargerEtRendre` : elle rend
+       l'instantané, ou un état VIDE ET DÉCLARÉ quand le serveur est trop ancien pour le servir.
+       ⛔ Ici le serveur du banc le sert : la doublure délègue donc simplement. */
+    lireInstantaneAdminOuVide: (cle, opts) => ctx.lireInstantaneAdmin(cle, opts),
     afficherCategories: () => '', verifierTerrainsBloc() {}, majFormesCategories() {}, injecterTerrains() {},
     remplirSelectCategories() {}, afficherPlanning() {}, majApresMidi() {}, majFeuilleJour() {}, majInfosTournoi() {},
     majContactsSecurite() {}, majInvitation() {}, majPerfsMotCleClub() {}, majPublication() {}, majHeureAdmin() {},

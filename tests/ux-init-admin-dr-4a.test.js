@@ -302,7 +302,26 @@ function bancCle(options) {
     definirCleLocale(role, v) { trace.rangees.push(v); stockage.setItem('r92_cle_' + role, v || ''); },
     dialogDemander() { trace.saisies++; return Promise.resolve(options.saisie || 'CLE-DE-TEST-XYZ'); },
     dialogAlerter(m) { trace.alertes.push(String(m)); return Promise.resolve(); },
-    apiGet() { return Promise.resolve({ equipes: [], matchs: [] }); },
+    /* ⚠️ L'ouverture lit désormais `lireInstantaneAdmin` (SOUS CLÉ ADMIN) et non `getAll`, porte
+       anonyme fermée par le lot « Pages publiques du tournoi ». ⭐ Elle reçoit la clé CANDIDATE :
+       la doublure la note, pour que les contrôles puissent vérifier qu'aucune lecture ne part
+       sans clé et qu'une clé refusée en relance bien une neuve. */
+    lireInstantaneAdmin(cle) {
+      trace.lectures = (trace.lectures || []).concat([cle === undefined ? null : cle]);
+      if (options.panneLecture) return Promise.reject(new Error(options.panneLecture));
+      return Promise.resolve({ equipes: [], poules: [], matchs: [] });
+    },
+    /* ⭐ L'ouverture emprunte la variante TOLÉRANTE : elle ne dégrade QUE si le serveur est trop
+       ancien pour connaître l'action. ⛔ Toute autre panne remonte telle quelle — c'est ce que
+       vérifient les contrôles 6.x, et la doublure doit donc le reproduire fidèlement. */
+    lireInstantaneAdminOuVide(cle) {
+      return base.lireInstantaneAdmin(cle).catch((err) => {
+        if (err && err.backendTropAncien === true) {
+          return { equipes: [], poules: [], matchs: [], indisponible: 'backend_trop_ancien' };
+        }
+        throw err;
+      });
+    },
     lireConfigAdmin() {
       if (options.panne) return Promise.reject(new Error(options.panne));
       if (trace.refusRestants > 0) {

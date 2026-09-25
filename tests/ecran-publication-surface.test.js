@@ -66,7 +66,8 @@ async function ecran(opt) {
   {
     const b = await B.banc({ garderOuverture: true });
     ok(b.requetes().length === 2 &&
-       JSON.stringify(b.requetes()) === JSON.stringify(['getAll', 'getConfigAdmin']),
+       // /* ⚠️ `getAll` → `getInstantaneAdmin` (lot « Pages publiques du tournoi », 24/09/2026) : l'administration lit l'instantané SOUS CLÉ ADMIN, `getAll` étant une porte anonyme désormais réservée au tournoi PUBLIÉ. ⛔ Même lecture, même contenu, même intention. */
+       JSON.stringify(b.requetes()) === JSON.stringify(['getInstantaneAdmin', 'getConfigAdmin']),
       'B1 ⭐⭐ l’OUVERTURE de l’administration émet EXACTEMENT 2 requêtes — ⛔ plus celle de l’accès ' +
       'aux scores, que `majPublication()` déclenchait même sans jamais venir sur cet écran',
       b.requetes());
@@ -259,11 +260,18 @@ async function ecran(opt) {
     ok(public_.indexOf(B.CLE_ADMIN) === -1 && public_.indexOf(B.MP.CLE_SCORES) === -1 &&
        public_.indexOf(jeton) === -1,
       'G3 ⭐⭐ ⛔ ni clé ni jeton dans l’adresse PUBLIQUE ni dans son QR');
-    /* ⭐ L'instantané public, celui que la page des scores lit, ne doit rien porter non plus. */
-    const instantane = JSON.stringify(b.srv.getMesure({ action: 'getAll' }, 'sonde').reponse);
-    ok(instantane.indexOf(B.CLE_ADMIN) === -1 && instantane.indexOf(B.MP.CLE_SCORES) === -1 &&
+    /* ⭐ L'instantané public, celui que la page des scores lit, ne doit rien porter non plus.
+       ⚠️ ON PUBLIE D'ABORD, et c'est indispensable depuis le lot « Pages publiques du tournoi » :
+       `getAll` refuse quand le tournoi ne l'est pas, et un refus satisferait ce contrôle SANS RIEN
+       PROUVER. ⛔ On veut la vue publique RÉELLEMENT SERVIE, la plus bavarde possible. */
+    b.srv.postMesure({ action: 'publierTournoi', cle: B.CLE_ADMIN, publie: 'oui' }, 'publier-sonde');
+    const instantane = JSON.stringify(b.srv.getMesure({ action: 'getAll' }, 'sonde').reponse) +
+      JSON.stringify(b.srv.getMesure({ action: 'getPublic' }, 'sonde-public').reponse);
+    ok(instantane.indexOf('equipes') !== -1 &&
+       instantane.indexOf(B.CLE_ADMIN) === -1 && instantane.indexOf(B.MP.CLE_SCORES) === -1 &&
        instantane.indexOf(jeton) === -1,
-      'G4 ⭐⭐ la vue PUBLIQUE du tournoi ne porte ni clé, ni jeton, ni lien protégé');
+      'G4 ⭐⭐ les DEUX vues publiques du tournoi (instantané et état public), réellement servies, ' +
+      'ne portent ni clé, ni jeton, ni lien protégé');
     /* ⛔ Et rien de tout cela ne doit être parti dans une URL : le transport est un POST. */
     const enClair = b.sorties.filter((s) => s.indexOf(B.CLE_ADMIN) !== -1 ||
       s.indexOf(B.MP.CLE_SCORES) !== -1 || (jeton && s.indexOf(jeton) !== -1));
@@ -335,7 +343,7 @@ async function ecran(opt) {
        b.texte('message-acces-saisie').indexOf('délai') !== -1,
       'H12 ⭐⭐ une lecture d’accès muette finit par DIRE qu’elle a échoué, et pourquoi : « ' +
       b.texte('message-acces-saisie').slice(0, 70) + ' »');
-    const bAvant = await B.banc({ js: B.LECTEUR_AVANT, monde: { publie: 'oui' },
+    const bAvant = await B.banc({ js: B.LECTEUR_AVANT, monde: { publie: 'non' },
                                   pannes: { getAccesScoresAdmin: 'silence' } });
     await bAvant.tour(400);
     ok(bAvant.texte('message-acces-saisie') === '',

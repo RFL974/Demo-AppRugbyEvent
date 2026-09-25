@@ -14,7 +14,7 @@
  *
  *  Dépend de globaux définis ailleurs, accédés à l'appel :
  *   - commun.js : echapper
- *   - api.js    : apiGet
+ *   - api.js    : apiGet, apiPostProtege
  *   - admin.js  : configCourante
  *  Chargé après admin.js et admin-reglages.js dans admin.html.
  * ============================================================================
@@ -231,11 +231,11 @@ async function majConformiteFFR() {
   const zoneVacances = zoneVacancesCourante();
   let res;
   try {
-    res = await apiGet('getConformiteFFR', {
+    res = await apiPostProtege('getConformiteFFR', {
       date: dateISO,
       categories: categories.join(','),
       zone: zoneVacances
-    }, { delaiMs: 30000 });
+    }, 'admin', 'admin', { delaiMs: 30000 });
   } catch (e) {
     if (generation !== conformiteFFRGeneration) return;
     zone.innerHTML = messageRepriseFFR('Contrôle FFR indisponible pour le moment.');
@@ -1248,11 +1248,11 @@ async function onChercherDatesCompatibles() {
   if (bouton) bouton.disabled = true;
   zone.innerHTML = '<p class="date-finder-vide">Recherche des jours compatibles…</p>';
   try {
-    const res = await apiGet('datesCompatiblesFFR', {
+    const res = await apiPostProtege('datesCompatiblesFFR', {
       mois: mois,
       categories: categories.join(','),
       zone: zoneVacancesCourante()
-    }, { delaiMs: 30000 });
+    }, 'admin', 'admin', { delaiMs: 30000 });
     if (generation === datesCompatiblesGeneration) zone.innerHTML = rendreDatesCompatibles(res);
   } catch (e) {
     if (generation === datesCompatiblesGeneration) zone.innerHTML = '<p class="date-finder-vide">Recherche indisponible pour le moment.</p>';

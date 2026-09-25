@@ -85,6 +85,17 @@ async function initSaisie() {
   //   `getAll` ni `getCapacitesCategories`. Sans ce fichier, le parcours ci-dessous est inchangé.
   if (typeof initSaisieProtegee === 'function') return initSaisieProtegee();
 
+  /* ⛔ CE QUI SUIT EST UN CHEMIN MORT DANS TOUTES LES CONFIGURATIONS DÉPLOYÉES, et il faut le dire
+     plutôt que de le laisser croire vivant :
+      · `saisie.html` (ce dépôt) est une page d'information FERMÉE qui ne charge AUCUN script —
+        ni `saisie.js`, ni `api.js` : elle ne peut donc pas l'atteindre ;
+      · la passerelle protégée, elle, charge `saisie-protegee.js` JUSTE APRÈS ce fichier, si bien
+        que `initSaisieProtegee` existe toujours et que le `return` ci-dessus part systématiquement.
+     ⚠️ S'il était un jour ranimé, il échouerait FERMÉ sur un tournoi non publié : depuis le lot
+     « Pages publiques du tournoi », `getAll` est une porte publique réservée au tournoi PUBLIÉ, et
+     cette page n'a aucune autorité à présenter avant d'avoir demandé la clé scores. ⛔ C'est le
+     comportement voulu : une table de marque sans lien ni clé ne doit rien lire. */
+
   try {
     // ⚡ getAll (matchs) et getCapacitesCategories (tir au but) partent EN MÊME TEMPS. Les capacités
     // sont tolérantes à l'échec (backend pas encore redéployé) : la saisie reste alors en mode simple.

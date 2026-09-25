@@ -124,6 +124,13 @@ const SRC_API = [
   bloc(F_API, 'function definirCleLocale('),
   bloc(F_API, 'async function demanderCle('),
   bloc(F_API, 'async function apiPostProtege('),
+  /* ⭐ LA LECTURE PROTÉGÉE DE L'ADMINISTRATION (lot « Pages publiques du tournoi », 24/09/2026).
+     `getAll` et `getEquipes` étaient des portes ANONYMES : elles livraient un tournoi non publié à
+     qui demandait. Les écrans lisent désormais `getInstantaneAdmin`, SOUS CLÉ ADMIN, et c'est ce
+     transport-là que le banc doit charger — sinon `rechargerEquipes` n'émettrait rien du tout. */
+  bloc(F_API, 'async function lireInstantaneAdmin('),
+  bloc(F_API, 'async function lireEquipesAdmin('),
+  bloc(F_API, 'async function lireInstantaneAdminOuVide('),
   bloc(F_API, 'function estRefusCle(')
 ].join('\n');
 
@@ -281,7 +288,7 @@ function fabriquerReseau(horloge) {
       try { info.action = info.corps ? JSON.parse(info.corps).action : new URL(info.url).searchParams.get('action'); }
       catch (e) { info.action = null; }
       journal.push(info);
-      const plan = scenario(info);
+      const plan = enveloppeLectureAdmin(info, scenario(info));
       const signal = reglages && reglages.signal;
       return new Promise(function (resoudre, rejeter) {
         if (signal) {
@@ -294,6 +301,33 @@ function fabriquerReseau(horloge) {
       });
     }
   };
+}
+
+/**
+ * ⭐ L'ENVELOPPE DE LA LECTURE PROTÉGÉE, POSÉE PAR LE BANC.
+ *
+ * ⚠️ POURQUOI ELLE EXISTE (lot « Pages publiques du tournoi », 24/09/2026). Les scénarios de ce
+ * fichier programment la LECTURE de l'administration par sa charge NUE — un tableau d'équipes, ou
+ * `{ equipes, poules, matchs }` —, parce que `getAll` et `getEquipes` répondaient ainsi. Ces deux
+ * portes étaient ANONYMES et livraient un tournoi non publié ; la lecture passe désormais par
+ * `getInstantaneAdmin`, sous clé, dont la réponse est `{ ok, instantane }`.
+ * ⛔ PLUTÔT QUE DE RÉÉCRIRE TRENTE SCÉNARIOS — et de risquer d'en affaiblir un au passage —, le
+ * banc pose l'enveloppe lui-même. ⭐ Les scénarios continuent donc d'exprimer EXACTEMENT ce qu'ils
+ * exprimaient : une charge, un statut, un retard, une panne. Rien n'est assoupli : un corps
+ * illisible reste illisible, un 404 reste un 404, une réponse qui pend pend toujours.
+ */
+function enveloppeLectureAdmin(info, plan) {
+  if (!info || info.action !== 'getInstantaneAdmin') return plan;
+  if (!plan || plan === 'pend' || typeof plan !== 'object') return plan;
+  if (plan.corpsIllisible || plan.corpsPend || plan.corps === undefined || plan.corps === null) return plan;
+  const c = plan.corps;
+  if (c && typeof c === 'object' && c.instantane) return plan;          // déjà enveloppé
+  const instantane = Array.isArray(c)
+    ? { equipes: c, poules: [], matchs: [] }
+    : { equipes: c.equipes || [], poules: c.poules || [], matchs: c.matchs || [] };
+  let portee = 'tournoi';
+  try { portee = (JSON.parse(info.corps || '{}').portee) || 'tournoi'; } catch (e) { portee = 'tournoi'; }
+  return Object.assign({}, plan, { corps: { ok: true, portee: portee, instantane: instantane } });
 }
 
 function fabriquerReponse(plan, signal) {
@@ -458,14 +492,41 @@ function bac(opt) {
     },
     getsDe: function (action) {
       return reseau.journal.filter(function (i) { return i.methode !== 'POST' && i.action === action; });
+    },
+    /** ⭐ Une LECTURE, quelle que soit sa méthode : `getInstantaneAdmin` est un POST. */
+    lecturesDe: function (action) {
+      return reseau.journal.filter(function (i) { return i.action === action; });
+    },
+    /** ⭐ LA PORTÉE SÉPARE LES DEUX LECTURES que l'action unique confondrait : la CIBLÉE de l'écran
+     *  « Équipes » (`portee: 'equipes'`) et la GLOBALE du tableau de bord (sans portée). */
+    lecturesPortee: function (portee) {
+      return reseau.journal.filter(function (i) {
+        if (i.action !== 'getInstantaneAdmin') return false;
+        var p = '';
+        try { p = (JSON.parse(i.corps || '{}').portee) || ''; } catch (e) { p = ''; }
+        return portee === '' ? p === '' : p === portee;
+      });
     }
   };
 }
 
+/* ⭐ LES LECTURES DE L'ADMINISTRATION, PAR LEUR NOM.
+ * ⚠️ AFFINÉ le 24/09/2026 (lot « Pages publiques du tournoi »). Ce fichier distinguait lecture et
+ * écriture par la MÉTHODE HTTP : GET = lecture, POST = écriture. Le raccourci tenait tant que les
+ * lectures du tournoi étaient anonymes. Elles ne le sont plus — `getAll` et `getEquipes` livraient
+ * un tournoi non publié à qui demandait — et passent désormais par `getInstantaneAdmin`, un POST
+ * SOUS CLÉ ADMIN. ⛔ Router sur la méthode ferait prendre chaque relecture pour une écriture.
+ * ⭐ On route donc sur l'ACTION, ce qui est à la fois plus juste et plus lisible. */
+var LECTURES_ADMIN = ['getInstantaneAdmin', 'getConfigAdmin', 'getEquipes', 'getAll'];
+function estLectureAdmin(info) {
+  return LECTURES_ADMIN.indexOf(info && info.action) !== -1;
+}
+function estEcritureAdmin(info) { return !estLectureAdmin(info); }
+
 /** Scénario courant : l'écriture réussit, la lecture suivante suit `planLecture`. */
 function scenarioAjout(b, planLecture, planEcriture) {
   b.reseau.programmer(function (info) {
-    if (info.methode === 'POST') return planEcriture || { statut: 200, corps: { ok: true } };
+    if (!estLectureAdmin(info)) return planEcriture || { statut: 200, corps: { ok: true } };
     return typeof planLecture === 'function' ? planLecture(info) : planLecture;
   });
 }
@@ -543,8 +604,8 @@ async function principal() {
       json({ reprise: b.repriseVisible(), minuteurs: b.horloge.restantes() }));
 
     verifier('1.6', 'UNE écriture et UNE lecture, pas davantage',
-      b.postsDe('ajouterEquipe').length === 1 && b.getsDe('getEquipes').length === 1,
-      json({ post: b.postsDe('ajouterEquipe').length, get: b.getsDe('getEquipes').length }));
+      b.postsDe('ajouterEquipe').length === 1 && b.lecturesDe('getInstantaneAdmin').length === 1,
+      json({ post: b.postsDe('ajouterEquipe').length, get: b.lecturesDe('getInstantaneAdmin').length }));
   }
 
   {
@@ -569,8 +630,8 @@ async function principal() {
       json({ equipes: b.ctx.equipesCourantes, msg: b.message(), ferme: b.ajoutFerme() }));
 
     verifier('1.8', 'la vérification distante est lancée une fois en arrière-plan, sans seconde écriture',
-      b.postsDe('ajouterEquipe').length === 1 && b.getsDe('getEquipes').length === 1,
-      json({ post: b.postsDe('ajouterEquipe').length, get: b.getsDe('getEquipes').length }));
+      b.postsDe('ajouterEquipe').length === 1 && b.lecturesDe('getInstantaneAdmin').length === 1,
+      json({ post: b.postsDe('ajouterEquipe').length, get: b.lecturesDe('getInstantaneAdmin').length }));
 
     // Le tableau porte les effectifs dans deux colonnes étiquetées, plus dans un résumé.
     verifier('1.9', 'les effectifs affichés viennent de la réponse serveur confirmée',
@@ -602,8 +663,8 @@ async function principal() {
 
     verifier('1.11', 'réponse équipe incomplète : aucun identifiant n\'est inventé, le repli serveur conclut',
       b.ctx.equipesCourantes.length === 1 && b.ctx.equipesCourantes[0].id_equipe === 'SERVEUR' &&
-      b.getsDe('getEquipes').length === 1,
-      json({ equipes: b.ctx.equipesCourantes, get: b.getsDe('getEquipes').length }));
+      b.lecturesDe('getInstantaneAdmin').length === 1,
+      json({ equipes: b.ctx.equipesCourantes, get: b.lecturesDe('getInstantaneAdmin').length }));
   }
 
   {
@@ -661,10 +722,10 @@ async function principal() {
     await b.lancerAjout();
 
     verifier('1.15', 'si le rendu immédiat lève, le repli relit puis affiche sans renier l\'écriture',
-      rendus === 2 && b.getsDe('getEquipes').length === 1 &&
+      rendus === 2 && b.lecturesDe('getInstantaneAdmin').length === 1 &&
       b.ctx.equipesCourantes.length === 1 && b.ctx.equipesCourantes[0].id_equipe === 'E11' &&
       b.message() === '✅ « SÈVRES » ajoutée.',
-      json({ rendus: rendus, get: b.getsDe('getEquipes').length,
+      json({ rendus: rendus, get: b.lecturesDe('getInstantaneAdmin').length,
              equipes: b.ctx.equipesCourantes, msg: b.message() }));
   }
 
@@ -689,8 +750,8 @@ async function principal() {
       json(avantEcheance));
 
     verifier('2.2', 'après deux échéances : état ③ — la lecture rend la main, avec deux émissions au plus',
-      b.message().indexOf('Actualisation de la liste…') === -1 && b.getsDe('getEquipes').length === 2,
-      json({ msg: b.message(), lectures: b.getsDe('getEquipes').length }));
+      b.message().indexOf('Actualisation de la liste…') === -1 && b.lecturesDe('getInstantaneAdmin').length === 2,
+      json({ msg: b.message(), lectures: b.lecturesDe('getInstantaneAdmin').length }));
 
     verifier('2.3', 'l\'acquis reste DIT dans le message d\'échec (l\'écriture n\'est pas reniée)',
       b.message().indexOf('✅ « RACING 92-2 » ajoutée.') === 0,
@@ -726,8 +787,8 @@ async function principal() {
     await p;
     verifier('2.9', 'le budget couvre aussi l\'attente du CORPS de la réponse, puis tente une seconde lecture bornée',
       b.message().indexOf('n\'a PAS pu être actualisée') !== -1 && b.repriseVisible() === true &&
-      b.getsDe('getEquipes').length === 2 && b.horloge.restantes() === 0,
-      json({ msg: b.message(), reprise: b.repriseVisible(), lectures: b.getsDe('getEquipes').length,
+      b.lecturesDe('getInstantaneAdmin').length === 2 && b.horloge.restantes() === 0,
+      json({ msg: b.message(), reprise: b.repriseVisible(), lectures: b.lecturesDe('getInstantaneAdmin').length,
              minuteurs: b.horloge.restantes() }));
   }
 
@@ -757,9 +818,9 @@ async function principal() {
     await b.horloge.avancer(2000);
     await p;
     verifier('2.12', '404 : le rejeu unique de DR-6F joue (2 émissions), puis état ③ — jamais un échec d\'écriture',
-      b.getsDe('getEquipes').length === 2 && b.message().indexOf('✅ « QUATRE CENT QUATRE » ajoutée.') === 0 &&
+      b.lecturesDe('getInstantaneAdmin').length === 2 && b.message().indexOf('✅ « QUATRE CENT QUATRE » ajoutée.') === 0 &&
       b.message().indexOf('n\'a PAS pu être actualisée') !== -1,
-      json({ emissions: b.getsDe('getEquipes').length, msg: b.message() }));
+      json({ emissions: b.lecturesDe('getInstantaneAdmin').length, msg: b.message() }));
   }
 
   /* ---------------------------------------------------------------------- */
@@ -770,7 +831,7 @@ async function principal() {
     scenarioAjout(b, { statut: 200, corps: [] });
     b.saisir('BUDGET');
     await b.lancerAjout();
-    const lecture = b.getsDe('getEquipes')[0];
+    const lecture = b.lecturesDe('getInstantaneAdmin')[0];
     const ecriture = b.postsDe('ajouterEquipe')[0];
     verifier('3.1', 'la lecture ET le seul ajout idempotent partent avec un signal d\'abandon',
       lecture.borne === true && ecriture.borne === true,
@@ -796,7 +857,7 @@ async function principal() {
     const b = bac();
     let posts = 0;
     b.reseau.programmer(function (info) {
-      if (info.methode !== 'POST') {
+      if (estLectureAdmin(info)) {
         return { statut: 200, corps: [{ id_equipe: 'E9', nom_equipe: 'REPRISE SÛRE', categorie: 'U10' }] };
       }
       posts++;
@@ -822,8 +883,8 @@ async function principal() {
     /* Démarrage : une des deux lectures d'ouverture PEND. */
     const b = bac();
     b.reseau.programmer(function (info) {
-      if (info.methode === 'POST') return { statut: 200, corps: { config: { global: {}, categories: [] } } };
-      return 'pend';                                  // getAll ne répond jamais
+      if (info.action === 'getConfigAdmin') return { statut: 200, corps: { config: { global: {}, categories: [] } } };
+      return 'pend';                                  // l'instantané ne répond jamais
     });
     const p = b.ctx.ouvrirSessionAdmin();
     let issue = null;
@@ -841,9 +902,9 @@ async function principal() {
       issue !== null && !!issue.err, json({ issue: issue }));
 
     verifier('3.6', 'les DEUX lectures d\'ouverture partent bornées (getAll et getConfigAdmin)',
-      b.getsDe('getAll').length === 2 && b.getsDe('getAll').every(function (x) { return x.borne === true; }) &&
+      b.lecturesDe('getInstantaneAdmin').length === 2 && b.lecturesDe('getInstantaneAdmin').every(function (x) { return x.borne === true; }) &&
       b.postsDe('getConfigAdmin').length === 1 && b.postsDe('getConfigAdmin')[0].borne === true,
-      json({ getAll: b.getsDe('getAll'), post: b.postsDe('getConfigAdmin')[0] }));
+      json({ instantane: b.lecturesDe('getInstantaneAdmin'), post: b.postsDe('getConfigAdmin')[0] }));
 
     verifier('3.7', 'aucun minuteur résiduel après l\'abandon de l\'ouverture',
       b.horloge.restantes() === 0, json({ minuteurs: b.horloge.restantes() }));
@@ -864,7 +925,7 @@ async function principal() {
     b.el('champ-joueurs').value = '11';
 
     b.reseau.programmer(function (info) {
-      if (info.methode === 'POST') return { statut: 200, corps: { ok: true } };
+      if (estEcritureAdmin(info)) return { statut: 200, corps: { ok: true } };
       return { statut: 200, corps: [{ id_equipe: 'E3', nom_equipe: 'STADE FRANCAIS-1', categorie: 'U10' }], apres: 2300 };
     });
     const pr = b.ctx.onRepriseEquipes();
@@ -894,7 +955,7 @@ async function principal() {
 
     verifier('4.6', '⛔ la reprise n\'a réémis AUCUNE écriture — une seule depuis le début',
       b.postsDe('ajouterEquipe').length === 1 && b.reseau.journal.filter(function (i) {
-        return i.methode === 'POST' && i.action !== 'getConfigAdmin';
+        return i.methode === 'POST' && !estLectureAdmin(i);
       }).length === 1,
       json({ posts: b.reseau.journal.filter(function (i) { return i.methode === 'POST'; }).map(function (i) { return i.action; }) }));
 
@@ -916,12 +977,12 @@ async function principal() {
     const p2 = b.ctx.onRepriseEquipes();
     const p3 = b.ctx.onRepriseEquipes();
     await souffler();
-    const pendant = b.getsDe('getEquipes').length;
+    const pendant = b.lecturesDe('getInstantaneAdmin').length;
     await b.horloge.avancer(4000);
     await Promise.all([p1, p2, p3]);
     verifier('4.8', 'trois clics de reprise pendant une lecture en vol ⇒ UNE seule lecture émise',
-      pendant === 2 && b.getsDe('getEquipes').length === 2,
-      json({ pendantLesClics: pendant, total: b.getsDe('getEquipes').length }));
+      pendant === 2 && b.lecturesDe('getInstantaneAdmin').length === 2,
+      json({ pendantLesClics: pendant, total: b.lecturesDe('getInstantaneAdmin').length }));
   }
 
   {
@@ -991,7 +1052,7 @@ async function principal() {
     /* ⭐ R1 — Erreur MÉTIER : une réponse `{error}` ne prouve PAS l'absence d'écriture. */
     const b = bac();
     b.reseau.programmer(function (info) {
-      if (info.methode === 'POST') return { statut: 200, corps: { error: 'Catégorie inconnue.' } };
+      if (estEcritureAdmin(info)) return { statut: 200, corps: { error: 'Catégorie inconnue.' } };
       return { statut: 200, corps: [] };
     });
     b.saisir('REFUS METIER');
@@ -1002,7 +1063,7 @@ async function principal() {
       json({ msg: b.message(), ferme: b.ajoutFerme(), reprise: b.repriseVisible() }));
 
     verifier('6.2', 'erreur métier : aucune lecture automatique n\'est lancée — c\'est à l\'organisateur de décider',
-      b.getsDe('getEquipes').length === 0, json({ lectures: b.getsDe('getEquipes').length }));
+      b.lecturesDe('getInstantaneAdmin').length === 0, json({ lectures: b.lecturesDe('getInstantaneAdmin').length }));
   }
 
   {
@@ -1010,7 +1071,7 @@ async function principal() {
        écriture partielle. Elle est structurellement identique à un refus de validation. */
     const b = bac();
     b.reseau.programmer(function (info) {
-      if (info.methode === 'POST') return { statut: 200, corps: { error: 'Erreur serveur pendant l\'écriture.' } };
+      if (estEcritureAdmin(info)) return { statut: 200, corps: { error: 'Erreur serveur pendant l\'écriture.' } };
       return { statut: 200, corps: [] };
     });
     b.saisir('ERREUR SERVEUR');
@@ -1050,7 +1111,7 @@ async function principal() {
     /* Panne TECHNIQUE sur l'écriture : issue INCONNUE. */
     const b = bac();
     b.reseau.programmer(function (info) {
-      if (info.methode === 'POST') return { statut: 500 };
+      if (estEcritureAdmin(info)) return { statut: 500 };
       return { statut: 200, corps: [] };
     });
     b.saisir('INCONNU');
@@ -1076,7 +1137,7 @@ async function principal() {
     const b = bac();
     let n = 0;
     b.reseau.programmer(function (info) {
-      if (info.methode !== 'POST') return { statut: 200, corps: [] };
+      if (estLectureAdmin(info)) return { statut: 200, corps: [] };
       n++;
       return { statut: 200, corps: { error: 'Clé incorrecte', acces_refuse: true } };
     });
@@ -1127,7 +1188,7 @@ async function principal() {
     /* Suppression unitaire recevant un 404 : issue incertaine. */
     const b = bac();
     b.ctx.equipesCourantes = [{ id_equipe: 'E1', nom_equipe: 'RACING 92-1', categorie: 'U10' }];
-    b.reseau.programmer(function (info) { return info.methode === 'POST' ? { statut: 404 } : { statut: 200, corps: [] }; });
+    b.reseau.programmer(function (info) { return estEcritureAdmin(info) ? { statut: 404 } : { statut: 200, corps: [] }; });
     const bouton = fabriquerElement('suppr');
     bouton.getAttribute = function (a) { return a === 'data-id' ? 'E1' : 'RACING 92-1'; };
     await b.ctx.onSupprimerEquipe(bouton);
@@ -1147,7 +1208,7 @@ async function principal() {
     /* Suppression par catégorie : une partie a pu être supprimée. */
     const b = bac();
     b.ctx.equipesCourantes = [{ id_equipe: 'E1', categorie: 'U10' }, { id_equipe: 'E2', categorie: 'U10' }];
-    b.reseau.programmer(function (info) { return info.methode === 'POST' ? { statut: 500 } : { statut: 200, corps: [] }; });
+    b.reseau.programmer(function (info) { return estEcritureAdmin(info) ? { statut: 500 } : { statut: 200, corps: [] }; });
     const bouton = fabriquerElement('suppr-cat');
     bouton.getAttribute = function () { return 'U10'; };
     await b.ctx.onSupprimerCategorieEquipes(bouton);
@@ -1163,7 +1224,7 @@ async function principal() {
     const b = bac();
     b.ctx.equipesCourantes = [{ id_equipe: 'E1', nom_equipe: 'AVANT', categorie: 'U10' }];
     b.reseau.programmer(function (info) {
-      return info.methode === 'POST' ? { statut: 200, corps: { error: 'Erreur serveur pendant l\'écriture.' } }
+      return estEcritureAdmin(info) ? { statut: 200, corps: { error: 'Erreur serveur pendant l\'écriture.' } }
                                      : { statut: 200, corps: [] };
     });
     const item = fabriquerElement('item');
@@ -1320,9 +1381,9 @@ async function principal() {
       json({ maj: b.el('maj-admin').textContent }));
 
     verifier('R1.18', '⭐ C — la lecture de ce chemin part BORNÉE, et aucun minuteur ne survit',
-      b.getsDe('getAll').length === 2 && b.getsDe('getAll').every(function (x) { return x.borne === true; }) &&
+      b.lecturesDe('getInstantaneAdmin').length === 2 && b.lecturesDe('getInstantaneAdmin').every(function (x) { return x.borne === true; }) &&
       b.horloge.restantes() === 0,
-      json({ lectures: b.getsDe('getAll').length, borne: b.getsDe('getAll')[0].borne,
+      json({ lectures: b.lecturesDe('getInstantaneAdmin').length, borne: b.lecturesDe('getInstantaneAdmin')[0].borne,
              minuteurs: b.horloge.restantes() }));
   }
 
@@ -1331,7 +1392,7 @@ async function principal() {
     const b = bac();
     b.ctx.equipesCourantes = [{ id_equipe: 'AVANT' }];
     b.reseau.programmer(function (info) {
-      if (info.methode === 'POST') return { statut: 500 };   // lireConfigAdmin échoue
+      if (info.action === 'getConfigAdmin') return { statut: 500 };   // lireConfigAdmin échoue
       return { statut: 200, corps: { equipes: [{ id_equipe: 'NOUVELLE' }], matchs: [], poules: [] } };
     });
     let leve = false;
@@ -1341,8 +1402,8 @@ async function principal() {
       json({ leve: leve, equipes: b.ctx.equipesCourantes.map(function (e) { return e.id_equipe; }) }));
 
     verifier('R1.20', 'les DEUX lectures de ce chemin sont bornées',
-      b.getsDe('getAll')[0].borne === true && b.postsDe('getConfigAdmin')[0].borne === true,
-      json({ get: b.getsDe('getAll')[0].borne, post: b.postsDe('getConfigAdmin')[0].borne }));
+      b.lecturesDe('getInstantaneAdmin')[0].borne === true && b.postsDe('getConfigAdmin')[0].borne === true,
+      json({ get: b.lecturesDe('getInstantaneAdmin')[0].borne, post: b.postsDe('getConfigAdmin')[0].borne }));
   }
 
   /* ---------------------------------------------------------------------- */
@@ -1351,7 +1412,7 @@ async function principal() {
   {
     /* R2-1a — écriture EN VOL : ni le rendu des catégories, ni une seconde soumission. */
     const b = bac();
-    b.reseau.programmer(function (info) { return info.methode === 'POST' ? 'pend' : { statut: 200, corps: [] }; });
+    b.reseau.programmer(function (info) { return estEcritureAdmin(info) ? 'pend' : { statut: 200, corps: [] }; });
     b.saisir('DOUBLON EN VOL');
     const p = b.lancerAjout(); p.catch(function () {});
     await souffler();
@@ -1484,8 +1545,14 @@ async function principal() {
     const b = bac();
     b.valeur('afficherRepriseEquipes')('✅ acquis.');
     b.reseau.programmer(function (info) {
-      if (info.action === 'getEquipes') return o.ciblee;
-      if (info.action === 'getAll') return o.global;
+      /* ⭐ LES DEUX LECTURES SE DISTINGUENT PAR LEUR PORTÉE (lot « Pages publiques du tournoi ») :
+         `getEquipes` et `getAll` étaient deux portes ANONYMES ; il n'y en a plus qu'une, protégée,
+         et c'est `portee` qui sépare la lecture CIBLÉE de l'écran « Équipes » de la GLOBALE. */
+      if (info.action === 'getInstantaneAdmin') {
+        var p = '';
+        try { p = (JSON.parse(info.corps || '{}').portee) || ''; } catch (e) { p = ''; }
+        return p === 'equipes' ? o.ciblee : o.global;
+      }
       return { statut: 200, corps: {} };
     });
     let ciblee, global;
@@ -1532,12 +1599,12 @@ async function principal() {
     const r = await croisement({ ciblee: { statut: 200, corps: [{ id_equipe: 'C' }], apres: 9000 },
       global: { statut: 200, corps: { equipes: [{ id_equipe: 'G' }], matchs: [] }, apres: 1000 } });
     const b = r.b;
-    const avant = b.getsDe('getEquipes').length;
+    const avant = b.lecturesDe('getInstantaneAdmin').length;
     b.reseau.programmer(function () { return { statut: 200, corps: [{ id_equipe: 'FINAL' }] }; });
     await b.ctx.onRepriseEquipes();
 
     verifier('R2.16', '⭐ R2 — le clic suivant sur « Actualiser la liste » émet RÉELLEMENT une lecture',
-      b.getsDe('getEquipes').length === avant + 1, json({ avant: avant, apres: b.getsDe('getEquipes').length }));
+      b.lecturesDe('getInstantaneAdmin').length === avant + 1, json({ avant: avant, apres: b.lecturesDe('getInstantaneAdmin').length }));
 
     verifier('R2.17', 'et il rétablit un état cohérent : liste à jour, reprise cachée, ajout rouvert',
       json(b.ctx.equipesCourantes.map(function (e) { return e.id_equipe; })) === json(['FINAL']) &&
@@ -1546,7 +1613,7 @@ async function principal() {
              reprise: b.repriseVisible(), ferme: b.ajoutFerme() }));
 
     verifier('R2.18', '⛔ aucune mutation n\'a été émise pendant tout ce croisement',
-      b.reseau.journal.filter(function (i) { return i.methode === 'POST' && i.action !== 'getConfigAdmin'; }).length === 0,
+      b.reseau.journal.filter(function (i) { return i.methode === 'POST' && !estLectureAdmin(i); }).length === 0,
       json({ posts: b.reseau.journal.filter(function (i) { return i.methode === 'POST'; }).map(function (i) { return i.action; }) }));
   }
 
@@ -1589,8 +1656,8 @@ async function principal() {
       json({ msg: b.message(), reprise: b.repriseVisible() }));
 
     verifier('8.3', '⛔ AVANT : la lecture n\'est pas bornée — aucun signal d\'abandon n\'accompagne la requête',
-      b.getsDe('getEquipes').length === 1 && b.getsDe('getEquipes')[0].borne === false,
-      json({ borne: b.getsDe('getEquipes')[0].borne }));
+      b.lecturesDe('getInstantaneAdmin').length === 1 && b.lecturesDe('getInstantaneAdmin')[0].borne === false,
+      json({ borne: b.lecturesDe('getInstantaneAdmin')[0].borne }));
 
     /* APRÈS : même scénario, code réel — il faut que ça se dénoue. */
     const c = bac();
@@ -1620,10 +1687,17 @@ async function principal() {
     const listeGet = b.valeur('ACTIONS_GET_REJOUABLES');
     const listePost = b.valeur('ACTIONS_POST_REJOUABLES');
     const listeEcrituresIdempotentes = b.valeur('ACTIONS_POST_ECRITURES_IDEMPOTENTES');
-    verifier('9.1', 'les listes de lectures restent INCHANGÉES ; une liste séparée n\'autorise que l\'ajout idempotent',
+    /* ⚠️ 11 → 12 LECTURES REJOUABLES (lot « Pages publiques du tournoi », 24/09/2026) : `getPublic`,
+       l'état public autoritaire, entre dans la liste. ⭐ CE QUE CE CONTRÔLE PROTÈGE N'EST PAS
+       ASSOUPLI : les listes restent FERMÉES et GELÉES, les écritures restent hors de la liste des
+       lectures, et `ajouterEquipe` reste la SEULE écriture idempotente admise — c'est-à-dire tout
+       ce que ce contrôle défendait. Ce qui change, c'est un compte, et il change parce qu'une
+       LECTURE PURE de plus existe : ni verrou, ni écriture de classeur, ni propriété persistante. */
+    verifier('9.1', 'les listes de lectures restent FERMÉES et GELÉES ; une liste séparée n\'autorise que l\'ajout idempotent',
       Object.isFrozen(listeGet) && Object.isFrozen(listePost) &&
       Object.isFrozen(listeEcrituresIdempotentes) &&
-      listeGet.length === 11 && listePost.length === 7 &&
+      listeGet.length === 12 && listeGet.indexOf('getPublic') !== -1 &&
+      listePost.length === 8 && listePost.indexOf('getInstantaneAdmin') !== -1 &&
       listeEcrituresIdempotentes.length === 1 && listeEcrituresIdempotentes[0] === 'ajouterEquipe' &&
       listePost.indexOf('ajouterEquipe') === -1 && listePost.indexOf('listerSponsors') === -1 &&
       listeGet.indexOf('getEquipes') !== -1,
@@ -1778,7 +1852,7 @@ async function principal() {
         await souffler();
         const c = b.ctx.onRepriseEquipes(); c.catch(function () {});
         await souffler();
-        const emises = b.getsDe('getEquipes').length;
+        const emises = b.lecturesDe('getInstantaneAdmin').length;
         await b.horloge.avancer(5000);
         await Promise.all([a, c]);
         return emises > 2;
@@ -1841,12 +1915,16 @@ async function principal() {
         /* ⚠️ Pas de redéclaration du budget : `const` partage la portée lexicale du contexte vm,
            et la fonction mutée y résout donc la constante d'origine. */
         const MUTANT = substituer(bloc(F_ADMIN, 'async function rechargerEtRendre('),
-            '  if (equipesFraiches) equipesCourantes = data.equipes;',
-            '  equipesCourantes = data.equipes;', 'mutant Z.11');
+            '  const equipesFraiches = instantaneLu && ((jeton === null) || jetonEquipesValide(jeton));',
+            '  const equipesFraiches = true;', 'mutant Z.11');
         const b = bac();
         vm.runInContext(MUTANT, b.ctx);
+        /* ⭐ Les deux lectures se distinguent par leur PORTÉE : la GLOBALE (sans portée) est lente
+           et ramène une liste ANCIENNE ; la CIBLÉE (`portee: 'equipes'`) est rapide et à jour. */
         b.reseau.programmer(function (info) {
-          return info.action === 'getAll'
+          var p = '';
+          try { p = (JSON.parse(info.corps || '{}').portee) || ''; } catch (e) { p = ''; }
+          return (info.action === 'getInstantaneAdmin' && p !== 'equipes')
             ? { statut: 200, corps: { equipes: [{ id_equipe: 'ANCIENNE' }], matchs: [] }, apres: 9000 }
             : { statut: 200, corps: [{ id_equipe: 'A' }], apres: 1000 };
         });
@@ -1895,7 +1973,7 @@ async function principal() {
         vm.runInContext(MUTANT, b.ctx);
         b.ctx.equipesCourantes = [{ id_equipe: 'AVANT' }];
         b.reseau.programmer(function (info) {
-          return info.methode === 'POST' ? { statut: 500 }
+          return estEcritureAdmin(info) ? { statut: 500 }
             : { statut: 200, corps: { equipes: [{ id_equipe: 'NOUVELLE' }], matchs: [] } };
         });
         try { await b.ctx.rechargerEtRendre({ equipes: true, publication: true }); } catch (e) { /* attendu */ }

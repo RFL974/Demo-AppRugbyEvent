@@ -96,12 +96,23 @@ function navigateur(srv, lireJs, options) {
     };
     proto.dispatchEvent = function (brut) {
       const ev = Object.assign({ target: this, key: '', preventDefault() {}, stopPropagation() {} }, brut || {});
+      /* ⭐ UN ÉCOUTEUR QUI REJETTE EST UNE ISSUE, PAS UN PLANTAGE DU BANC.
+         🔬 Un écouteur `async` rend une promesse que le vrai navigateur ignore ; ici, elle
+         devenait un rejet NON GÉRÉ qui tuait la passe entière. ⛔ Depuis que `getAll` refuse un
+         tournoi non publié (lot « Pages publiques du tournoi »), un frontend FIGÉ rejoué contre le
+         backend courant rejette pour de bonnes raisons — et le banc doit l'OBSERVER, pas mourir.
+         ⭐ Les rejets sont donc retenus dans `doc.__rejets`, consultables par les contrôles. */
+      const surveiller = (r) => {
+        if (r && typeof r.catch === 'function') {
+          r.catch((e) => { (doc.__rejets = doc.__rejets || []).push(String(e && e.message || e)); });
+        }
+      };
       let n = this;
       while (n && n.tag) {
-        ((n.__ev || {})[ev.type] || []).slice().forEach((fn) => fn.call(n, ev));
+        ((n.__ev || {})[ev.type] || []).slice().forEach((fn) => surveiller(fn.call(n, ev)));
         n = n.parentNode;
       }
-      ((doc.__ev || {})[ev.type] || []).slice().forEach((fn) => fn.call(doc, ev));
+      ((doc.__ev || {})[ev.type] || []).slice().forEach((fn) => surveiller(fn.call(doc, ev)));
       return true;
     };
   })();

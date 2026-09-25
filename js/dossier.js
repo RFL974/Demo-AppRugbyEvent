@@ -105,21 +105,11 @@ async function initDossier() {
 }
 
 /**
- * Message affiché quand le lien du dossier est absent, incomplet ou expiré. Donne une porte de
- * sortie par EMAIL (contact_reponse_email, lu dans la vue invitation PUBLIQUE) : un club bloqué
- * le samedi matin doit pouvoir joindre l'organisateur. JAMAIS de téléphone — cette page s'affiche
- * sans jeton, donc elle est publique.
+ * Message affiché quand le lien du dossier est absent, incomplet ou expiré. Sans autorité valide,
+ * il reste générique : aucun contact du tournoi ne doit être récupéré par une lecture anonyme.
  */
 async function afficherLienDossierExpire(zone) {
-  let email = '';
-  try {
-    const cfg = await apiGet('getConfig'); // vue invitation (publique) : contient contact_reponse_email
-    email = txt(cfg && cfg.global && cfg.global.contact_reponse_email);
-  } catch (e) { /* contact indisponible : on reste sur un message générique */ }
-  const sortie = email
-    ? 'Pour recevoir votre lien personnel, écrivez à <a href="mailto:' + echapper(email) + '">'
-      + echapper(email) + '</a>.'
-    : 'Contactez l\'organisateur du tournoi pour recevoir votre lien personnel.';
+  const sortie = 'Contactez l\'organisateur du tournoi pour recevoir votre lien personnel.';
   zone.innerHTML =
     '<div class="message-chargement">Ce lien de dossier n\'est plus valide ou incomplet.<br>'
     + 'Chaque club reçoit un lien personnel unique.<br>' + sortie + '</div>';

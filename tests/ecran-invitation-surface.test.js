@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 'use strict';
 
+/* ⚠️ `getEquipes` / `getAll` → `getInstantaneAdmin` (lot « Pages publiques du tournoi »,
+ * 24/09/2026) : les relectures de l'administration passent par la lecture SOUS CLÉ ADMIN. Les deux
+ * portes qu'elles employaient étaient ANONYMES et livraient un tournoi non publié à qui demandait.
+ * ⛔ Même relecture, même contenu, même intention — seule l'autorité change. */
+
 /**
  * ============================================================================
  *  ÉCRAN « INVITER UN CLUB » — surface complète et jeu de démonstration, vrais modules contre le vrai Code.gs
@@ -262,7 +267,7 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
   await essai('P', async () => {
     const cas = async (mode) => { const b = await banc({ panne: (e, j) => (e.action === 'creerJeuDemoRacing' && j.filter((x) => x.action === 'creerJeuDemoRacing').length === 1 ? mode : null) }); return { b, r: await b.demo() }; };
     const p1 = await cas('http404-apres');
-    t.vrai(actions(p1.r).filter((a) => a === 'creerJeuDemoRacing').length === 1 && p1.r.fond.map((q) => q.action).sort().join() === 'getEquipes,listerClubsInvites' &&
+    t.vrai(actions(p1.r).filter((a) => a === 'creerJeuDemoRacing').length === 1 && p1.r.fond.map((q) => q.action).sort().join() === 'getInstantaneAdmin,listerClubsInvites' &&
       /^⚠️ Réponse du serveur non reçue.*pas confirmée/.test(p1.b.texte('message-jeu-demo')) && !/✅/.test(p1.b.texte('message-jeu-demo')) &&
       p1.b.id('message-jeu-demo').type !== 'ok' && !p1.b.boutonDemo().disabled,
       'P.1 réponse perdue (404 après écriture) : aucun renvoi automatique, relecture seule des deux listes en arrière-plan, « non confirmée », bouton rendu', [p1.r.resume, p1.b.texte('message-jeu-demo')]);
@@ -287,7 +292,7 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
       'P.11 verrou déjà occupé : refus clair, rien écrit, aucune relecture inutile', [v.r.resume, v.b.texte('message-jeu-demo')]);
     for (const [code, mode] of [['P.12', 'partielle'], ['P.13', 'ancienne']]) {
       const x = await cas(mode);
-      t.vrai(x.r.attendues.map((q) => q.action).sort().join() === 'creerJeuDemoRacing,getEquipes,listerClubsInvites' && ecrans(x.b).equipes.length === 21 &&
+      t.vrai(x.r.attendues.map((q) => q.action).sort().join() === 'creerJeuDemoRacing,getInstantaneAdmin,listerClubsInvites' && ecrans(x.b).equipes.length === 21 &&
         /✅/.test(x.b.texte('message-jeu-demo')), code + ' réponse ' + mode + ' (sans état relu) : les deux listes sont relues avant de rendre la main', x.r.resume);
     }
   });
@@ -432,8 +437,13 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
       'X.13 cache mêlé — admin-infos-publication.js d\'avant, admin-invitations.js neuf : « Sur place » s\'enregistre', [r13.resume, x13.erreurBranchement]);
     const x14 = await B.banc({ lire: B.lecteurMele(['js/admin.js'], LIRE), backend: CODE, monde: B.MI.amorcerClubs });
     const r14 = await x14.jouer(() => x14.cliquer(x14.id('bouton-rafraichir-admin')));
+    /* ⛔ ICI C'EST BIEN `getAll` QU'IL FAUT ATTENDRE : ce cas charge l'`admin.js` d'AVANT, qui ne
+       connaît pas la lecture sous clé. ⭐ Depuis le lot « Pages publiques du tournoi », `getAll`
+       lui rend un état VIDE mais BIEN FORMÉ quand le tournoi n'est pas publié — il continue donc
+       de fonctionner et de rendre la main, au lieu de tomber. ⛔ Et il n'obtient AUCUNE donnée non
+       publiée : c'est tout l'objet de la fermeture. */
     t.vrai(!x14.erreurBranchement && actions(r14).indexOf('getAll') !== -1 && r14.ecritures.length === 0 && !r14.bloque,
-      'X.14 cache mêlé — admin.js d\'avant : « Rafraîchir » fonctionne comme avant (sans relire les clubs), page branchée', [r14.resume, x14.erreurBranchement]);
+      'X.14 cache mêlé — admin.js d\'avant : « Rafraîchir » rend la main (état vide, page branchée)', [r14.resume, x14.erreurBranchement]);
     for (const [code, fichiers] of MELANGES) {
       const m = await B.banc({ lire: B.lecteurMele(fichiers, LIRE), backend: CODE });
       const r = await m.demo();
@@ -491,7 +501,7 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
       ['C5', 'retirer un club', clubs, () => {}, (b) => B.clic(b, B.clubLigne(b, 'CLUB FICTIF C').querySelector('.bouton-suppr-club')), 'supprimerClubInvite',
         'message-club-invite', () => true, ['listerClubsInvites'], (b) => { const l = B.clubLigne(b, 'CLUB FICTIF C'); return !l || !l.querySelector('.bouton-suppr-club').disabled; }],
       ['C6', 'ajouter les équipes au tournoi', clubs, () => {}, (b) => B.clic(b, B.clubLigne(b, 'CLUB FICTIF B').querySelector('.bouton-cats-club')),
-        'enregistrerCategoriesEngagees', 'message-club-invite', () => true, ['listerClubsInvites', 'getEquipes'],
+        'enregistrerCategoriesEngagees', 'message-club-invite', () => true, ['listerClubsInvites', 'getInstantaneAdmin'],
         (b) => { const x = B.clubLigne(b, 'CLUB FICTIF B').querySelector('.bouton-cats-club'); return x.getAttribute('aria-busy') === null; }]
     ];
     const ecrite = (action) => (q) => q.action === action && !(action === 'supprimerClubInvite' && q.corps.apercu === 'oui');
@@ -666,7 +676,7 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
     b.srv.postMesure({ action: 'enregistrerInvitation', cle: B.MI.CLE_ADMIN, parking_texte: 'PARKING AUTRE APPAREIL' });
     B.remplir(b, 'form-modalites', { tarif_engagement_oui: 'oui', tarif_engagement_montant: '75', tarif_engagement_mode: 'par_equipe' });
     const r = await b.jouer(() => b.cliquer(b.id('bouton-rafraichir-admin')));
-    t.vrai(['getAll', 'getConfigAdmin', 'listerClubsInvites'].every((a) => actions(r).indexOf(a) !== -1) && r.ecritures.length === 0 &&
+    t.vrai(['getInstantaneAdmin', 'getConfigAdmin', 'listerClubsInvites'].every((a) => actions(r).indexOf(a) !== -1) && r.ecritures.length === 0 &&
       B.clubLigne(b, 'CLUB AUTRE APPAREIL') && b.id('form-parking').parking_texte.value === 'PARKING AUTRE APPAREIL' &&
       b.id('form-modalites').tarif_engagement_montant.value === '75',
       'F.2 « Rafraîchir » relit VRAIMENT les clubs (club ajouté ailleurs affiché) et la configuration (parking changé ailleurs), sans écraser la saisie en cours',
@@ -848,7 +858,7 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
     };
     for (const [code, mode, faite] of [['R.2', 'silence', true], ['R.3', 'http404-apres', true], ['R.4', 'reseau-avant', false]]) {
       const z = await resetAvecPanne(mode);
-      t.vrai(!z.rr.bloque && z.emissions.length === 1 && z.emissions[0].delaiMs === 180000 && actions(z.rr).indexOf('getAll') !== -1 &&
+      t.vrai(!z.rr.bloque && z.emissions.length === 1 && z.emissions[0].delaiMs === 180000 && actions(z.rr).indexOf('getInstantaneAdmin') !== -1 &&
         /n’est pas confirmée/.test(z.msg) && /Rien n’est renvoyé/.test(z.msg) && !z.x.id('bouton-reinitialiser').disabled &&
         (faite ? z.x.srv.equipes().length === 0 && z.e.equipes.length === 0 && z.e.clubs.length === 0 && /elle a bien eu lieu/.test(z.msg)
           : z.x.srv.equipes().length === 21 && z.e.equipes.length === 21 && /n’a pas eu lieu/.test(z.msg)),
@@ -880,10 +890,10 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
       ['Q.3', 'retirer un club sans équipe (aperçu + retrait)', 'supprimerClubInvite', B.MI.amorcerClubs,
         (b) => B.clic(b, B.clubLigne(b, 'CLUB FICTIF C').querySelector('.bouton-suppr-club')), 'listerClubsInvites', (b) => !B.clubLigne(b, 'CLUB FICTIF C')],
       ['Q.4', 'retirer un club AVEC équipes (clubs et équipes suivent)', 'supprimerClubInvite', avecEquipesB,
-        (b) => B.clic(b, B.clubLigne(b, 'CLUB FICTIF B').querySelector('.bouton-suppr-club')), 'listerClubsInvites,getEquipes',
+        (b) => B.clic(b, B.clubLigne(b, 'CLUB FICTIF B').querySelector('.bouton-suppr-club')), 'listerClubsInvites,getInstantaneAdmin',
         (b) => !B.clubLigne(b, 'CLUB FICTIF B') && b.equipesAffichees().length === 0],
       ['Q.5', 'ajouter les équipes au tournoi (catégories engagées)', 'enregistrerCategoriesEngagees', B.MI.amorcerClubs,
-        (b) => B.clic(b, B.clubLigne(b, 'CLUB FICTIF B').querySelector('.bouton-cats-club')), 'getEquipes', (b) => b.equipesAffichees().length === 2],
+        (b) => B.clic(b, B.clubLigne(b, 'CLUB FICTIF B').querySelector('.bouton-cats-club')), 'getInstantaneAdmin', (b) => b.equipesAffichees().length === 2],
       ['Q.6', 'envoyer aux clubs non encore invités (envoi groupé)', 'envoyerInvitationsGroupe', B.MI.amorcerClubs,
         (b) => b.global('onEnvoyerInvitationsGroupe')(), 'listerClubsInvites',
         (b) => !!String((b.global('clubsInvitesCourants').find((c) => c.club_nom === 'CLUB FICTIF A') || {}).invitation_envoyee || '')]

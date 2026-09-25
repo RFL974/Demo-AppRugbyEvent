@@ -34,7 +34,14 @@ const DELAI_REJEU_404_MS = 300;
  *     creerOngletAvecEntetes peut créer l'onglet (en-têtes, style, première ligne figée).
  *  ⛔ `getPoules`, `getClassement` et toute action absente restent à UNE émission. */
 const ACTIONS_GET_REJOUABLES = Object.freeze([
-  'getAll', 'getRefFFR', 'getConfig', 'getEquipes', 'getMatchs', 'getConformiteFFR',
+  /* ⭐ `getPublic` (lot « Pages publiques du tournoi ») — l'état public autoritaire. Rejouable au
+     même titre que `getAll` : c'est une LECTURE PURE, servie par un cache qu'elle peut reconstruire,
+     sans verrou, sans écriture de classeur et sans propriété persistante.
+     ⛔ CHANGEMENT INERTE POUR LES AUTRES PAGES, et c'est ce qui le rend sûr malgré un `js/api.js`
+     encore servi SANS version à l'administration, à la saisie et aux pages club : seules les pages
+     publiques appellent `getPublic`, et elles chargent la version `?v=…-api2` de ce fichier. Un
+     navigateur qui garde en cache l'`api.js` d'avant se comporte donc EXACTEMENT comme avant. */
+  'getAll', 'getPublic', 'getRefFFR', 'getConfig', 'getEquipes', 'getMatchs', 'getConformiteFFR',
   'datesCompatiblesFFR', 'getCapacitesCategories', 'getConfigClub', 'getClubDossier', 'getReponseInvitation'
 ]);
 
@@ -45,7 +52,11 @@ const ACTIONS_GET_REJOUABLES = Object.freeze([
  *  ⛔ `listerSponsors` en est EXCLUE : elle appelle `assurerOngletSponsors`, qui peut créer
  *     l'onglet, ajouter des colonnes et réécrire les en-têtes. */
 const ACTIONS_POST_REJOUABLES = Object.freeze([
-  'getConfigAdmin', 'getDossierAutorisation', 'lireMesuresSponsors',
+  /* ⭐ `getInstantaneAdmin` (lot « Pages publiques du tournoi ») — l'instantané du tournoi sous CLÉ
+     ADMIN. Elle remplace, pour l'administration, l'appel ANONYME à `getAll`, désormais réservé au
+     tournoi PUBLIÉ. Rejouable au même titre que `getConfigAdmin` : son corps métier n'écrit ni dans
+     le classeur, ni dans Drive, ni dans une propriété persistante — elle ne prend même pas le verrou. */
+  'getConfigAdmin', 'getInstantaneAdmin', 'getDossierAutorisation', 'lireMesuresSponsors',
   'listerClubsInvites', 'getAccesScoresAdmin', 'getMatchsLitige', 'getSaisieScores'
 ]);
 
@@ -352,6 +363,85 @@ async function demanderCle(role, message) {
   const saisie = await dialogDemander(message, lireCleLocale(role), { ok: 'Valider', secret: true });
   if (saisie == null) return null;
   return saisie.trim();
+}
+
+/**
+ * L'INSTANTANÉ DU TOURNOI, LU SOUS CLÉ ADMIN — équipes, poules, matchs (et la vue live, ignorée ici).
+ *
+ * 🔬 POURQUOI CE N'EST PLUS `getAll`. Jusqu'au 24/09/2026, cet écran lisait `getAll`, une porte
+ * ANONYME : n'importe qui pouvait l'appeler et recevoir 21 équipes, 8 poules, 34 matchs AVEC LEURS
+ * SCORES d'un tournoi jamais publié ou masqué. ⛔ Le fait que seuls des écrans « autorisés » s'en
+ * servaient ne protégeait rien — l'adresse du backend est publique, et `curl` suffit.
+ * ⭐ `getAll` est désormais réservé au tournoi PUBLIÉ ; l'administration, elle, porte déjà une
+ * autorité — la clé admin —, et c'est par elle qu'elle lit. Même contenu, même écran, vraie porte.
+ *
+ * ⭐ `cle` est RÉSERVÉE à l'ouverture de la page (`ouvrirSessionAdmin`), comme pour `lireConfigAdmin` :
+ * on l'envoie TELLE QUELLE, sans fenêtre et sans rien mémoriser, pour que le refus revienne à
+ * l'appelant. Sans argument, la clé déjà rangée est employée (et redemandée si elle est refusée).
+ * ⛔ UNE RÉPONSE INCOMPLÈTE N'EST PAS UN TOURNOI VIDE : elle lève, plutôt que de laisser un écran
+ * conclure qu'il n'y a ni équipe, ni poule, ni match.
+ */
+async function lireInstantaneAdmin(cle, options) {
+  let r;
+  try {
+    r = cle
+      ? await apiPost('getInstantaneAdmin', { cle: cle }, options)
+      : await apiPostProtege('getInstantaneAdmin', {}, 'admin', 'admin', options);
+  } catch (err) {
+    /* ⭐ BACKEND TROP ANCIEN : l'action n'existe pas encore chez lui. ⛔ ÉCHEC FERMÉ, et l'erreur est
+       MARQUÉE pour que l'appelant sache exactement ce qui manque. ⛔ IL N'Y A AUCUN REPLI SUR
+       `getAll` : ce serait rouvrir la porte ANONYME que ce lot vient de fermer, et le contrat
+       l'interdit en toutes lettres — « plutôt qu'un appel à un ancien endpoint qui livrerait déjà
+       les données ». ⚠️ Conséquence de déploiement, dite plutôt que tue : le backend se déploie
+       AVANT le frontend. */
+    if (/action inconnue/i.test(String((err && err.message) || ''))) {
+      throw Object.assign(
+        new Error('Le serveur est dans une version trop ancienne pour la lecture protégée du tournoi.'),
+        { backendTropAncien: true });
+    }
+    throw err;
+  }
+  if (!r || !r.instantane || !Array.isArray(r.instantane.equipes) ||
+      !Array.isArray(r.instantane.poules) || !Array.isArray(r.instantane.matchs)) {
+    throw new Error('Instantané du tournoi incomplet ; aucune modification ne peut être validée.');
+  }
+  return r.instantane;
+}
+
+/**
+ * ⭐ LA LECTURE CIBLÉE DE L'ÉCRAN « ÉQUIPES » — la même porte, la même clé, une portée PLUS ÉTROITE.
+ * ⛔ Elle ne demande que les équipes : l'écran jette les poules et les matchs, les transporter
+ * serait payer un aller-retour plus gros pour rien. ⛔ La portée ne donne aucun droit : la clé est
+ * vérifiée avant, et une portée inventée ne peut que RÉDUIRE ce qui est rendu.
+ * ⭐ Elle rend aussi les deux lectures DISTINGUABLES — d'un journal, d'un banc, d'un audit — là où
+ * une action unique les aurait confondues.
+ */
+
+/**
+ * L'instantané, ou un état VIDE ET DÉCLARÉ quand le serveur est trop ancien pour le servir.
+ *
+ * ⭐ POURQUOI DÉGRADER PLUTÔT QUE TOMBER. Beaucoup d'écrans d'administration n'ont pas besoin des
+ * équipes ni des matchs — publier, réinitialiser, régler les contacts, inviter un club. Les faire
+ * tous échouer parce qu'UNE lecture manque punirait l'organisateur pour un ordre de déploiement.
+ * ⛔ CE QUE ÇA NE FAIT PAS : inventer des données, ni retomber sur la porte anonyme. Le drapeau
+ * `indisponible` voyage AVEC l'état vide, pour qu'aucun écran ne puisse prendre ce vide pour un
+ * tournoi réellement vide.
+ */
+async function lireEquipesAdmin(options) {
+  const r = await apiPostProtege('getInstantaneAdmin', { portee: 'equipes' }, 'admin', 'admin', options);
+  if (!r || !r.instantane || !Array.isArray(r.instantane.equipes)) {
+    throw new Error('Liste des équipes incomplète ; aucune modification ne peut être validée.');
+  }
+  return r.instantane.equipes;
+}
+
+async function lireInstantaneAdminOuVide(cle, options) {
+  try {
+    return await lireInstantaneAdmin(cle, options);
+  } catch (err) {
+    if (!err || err.backendTropAncien !== true) throw err;
+    return { equipes: [], poules: [], matchs: [], indisponible: 'backend_trop_ancien' };
+  }
 }
 
 /**

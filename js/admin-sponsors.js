@@ -1552,6 +1552,11 @@ async function onVerifierPublic() {
   let data = null;
   let erreur = '';
   try {
+    /* ⭐ ICI, L'APPEL ANONYME EST LE SUJET, PAS UN OUBLI. Ce bouton vérifie ce que le PUBLIC
+       reçoit : il doit donc frapper la porte publique, sans clé, exactement comme un spectateur.
+       ⛔ Depuis le lot « Pages publiques du tournoi », `getAll` refuse quand le tournoi n'est pas
+       publié — et c'est un RÉSULTAT DE DIAGNOSTIC valable, pas une panne : « Tournoi non publié. »
+       s'affiche alors dans le verdict ci-dessous, ce qui est exactement ce que le public voit. */
     data = await apiGet('getAll', null, { delaiMs: DELAI_SPONSORS_MS });
   } catch (err) {
     erreur = messageErreurSponsors(err, false);

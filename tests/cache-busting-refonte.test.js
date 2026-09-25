@@ -18,10 +18,24 @@
  *  `git diff --name-only origin/main...refonte/ciel-et-verre -- 'css/*' 'js/*'`). Chacun doit
  *  être appelé avec UNE seule version, explicite et identique partout.
  *
+ *  ⚠️ UNE JUSTIFICATION FAUSSE A ÉTÉ CORRIGÉE ICI (lot « Pages publiques du tournoi », 24/09/2026).
+ *  Ce bandeau affirmait que `js/api.js` n'avait pas bougé et n'avait donc pas besoin d'adresse
+ *  neuve. 🔬 C'ÉTAIT FAUX, et vérifiable en une commande :
+ *      git diff --stat origin/main...refonte/ciel-et-verre -- js/api.js   →  47 ajouts, 10 retraits
+ *  Deux commits l'avaient modifié — `e1a7f06` puis `7cabce4` (lot « Saisie des scores ») — alors
+ *  qu'il restait servi SANS version. Le test PASSAIT quand même, parce qu'il ne regardait que les
+ *  fichiers de sa propre liste : il ne mentait pas sur ce qu'il vérifiait, il mentait sur ce qu'il
+ *  affirmait ne pas avoir besoin de vérifier. ⛔ Le pire garde-fou est celui qui rassure à tort.
+ *  ⭐ La section 5 ci-dessous ferme le défaut à la racine, pour les PAGES PUBLIQUES : chaque
+ *  ressource qu'elles chargent voit son CONTENU ÉPINGLÉ à son ADRESSE. Modifier le fichier sans
+ *  changer l'URL fait désormais échouer ce test.
+ *
  *  ⛔ HORS PORTÉE, ET C'EST VOULU :
- *    · les fichiers NON modifiés (`js/api.js`, `js/sponsors.js`, `js/vendor/…`…) gardent leur
- *      adresse : leur contenu n'a pas bougé, les reversionner ne ferait que vider des caches
- *      encore valides ;
+ *    · `js/vendor/…` : bibliothèques tierces, jamais modifiées, jamais reversionnées ;
+ *    · `js/api.js` et `js/commun-dossier.js` restent servis SANS version à l'administration, à la
+ *      saisie et aux pages club. ⚠️ C'est une DETTE CONNUE, consignée par le lot « Pages publiques » :
+ *      la fermer impose de toucher `admin.html` (et donc la « Feuille de journée », exclue du lot).
+ *      Les pages PUBLIQUES, elles, sont couvertes en section 5 ;
  *    · `backend/gateway-acces-scores/SaisieProtegee.html` est FIGÉ (empreinte vérifiée octet
  *      pour octet, contrôle S.3) : la page protégée charge donc `css/styles.css`, `js/commun.js`,
  *      `js/dialog.js`, `js/api.js`, `js/saisie.js` et `js/saisie-protegee.js` SANS version.
@@ -127,5 +141,108 @@ pages.forEach(page => {
 });
 vrai(vendorVersionne.length === 0,
   '⛔ les bibliothèques `js/vendor/` restent telles quelles : ' + vendorVersionne.join(', '));
+
+/* ---- 5) PAGES PUBLIQUES : le CONTENU de chaque ressource est ÉPINGLÉ à son ADRESSE ----
+ *
+ * ⭐ L'INVARIANT, en une phrase : un fichier dont les octets changent doit changer d'URL.
+ * Les sections 1 à 4 vérifient la FORME des adresses (une version, la bonne, partout). Elles ne
+ * peuvent RIEN dire du contenu — c'est exactement ce qui a laissé passer `js/api.js`.
+ * ⛔ Ici, chaque ressource chargée par une page PUBLIQUE est épinglée : adresse ET empreinte.
+ * Toucher au fichier sans toucher à l'adresse fait échouer ce contrôle, et le message dit quoi faire.
+ *
+ * ⚠️ CE QUE CE TABLEAU N'EST PAS : une liste de versions à incrémenter par réflexe. Une ressource
+ * INCHANGÉE garde son adresse — reversionner pour rien viderait des caches encore valides, ce que
+ * la doctrine du dépôt refuse depuis l'origine. C'est pourquoi `js/sponsors.js` y figure SANS
+ * version : ce lot ne l'a pas touché, et son empreinte le prouve.
+ */
+const PUBLIQUES = ['index.html', 'tournoi.html', 'perfs.html'];
+
+/** [chemin, requête attendue, SHA-256 du contenu servi à cette adresse]. */
+const EPINGLES = [
+  ['css/sponsors.css', '?v=refonte-ciel-verre-20260920',
+    'f68723568bbd8145e9d9c2a28c88a2306cbdabfb46eba54d6e116ba1dd375545'],
+  ['css/styles.css', '?v=refonte-ciel-verre-20260920',
+    '5be9e18c803daed289b26b45ea1ddc54ed91fd3fbb71227fe8e9bf68bc22b9e7'],
+  ['css/tokens.css', '?v=refonte-ciel-verre-20260920',
+    '59609c6375098bc54a7fe6d8fd706f5e2e9150b91b52461944203fe43ffa13dc'],
+  ['css/tournoi-public.css', '?v=refonte-ciel-verre-20260920',
+    'cdcaaa5e96cc5f9d8943661d185d9642df26bebef62d5fb6ed30684d6a839b73'],
+  /* ⭐ L'ADRESSE PROPRE À LA RESSOURCE : le suffixe `-api2` produit une URL DISTINCTE sans toucher
+     à la version GLOBALE de la livraison, qui doit rester `refonte-ciel-verre-20260920`. */
+  ['js/api.js', '?v=refonte-ciel-verre-20260920-api2',
+    '04761ab8ee8bd9c3d8aba1db029a1b45f31a062b34a33a124213919a273be0d7'],
+  ['js/commun.js', '?v=refonte-ciel-verre-20260920',
+    'a269fc151823318b7a1f78f81e3b13502d0a39460bec27c7e503282f3673274d'],
+  ['js/config.js', '?v=refonte-ciel-verre-20260920',
+    '26c341bc20571a7e28632e7b64214a3feae0d7a8c1c2a10e31a54dab35d20ee6'],
+  ['js/dialog.js', '?v=refonte-ciel-verre-20260920',
+    'de2d2634f89bb710a7feaa56f95f6afa515a8b7eba2845cf2916932b757c9115'],
+  ['js/perfs.js', '?v=refonte-ciel-verre-20260920',
+    'ed24f59aa298d6d236a490f1388e46f58e73f5281d1b6b12c5820f8b1e5dc18f'],
+  /* ⛔ SANS VERSION, ET C'EST JUSTE : `js/sponsors.js` n'a été modifié ni par la refonte, ni par ce
+     lot. Son empreinte est là pour qu'un changement futur ne puisse plus passer inaperçu. */
+  ['js/sponsors.js', '',
+    '18c8f8af4bed1f5c9ae3104a92f75298adcf05d21d8d1a69c0e1ebf2e1ba82cf'],
+  ['js/tournoi.js', '?v=refonte-ciel-verre-20260920',
+    '1a77083cbb34fa9ba3be81ce9b120959e335cdd13b2f768a20a60a27cd0bbe9f']
+];
+
+const crypto = require('node:crypto');
+const sha256 = (rel) => crypto.createHash('sha256')
+  .update(fs.readFileSync(path.join(racine, rel))).digest('hex');
+
+/** Les ressources RÉELLEMENT chargées par les pages publiques (balises + @import). */
+function ressourcesPubliques() {
+  const trouve = new Map();
+  const ajouter = (chemin, requete) => {
+    if (!trouve.has(chemin)) trouve.set(chemin, new Set());
+    trouve.get(chemin).add(requete || '');
+  };
+  PUBLIQUES.forEach((page) => {
+    const html = lire(page);
+    const motif = new RegExp(MOTIF.source, 'g');
+    let m;
+    while ((m = motif.exec(html)) !== null) ajouter(m[1], m[2]);
+  });
+  // Les feuilles tirées par `@import`, qu'aucune balise ne nomme.
+  Array.from(trouve.keys()).filter((f) => f.endsWith('.css')).forEach((f) => {
+    const motif = /@import url\("([^"?]+)(\?[^"]*)?"\)/g;
+    let m;
+    while ((m = motif.exec(lire(f))) !== null) ajouter('css/' + m[1], m[2] || '');
+  });
+  return trouve;
+}
+
+const reelles = ressourcesPubliques();
+const epingles = new Map(EPINGLES.map((e) => [e[0], e]));
+
+vrai(EPINGLES.length === reelles.size,
+  '⛔ le tableau d’épingles décrit EXACTEMENT les ressources des pages publiques — épinglées : ' +
+  EPINGLES.length + ', chargées : ' + reelles.size + ' — écart : ' +
+  JSON.stringify(Array.from(reelles.keys()).filter((f) => !epingles.has(f))
+    .concat(EPINGLES.map((e) => e[0]).filter((f) => !reelles.has(f)))));
+
+const desaccords = [];
+reelles.forEach((requetes, chemin) => {
+  const e = epingles.get(chemin);
+  if (!e) { desaccords.push(chemin + ' : non épinglé'); return; }
+  const vues = Array.from(requetes);
+  if (vues.length !== 1 || vues[0] !== e[1]) {
+    desaccords.push(chemin + ' : adresse ' + JSON.stringify(vues) + ' ≠ ' + JSON.stringify(e[1]));
+  }
+  const reel = sha256(chemin);
+  if (reel !== e[2]) {
+    desaccords.push(chemin + ' : CONTENU CHANGÉ (' + reel.slice(0, 12) + '… ≠ ' + e[2].slice(0, 12) +
+      '…) — donne-lui une adresse neuve, puis épingle la nouvelle empreinte');
+  }
+});
+vrai(desaccords.length === 0,
+  '⭐⭐ chaque ressource des pages publiques est servie à SON adresse épinglée, avec SON contenu épinglé — ' +
+  'désaccords : ' + desaccords.join(' | '));
+
+/* Le suffixe propre à une ressource ne doit jamais devenir une version GLOBALE de rechange. */
+vrai(EPINGLES.every((e) => e[1] === '' || e[1] === '?v=' + VERSION || e[1].indexOf('?v=' + VERSION + '-') === 0),
+  '⛔ toute adresse épinglée est soit nue, soit la version de la livraison, soit un SUFFIXE de ' +
+  'celle-ci — ⛔ jamais une version concurrente');
 
 console.log('OK — ' + controles + '/' + controles + ' contrôles de cache-busting passés.');

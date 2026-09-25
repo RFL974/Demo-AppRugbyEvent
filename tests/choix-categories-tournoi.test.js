@@ -86,6 +86,11 @@ function bac(categories = []) {
     apiGet: async (action, params) => {
       appels.api.push({ action, params });
       if (hooks.api) return hooks.api(action, params);
+      return { formes: [], dates: [] };
+    },
+    apiPostProtege: async (action, params, role, libelle, options) => {
+      appels.api.push({ action, params });
+      if (hooks.api) return hooks.api(action, params);
       if (action === 'datesCompatiblesFFR') return { jours: [{ date: '2027-05-15', dow: 6, applicable: true, statut: 'compatible' }] };
       return { refDisponible: true, bloquants: params.date === '2026-10-17'
         ? [{ libelle: 'CONFLIT SIMULÉ', categories: ['U10', 'U12'] }] : [], avertissements: [], regles: [], temps: [] };

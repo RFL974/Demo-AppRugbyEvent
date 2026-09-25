@@ -89,6 +89,8 @@ let historique = [];
 const INTERVALLE_MS = 60000;
 let derniereSignature = '';
 let minuteurPerfs = null; // minuteur du prochain rafraîchissement (null = en pause)
+let derniereRequetePerfs = 0;
+let derniereGenerationPerfs = -1;
 
 /** Point d'entrée : onglets + chargement initial + rafraîchissement automatique. */
 async function initPerfs() {
@@ -131,19 +133,58 @@ function basculer(cible) {
   document.getElementById('vue-saison').hidden = (cible !== 'saison');
 }
 
-/** (Re)charge tournoi en cours (getAll) + saison (getHistorique). Ne réaffiche que si ça change. */
+/**
+ * (Re)charge le tournoi en cours (`getPublic`) + la saison (`getHistorique`).
+ *
+ * ⭐ CETTE PAGE EST PUBLIQUE, et elle ne l'était que par omission. Elle n'est liée nulle part,
+ * mais elle est servie en statique par GitHub Pages : n'en connaître l'adresse est une politesse,
+ * pas une protection. Elle passe donc par le MÊME état public autoritaire que `tournoi.html` :
+ * tant que le tournoi n'est pas publié, elle ne reçoit RIEN à afficher — ⛔ c'est le serveur qui
+ * le décide, pas ce fichier.
+ *
+ * ⛔ ET ELLE N'ÉCRIT PLUS RIEN. `getHistorique` créait l'onglet `Historique` du classeur quand il
+ * manquait — six écritures déclenchées par une simple ouverture de page. Le serveur ne le fait
+ * plus ; il filtre aussi de sa réponse les lignes de l'édition COURANTE tant qu'elle n'est pas
+ * publiée, sans quoi les scores d'un tournoi masqué ressortiraient par cette porte.
+ */
 async function charger(premier) {
+  const requete = ++derniereRequetePerfs;
   try {
     // ⚡ Les DEUX lectures partent EN MÊME TEMPS (Promise.all) au lieu de l'une après
     // l'autre : la page se charge en ~1 temps de requête au lieu de ~2.
-    // L'historique peut ne pas être dispo (backend pas encore redéployé) : on tolère
-    // l'échec pour que « Ce tournoi » fonctionne toujours ; « Saison » sera juste vide.
+    // L'historique peut être refusé (tournoi non publié) ou absent : on tolère l'échec pour que
+    // « Ce tournoi » réponde toujours ; « Saison » est alors simplement vide.
     const [data, hist] = await Promise.all([
-      apiGet('getAll'),
+      apiGet('getPublic'),
       apiGet('getHistorique').catch(function () { return []; })
     ]);
 
-    // Le mot-clé du club voyage DÉJÀ dans getAll (vue `live`) : aucun appel réseau de plus.
+    if (requete !== derniereRequetePerfs) return;
+
+    /* ⛔ ÉCHEC FERMÉ : un backend trop ancien ne connaît pas `getPublic` (l'appel a déjà levé), et
+       une réponse qui ne porte pas le contrat n'est pas un état public. ⛔ Aucun repli sur
+       `getAll` : il livrerait le tournoi non publié que ce contrat vient précisément de fermer. */
+    const genereMs = Date.parse(String((data && data.genere_le) || ''));
+    const serviMs = Date.parse(String((data && data.servi_le) || ''));
+    if (!data || data.contrat !== 'public-1' || typeof data.public !== 'boolean' ||
+        typeof data.version !== 'string' || !data.version || !Array.isArray(data.equipes) ||
+        !Array.isArray(data.matchs) || !data.config || !isFinite(genereMs) ||
+        !isFinite(serviMs) || serviMs < genereMs) throw new Error('Réponse publique illisible.');
+    if (derniereGenerationPerfs >= 0 && genereMs < derniereGenerationPerfs) return;
+    derniereGenerationPerfs = genereMs;
+    if (data.public !== true) {
+      motCleClub = '';
+      equipes = []; matchs = []; historique = []; nomParEquipe = {};
+      derniereSignature = 'non-publie';
+      document.getElementById('vue-tournoi').innerHTML =
+        '<p class="vide">Le tournoi n’est pas publié : aucune donnée n’est disponible.</p>';
+      document.getElementById('vue-saison').innerHTML =
+        '<p class="vide">Le tournoi n’est pas publié : aucune donnée n’est disponible.</p>';
+      majHeure(data);
+      return;
+    }
+
+    // Le mot-clé du club voyage DÉJÀ dans l'état public : aucun appel réseau de plus.
     const globalConfig = (data.config && data.config.global) || {};
     motCleClub = normaliserPourClub(globalConfig.perfs_mot_cle_club);
 
@@ -155,7 +196,7 @@ async function charger(premier) {
     nomParEquipe = indexerNoms(equipes); // index id → nom (O(1))
     matchs = data.matchs || [];
     historique = Array.isArray(hist) ? hist : [];
-    majHeure();
+    majHeure(data);
 
     if (premier || signature !== derniereSignature) {
       derniereSignature = signature;
@@ -163,6 +204,7 @@ async function charger(premier) {
       afficherSaison();
     }
   } catch (err) {
+    if (requete !== derniereRequetePerfs) return;
     if (premier) {
       document.getElementById('vue-tournoi').innerHTML =
         '<p class="vide">Erreur de chargement : ' + echapper(err.message) + '</p>';
@@ -170,14 +212,19 @@ async function charger(premier) {
   }
 }
 
-/** Affiche l'heure de dernière mise à jour. */
-function majHeure() {
+/**
+ * Affiche l'heure des DONNÉES — celle que le serveur a datée (`genere_le`), pas celle du
+ * téléphone. ⛔ Sans elle, une réponse servie par un cache de dix minutes s'affichait à l'heure
+ * courante : le geste était daté, pas le contenu.
+ */
+function majHeure(etat) {
   const el = document.getElementById('maj-perfs');
   if (!el) return;
-  const d = new Date();
-  el.textContent = 'Mis à jour à ' +
-    String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0') +
-    ':' + String(d.getSeconds()).padStart(2, '0');
+  const t = Date.parse(String((etat && etat.genere_le) || ''));
+  if (!isFinite(t)) { el.textContent = ''; return; }
+  const d = new Date(t);
+  el.textContent = 'Données du ' +
+    String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }
 
 /**

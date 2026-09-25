@@ -985,7 +985,11 @@ async function rechargerEquipes(options) {
   lectureEquipesProprietaire = proprietaire;
   let equipes, echec = null;
   try {
-    equipes = await apiGet('getEquipes', null,
+    /* ⭐ LECTURE SOUS CLÉ ADMIN (lot « Pages publiques du tournoi »). ⛔ `getEquipes` était une
+       porte ANONYME : elle rendait les équipes d'un tournoi jamais publié ou masqué, avec leurs
+       colonnes brutes — `source`, `nb_joueurs`, `nb_educateurs`, c'est-à-dire les EFFECTIFS — à qui
+       demandait. Elle est désormais réservée au tournoi PUBLIÉ ; cet écran, lui, porte la clé. */
+    equipes = await lireEquipesAdmin(
       { delaiMs: (options && options.delaiMs) || DELAI_LECTURE_EQUIPES_MS });
   } catch (err) {
     // ⭐ R1 — L'ERREUR EST RETENUE, PAS RELANCÉE TOUT DE SUITE. Le jeton ne filtrait que les

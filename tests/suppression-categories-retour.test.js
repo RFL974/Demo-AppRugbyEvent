@@ -108,7 +108,11 @@ async function main() {
     const c = vm.createContext({ DELAI_LECTURE_ADMIN_MS: 30000,
       configCourante: initial, equipesCourantes: ['actuelles'],
       versionCategoriesCourante: () => revision,
-      apiGet: () => new Promise(r => { finir = r; }),
+      /* ⚠️ La relecture de `rechargerEtRendre` passe par `lireInstantaneAdmin` (SOUS CLÉ ADMIN)
+         depuis le lot « Pages publiques du tournoi » : `getAll` était une porte anonyme. La
+         doublure change de nom, pas d'intention — elle pend jusqu'à ce que le test la dénoue. */
+      lireInstantaneAdmin: () => new Promise(r => { finir = r; }),
+      lireInstantaneAdminOuVide: () => new Promise(r => { finir = r; }),
       lireConfigAdmin: async () => ({ global: {}, categories: [{ categorie: 'U6' }] })
     });
     vm.runInContext('async ' + extrait('js/admin.js', 'rechargerEtRendre'), c);
@@ -132,6 +136,7 @@ async function main() {
     const element = id => elements[id] || (elements[id] = { innerHTML: '', disabled: false,
       addEventListener() {}, value: id === 'finder-mois' ? '2027-05' : '' });
     const c = vm.createContext({ apiGet: api,
+      apiPostProtege: (action, params, role, libelle, options) => api(action, params, options),
       configCourante: { global: { tournoi_date: '2027-05-15', zone_vacances: 'C' },
         categories: [{ categorie: 'U10', presente: 'oui' }] },
       document: { getElementById: element, querySelector: () => null, querySelectorAll: () => [] },

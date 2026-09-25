@@ -7,9 +7,33 @@
  *   • 📋 Mon équipe  — sélection d'une équipe → ses matchs + ses classements (onglet par défaut)
  *   • 🏆 Classements — derniers scores du tournoi, puis poules (matin) + niveaux croisés (après-midi)
  *
- *  Un SEUL appel réseau (getAll) et un SEUL rafraîchissement auto (60 s) alimentent
- *  les 2 vues. Barème partout identique au backend : V=3 / N=2 / D=1, départage par
- *  la différence (BP − BC) puis les points marqués ; seuls les matchs « terminé » comptent.
+ *  Un SEUL appel réseau et un SEUL rafraîchissement auto (~15 s) alimentent les 2 vues.
+ *  Barème partout identique au backend : V=3 / N=2 / D=1, départage par la différence
+ *  (BP − BC) puis les points marqués ; seuls les matchs « terminé » comptent.
+ *
+ *  ⭐ LA LECTURE PASSE PAR `getPublic`, L'ÉTAT PUBLIC AUTORITAIRE — jamais par `getAll`.
+ *
+ *  🔬 CE QUE CETTE PAGE FAISAIT AVANT, et pourquoi c'était faux. Elle lisait `getAll`, qui livre
+ *  le tournoi ENTIER quel que soit son état, et c'est `appliquerPublication()` — ICI, dans le
+ *  navigateur — qui masquait l'écran quand `tournoi_publie` valait autre chose que « oui ».
+ *  Mesuré sur le backend figé `e1c96067`, tournoi NON PUBLIÉ : 21 équipes, 8 poules, 34 matchs
+ *  AVEC LEURS 34 SCORES, 3 partenaires, livrés à qui demandait. ⛔ Masquer n'est pas protéger :
+ *  l'adresse du backend est dans `js/config.js`, que n'importe qui peut lire.
+ *
+ *  ⭐ CE QUE `getPublic` CHANGE ICI, en quatre points :
+ *   ① L'ÉTAT EST DÉCIDÉ PAR LE SERVEUR. Tournoi non publié ⇒ la réponse ne PORTE rien. Il n'y a
+ *      plus rien à masquer, donc plus rien à oublier de masquer.
+ *   ② LA RÉPONSE SE DÉCRIT (contrat, version, édition, `genere_le`, `servi_le`) : la page sait
+ *      l'ÂGE de ce qu'elle montre, et le dit quand il n'est plus frais.
+ *   ③ LE RAFRAÎCHISSEMENT EST MONOTONE : une réponse plus ANCIENNE que celle déjà appliquée est
+ *      ÉCARTÉE — c'est la course que deux requêtes concurrentes créent sur un réseau mobile.
+ *   ④ L'ÉCHEC EST FERMÉ : un backend trop ancien ne connaît pas `getPublic` et répond « action
+ *      inconnue ». La page le DIT et n'affiche rien. ⛔ Elle ne retombe JAMAIS sur `getAll`, qui
+ *      livrerait précisément ce que le contrat vient de fermer.
+ *
+ *  ⛔ AUCUNE ÉCRITURE. Cette page ne déclenche ni écriture Sheets, ni écriture Drive, ni propriété,
+ *  ni télémétrie persistante. Le relevé de visibilité des partenaires (`mesureSponsors`) N'EST
+ *  PLUS ARMÉ ici, et la porte est fermée côté serveur (voir `doPost`).
  *
  *  Nécessite (chargés AVANT ce fichier) : config.js puis api.js.
  * ============================================================================
@@ -35,14 +59,71 @@ const JITTER_MS = 4000;      // étalement aléatoire : évite que tous les spec
 const DELAI_REQUETE_MS = 12000; // délai max d'une requête : au-delà on abandonne (réseau mobile qui « pend »)
 
 /* ==========================================================================
+   L'ÉTAT PUBLIC AUTORITAIRE — une seule vérité pour les DEUX onglets et TOUTES les commandes
+   ========================================================================== */
+
+/** Le nom du contrat servi par `getPublic`. ⛔ Une réponse qui ne le porte pas est REFUSÉE. */
+const CONTRAT_PUBLIC = 'public-1';
+
+/** Au-delà de cet âge, le contenu affiché est annoncé comme ANCIEN plutôt que présenté comme frais. */
+const AGE_ANCIEN_S = 90;
+
+/**
+ * L'état courant, en une seule structure — parce que « les deux onglets et toutes les commandes
+ * doivent refléter le même état ». ⛔ Aucune vue ne décide plus seule de ce qu'elle montre.
+ *   phase   : 'chargement' | 'publie' | 'non_publie' | 'erreur' | 'incompatible'
+ *   ancien  : le contenu à l'écran vient d'une réponse ANTÉRIEURE (hors ligne, échec de
+ *             rafraîchissement, réponse écartée) — il n'est PAS présenté comme courant.
+ */
+let etatPublic = { phase: 'chargement', motif: '', source: '', version: '', edition: '',
+                   genereLe: '', ageS: null, ancien: false, detail: '' };
+
+/** L'instant de génération DÉJÀ APPLIQUÉ, en millisecondes. ⛔ Le rafraîchissement est MONOTONE :
+ *  une réponse plus ancienne que celle-ci n'écrase jamais ce qui est à l'écran. */
+let derniereGenereMs = -1;
+let derniereRequetePublique = 0;
+
+/** Vrai dès qu'un contenu honnête a été rendu au moins une fois (sert à distinguer
+ *  « rien n'a jamais marché » de « ça marchait, et le réseau vient de tomber »). */
+let contenuRendu = false;
+
+/* ==========================================================================
    DÉMARRAGE / NAVIGATION
    ========================================================================== */
 
 async function initTournoi() {
-  document.querySelectorAll('.onglet[data-onglet]').forEach(function (b) {
+  const onglets = Array.prototype.slice.call(document.querySelectorAll('.onglet[data-onglet]'));
+  onglets.forEach(function (b, i) {
     b.addEventListener('click', function () { basculer(b.getAttribute('data-onglet')); });
+    /* ⭐ NAVIGATION AU CLAVIER DU MODÈLE `tablist` (pratique ARIA) : ← → circulent d'un onglet à
+       l'autre en BOUCLE, Début et Fin vont aux extrémités. ⛔ Le déplacement ACTIVE l'onglet et
+       lui donne le focus : c'est la variante « sélection automatique », cohérente avec deux
+       onglets dont le contenu est déjà chargé — rien n'est téléchargé par un coup de flèche. */
+    b.addEventListener('keydown', function (e) {
+      let cible = -1;
+      if (e.key === 'ArrowRight') cible = (i + 1) % onglets.length;
+      else if (e.key === 'ArrowLeft') cible = (i - 1 + onglets.length) % onglets.length;
+      else if (e.key === 'Home') cible = 0;
+      else if (e.key === 'End') cible = onglets.length - 1;
+      if (cible === -1) return;
+      e.preventDefault();
+      basculer(onglets[cible].getAttribute('data-onglet'));
+      onglets[cible].focus();
+    });
   });
   document.getElementById('btn-refresh').addEventListener('click', onRafraichir);
+  const reessayer = document.getElementById('btn-reessayer');
+  if (reessayer) reessayer.addEventListener('click', reprendreMaintenant);
+
+  /* ⭐ RETOUR EN LIGNE : le navigateur le dit, on reprend TOUT DE SUITE plutôt que d'attendre le
+     prochain tour de boucle. ⛔ Par `reprendreMaintenant`, qui COALESCE : voir sa raison d'être. */
+  window.addEventListener('online', reprendreMaintenant);
+  window.addEventListener('offline', function () {
+    if (!contenuRendu) return;
+    etatPublic.ancien = true;
+    etatPublic.detail = 'Appareil hors ligne.';
+    rendreEtat();
+  });
 
   const sel = document.getElementById('select-equipe');
   sel.addEventListener('change', function () {
@@ -63,12 +144,32 @@ async function initTournoi() {
   // et on relance le rafraîchissement automatique s'il s'était mis en pause.
   // Le garde-fou « minuteur déjà en place » empêche de lancer deux boucles en parallèle.
   document.addEventListener('visibilitychange', function () {
-    if (document.hidden || minuteurRafraichissement != null) return;
-    planifierProchainChargement(0); // recharge immédiate + boucle relancée
+    if (document.hidden) return;
+    reprendreMaintenant();
   });
 
   await charger(true);
   planifierProchainChargement();
+}
+
+/**
+ * ⭐ REPRENDRE MAINTENANT — le point d'entrée UNIQUE des reprises immédiates (retour au premier
+ * plan, retour en ligne, bouton « Réessayer »).
+ *
+ * 🔬 LE DÉFAUT FERMÉ. Chacun de ces trois signaux appelait directement `planifierProchainChargement(0)`.
+ * Or ils arrivent VOLONTIERS ENSEMBLE : déverrouiller un téléphone dans le tunnel qui sort, c'est
+ * `visibilitychange` PUIS `online` à quelques millisecondes d'intervalle, et un lecteur impatient y
+ * ajoute son clic. Mesuré au banc : trois signaux d'affilée = TROIS requêtes, pour un seul besoin.
+ * ⭐ La reprise est donc COALESCÉE : tant qu'une reprise immédiate est armée ou qu'un chargement est
+ * en vol, un signal de plus ne fait RIEN. ⛔ Ce n'est pas un anti-rebond par minuterie : il n'y a
+ * aucun délai à choisir, donc aucun délai à se tromper.
+ */
+let repriseArmee = false;
+let chargementEnCours = false;
+function reprendreMaintenant() {
+  if (repriseArmee || chargementEnCours) return;
+  repriseArmee = true;
+  planifierProchainChargement(0);
 }
 
 /**
@@ -88,18 +189,30 @@ async function initTournoi() {
  */
 function planifierProchainChargement(delaiMs) {
   const delai = (delaiMs != null) ? delaiMs : INTERVALLE_MS + Math.floor(Math.random() * JITTER_MS);
+  /* ⛔ ANTI-TEMPÊTE : un minuteur déjà posé est ANNULÉ avant d'en poser un autre. Sans cette
+     ligne, « retour au premier plan » + « retour en ligne » + « Réessayer » en quelques secondes
+     laisseraient tourner trois boucles en parallèle, chacune rappelant la suivante. */
+  if (minuteurRafraichissement != null) clearTimeout(minuteurRafraichissement);
   minuteurRafraichissement = setTimeout(function () {
+    repriseArmee = false;
     if (document.hidden) { minuteurRafraichissement = null; return; } // pause (reprise au retour)
-    Promise.resolve(charger(false)).finally(function () { planifierProchainChargement(); });
+    chargementEnCours = true;
+    Promise.resolve(charger(false)).finally(function () {
+      chargementEnCours = false;
+      planifierProchainChargement();
+    });
   }, delai);
 }
 
-/** Bascule d'onglet : montre une vue, cache l'autre. */
+/** Bascule d'onglet : montre une vue, cache l'autre, et tient le modèle ARIA à jour. */
 function basculer(cible) {
   document.querySelectorAll('.onglet[data-onglet]').forEach(function (b) {
     const actif = b.getAttribute('data-onglet') === cible;
     b.classList.toggle('actif', actif);
     b.setAttribute('aria-selected', actif ? 'true' : 'false');
+    /* ⛔ UN SEUL ARRÊT DE TABULATION dans le groupe d'onglets : la tabulation entre DANS le
+       groupe puis en SORT vers le panneau, au lieu de traverser chaque onglet un par un. */
+    b.setAttribute('tabindex', actif ? '0' : '-1');
   });
   const titreVue = document.getElementById('cv-public-titre');
   if (titreVue) titreVue.textContent = cible === 'classements' ? 'Classements' : 'Mon équipe';
@@ -115,69 +228,245 @@ function basculer(cible) {
 }
 
 /**
- * Lit les données publiques. En priorité via le RELAIS CDN (config SNAPSHOT_URL) qui tient
- * une grosse audience ; repli automatique sur Apps Script si le relais est vide ou en panne.
- * On NE met PAS de paramètre anti-cache ici : on veut au contraire profiter du cache du CDN
- * (partagé entre tous les spectateurs). Le Worker fixe une fraîcheur courte (~8 s).
- *
- * ⚡ Chaque requête a un DÉLAI MAXIMUM (DELAI_REQUETE_MS) : au-delà, elle est abandonnée.
- * Sans ça, une connexion mobile qui « pend » indéfiniment gèlerait la boucle de
- * rafraîchissement (elle n'enchaîne qu'après la fin de la requête précédente).
+ * Une réponse porte-t-elle bien le CONTRAT PUBLIC ? ⛔ Contrôle de FORME, jamais de confiance :
+ * un corps qui n'a pas le bon contrat, pas de version, ou pas ses deux tableaux, n'est pas un état
+ * public — il est REFUSÉ, qu'il vienne du serveur, du relais ou d'un JSON tronqué à mi-chemin.
  */
-async function lireDonnees() {
-  if (typeof SNAPSHOT_URL === 'string' && SNAPSHOT_URL) {
-    try {
-      const controleur = new AbortController();
-      const minuteur = setTimeout(function () { controleur.abort(); }, DELAI_REQUETE_MS);
-      try {
-        const r = await fetch(SNAPSHOT_URL, { signal: controleur.signal });
-        if (r.ok) {
-          const d = await r.json();
-          if (d && !d.error && d.matchs) return d; // snapshot valide
-        }
-      } finally { clearTimeout(minuteur); }
-    } catch (e) { /* relais indisponible ou trop lent → on bascule sur Apps Script */ }
-  }
-  return apiGet('getAll', null, { delaiMs: DELAI_REQUETE_MS }); // repli (ou mode sans relais)
+function estEtatPublicValide(d) {
+  const genere = horodatageMs(d && d.genere_le);
+  const servi = horodatageMs(d && d.servi_le);
+  return !!d && typeof d === 'object' && d.contrat === CONTRAT_PUBLIC &&
+         typeof d.public === 'boolean' && typeof d.version === 'string' && d.version !== '' &&
+         Array.isArray(d.equipes) && Array.isArray(d.matchs) && !!d.config &&
+         genere >= 0 && servi >= genere;
 }
 
-/** (Re)charge les données. Ne ré-affiche que si elles ont changé (évite le clignotement). */
-async function charger(premier) {
+/** Un horodatage ISO en millisecondes, ou -1 s'il est absent ou illisible. ⛔ Jamais 0 : `Date.parse`
+ *  rend NaN sur une chaîne vide, et NaN comparé à n'importe quoi est toujours faux. */
+function horodatageMs(iso) {
+  const t = Date.parse(String(iso || ''));
+  return isFinite(t) ? t : -1;
+}
+
+/**
+ * L'ÂGE d'une réponse, en secondes, MESURÉ PAR LE SERVEUR : `servi_le` − `genere_le`, deux instants
+ * de la MÊME horloge. ⛔ On ne compare jamais l'horloge du téléphone à celle du serveur : un
+ * appareil déréglé de vingt minutes ferait déclarer « ancien » un contenu parfaitement frais.
+ */
+function ageReponseS(d) {
+  const g = horodatageMs(d && d.genere_le), v = horodatageMs(d && d.servi_le);
+  return (g >= 0 && v >= 0) ? Math.max(0, Math.round((v - g) / 1000)) : null;
+}
+
+/** Pourquoi le relais a été écarté lors de la dernière lecture ('' = il ne l'a pas été). */
+let relaisEcarte = '';
+
+/**
+ * Le relais CDN, SI et SEULEMENT SI il est utilisable. ⛔ Il n'est plus « cru sur parole » :
+ * 🔬 LE DÉFAUT FERMÉ. L'ancienne lecture acceptait le relais dès qu'il rendait un corps avec un
+ * champ `matchs`. Un relais périmé, ou servant une AUTRE ÉDITION, passait donc pour la source
+ * courante — silencieusement, et de préférence au serveur, qui était plus récent.
+ * ⭐ Quatre refus, et chacun est NOMMÉ (le repli n'est jamais muet) :
+ *   · `contrat`     — le corps ne porte pas le contrat public ;
+ *   · `ancien`      — sa génération est ANTÉRIEURE à ce qui est déjà à l'écran ;
+ *   · `edition`     — il décrit une AUTRE édition que celle en cours ;
+ *   · `injoignable` — rejet réseau, statut non-2xx, JSON illisible, ou trop lent.
+ * ⚠️ Le relais est DÉSACTIVÉ dans la configuration Démo Racing (`SNAPSHOT_URL` vide) : ce chemin
+ * n'y est jamais emprunté. Il reste éprouvé par des doubles, jamais contre un relais réel.
+ */
+async function lireRelais() {
   try {
-    const data = await lireDonnees();
-    const signature = JSON.stringify(data.matchs) + '|' + JSON.stringify(data.equipes);
-    equipes = data.equipes || [];
-    matchs = data.matchs || [];
-    config = data.config || { global: {} };
-    nomParEquipe = indexerNoms(equipes); // index id → nom (O(1)), reconstruit à chaque chargement
-    majHeure();
-    majTitre(); // le bandeau prend le nom de l'événement s'il est renseigné
+    const controleur = new AbortController();
+    const minuteur = setTimeout(function () { controleur.abort(); }, DELAI_REQUETE_MS);
+    try {
+      const r = await fetch(SNAPSHOT_URL, { signal: controleur.signal });
+      if (!r.ok) { relaisEcarte = 'injoignable'; return null; }
+      const d = await r.json();
+      if (!estEtatPublicValide(d)) { relaisEcarte = 'contrat'; return null; }
+      const ms = horodatageMs(d.genere_le);
+      if (ms >= 0 && ms < derniereGenereMs) { relaisEcarte = 'ancien'; return null; }
+      if (etatPublic.edition && d.edition && d.edition !== etatPublic.edition) {
+        relaisEcarte = 'edition'; return null;
+      }
+      return { data: d, source: 'relais' };
+    } finally { clearTimeout(minuteur); }
+  } catch (e) { relaisEcarte = 'injoignable'; return null; }
+}
 
-    // Partenaires : réglages + liste, AVANT l'affichage (l'encart au fil s'insère dans les vues).
+/**
+ * Lit l'ÉTAT PUBLIC AUTORITAIRE : le relais s'il est utilisable, sinon le serveur.
+ *
+ * ⛔ IL N'Y A PAS DE REPLI SUR `getAll`, et c'est le cœur de ce lot : un backend trop ancien ne
+ * connaît pas `getPublic` et répond « Action inconnue » — la page ÉCHOUE ALORS, FERMÉE. Retomber
+ * sur `getAll` livrerait exactement le tournoi non publié que le contrat vient de fermer.
+ *
+ * ⚡ Chaque requête a un DÉLAI MAXIMUM (DELAI_REQUETE_MS) : au-delà, elle est abandonnée. Sans ça,
+ * une connexion mobile qui « pend » gèlerait la boucle (elle n'enchaîne qu'après la précédente).
+ */
+async function lireEtatPublic() {
+  relaisEcarte = '';
+  if (typeof SNAPSHOT_URL === 'string' && SNAPSHOT_URL && etatPublic.edition) {
+    const viaRelais = await lireRelais();
+    if (viaRelais) return viaRelais;
+  }
+  const d = await apiGet('getPublic', null, { delaiMs: DELAI_REQUETE_MS });
+  return { data: d, source: 'serveur' };
+}
+
+/**
+ * (Re)charge l'état public. ⭐ TOUTE issue passe par ici, et AUCUNE ne se tait :
+ *   · réponse valide PLUS RÉCENTE  → elle est appliquée (publiée ou non publiée) ;
+ *   · réponse valide PLUS ANCIENNE → ÉCARTÉE ; l'écran garde ce qu'il montrait, ANNONCÉ comme tel ;
+ *   · réponse invalide / tronquée  → échec, jamais confondu avec un tournoi vide ;
+ *   · action inconnue du serveur   → échec FERMÉ, explicite (backend trop ancien) ;
+ *   · réseau perdu                 → échec ; le contenu déjà obtenu reste, ANNONCÉ comme ancien.
+ * ⛔ Ne ré-affiche que si le contenu a changé (évite le clignotement toutes les ~15 s).
+ */
+async function charger(premier) {
+  const requete = ++derniereRequetePublique;
+  let lu;
+  try {
+    lu = await lireEtatPublic();
+  } catch (err) {
+    if (requete !== derniereRequetePublique) return;
+    return echecChargement(err, premier);
+  }
+
+  if (requete !== derniereRequetePublique) return;
+
+  const d = lu.data;
+  if (!estEtatPublicValide(d)) {
+    /* ⛔ UNE RÉPONSE ILLISIBLE N'EST PAS UN TOURNOI VIDE. Un `{error}` du serveur, un JSON tronqué
+       par une coupure, un corps d'une autre forme : tous arrivent ici, et tous DISENT ce qu'ils
+       sont. Sans ce chemin, `d.equipes || []` aurait affiché « aucun match » — un mensonge. */
+    return echecChargement(Object.assign(
+      new Error(String((d && d.error) || 'Réponse illisible du serveur.')),
+      { reponse: d }), premier);
+  }
+
+  /* ⛔ MONOTONIE — la course que deux requêtes concurrentes créent sur un réseau mobile : la
+     seconde part avant que la première soit revenue, et la PREMIÈRE arrive en dernier. Sans cette
+     garde, un état plus ANCIEN écraserait un état plus récent déjà à l'écran. */
+  const ms = horodatageMs(d.genere_le);
+  if (derniereGenereMs >= 0 &&
+      (ms < derniereGenereMs ||
+       (ms === derniereGenereMs && d.version !== etatPublic.version && lu.source !== 'serveur'))) {
+    etatPublic.ancien = true;
+    etatPublic.detail = 'Une réponse plus ancienne que l’affichage a été écartée.';
+    rendreEtat();
+    return;
+  }
+
+  /* ⭐ CHANGEMENT D'ÉDITION : rien de l'édition précédente ne survit — ni l'équipe choisie, ni la
+     catégorie, ni le partenaire de l'encart au fil, ni la signature qui évite les redessins. */
+  if (etatPublic.edition && d.edition && d.edition !== etatPublic.edition) reprendreEdition();
+
+  if (ms >= 0) derniereGenereMs = ms;
+  appliquerEtatPublic(d, lu.source, premier);
+}
+
+/** Repart d'une page vierge : appelé quand le serveur annonce une AUTRE édition. */
+function reprendreEdition() {
+  derniereSignature = '';
+  sponsorFil = null;
+  sponsorsSignature = '';
+  categorieActive = '';
+  pubCreneau = 'matin';
+  pubPoule = '';
+}
+
+/**
+ * Applique un état public VALIDE et AU MOINS AUSSI RÉCENT que l'affichage courant.
+ * ⛔ Quand le serveur annonce « non publié » (jamais publié, ou MASQUÉ après l'avoir été),
+ * l'interface est EFFACÉE : listes vidées, partenaires éteints, filtres remis à zéro. Il ne reste
+ * rien d'une édition visible cinq secondes plus tôt.
+ */
+function appliquerEtatPublic(d, source, premier) {
+  etatPublic = {
+    phase: d.public ? 'publie' : 'non_publie',
+    motif: String(d.motif || ''), source: source, version: String(d.version || ''),
+    edition: String(d.edition || ''), genereLe: String(d.genere_le || ''),
+    ageS: ageReponseS(d), ancien: false,
+    detail: relaisEcarte ? motifRelais(relaisEcarte) : ''
+  };
+
+  if (!d.public) {
+    /* EFFACEMENT. ⛔ On ne se contente pas de masquer : les données sortent de la mémoire de la
+       page, pour qu'aucun rendu ultérieur ne puisse les faire revenir. */
+    equipes = []; matchs = []; sponsors = []; sponsorFil = null;
+    config = d.config || { global: {} };
+    nomParEquipe = {};
+    derniereSignature = '';
     sponsorsReg = sponsorsReglages(config);
-    sponsors = sponsorsReg.actifs ? sponsorsListe(data, sponsorsReg) : [];
-    // L'encart au fil est tiré UNE FOIS pour toute la session : il ne doit pas changer sous les
-    // yeux du lecteur à chaque rafraîchissement automatique (toutes les ~15 s).
-    if (sponsors.length && !sponsorFil) {
-      sponsorFil = sponsorsTirer('fil', sponsorsPourEmplacement(sponsors, 'fil'), true);
-    }
-    if (!sponsors.length) sponsorFil = null;
-
-    if (premier || signature !== derniereSignature) {
-      derniereSignature = signature;
-      peuplerCategorie();
-      peuplerSelect();
-      afficherTout();
-    }
-    // Verrou de publication (peut changer sans que les matchs/équipes changent).
+    peuplerCategorie();
+    peuplerSelect();
+    afficherTout();
     appliquerPublication();
     appliquerSponsors(premier);
-  } catch (err) {
-    if (premier) {
-      document.getElementById('mon-planning').innerHTML =
-        '<p class="vide">Erreur de chargement : ' + echapper(err.message) + '</p>';
-    }
+    rendreEtat();
+    contenuRendu = true;
+    return;
   }
+
+  const signature = JSON.stringify(d.matchs) + '|' + JSON.stringify(d.equipes);
+  equipes = d.equipes;
+  matchs = d.matchs;
+  config = d.config || { global: {} };
+  nomParEquipe = indexerNoms(equipes); // index id → nom (O(1)), reconstruit à chaque chargement
+  majTitre(); // le bandeau prend le nom de l'événement s'il est renseigné
+
+  // Partenaires : réglages + liste, AVANT l'affichage (l'encart au fil s'insère dans les vues).
+  sponsorsReg = sponsorsReglages(config);
+  sponsors = sponsorsReg.actifs ? sponsorsListe(d, sponsorsReg) : [];
+  // L'encart au fil est tiré UNE FOIS pour toute la session : il ne doit pas changer sous les
+  // yeux du lecteur à chaque rafraîchissement automatique (toutes les ~15 s).
+  if (sponsors.length && !sponsorFil) {
+    sponsorFil = sponsorsTirer('fil', sponsorsPourEmplacement(sponsors, 'fil'), true);
+  }
+  if (!sponsors.length) sponsorFil = null;
+
+  if (premier || signature !== derniereSignature) {
+    derniereSignature = signature;
+    peuplerCategorie();
+    peuplerSelect();
+    afficherTout();
+  }
+  appliquerPublication();
+  appliquerSponsors(premier);
+  rendreEtat();
+  contenuRendu = true;
+}
+
+/** Le motif, en clair, pour lequel le relais a été écarté au profit du serveur. */
+function motifRelais(code) {
+  if (code === 'ancien') return 'Le relais servait une version plus ancienne : lecture directe du serveur.';
+  if (code === 'edition') return 'Le relais servait une autre édition : lecture directe du serveur.';
+  if (code === 'contrat') return 'Le relais ne sert pas le contrat attendu : lecture directe du serveur.';
+  if (code === 'injoignable') return 'Relais injoignable : lecture directe du serveur.';
+  return '';
+}
+
+/**
+ * Une lecture a échoué. ⭐ DEUX SITUATIONS, qu'il serait malhonnête de confondre :
+ *  · rien n'a JAMAIS été affiché → écran d'indisponibilité explicite, avec un bouton « Réessayer » ;
+ *  · un contenu EST à l'écran    → il reste, mais il est ANNONCÉ comme non actualisé, avec son
+ *    heure. ⛔ Jamais présenté comme courant, et l'horodatage n'avance pas.
+ */
+function echecChargement(err, premier) {
+  const message = String((err && err.message) || 'Erreur inconnue.');
+  const ferme = /action inconnue/i.test(message);
+  etatPublic.detail = ferme
+    ? 'Le serveur ne connaît pas encore l’affichage public de ce tournoi (version trop ancienne).'
+    : message;
+  if (contenuRendu && !premier) {
+    etatPublic.ancien = true;      // ⛔ le contenu reste, sa fraîcheur non
+    rendreEtat();
+    return;
+  }
+  etatPublic.phase = ferme ? 'incompatible' : 'erreur';
+  etatPublic.ancien = false;
+  appliquerPublication();
+  rendreEtat();
 }
 
 /** Réaffiche les deux vues d'un coup (+ le podium, commun aux deux onglets). */
@@ -211,26 +500,98 @@ function afficherPodium() {
 }
 
 /** Vrai si le tournoi est publié (rendu visible depuis l'admin). */
+/**
+ * Le tournoi est-il publié ? ⭐ LA RÉPONSE VIENT DE L'ÉTAT AUTORITAIRE, plus de la charge.
+ * ⛔ Avant, cette fonction lisait `config.global.tournoi_publie` — un champ que le serveur
+ * envoyait AVEC toutes les données. Le décider ici revenait à demander au renard s'il était
+ * dans le poulailler. Désormais le serveur ne livre rien à masquer, et cette fonction ne fait
+ * que relire ce qu'il a DÉCIDÉ.
+ */
 function estPublie() {
-  return String(config.global && config.global.tournoi_publie).toLowerCase() === 'oui';
+  return etatPublic.phase === 'publie';
 }
 
 /**
- * Verrou de publication : tant que le tournoi n'est pas publié, on masque tout le contenu
- * (barre, onglets, filtre, vues) et on affiche l'écran « à venir ». Sinon, on montre la page.
+ * Accorde TOUTE l'interface sur l'état autoritaire — les deux onglets, la barre, les filtres, le
+ * podium, l'écran « à venir » et l'écran d'indisponibilité. ⛔ Un seul endroit décide : il ne peut
+ * donc plus y avoir un onglet qui montre un tournoi et un autre qui montre autre chose.
  */
 function appliquerPublication() {
-  const pub = estPublie();
-  document.getElementById('tournoi-avenir').hidden = pub;
+  const phase = etatPublic.phase;
+  const pub = phase === 'publie';
+  const enPanne = (phase === 'erreur' || phase === 'incompatible');
+
+  const indispo = document.getElementById('tournoi-indispo');
+  if (indispo) {
+    indispo.hidden = !enPanne;
+    const texte = document.getElementById('indispo-texte');
+    if (texte) {
+      texte.textContent = phase === 'incompatible'
+        ? 'Le serveur du tournoi est dans une version trop ancienne pour cette page. ' +
+          'Rien ne peut être affiché — et surtout pas un tournoi qui n’est peut-être pas publié.'
+        : 'Les données du tournoi n’ont pas pu être chargées. Vérifie ta connexion, puis réessaie. ' +
+          'Détail : ' + (etatPublic.detail || 'erreur inconnue');
+    }
+  }
+
+  /* ⛔ « À venir » NE S'AFFICHE QUE SUR UN VERDICT DU SERVEUR — jamais sur une panne. Une erreur
+     qui ressemblerait à « le tournoi arrive bientôt » serait un mensonge de plus. */
+  document.getElementById('tournoi-avenir').hidden = (phase !== 'non_publie');
+
   document.querySelector('.live-barre').hidden = !pub;
   document.querySelector('.onglets').hidden = !pub;
   document.getElementById('vues').hidden = !pub;
   const choix = document.getElementById('cv-choix-equipe');
   if (choix) choix.hidden = !pub || document.getElementById('vue-equipe').hidden;
-  // Le podium : masqué si non publié ; sinon c'est afficherPodium qui décide (certitude).
+  // Le podium : masqué hors publication ; sinon c'est afficherPodium qui décide (certitude).
   if (!pub) { const pod = document.getElementById('podium'); if (pod) pod.hidden = true; }
-  // Le filtre catégorie : masqué si non publié ; sinon c'est peuplerCategorie qui décide.
+  // Le filtre catégorie : masqué hors publication ; sinon c'est peuplerCategorie qui décide.
   if (!pub) document.getElementById('filtre-categorie').hidden = true;
+}
+
+/**
+ * Écrit le bandeau d'état — la SEULE phrase qui dise au lecteur ce qu'il regarde vraiment.
+ * ⭐ Il est dans une région `role="status" aria-live="polite"` : un lecteur d'écran l'annonce
+ * sans voler le focus, ce qui couvre « chargement », « erreur », « ancienneté » et « masquage ».
+ */
+function rendreEtat() {
+  const zone = document.getElementById('etat-public');
+  if (!zone) return;
+  const parts = [];
+
+  if (etatPublic.phase === 'erreur' || etatPublic.phase === 'incompatible') {
+    parts.push(etatPublic.phase === 'incompatible'
+      ? '⛔ Affichage public indisponible : serveur trop ancien.'
+      : '⛔ Chargement impossible.');
+  } else if (etatPublic.ancien) {
+    /* ⭐ L'AVERTISSEMENT EXPLICITE. Un contenu obtenu plus tôt et affiché hors ligne DOIT être
+       annoncé comme tel : c'est la différence entre « voici le score » et « voici le score
+       d'il y a dix minutes ». */
+    parts.push('⚠️ Hors ligne ou serveur injoignable — affichage non actualisé' +
+      (etatPublic.genereLe ? ' (données de ' + heureCourte(etatPublic.genereLe) + ')' : '') + '.');
+    if (etatPublic.detail) parts.push(etatPublic.detail);
+  } else if (etatPublic.phase === 'non_publie') {
+    parts.push('Le tournoi n’est pas publié : aucune donnée n’est disponible.');
+  } else if (etatPublic.phase === 'publie') {
+    if (etatPublic.ageS != null && etatPublic.ageS > AGE_ANCIEN_S) {
+      parts.push('⚠️ Données servies par un cache : ' + etatPublic.ageS + ' s d’ancienneté.');
+    }
+    if (etatPublic.detail) parts.push(etatPublic.detail);
+  }
+
+  zone.textContent = parts.join(' ');
+  zone.hidden = parts.length === 0;
+  zone.classList.toggle('etat-alerte',
+    etatPublic.ancien || etatPublic.phase === 'erreur' || etatPublic.phase === 'incompatible');
+  majHeure();
+}
+
+/** « 14:32 » à partir d'un horodatage ISO ; '' s'il est illisible. */
+function heureCourte(iso) {
+  const ms = horodatageMs(iso);
+  if (ms < 0) return '';
+  const d = new Date(ms);
+  return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
 }
 
 /* ==========================================================================
@@ -297,10 +658,17 @@ function appliquerSponsors(premier) {
     [zoneBandeau, zoneRail, zoneBarre, zoneMur].forEach(function (z) {
       if (z && !z.hidden) sponsorsBrancherMesure(z);
     });
-    // Des partenaires sont réellement à l'écran : on arme la remontée des relevés, pour que
-    // la fiche de visibilité porte sur TOUS les spectateurs et non sur le seul appareil qui
-    // la consulte. Rien n'est envoyé si les sponsors sont éteints — on n'arrive jamais ici.
-    sponsorsArmerEnvoi();
+    /* ⛔ LA REMONTÉE DES RELEVÉS N'EST PLUS ARMÉE — garantie « zéro écriture » de ce lot.
+       🔬 CE QUE CETTE LIGNE FAISAIT : `sponsorsArmerEnvoi()` postait `mesureSponsors` au backend
+       20 s après l'ouverture, puis toutes les 10 min, puis une dernière fois à la fermeture de
+       l'onglet. Côté serveur, ce POST SANS CLÉ créait l'onglet `Mesures` et y ajoutait une ligne :
+       une page PUBLIQUE mutait donc le classeur de production, à chaque visite de chaque
+       spectateur. ⛔ La garantie de ce lot l'interdit sans réserve.
+       ⭐ LES COMPTEURS LOCAUX RESTENT : `sponsorsBrancherMesure` ci-dessus continue de compter
+       expositions et clics DANS le navigateur (localStorage), ce qui n'est pas de la télémétrie
+       PERSISTANTE — rien ne quitte l'appareil. ⛔ `js/sponsors.js` n'est pas touché : la porte
+       est fermée ICI (le seul appelant) et côté serveur (`doPost`), pas en modifiant un fichier
+       du lot « Partenaires » dont aucune autre page ne doit changer de comportement. */
     // La rotation pilote les DEUX rendus du rail (colonne et barre) : une seule est visible
     // à la fois selon la largeur d'écran, mais toutes deux doivent rester synchronisées.
     sponsorsDemarrerRotation([zoneRail, zoneBarre], sponsorsReg.rotationS);
@@ -362,14 +730,21 @@ function afficherBandeauDemo() {
   });
 }
 
+/**
+ * L'horodatage affiché. ⭐ IL DÉCRIT LES DONNÉES, PAS LA TENTATIVE.
+ * 🔬 LE DÉFAUT FERMÉ : l'ancienne version posait l'heure du TÉLÉPHONE à chaque chargement réussi.
+ * Un rafraîchissement qui échouait n'y touchait pas — c'est bien —, mais un rafraîchissement
+ * RÉUSSI servi par un cache de dix minutes affichait l'heure COURANTE sur des données anciennes.
+ * ⭐ Désormais l'heure est celle de la GÉNÉRATION de l'état, telle que le serveur l'a datée ; et
+ * quand l'affichage n'est plus actualisé, la ligne le dit au lieu de faire semblant.
+ */
 function majHeure() {
-  const d = new Date();
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  const ss = String(d.getSeconds()).padStart(2, '0');
-  // On affiche les secondes : ainsi chaque rafraîchissement fait VISIBLEMENT bouger
-  // l'heure, même si les données n'ont pas changé (retour clair « ça a marché »).
-  document.getElementById('maj').textContent = 'Mis à jour à ' + hh + ':' + mm + ':' + ss;
+  const zone = document.getElementById('maj');
+  if (!zone) return;
+  if (etatPublic.phase === 'erreur' || etatPublic.phase === 'incompatible') { zone.textContent = ''; return; }
+  const h = heureCourte(etatPublic.genereLe);
+  if (!h) { zone.textContent = ''; return; }
+  zone.textContent = (etatPublic.ancien ? 'Dernières données reçues à ' : 'Données du ') + h;
 }
 
 /**
@@ -378,14 +753,20 @@ function majHeure() {
  */
 async function onRafraichir() {
   const btn = document.getElementById('btn-refresh');
-  const texte = btn.textContent;
+  const texte = '🔄 Rafraîchir';
   btn.disabled = true;
   btn.textContent = '⏳ Rafraîchissement…';
+  chargementEnCours = true;
   try {
     await charger(false);
   } finally {
+    chargementEnCours = false;
     btn.disabled = false;
-    btn.textContent = texte;
+    /* ⛔ LE LIBELLÉ DIT L'ISSUE. 🔬 Avant, le bouton reprenait son texte quoi qu'il arrive : un
+       rafraîchissement manuel qui échouait était INDISCERNABLE d'un rafraîchissement réussi. Le
+       bandeau d'état porte le détail ; le bouton, lui, ne prétend plus que tout va bien. */
+    btn.textContent = etatPublic.ancien || etatPublic.phase === 'erreur' ||
+                      etatPublic.phase === 'incompatible' ? '⚠️ Réessayer' : texte;
   }
 }
 

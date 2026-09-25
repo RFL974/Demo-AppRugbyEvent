@@ -104,6 +104,10 @@ async function apresMidiJoueEtMatinCorrige(opts) {
     const { nav } = await ecranAvant();
     await nav.clic('bouton-apresmidi', 30);
     const r = nav.requetes();
+    /* ⛔ ICI, C'EST BIEN `getAll` QU'IL FAUT ATTENDRE, et ce n'est pas un oubli : ce contrôle joue
+       le frontend FIGÉ, celui d'avant le lot « Pages publiques du tournoi ». Il émettait `getAll`,
+       et c'est précisément ce que la contre-épreuve doit constater. ⭐ Le frontend COURANT, lui,
+       émet `getInstantaneAdmin` (lecture sous clé admin) — voir B3, juste au-dessus. */
     ok(r.length === 3 && r[0] === 'genererApresMidi' && r.indexOf('getAll') !== -1 &&
        r.indexOf('getConfigAdmin') !== -1,
       'B4 ⭐⭐ contre-épreuve — le frontend figé ' + B.FRONTEND_AVANT_REV.slice(0, 12) +

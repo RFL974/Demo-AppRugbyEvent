@@ -33,12 +33,15 @@ async function initInvitation() {
   const zone = document.getElementById('invitation');
   revelerOutilsAdmin();
   try {
-    const config = await apiGet('getConfig'); // { global, categories }
+    const p = new URLSearchParams(window.location.search);
+    const club = txt(p.get('club'));
+    const token = jetonCourant('invitation:' + club, p);
+    if (!club || !token) throw new Error('Lien d’invitation incomplet ou expiré.');
+    const config = await apiGet('getConfig', { club: club, token: token }); // { global, categories }
     zone.innerHTML = construireInvitation((config && config.global) || {}, (config && config.categories) || []);
     // Page rendue (le bouton « Répondre » porte déjà son lien) : le jeton sort de l'adresse —
     // il s'imprimait en pied de feuille et s'affichait sur la moindre capture d'écran.
-    const p = new URLSearchParams(window.location.search);
-    masquerJetonDeLUrl('invitation:' + txt(p.get('club')), jetonCourant('invitation:' + txt(p.get('club')), p));
+    masquerJetonDeLUrl('invitation:' + club, token);
   } catch (erreur) {
     zone.innerHTML = '<div class="message-chargement erreur">Impossible de charger les données du tournoi.<br>'
       + 'Détail : ' + echapper(erreur.message) + '</div>';
@@ -147,13 +150,10 @@ function lienReponsePersonnel(g) {
 }
 
 /** « Votre réponse » : encart mis en avant — date limite en grand + contact référent.
- *  Ouvert depuis l'email (club reconnu) → VRAI bouton « Répondre à l'invitation » ;
- *  visiteur anonyme → mention du lien personnel reçu par email (le bouton de réponse
- *  vit dans l'email de chaque club, avec son jeton).
- *  Le TÉLÉPHONE n'est volontairement PAS affiché : cette page vitrine est publique et mise en
- *  avant ; le portable d'un bénévole n'y figure pas (décision S3). La vue `invitation` du backend
- *  ne renvoie d'ailleurs plus `contact_reponse_tel`. Le numéro du jour J reste dans le dossier
- *  club, derrière le jeton. */
+ *  La page est ouverte depuis le lien personnel du club ; le bouton « Répondre » reprend cette
+ *  autorité sans laisser le jeton dans l'adresse affichée.
+ *  Le TÉLÉPHONE n'est volontairement PAS affiché : la vue `invitation` ne renvoie plus
+ *  `contact_reponse_tel`. Le numéro du jour J reste dans le dossier club, derrière son jeton. */
 function blocReponse(g) {
   const dateLimite = txt(g.date_limite_reponse) ? dateLongueFr(g.date_limite_reponse) : '';
   const lienReponse = lienReponsePersonnel(g);

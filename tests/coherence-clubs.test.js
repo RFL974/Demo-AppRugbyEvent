@@ -62,7 +62,11 @@ c.afficherEquipes=()=>{};c.majTableauBord=()=>{};c.masquerRepriseEquipes=()=>{};
  await c.genererDossierFinal('ANTONY');assert.equal(previews,1);
  await c.genererDossierFinal('RACING 92');assert.equal(previews,1);assert.equal(renewals,1);
  // Relecture réelle de la liste vide : deux cartes orange et dossier bloqué.
- c.apiGet=async()=>[];await c.rechargerEquipes();
+ /* ⚠️ La relecture des équipes passe désormais par `lireInstantaneAdmin` (lecture SOUS CLÉ
+    ADMIN, lot « Pages publiques du tournoi ») et non plus par `apiGet('getEquipes')`, qui
+    était une porte ANONYME. ⛔ La doublure change de nom, pas d'intention : elle rend une
+    lecture vide, exactement comme avant. */
+ c.lireEquipesAdmin=async()=>[];await c.rechargerEquipes();
  etatAttendu(club,'a-enregistrer');assert(!button.disabled);assert.equal(badge.textContent,'Équipes à ajouter');
  assert(classes.has('club-etat-a-enregistrer')&&!classes.has('club-etat-equipes-ajoutees'));
  assert(!dossierActif(club));await c.genererDossierFinal('ANTONY');assert.equal(previews,1);
@@ -71,7 +75,8 @@ c.afficherEquipes=()=>{};c.majTableauBord=()=>{};c.masquerRepriseEquipes=()=>{};
  assert(button.disabled);assert.equal(badge.textContent,'Équipes ajoutées');assert(dossierActif(club));
  assert(dom['liste-suivi-clubs'].innerHTML.includes('club-etat-equipes-ajoutees" data-club="ANTONY"'));
  // Une lecture plus ancienne ne doit pas annuler un ajout confirmé.
- let resolve;c.apiGet=()=>new Promise(r=>resolve=r);const lecture=c.rechargerEquipes();
+ /* Même doublure, même intention : c'est `lireInstantaneAdmin` qui pend, désormais. */
+ let resolve;c.lireEquipesAdmin=()=>new Promise(r=>resolve=r);const lecture=c.rechargerEquipes();
  c.integrerEquipeAjoutee({id_equipe:'seconde',nom_equipe:'ANTONY-2',categorie:'U12'});
  resolve([]);assert.equal(await lecture,false);etatAttendu(club,'equipes-ajoutees');assert(button.disabled);
  console.log('OK — état commun, équipes existantes/manuelles, ancien marqueur, collisions, retrait, dossier bloqué et lecture périmée.');

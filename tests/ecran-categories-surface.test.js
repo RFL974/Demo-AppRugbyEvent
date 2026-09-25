@@ -410,7 +410,7 @@ function releverControles(doc) {
     b.srv.poserCategorie({ categorie: 'U10', effectif_min: '9', arbitrage_organisation: 'Autre' });   // changé ailleurs
     const g = await b.jouer(() => b.global('rechargerEtRendre({ reglages: true })'));
     const nouveau = b.champ('U10', 'arbitrage_organisation');
-    t.vrai(g.requetes.map((r) => r.action).join() === 'getAll,getConfigAdmin' && b.champ('U10', 'duree_mi_temps_min').value === '19' &&
+    t.vrai(g.requetes.map((r) => r.action).join() === 'getInstantaneAdmin,getConfigAdmin' && b.champ('U10', 'duree_mi_temps_min').value === '19' &&
       b.champ('U10', 'effectif_min').value === '9' && nouveau.value === 'XY Éducateurs' && b.doc.activeElement === nouveau &&
       nouveau.selectionStart === 2 && /Saisie non enregistrée conservée/.test(b.message('U10')),
       'R.5 ⭐ relecture des réglages (génération, terrains, arbitrage…) : saisie GARDÉE, champ non touché rafraîchi, le champ ACTIF garde focus et curseur même si le serveur l\'a changé',
@@ -613,14 +613,14 @@ function releverControles(doc) {
   const chaqueFFR = (mode) => () => () => mode;
   console.log('\nN — contrôle FFR d\'arrière-plan en panne : l\'écriture reste réussie, aucune saisie effacée');
   // [code, panne, libellé, émissions FFR réelles, attente réseau après le retour (ms, hors durée d'exécution), bloc FFR final]
-  // ⭐ api.js relance UNE fois une lecture de sa liste fermée (getConformiteFFR) après un délai dépassé ou un 404 — jamais
-  //   après un 500 ; chaque tentative a son délai de 30 s.
+  // ⭐ Les contrôles FFR protégés passent en POST : le transport ne les rejoue jamais automatiquement.
+  //   Après une réponse perdue, l'écran échoue fermé et propose une reprise explicite.
   const PANNES_FFR = [
     ['N.1', chaqueFFR('http500-avant'), 'échec (500)', 1, 0, /indisponible/],
-    ['N.2', chaqueFFR('delai'), 'délai dépassé, deux fois', 2, 60000, /indisponible/],
-    ['N.3', chaqueFFR('silence'), 'réponse silencieuse, deux fois', 2, 60000, /indisponible/],
-    ['N.5', premierFFR('silence'), 'réponse silencieuse, puis relance réussie', 2, 30000, /Calendrier vérifié|conflit|Vigilance/i],
-    ['N.6', premierFFR('404'), '404 de Google, puis relance réussie', 2, null, /Calendrier vérifié|conflit|Vigilance/i]
+    ['N.2', chaqueFFR('delai'), 'délai dépassé, sans rejeu', 1, 30000, /indisponible/],
+    ['N.3', chaqueFFR('silence'), 'réponse silencieuse, sans rejeu', 1, 30000, /indisponible/],
+    ['N.5', premierFFR('silence'), 'réponse silencieuse, sans rejeu', 1, 30000, /indisponible/],
+    ['N.6', premierFFR('404'), '404 de Google, sans rejeu', 1, null, /indisponible/]
   ];
   for (const [code, panneFFR, libelle, emissions, attenteMs, bloc] of PANNES_FFR) {
     await essai(code, async () => {
@@ -676,10 +676,10 @@ function releverControles(doc) {
     ['Ajouter — réponse perdue (404)', { panne: premier('enregistrerCategorie', '404') }, (b) => b.ajouter('U16'), [2, 1]],
     ['Enregistrer — même réglage changé ailleurs (refus)', {}, (b) => { b.srv.poserCategorie({ categorie: 'U10', duree_mi_temps_min: '10' }); b.saisir('U10', { duree_mi_temps_min: '12' }); return b.enregistrer('U10'); }, [1, 1]],
     ['Enregistrer durée — contrôle FFR en échec (500)', { panne: toujours('getConformiteFFR', 'http500-avant') }, duree, [1, 1]],
-    ['Enregistrer durée — contrôle FFR hors délai (deux fois)', { panne: toujours('getConformiteFFR', 'delai') }, duree, [1, 2]],
-    ['Enregistrer durée — contrôle FFR silencieux (deux fois)', { panne: toujours('getConformiteFFR', 'silence') }, duree, [1, 2]],
-    ['Enregistrer durée — contrôle FFR silencieux, relance réussie', { panne: premierFond('getConformiteFFR', 'silence') }, duree, [1, 2]],
-    ['Enregistrer durée — contrôle FFR 404, relance réussie', { panne: premierFond('getConformiteFFR', '404') }, duree, [1, 2]]
+    ['Enregistrer durée — contrôle FFR hors délai, sans rejeu', { panne: toujours('getConformiteFFR', 'delai') }, duree, [1, 1]],
+    ['Enregistrer durée — contrôle FFR silencieux, sans rejeu', { panne: toujours('getConformiteFFR', 'silence') }, duree, [1, 1]],
+    ['Enregistrer durée — premier contrôle FFR silencieux', { panne: premierFond('getConformiteFFR', 'silence') }, duree, [1, 1]],
+    ['Enregistrer durée — premier contrôle FFR en 404', { panne: premierFond('getConformiteFFR', '404') }, duree, [1, 1]]
   ];
   console.log('    | Geste | bloquantes | arrière-plan | total | retour utilisateur | fin de l\'activité réseau | requêtes |');
   console.log('    |---|---|---|---|---|---|---|');

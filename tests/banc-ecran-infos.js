@@ -201,7 +201,7 @@ function navigateur(srv, lireJs, options) {
     const faites = journal.slice(avant);
     return {
       requetes: faites, attendues: faites.filter((r) => r.attendue), fond: faites.filter((r) => !r.attendue),
-      ecritures: faites.filter((r) => r.methode === 'POST' && r.action !== 'getConfigAdmin'),
+      ecritures: faites.filter((r) => r.methode === 'POST' && !/^get/.test(r.action)),
       resume: faites.map((r) => (r.attendue ? '' : '↪') + r.action).join(' → '),
       // Attente ESTIMÉE qui bloque le geste : somme des requêtes attendues (majorant si deux d'entre
       // elles partent ensemble), et verrou d'écriture cumulé.

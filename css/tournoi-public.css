@@ -643,3 +643,43 @@ tr.cl-vainqueur .col-equipe { font-weight: 700; color: var(--navy); }
    il ne peut pas charger la présente feuille (elle habille
    toute la page publique). tournoi.html charge les deux.
    ========================================================= */
+
+/* ---------------------------------------------------------
+   BANDEAU D'ÉTAT — chargement, erreur, ancienneté, masquage
+   ---------------------------------------------------------
+   ⭐ Il porte `role="status"` / `aria-live="polite"` dans le
+   HTML : ce style ne fait que le rendre LISIBLE. Il ne doit
+   jamais être la SEULE façon de comprendre le message —
+   chaque état est écrit en toutes lettres, et le pictogramme
+   (⚠️ / ⛔) double la couleur pour qui ne la perçoit pas.
+   Contraste vérifié sur fond clair (≥ 4,5:1 en AA).
+   --------------------------------------------------------- */
+.etat-public {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid var(--bordure);
+  background: var(--surface-clair);
+  color: var(--navy);
+  font-size: 14px;
+  line-height: 1.45;
+}
+.etat-public.etat-alerte {
+  border-color: #e3b7b2;
+  background: #fdf3f2;
+  color: #8a2a1f;   /* 6,4:1 sur #fdf3f2 */
+}
+
+/* Écran d'indisponibilité : le bouton « Réessayer » reste une CIBLE TACTILE confortable
+   (≥ 44 px de haut) même sur les plus petits téléphones. */
+#tournoi-indispo .bouton { margin-top: 14px; min-height: 44px; }
+
+/* ⛔ Aucun débordement horizontal à 320 px : le bandeau d'état coupe ses mots plutôt que
+   d'élargir la page (une version ou un détail technique n'a pas d'espace où se couper). */
+.etat-public { overflow-wrap: anywhere; }
+
+/* Quelqu'un qui a demandé moins d'animation n'en reçoit pas ici non plus. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .etat-public { transition: none; }
+}

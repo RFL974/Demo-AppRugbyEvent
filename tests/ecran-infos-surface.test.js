@@ -218,8 +218,9 @@ const bouton = (attributs) => ({ disabled: false, getAttribute: (a) => (attribut
   b = await banc();
   const reprise = { disabled: false };
   x = await b.jouer(() => b.ctx.onReessayerControleFFR(clic('[data-action="reessayer-ffr"]', reprise)));
-  vrai(x.requetes.length >= 1 && x.requetes.every((r) => r.methode === 'GET') && reprise.disabled === true,
-    'R.6 « Réessayer le contrôle FFR » : lectures seules, bouton désactivé pendant la reprise', x.resume);
+  vrai(x.requetes.length === 1 && x.requetes[0].action === 'getConformiteFFR' &&
+       x.requetes[0].methode === 'POST' && x.ecritures.length === 0 && reprise.disabled === true,
+    'R.6 « Réessayer le contrôle FFR » : lecture protégée seule, bouton désactivé pendant la reprise', x.resume);
   matrice('Réessayer le contrôle FFR', x);
 
   /* ================================================================ W — écritures */

@@ -130,6 +130,10 @@ async function sauvegarder(options) {
       if (action === 'getRefFFR') return { formes: [{ categorie: 'M10' }], dates: [], regles: [], temps: [] };
       return { refDisponible: true, statut: 'OK', conflits: [], vigilances: [], formes: {}, regles: {}, temps: {} };
     },
+    apiPostProtege: async (action) => {
+      appelsFFR.push(action);
+      return { refDisponible: true, statut: 'OK', conflits: [], vigilances: [], formes: {}, regles: {}, temps: {} };
+    },
     echapper: (s) => String(s)
   });
   vm.runInContext(lire('admin-conformite-ffr.js'), ffr);

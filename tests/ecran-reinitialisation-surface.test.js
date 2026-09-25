@@ -541,7 +541,7 @@ const prepa = (b) => b.demandes().filter((d) => d.action === 'preparerReinitiali
     const b = await B.banc({ backend: B.BACKEND_AVANT() });
     await b.clic('bouton-reinitialiser', 90);
     vrai(b.srv.vide(), 'X.1 la réinitialisation aboutit quand même', b.etatServeur());
-    vrai(actions(b).indexOf('getAll') !== -1 && actions(b).indexOf('getConfigAdmin') !== -1,
+    vrai(actions(b).indexOf('getInstantaneAdmin') !== -1 && actions(b).indexOf('getConfigAdmin') !== -1,
       'X.2 ⭐⭐ sans état joint, l’écran RETOMBE sur ses deux lectures d’avant — ⛔ il ne devine rien',
       actions(b));
     vrai(JSON.stringify(b.etatEcran()) === JSON.stringify(b.etatServeur()),
@@ -570,8 +570,12 @@ const prepa = (b) => b.demandes().filter((d) => d.action === 'preparerReinitiali
       'X.8 ⛔ une seule écriture — pas de double exécution', actions(b));
     vrai(b.demandes()[0].etat_vu === undefined && b.demandes()[0].renvoyer_etat === undefined,
       'X.9 ⭐ l’ancien module n’envoie ni précondition ni demande d’état', Object.keys(b.demandes()[0]));
+    /* ⛔ ICI C'EST BIEN `getAll` : ce cas charge l'`admin.js` d'AVANT, qui ne connaît pas la lecture
+       sous clé. ⭐ Le serveur COURANT la sert encore — le tournoi de ce banc est publié —, et lui
+       rendrait un état VIDE mais bien formé s'il ne l'était pas. Le module neuf, lui, passe par
+       `getInstantaneAdmin` (voir X.13). */
     vrai(actions(b).indexOf('getAll') !== -1,
-      'X.10 ⭐ il relit donc `getAll` comme avant, et le serveur le sert', actions(b));
+      'X.10 ⭐ le module d’avant relit `getAll` comme avant, et le serveur le sert', actions(b));
     vrai(JSON.stringify(b.etatEcran()) === JSON.stringify(b.etatServeur()) && /✅/.test(b.message()),
       'X.11 ⭐ l’écran finit exact, et le message est celui du succès', [b.etatEcran(), b.message().slice(0, 40)]);
   }
@@ -581,7 +585,7 @@ const prepa = (b) => b.demandes().filter((d) => d.action === 'preparerReinitiali
     await b.clic('bouton-reinitialiser', 90);
     vrai(b.srv.vide() && /✅ Tournoi réinitialisé/.test(b.message()),
       'X.12 ⭐⭐ réponse AMPUTÉE de l’état joint : l’écran retombe sur ses lectures et réussit', b.message().slice(0, 60));
-    vrai(actions(b).indexOf('getAll') !== -1 && actions(b).indexOf('getConfigAdmin') !== -1,
+    vrai(actions(b).indexOf('getInstantaneAdmin') !== -1 && actions(b).indexOf('getConfigAdmin') !== -1,
       'X.13 ⭐ exactement le repli annoncé', actions(b));
     vrai(!/déjà réinitialisé/.test(b.message()),
       'X.14 ⛔ et il n’invente pas un « déjà réinitialisé » que la réponse ne dit pas', b.message());

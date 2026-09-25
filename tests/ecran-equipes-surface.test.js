@@ -279,6 +279,7 @@ await essai('V', async () => {
     ['V.2', 'NOUVEAU frontend + ancien backend', { lire: LIRE, backend: B.BACKEND_AVANT() }]
   ];
   for (const [code, libelle, options] of combinaisons) {
+    const backendNeuf = options.backend === CODE;
     const b = await B.banc(options);
     const s = b.totauxServeur();
     t.vrai(s.total.equipes === 21 && s.total.joueurs === 327 && s.total.educateurs === 34,
@@ -288,11 +289,44 @@ await essai('V', async () => {
       b.nomsAffiches().indexOf('MIX') !== -1,
       code + 'b ' + libelle + ' : ajouter marche, une seule ligne écrite, affichée', rA.resume);
     const rM = await b.modifier('MEUDON', { nom: 'MEUDON-V', joueurs: 11, educateurs: 3 });
-    t.vrai(!rM.bloque && !b.doc.querySelector('#liste-equipes .en-edition') && b.nomsAffiches().indexOf('MEUDON-V') !== -1,
-      code + 'c ' + libelle + ' : modifier marche et referme l\'édition', rM.resume);
     const rS = await b.supprimer('ANTONY');
-    t.vrai(!rS.bloque && b.srv.equipes().filter((e) => e.nom_equipe === 'ANTONY').length === 1,
-      code + 'd ' + libelle + ' : supprimer marche', rS.resume);
+    /* ⭐ CE QUI VAUT DANS LES DEUX SENS : ce que le serveur a écrit, il l'a écrit JUSTE. */
+    t.vrai(b.srv.equipes().filter((e) => e.nom_equipe === 'MEUDON-V').length === 1,
+      code + 'c ' + libelle + ' : modifier est APPLIQUÉ côté serveur, une seule fois', rM.resume);
+
+    if (backendNeuf) {
+      t.vrai(b.srv.equipes().filter((e) => e.nom_equipe === 'ANTONY').length === 1,
+        code + 'd ' + libelle + ' : supprimer est APPLIQUÉ côté serveur', rS.resume);
+    } else {
+      /* ⚠️ BACKEND D'AVANT : la suppression a besoin de la liste RELUE pour désigner sa ligne, et
+         cette relecture passe par `getInstantaneAdmin`, que ce backend ne connaît pas. Le geste
+         n'est donc pas émis. ⭐ CE QUI COMPTE, ET QUI EST VÉRIFIÉ ICI : rien n'a été supprimé À
+         L'AVEUGLE. ⛔ Le pire ne serait pas de ne pas supprimer, ce serait de supprimer la
+         mauvaise ligne à partir d'une liste qu'on n'a pas pu relire. */
+      t.vrai(b.srv.equipes().filter((e) => e.nom_equipe === 'ANTONY').length === 2,
+        code + 'd ' + libelle + ' : la suppression n’est pas émise — ⛔ aucune ligne effacée à ' +
+        'l’aveugle faute de liste relue', rS.resume);
+    }
+
+    if (backendNeuf) {
+      /* ⭐ BACKEND COURANT : la relecture sous clé admin passe, l'écran se referme et se rafraîchit. */
+      t.vrai(!rM.bloque && !b.doc.querySelector('#liste-equipes .en-edition') &&
+        b.nomsAffiches().indexOf('MEUDON-V') !== -1,
+        code + 'e ' + libelle + ' : l\'écran se rafraîchit et referme l\'édition', rM.resume);
+    } else {
+      /* ⚠️ BACKEND D'AVANT + FRONTEND NEUF : la relecture passe par `getInstantaneAdmin`, que ce
+         backend ne connaît pas. ⛔ ELLE ÉCHOUE FERMÉ, et c'est VOULU : le contrat de ce lot exige
+         qu'une action absente d'un ancien backend fasse échouer, plutôt que de retomber sur
+         `getAll` — qui livrerait, lui, le tournoi non publié qu'on vient de fermer.
+         ⭐ CE QUE L'ÉCRAN NE FAIT SURTOUT PAS : prétendre que tout va bien. Il ne montre pas un
+         état périmé comme s'il était frais.
+         ⚠️ CONSÉQUENCE DE DÉPLOIEMENT, dite plutôt que tue : le backend se déploie AVANT le
+         frontend. C'est la seule contrainte que la fermeture introduit. */
+      const silencieux = !rM.bloque && b.nomsAffiches().indexOf('MEUDON-V') !== -1;
+      t.vrai(!silencieux,
+        code + 'e ' + libelle + ' : la relecture échoue FERMÉ — ⛔ jamais un état périmé présenté ' +
+        'comme frais, ⛔ jamais de repli sur la porte anonyme', rM.resume);
+    }
   }
 });
 

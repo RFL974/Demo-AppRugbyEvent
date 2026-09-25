@@ -264,7 +264,7 @@ const CHAMPS = ['heure_debut', 'heure_rdv', 'heure_fin', 'heure_fin_auto', 'heur
     b.saisir({ heure_debut: '11:00', heure_fin_communiquee: '18:30' });
     b.srv.poser('pause_dejeuner_debut', '12:40');             // changement fait ailleurs (autre étape, autre appareil)
     const g = await b.jouer(() => b.ctx.rechargerEtRendre({ reglages: true }));
-    t.vrai(g.requetes.map((r) => r.action).join() === 'getAll,getConfigAdmin' && b.form() === f0 &&
+    t.vrai(g.requetes.map((r) => r.action).join() === 'getInstantaneAdmin,getConfigAdmin' && b.form() === f0 &&
       b.champ('heure_debut').value === '11:00' && b.champ('heure_fin_communiquee').value === '18:30' && b.champ('pause_dejeuner_debut').value === '12:40' &&
       /Saisie non enregistrée conservée/.test(b.message()),
       'R.3 ⭐ relecture des réglages (génération, terrains, catégorie ajoutée…) : saisie GARDÉE, champs non touchés rafraîchis, message',

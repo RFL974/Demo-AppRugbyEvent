@@ -321,7 +321,11 @@ async function ouvrirSessionAdmin() {
   // Une clé déjà validée cette session passe devant ; sinon, celle qu'une panne a laissée en
   // suspens ; sinon, on la demande.
   let cle = lireCleLocale('admin') || adminCleVolatile;
-  let getAll = null; // promesse UNIQUE : lancée au premier essai, jamais relancée ensuite
+  /* ⭐ Promesse UNIQUE POUR UNE CLÉ DONNÉE : lancée au premier essai, conservée d'un tour à l'autre.
+     ⛔ Elle est relancée quand la CLÉ change, et seulement alors : la lecture porte désormais
+     l'autorité, donc une clé refusée rend la lecture refusée — la garder serait garder un refus. */
+  let instantane = null;
+  let cleLancee = null;
 
   while (true) {
     if (!cle) {
@@ -337,9 +341,14 @@ async function ouvrirSessionAdmin() {
     // Le `catch` vide marque la promesse comme surveillée : sans lui, un `getAll` qui échoue
     // pendant qu'on redemande la clé remonterait en rejet NON GÉRÉ. L'erreur reste intacte et
     // ressort au `await` ci-dessous.
-    if (!getAll) {
-      getAll = apiGet('getAll', null, { delaiMs: DELAI_LECTURE_ADMIN_MS });
-      getAll.catch(function () { /* relu plus bas */ });
+    if (!instantane || cleLancee !== cle) {
+      cleLancee = cle;
+      /* ⭐ À L'OUVERTURE, un serveur trop ancien ne doit pas empêcher d'ATTEINDRE l'administration :
+         l'état vient vide et DÉCLARÉ tel (voir `lireInstantaneAdminOuVide`). ⛔ Ailleurs — dans
+         `rechargerEtRendre` —, l'échec reste FERMÉ : on ne réécrit pas la mémoire de l'écran avec
+         un vide qui n'est pas une vérité du classeur. */
+      instantane = lireInstantaneAdminOuVide(cle, { delaiMs: DELAI_LECTURE_ADMIN_MS });
+      instantane.catch(function () { /* relu plus bas */ });
     }
 
     let cfg;
@@ -364,7 +373,7 @@ async function ouvrirSessionAdmin() {
     // clé reste acquise : le rechargement suivant repartira sans redemander la saisie.
     definirCleLocale('admin', cle);
     adminCleVolatile = '';                   // acceptée : elle est désormais rangée, plus rien en suspens
-    const data = await getAll;
+    const data = await instantane;
     return { connecte: true, data: data, cfg: cfg };
   }
 }
@@ -1357,7 +1366,9 @@ async function rechargerEtRendre(opt) {
      le chemin réseau historique reprend au caractère près. */
   const data = opt.etat
     ? { equipes: opt.etat.equipes || [], poules: opt.etat.poules || [], matchs: opt.etat.matchs || [] }
-    : await apiGet('getAll', null, budget); // équipes / poules / matchs (config = vue live, ignorée ici)
+    // ⭐ Lecture SOUS CLÉ ADMIN (voir `lireInstantaneAdmin`) : équipes / poules / matchs.
+    //   ⛔ Plus jamais `getAll`, qui est une porte anonyme réservée au tournoi PUBLIÉ.
+    : await lireInstantaneAdminOuVide(null, budget)
 
   // La config COMPLÈTE vient de getConfigAdmin (clé admin), JAMAIS de la vue live de getAll (qui
   // écraserait les contacts). On ne la recharge que si un rendu qui en dépend est demandé — sinon
@@ -1375,10 +1386,15 @@ async function rechargerEtRendre(opt) {
 
   // ⛔ Résultat PÉRIMÉ pour les équipes : on ne touche ni la mémoire ni la liste. Le reste du
   //   rendu (planning, matchs) ne dépend pas de ce registre et suit son cours.
-  const equipesFraiches = (jeton === null) || jetonEquipesValide(jeton);
+  /* ⛔ SERVEUR TROP ANCIEN POUR LA LECTURE PROTÉGÉE : l'état arrive VIDE ET DÉCLARÉ tel. On garde
+     alors la mémoire de l'écran INTACTE — un vide qu'on n'a pas lu dans le classeur n'est pas une
+     vérité du classeur, et l'écrire effacerait les équipes à l'écran pour une raison de version.
+     ⛔ Le reste du rendu (configuration) suit son cours : c'est lui qui motive l'appel. */
+  const instantaneLu = data.indisponible !== 'backend_trop_ancien';
+  const equipesFraiches = instantaneLu && ((jeton === null) || jetonEquipesValide(jeton));
   if (equipesFraiches) equipesCourantes = data.equipes;
   if (equipesFraiches && typeof actualiserEtatClubsDepuisEquipes === 'function') actualiserEtatClubsDepuisEquipes();
-  matchsCourants = data.matchs || [];
+  if (instantaneLu) matchsCourants = data.matchs || [];
   if (cfg) configCourante = cfg;
 
   if (opt.reglages)   injecterReglages(configCourante.global, configCourante.categories);

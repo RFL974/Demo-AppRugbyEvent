@@ -32,9 +32,13 @@
         <img src="assets/logo-tournoi.svg" alt="" width="64" height="64" decoding="async">
         <h1 class="titre-page" id="titre-tournoi">Le tournoi</h1>
       </div>
+            <!-- Modèle d'onglets ARIA COMPLET : chaque `tab` porte un identifiant stable, désigne
+                 son `tabpanel` (aria-controls) et en est désigné en retour (aria-labelledby).
+                 Un SEUL onglet est dans l'ordre de tabulation (tabindex 0 / -1) ; les flèches,
+                 Début et Fin circulent entre eux (js/tournoi.js). -->
             <div class="onglets" role="tablist" aria-label="Vues du tournoi">
-              <button class="onglet actif" data-onglet="equipe" role="tab" aria-selected="true" aria-controls="vue-equipe">📋 Mon équipe</button>
-              <button class="onglet" data-onglet="classements" role="tab" aria-selected="false" aria-controls="vue-classements">🏆 Classements</button>
+              <button class="onglet actif" id="onglet-equipe" data-onglet="equipe" role="tab" aria-selected="true" aria-controls="vue-equipe" tabindex="0">📋 Mon équipe</button>
+              <button class="onglet" id="onglet-classements" data-onglet="classements" role="tab" aria-selected="false" aria-controls="vue-classements" tabindex="-1">🏆 Classements</button>
             </div>
     </div>
   </header>
@@ -55,6 +59,11 @@
            n'est déclaré sur cet emplacement : la page est alors STRICTEMENT celle d'avant. -->
       <div id="sp-bandeau" class="sp-zone-bandeau" hidden></div>
 
+      <!-- ÉTAT DE LA PAGE — une seule vérité, pour les deux onglets et toutes les commandes.
+           `role="status"` + `aria-live="polite"` : un lecteur d'écran annonce le passage en
+           « hors ligne », « données de 14:32 », « tournoi masqué » sans voler le focus. -->
+      <div id="etat-public" class="etat-public" role="status" aria-live="polite" hidden></div>
+
       <div class="carte-app">
 
         <!-- Écran « à venir » : affiché tant que le tournoi n'est pas publié depuis l'admin. -->
@@ -64,6 +73,18 @@
             <h2 class="avenir-titre">Le tournoi arrive bientôt</h2>
             <p class="avenir-texte">Les poules, le planning et les scores en direct s'afficheront ici
               dès l'ouverture du tournoi. Reviens un peu plus tard !</p>
+          </div>
+        </div>
+
+        <!-- Écran d'INDISPONIBILITÉ : réseau perdu, réponse illisible, serveur trop ancien.
+             ⛔ Il ne se confond JAMAIS avec l'écran « à venir » (tournoi non publié) ni avec un
+             planning vide : une erreur n'est pas un état vide. -->
+        <div id="tournoi-indispo" hidden>
+          <div class="avenir">
+            <div class="avenir-emoji">📡</div>
+            <h2 class="avenir-titre" id="indispo-titre">Impossible d'afficher le tournoi</h2>
+            <p class="avenir-texte" id="indispo-texte"></p>
+            <button id="btn-reessayer" class="bouton" type="button">🔄 Réessayer</button>
           </div>
         </div>
 
@@ -103,14 +124,14 @@
 
         <div id="vues">
           <!-- 📋 Mon équipe : sélecteur + matchs + classements de l'équipe -->
-          <div id="vue-equipe" role="tabpanel">
+          <div id="vue-equipe" role="tabpanel" aria-labelledby="onglet-equipe" tabindex="0">
             <div id="mon-planning">
               <p class="vide">Sélectionne ton équipe pour voir tes matchs.</p>
             </div>
           </div>
 
           <!-- 🏆 Classements : derniers scores + poules (matin) + niveaux croisés (après-midi) -->
-          <div id="vue-classements" role="tabpanel" hidden>
+          <div id="vue-classements" role="tabpanel" aria-labelledby="onglet-classements" tabindex="0" hidden>
             <div class="message">Chargement des classements…</div>
           </div>
         </div>
@@ -139,7 +160,13 @@
   <script src="js/config.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/commun.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/dialog.js?v=refonte-ciel-verre-20260920"></script>
-  <script src="js/api.js"></script>
+  <!-- ⚠️ `js/api.js` porte une version PROPRE À LUI. Il a été modifié DEUX FOIS sur cette branche
+       (e1a7f06, puis 7cabce4 « saisie des scores ») alors qu'il restait servi SANS version : un
+       visiteur au cache chaud pouvait recevoir un `tournoi.js` neuf et un `api.js` d'avant.
+       ⛔ La version GLOBALE de la livraison (`refonte-ciel-verre-20260920`) n'est PAS touchée : on
+       lui ajoute un suffixe propre à CETTE ressource, ce qui produit une URL distincte sans vider
+       aucun autre cache encore valide. -->
+  <script src="js/api.js?v=refonte-ciel-verre-20260920-api2"></script>
   <script src="js/sponsors.js"></script>
   <script src="js/tournoi.js?v=refonte-ciel-verre-20260920"></script>
 
