@@ -57,7 +57,7 @@ vrai(!dps.includes('Hypothèse') && !dps.includes('centrale'),
 
 const page = lire('reponse-invitation.html');
 const admin = lire('admin.html');
-vrai(page.includes('participants2') && admin.includes('participants3'),
+vrai(page.includes('participants2-reponse1') && admin.includes('participants3'),
   'les ressources modifiées ont une URL neuve sans changer la version globale');
 vrai(admin.includes('id="bloc-dps"') && admin.includes('id="autorisation-public-attendu"') &&
   admin.indexOf('id="bloc-dps"') < admin.indexOf('id="bloc-autorisation"'),

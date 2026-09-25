@@ -53,20 +53,22 @@ function vrai(valeur, message) { assert.ok(valeur, message); controles++; }
 
 const VERSION = 'refonte-ciel-verre-20260920';
 const VERSIONS_PROPRES = {
-  'css/dossier.css': VERSION + '-participants2',
-  'css/theme-r92.css': VERSION + '-participants2-dps2-terrains-pdf2',
+  'css/dossier.css': 'refonte-ciel-verre-20260925-dossier-final4',
+  'css/theme-r92.css': 'refonte-ciel-verre-20260925-dossier-final1',
   'js/admin-autorisation.js': VERSION + '-participants3-dps1-municipal1',
   'js/admin-dps.js': VERSION + '-dps2',
-  'js/admin-terrains.js': VERSION + '-terrains-pdf2',
-  'js/admin-terrains-pdf.js': VERSION + '-terrains-pdf2',
-  'js/admin-invitations.js': VERSION + '-participants2',
+  'js/admin-terrains.js': 'refonte-ciel-verre-20260925-dossier-plans1',
+  'js/admin-terrains-pdf.js': 'refonte-ciel-verre-20260925-dossier-plans2',
+  'js/admin-invitations.js': 'refonte-ciel-verre-20260925-dossier-final2',
   'js/admin-suivi-clubs.js': VERSION + '-participants2',
   'js/admin.js': VERSION + '-participants3-municipal1',
   'js/assistant.js': VERSION + '-participants3-municipal1',
-  'js/ecrans.js': VERSION + '-participants3-municipal1',
+  'js/ecrans.js': VERSION + '-participants3-municipal1-invitation-ordinateur2',
   'css/municipal.css': VERSION + '-municipal2',
   'js/admin-municipal.js': VERSION + '-municipal2',
-  'js/reponse.js': VERSION + '-participants2'
+  'js/reponse.js': VERSION + '-participants2-reponse1',
+  'js/dossier.js': 'refonte-ciel-verre-20260925-dossier-final5',
+  'js/terrains-dossier.js': 'refonte-ciel-verre-20260925-plans2'
 };
 
 /** Le recensement des fichiers livrés par la refonte. */
@@ -77,7 +79,7 @@ const LIVRES = [
   'js/admin-equipes.js', 'js/admin-generation.js', 'js/admin-infos-publication.js',
   'js/admin-reglages.js', 'js/admin-suivi-clubs.js', 'js/admin-tableau-bord.js',
   'js/admin-terrains.js', 'js/admin-terrains-pdf.js', 'js/admin.js', 'js/assistant.js', 'js/commun.js', 'js/config.js', 'js/dialog.js',
-  'js/dossier.js', 'js/ecrans.js', 'js/invitation.js', 'js/perfs.js', 'js/reponse.js',
+  'js/dossier.js', 'js/ecrans.js', 'js/invitation.js', 'js/perfs.js', 'js/reponse.js', 'js/terrains-dossier.js',
   'js/saisie-protegee.js', 'js/saisie.js', 'js/tournoi.js',
 ];
 

@@ -42,7 +42,7 @@ const BACKEND_AVANT_REV = '9f770a5daf5fb09dd4053f27fff19f69960671d9';
 const git = (depot, rev, fichier) => execFileSync('git', ['-C', depot, 'show', rev + ':' + fichier],
   { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 const BACKEND_AVANT = () => git(BACKEND, BACKEND_AVANT_REV, 'Code.gs');
-const LECTEUR_AVANT = (f) => git(RACINE, FRONTEND_AVANT_REV, f);
+const LECTEUR_AVANT = (f) => f === 'js/admin-terrains-pdf.js' ? '' : git(RACINE, FRONTEND_AVANT_REV, f);
 const lecteur = (dossier) => (f) => fs.readFileSync(path.join(dossier || RACINE, f), 'utf8');
 /** Cache du navigateur mêlant deux versions : `avant` = fichiers servis dans leur version figée d'avant. */
 const lecteurMele = (avant, base) => (f) => (avant.indexOf(f) !== -1 ? LECTEUR_AVANT(f) : (base || lecteur())(f));
@@ -59,7 +59,9 @@ function page(html) {
   }).join('\n') + '<span id="tb-categories"></span><span id="tb-planning"></span><span id="tb-publication"></span>';
 }
 
-const MODULES = ['js/api.js', 'js/admin.js', 'js/admin-terrains.js', 'js/admin-invitations.js', 'js/admin-reglages.js', 'js/admin-equipes.js',
+// `admin-terrains.js` valide désormais l'empreinte et prépare la projection du dossier via le
+// module PDF/terrains, chargé avant lui dans la vraie page. Le banc doit reproduire ce raccordement.
+const MODULES = ['js/api.js', 'js/admin.js', 'js/admin-terrains-pdf.js', 'js/admin-terrains.js', 'js/admin-invitations.js', 'js/admin-reglages.js', 'js/admin-equipes.js',
   'js/admin-tableau-bord.js', 'js/assistant.js'];
 
 /* ============================================================== serveur (vrai Code.gs) */

@@ -34,6 +34,7 @@ async function initReponse() {
     });
     if (!res || res.error || !res.club) { zone.innerHTML = messageErreur('Lien invalide ou expiré.'); return; }
     repDonnees = res;
+    majNavigationReponse(res);
     zone.innerHTML = construirePage(res);
     brancherEvenements();
   } catch (e) {
@@ -46,6 +47,82 @@ async function initReponse() {
 /** Bloc d'erreur générique (ne révèle aucune information). */
 function messageErreur(texte) {
   return '<div class="message-chargement erreur">' + echapper(texte) + '</div>';
+}
+
+/** Pictogrammes locaux partagés avec l'invitation, sans police d'icônes ni appel réseau. */
+function iconeReponse(nom, classe) {
+  return '<img class="rep-icone' + (classe ? ' ' + classe : '') + '" src="assets/email-icons/' +
+    echapper(nom) + '.svg" alt="" aria-hidden="true">';
+}
+
+/** Contrôle de repli local : aucune saisie n'est effacée et aucun appel réseau n'est déclenché. */
+function boutonRepliReponse(cible, libelle, visible) {
+  return '<button type="button" class="rep-repli" data-repli-cible="' + echapper(cible) + '" ' +
+    'data-repli-libelle="' + echapper(libelle) + '" aria-expanded="true" aria-controls="' + echapper(cible) + '" ' +
+    'aria-label="Replier ' + echapper(libelle) + '"' + (visible === false ? ' hidden' : '') + '>' +
+    iconeReponse('chevron-up') + '</button>';
+}
+
+function definirEtatRepli(bouton, ouvert) {
+  if (!bouton) return;
+  const cible = document.getElementById(bouton.getAttribute('data-repli-cible'));
+  if (!cible) return;
+  const libelle = bouton.getAttribute('data-repli-libelle') || 'cette section';
+  cible.hidden = !ouvert;
+  bouton.setAttribute('aria-expanded', ouvert ? 'true' : 'false');
+  bouton.setAttribute('aria-label', (ouvert ? 'Replier ' : 'Déplier ') + libelle);
+  const image = bouton.querySelector('img');
+  if (image) image.src = 'assets/email-icons/chevron-' + (ouvert ? 'up' : 'down') + '.svg';
+  const bloc = bouton.closest('.rep-repliable');
+  if (bloc) bloc.classList.toggle('est-replie', !ouvert);
+}
+
+/** L'affiche enregistrée reste prioritaire. Le visuel local ne sert qu'au tournoi de démonstration. */
+function afficheReponse(tournoi) {
+  if (txt(tournoi && tournoi.affiche_id)) return urlAffiche(tournoi.affiche_id, 900);
+  return /tournoi des petits champions/i.test(txt(tournoi && tournoi.nom))
+    ? 'assets/affiche-tournoi-des-petits-champions-2027.png' : '';
+}
+
+/** Bandeau commun Invitation → Votre réponse → Votre dossier. */
+function majNavigationReponse(data) {
+  const t = data.tournoi || {};
+  const meta = document.getElementById('rep-navigation-tournoi');
+  if (meta) {
+    const sousTitre = [txt(t.date) ? dateLongueFr(t.date) : '', txt(t.lieu)].filter(Boolean).join(' · ');
+    meta.innerHTML = '<strong>' + echapper(txt(t.nom) || 'Le tournoi') + '</strong>' +
+      (sousTitre ? '<span>' + echapper(sousTitre) + '</span>' : '');
+  }
+  try {
+    const lien = new URL('invitation-club.html', window.location.href);
+    lien.searchParams.set('club', repParams.club);
+    lien.searchParams.set('token', repParams.token);
+    ['rep-lien-invitation', 'rep-lien-marque'].forEach(function (id) {
+      const el = document.getElementById(id);
+      if (el) el.href = lien.toString();
+    });
+  } catch (_) { /* Le formulaire reste utilisable si l'URL ne peut pas être reconstruite. */ }
+}
+
+function etapesReponse() {
+  const etapes = ['Participation', 'Équipes', 'Repas', 'Récapitulatif'];
+  return '<ol class="rep-progression" aria-label="Étapes de votre réponse">' + etapes.map(function (libelle, i) {
+    const n = i + 1;
+    return '<li class="' + (n === 1 ? 'est-active' : '') + '" data-rep-etape="' + n + '"' +
+      (n === 1 ? ' aria-current="step"' : '') + '><span>' + n + '</span><strong>' + echapper(libelle) + '</strong></li>';
+  }).join('') + '</ol>';
+}
+
+function majEtapeReponse(numero) {
+  const n = Math.max(1, Math.min(4, Number(numero) || 1));
+  document.body.setAttribute('data-reponse-etape', String(n));
+  document.querySelectorAll('[data-rep-etape]').forEach(function (etape) {
+    const valeur = Number(etape.getAttribute('data-rep-etape'));
+    etape.classList.toggle('est-active', valeur === n);
+    etape.classList.toggle('est-faite', valeur < n);
+    if (valeur === n) etape.setAttribute('aria-current', 'step');
+    else etape.removeAttribute('aria-current');
+  });
 }
 
 /** Convertit un prix normalisé en centimes. Une valeur inconnue ne devient jamais un prix. */
@@ -95,25 +172,18 @@ function construirePage(data) {
   const prenom = txt(club.club_contact_prenom);
   const dejaRepondu = !!txt(club.date_reponse);
 
-  let html = '';
-
-  // a) En-tête VITRINE (même principe que l'invitation refondue) : blason centré en grand,
-  //    surtitre, grand titre, date · lieu, puis l'affiche en version COMPACTE (la page est un
-  //    formulaire : l'affiche rappelle le tournoi sans repousser la réponse hors de l'écran).
-  const quand = [];
-  if (txt(t.date)) quand.push('<span class="inv-quand-date">' + echapper(dateLongueFr(t.date)) + '</span>');
-  if (txt(t.lieu)) quand.push('<span>' + echapper(txt(t.lieu)) + '</span>');
-  html += '<header class="inv-hero">' +
-    '<img class="inv-blason" src="assets/logo-tournoi.svg" alt="" onerror="this.style.display=\'none\'">' +
-    '<p class="inv-surtitre">Vous êtes invités</p>' +
-    '<h1 class="inv-titre">' + echapper(nom) + '</h1>' +
-    (quand.length ? '<p class="inv-quand">' + quand.join('<span class="inv-quand-sep"> · </span>') + '</p>' : '') +
-  '</header>';
-  if (txt(t.affiche_id)) {
-    html += '<figure class="inv-affiche inv-affiche-compacte">' +
-      '<img src="' + echapper(urlAffiche(t.affiche_id, 800)) + '" alt="Affiche — ' + echapper(nom) + '">' +
-    '</figure>';
-  }
+  const affiche = afficheReponse(t);
+  const nomClub = txt(club.club_nom) || txt(repParams && repParams.club) || 'Votre club';
+  let html = '<section class="rep-entete-parcours"><div class="rep-identite-club">' +
+    '<p class="rep-surtitre">Votre réponse</p>' +
+    '<h1>' + echapper(nomClub) + '</h1>' +
+    '<p>Renseignez votre participation au tournoi.</p>' +
+    '<div class="rep-meta-tournoi">' +
+      (txt(t.date) ? '<span>' + iconeReponse('calendar') + echapper(dateLongueFr(t.date)) + '</span>' : '') +
+      (txt(t.lieu) ? '<span>' + iconeReponse('pin') + echapper(txt(t.lieu)) + '</span>' : '') +
+    '</div></div>' + etapesReponse() +
+    (affiche ? '<figure class="rep-affiche"><img src="' + echapper(affiche) + '" alt="Affiche — ' + echapper(nom) + '"></figure>' : '') +
+  '</section>';
 
   // GEL J-16 (décision Romain) : la page devient LECTURE SEULE — rappel de la réponse donnée,
   // mot d'explication et porte de sortie par email. Le vrai verrou d'écriture est côté serveur
@@ -123,11 +193,11 @@ function construirePage(data) {
       'les inscriptions de cette journée sont désormais closes.</p>';
     if (dejaRepondu) {
       const st = txt(club.statut);
-      html += '<p class="rep-deja">✅ Votre réponse du ' + echapper(dateLongueFr(club.date_reponse))
+      html += '<p class="rep-deja">' + iconeReponse('coche') + 'Votre réponse du ' + echapper(dateLongueFr(club.date_reponse))
         + (st ? ' (' + echapper(st) + ')' : '') + ' est bien enregistrée.</p>';
     }
     const email = txt(data.contact_email);
-    html += '<p class="rep-gel">🔒 Les réponses sont closes depuis J-16 : l\'organisation prépare ' +
+    html += '<p class="rep-gel">' + iconeReponse('verrou') + 'Les réponses sont closes depuis J-16 : l\'organisation prépare ' +
       'les documents officiels de la journée à partir des effectifs déclarés. ' +
       (email
         ? 'Pour toute modification de dernière minute, écrivez à <a href="mailto:' + echapper(email) + '">'
@@ -137,30 +207,34 @@ function construirePage(data) {
     return html;
   }
 
-  html += '<p class="d-presentation">' + (prenom ? 'Bonjour ' + echapper(prenom) + ', ' : '')
-    + 'merci de nous indiquer si votre club pourra participer à cette journée.</p>';
+  html += '<section class="rep-participation rep-repliable"><div class="rep-participation-intro">' +
+    iconeReponse('reponse', 'rep-icone-section') + '<div><h2>Votre participation</h2><p>' +
+    (prenom ? 'Bonjour ' + echapper(prenom) + ', ' : '') +
+    'merci de nous indiquer si votre club pourra participer à cette journée.</p></div>' +
+    boutonRepliReponse('rep-participation-contenu', 'votre participation') + '</div>' +
+    '<div class="rep-repli-contenu" id="rep-participation-contenu">';
 
   // Rappel si le club a déjà répondu (il peut modifier sa réponse).
   if (dejaRepondu) {
     const statut = txt(club.statut);
-    html += '<p class="rep-deja">✅ Vous avez déjà répondu le ' + echapper(dateLongueFr(club.date_reponse))
+    html += '<p class="rep-deja">' + iconeReponse('coche') + 'Vous avez déjà répondu le ' + echapper(dateLongueFr(club.date_reponse))
       + (statut ? ' (' + echapper(statut) + ')' : '') + '. Vous pouvez modifier votre réponse ci-dessous.</p>';
   }
 
   // b) Deux boutons initiaux.
-  html += '<div class="rep-choix">' +
-    '<button type="button" class="rep-btn rep-btn-oui" id="btn-present">✅ Nous serons présents</button>' +
-    '<button type="button" class="rep-btn rep-btn-non" id="btn-absent">❌ Nous ne pourrons pas venir</button>' +
-  '</div>';
+  html += '<div class="rep-choix rep-choix-initial">' +
+    '<button type="button" class="rep-btn rep-btn-oui" id="btn-present">' + iconeReponse('coche') + 'Nous serons présents</button>' +
+    '<button type="button" class="rep-btn rep-btn-non" id="btn-absent">Nous ne pourrons pas venir</button>' +
+  '</div></div></section>';
 
   // Zone « présents » (formulaire) + zone « absents » (confirmation) + zone message final.
   html += '<div id="rep-zone-present" hidden>' + formulairePresence(data) + '</div>';
-  html += '<div id="rep-zone-absent" hidden>' +
-    '<p class="rep-question">Confirmez-vous que votre club ne pourra pas participer ?</p>' +
+  html += '<div class="rep-zone-absent" id="rep-zone-absent" hidden>' +
+    iconeReponse('reponse', 'rep-icone-section') + '<div><p class="rep-question">Confirmez-vous que votre club ne pourra pas participer ?</p>' +
     '<div class="rep-choix">' +
       '<button type="button" class="rep-btn rep-btn-non" id="btn-decline-confirm">Oui, nous déclinons</button>' +
       '<button type="button" class="rep-btn rep-btn-neutre" id="btn-annuler">Annuler</button>' +
-    '</div>' +
+    '</div></div>' +
   '</div>';
   html += '<div id="rep-message-final"></div>';
 
@@ -182,7 +256,7 @@ function blocModalitesPaiement(data) {
     lignes.push('<span><strong>Date limite de paiement :</strong> ' +
       echapper(dateLongueFr(p.date_limite_paiement)) + '</span>');
   }
-  return '<section class="rep-finances"><h2 class="rep-titre">Inscription et paiement</h2>' +
+  return '<section class="rep-finances"><h3>' + iconeReponse('modalites') + 'Inscription et paiement</h3>' +
     '<div class="rep-rappel-paiement">' + lignes.join('') + '</div></section>';
 }
 
@@ -192,7 +266,8 @@ function blocCommandePrestation(type, libelle, prixBrut) {
   if (!prix) return '';
   const articlePluriel = type === 'repas' ? 'repas' : 'goûters';
   return '<section class="rep-prestation" data-prestation="' + type + '" data-prix-centimes="' + prix + '">' +
-    '<h3>' + echapper(libelle) + ' — ' + echapper(eurosDepuisCentimes(prix)) + ' par personne</h3>' +
+    '<h3>' + iconeReponse(type === 'repas' ? 'repas' : 'gouter') + echapper(libelle) +
+      '<small>' + echapper(eurosDepuisCentimes(prix)) + ' par personne</small></h3>' +
     '<p class="rep-aide">Choisissez le nombre de ' + articlePluriel + ' à réserver. « Pour tous » suit automatiquement vos effectifs.</p>' +
     '<div class="rep-prestation-public">' +
       '<label><input type="checkbox" class="rep-prestation-tous" data-public="joueurs"> ' +
@@ -227,8 +302,9 @@ function formulairePresence(data) {
   commandeInitiale = (detailInitial && detailInitial._restauration) || {};
 
   let lignes = '';
-  cats.forEach(function (c) {
+  cats.forEach(function (c, index) {
     const nomCat = txt(c.categorie);
+    const detailId = 'rep-detail-categorie-' + index;
     const max = parseInt(txt(c.max_equipes_par_club), 10);
     const aMax = isFinite(max) && max >= 1;
     const coche = engagees.indexOf(nomCat.toUpperCase()) !== -1;
@@ -249,10 +325,11 @@ function formulairePresence(data) {
           '<input type="number" class="rep-cat-equipes" min="1"' +
             ' value="' + echapper(nbVal || (coche ? '1' : '')) + '" inputmode="numeric"> équipe(s)' +
         '</span>' +
+        boutonRepliReponse(detailId, 'la catégorie ' + nomCat, coche) +
         '<span class="rep-cat-err" role="alert"></span>' +
         // Détail PAR ÉQUIPE (session 23) : joueurs + éducateurs de chaque équipe, rendu par
         // majDetailEquipes selon le nombre d'équipes saisi (valeurs préservées au re-rendu).
-        '<div class="rep-cat-detail"' + (coche ? '' : ' hidden') + '></div>' +
+        '<div class="rep-cat-detail rep-repli-contenu" id="' + detailId + '"' + (coche ? '' : ' hidden') + '></div>' +
       '</div>';
   });
 
@@ -263,16 +340,21 @@ function formulairePresence(data) {
   const equipesGroupees = txt(data.club.nb_equipes_groupees);
 
   return '<form id="form-presence" class="rep-form"><div class="cv-reponse-champs">' +
-    blocModalitesPaiement(data) +
-    '<h2 class="rep-titre">Vos équipes engagées</h2>' +
-    '<p class="rep-aide">Cochez les catégories concernées et indiquez le nombre d\'équipes pour chacune.</p>' +
-    '<div class="rep-cats">' + (lignes || '<p class="rep-aide">Aucune catégorie ouverte pour le moment.</p>') + '</div>' +
+    '<section class="rep-carte-formulaire rep-carte-equipes rep-repliable"><header class="rep-carte-titre">' +
+      iconeReponse('equipes', 'rep-icone-section') + '<div><h2>Inscription des équipes</h2>' +
+      '<p>Sélectionnez les catégories et indiquez vos effectifs.</p></div>' +
+      boutonRepliReponse('rep-contenu-equipes', 'les équipes') + '</header>' +
+      '<div class="rep-repli-contenu" id="rep-contenu-equipes">' +
+      blocModalitesPaiement(data) +
+      '<div class="rep-cats">' + (lignes || '<p class="rep-aide">Aucune catégorie ouverte pour le moment.</p>') + '</div>' +
     // Totaux VIVANTS (recalculés à chaque saisie) — remplacent l'ancien champ manuel global.
     '<div class="rep-totaux" id="rep-totaux" hidden>' +
       '<span>Total joueurs engagés : <strong id="rep-total-joueurs">0</strong></span>' +
       '<span>Total éducateurs : <strong id="rep-total-educateurs">0</strong></span>' +
-    '</div>' +
-    '<fieldset class="rep-deplacement"><legend>Informations pratiques</legend>' +
+    '</div></div></section>' +
+    '<fieldset class="rep-deplacement rep-carte-formulaire rep-repliable"><legend>' + iconeReponse('terrain') +
+      '<span>Informations pratiques</span>' + boutonRepliReponse('rep-contenu-deplacement', 'les informations pratiques') + '</legend>' +
+      '<div class="rep-repli-contenu rep-deplacement-contenu" id="rep-contenu-deplacement">' +
       '<p class="rep-question">Afin de vous accueillir dans les meilleures conditions, merci de nous indiquer comment votre club se rendra au tournoi.</p>' +
       '<p class="rep-aide">Cette information nous sert à dimensionner le poste de secours et le parking.</p>' +
       '<label><input type="radio" name="mode_deplacement" value="groupe"' + (modeDeplacement === 'groupe' ? ' checked' : '') + '> En bus ou en covoiturage organisé par le club</label>' +
@@ -281,14 +363,19 @@ function formulairePresence(data) {
       '<label class="rep-deplacement-mixte"' + (modeDeplacement === 'mixte' ? '' : ' hidden') + '>Environ combien d’équipes voyagent en groupe ? ' +
         '<input type="number" id="rep-equipes-groupees" min="0" step="1" inputmode="numeric" value="' + echapper(equipesGroupees) + '"> <small>(facultatif)</small></label>' +
       '<span class="rep-deplacement-erreur" role="alert"></span>' +
-    '</fieldset>' +
-    (commandes ? '<section class="rep-commandes"><h2 class="rep-titre">Repas et goûter</h2>' + commandes + '</section>' : '') +
-    '</div><aside class="cv-reponse-recap"><section class="rep-total-du"><h2>Total à payer</h2>' +
+    '</div></fieldset>' +
+    (commandes ? '<section class="rep-commandes rep-carte-formulaire rep-repliable"><header class="rep-carte-titre">' +
+      iconeReponse('repas', 'rep-icone-section') + '<div><h2>Repas et goûter</h2>' +
+      '<p>Indiquez le nombre souhaité pour votre délégation.</p></div>' +
+      boutonRepliReponse('rep-contenu-commandes', 'les repas et goûters') + '</header>' +
+      '<div class="rep-repli-contenu" id="rep-contenu-commandes">' + commandes + '</div></section>' : '') +
+    '</div><aside class="cv-reponse-recap"><section class="rep-total-du"><h2>Récapitulatif de votre inscription</h2>' +
       '<div id="rep-detail-paiement"></div>' +
-      '<p><strong id="rep-montant-total">0 €</strong></p>' +
+      '<p class="rep-total-ligne"><span>Total à régler</span><strong id="rep-montant-total">0 €</strong></p>' +
     '</section>' +
     '<div class="rep-actions">' +
-      '<button type="submit" class="rep-btn rep-btn-oui" id="btn-confirmer">Vérifier et confirmer</button>' +
+      '<button type="submit" class="rep-btn rep-btn-oui" id="btn-confirmer">Vérifier ma réponse' + iconeReponse('fleche-droite') + '</button>' +
+      '<button type="button" class="rep-btn-lien" id="btn-absent-secondaire">Nous ne pourrons pas venir</button>' +
       '<span class="rep-form-msg" id="rep-form-msg"></span>' +
     '</div>' +
     '</aside><div id="rep-recap-confirmation" hidden></div>' +
@@ -373,9 +460,8 @@ function majNomsEducateursEquipe(equipe, repli) {
   zone.innerHTML = html;
 }
 
-/** Note FFR d'UNE équipe : au minimum → recommandation DOUCE (jamais bloquante) ; sous le minimum
- *  → signal clair (bloquant à l'envoi). La règle : à l'effectif mini, chaque enfant joue la
- *  quasi-totalité du temps de jeu, or la FFR le plafonne par joueur et par jour. */
+/** Note de sécurité d'UNE équipe : au minimum → recommandation douce (jamais bloquante) ;
+ *  sous le minimum → signal clair (bloquant à l'envoi). */
 function majNoteEquipe(ligne, eq) {
   const note = eq.querySelector('.rep-eq-note');
   const effMin = parseInt(ligne.getAttribute('data-effmin'), 10);
@@ -385,12 +471,11 @@ function majNoteEquipe(ligne, eq) {
   if (!isFinite(effMin) || !isFinite(j)) return;
   if (j < effMin) {
     note.classList.add('rep-eq-note-mini');
-    note.textContent = '⚠️ ' + effMin + ' joueurs minimum par équipe (règle FFR).';
+    note.textContent = 'Attention — ' + effMin + ' joueurs minimum par équipe.';
   } else if (j === effMin) {
     note.classList.add('rep-eq-note-conseil');
-    note.textContent = '💡 À ' + effMin + ' joueurs (le minimum), chaque enfant joue la quasi-totalité ' +
-      'du temps de jeu — la FFR le plafonne par joueur et par jour. Si possible, venez à ' + (effMin + 1) +
-      ' ou plus pour faire tourner.';
+    note.textContent = 'Rappel sécurité — À ' + effMin + ' joueurs, chaque enfant joue la quasi-totalité ' +
+      'du temps de jeu. Si possible, venez à ' + (effMin + 1) + ' ou plus pour permettre une bonne rotation.';
   }
 }
 
@@ -532,6 +617,7 @@ function brancherEvenements() {
   restaurerCommandeInitiale();
   majAffichageDeplacementMixte();
   majMontantTotal();
+  majEtapeReponse(1);
 }
 
 function majAffichageDeplacementMixte() {
@@ -542,19 +628,30 @@ function majAffichageDeplacementMixte() {
 
 function onClicReponse(e) {
   const cible = e.target;
-  if (cible.closest('#btn-present')) {
+  const repli = cible.closest('.rep-repli');
+  if (repli) {
+    definirEtatRepli(repli, repli.getAttribute('aria-expanded') !== 'true');
+  } else if (cible.closest('#btn-present')) {
     document.getElementById('rep-zone-present').hidden = false;
     document.getElementById('rep-zone-absent').hidden = true;
+    document.body.classList.add('rep-parcours-commence');
+    majEtapeReponse(2);
     document.getElementById('rep-zone-present').scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } else if (cible.closest('#btn-absent')) {
+  } else if (cible.closest('#btn-absent, #btn-absent-secondaire')) {
     document.getElementById('rep-zone-absent').hidden = false;
     document.getElementById('rep-zone-present').hidden = true;
+    majEtapeReponse(1);
   } else if (cible.closest('#btn-annuler')) {
     document.getElementById('rep-zone-absent').hidden = true;
+    if (document.body.classList.contains('rep-parcours-commence')) {
+      document.getElementById('rep-zone-present').hidden = false;
+      majEtapeReponse(document.querySelector('.rep-commandes') ? 3 : 2);
+    }
   } else if (cible.closest('#btn-decline-confirm')) {
     envoyerDecline(cible.closest('#btn-decline-confirm'));
   } else if (cible.closest('#btn-modifier-reponse')) {
     annulerRecapitulatif();
+    majEtapeReponse(document.querySelector('.rep-commandes') ? 3 : 2);
   } else if (cible.closest('#btn-valider-confirmation')) {
     envoyerPresenceConfirmee(cible.closest('#btn-valider-confirmation'));
   }
@@ -572,6 +669,7 @@ function onChangeReponse(e) {
   const tous = e.target.closest('.rep-prestation-tous');
   if (tous) {
     annulerRecapitulatif();
+    majEtapeReponse(3);
     synchroniserQuantitesTous(totauxEffectifsReponse());
     majMontantTotal();
     return;
@@ -583,16 +681,19 @@ function onChangeReponse(e) {
   const nb = ligne.querySelector('.rep-cat-nb');
   const champ = ligne.querySelector('.rep-cat-equipes');
   const detailZone = ligne.querySelector('.rep-cat-detail');
+  const boutonRepli = ligne.querySelector('.rep-repli');
   if (boite.checked) {
     nb.hidden = false;
     if (champ && !txt(champ.value)) champ.value = '1';
     if (detailZone) detailZone.hidden = false;
+    if (boutonRepli) { boutonRepli.hidden = false; definirEtatRepli(boutonRepli, true); }
     majDetailEquipes(ligne);
     validerLigneCat(ligne);
   } else {
     nb.hidden = true;
     ligne.querySelector('.rep-cat-err').textContent = '';
     if (detailZone) { detailZone.hidden = true; }
+    if (boutonRepli) { definirEtatRepli(boutonRepli, false); boutonRepli.hidden = true; }
   }
   majTotaux();
 }
@@ -606,6 +707,7 @@ function onInputReponse(e) {
   const quantite = e.target.closest('.rep-prestation-quantite');
   if (quantite) {
     annulerRecapitulatif();
+    majEtapeReponse(3);
     majMontantTotal();
     return;
   }
@@ -652,7 +754,7 @@ async function onConfirmerPresence(e) {
   const cochees = Array.prototype.slice.call(document.querySelectorAll('.rep-cat')).filter(function (l) {
     return l.querySelector('.rep-cat-case').checked;
   });
-  if (!cochees.length) { msg.textContent = '⚠️ Sélectionnez au moins une catégorie.'; msg.classList.add('ko'); return; }
+  if (!cochees.length) { msg.textContent = 'Attention — Sélectionnez au moins une catégorie.'; msg.classList.add('ko'); return; }
 
   const parCat = {};
   let valide = true;
@@ -660,9 +762,9 @@ async function onConfirmerPresence(e) {
     if (!validerLigneCat(l)) { valide = false; return; }
     parCat[l.getAttribute('data-cat')] = parseInt(l.querySelector('.rep-cat-equipes').value, 10);
   });
-  if (!valide) { msg.textContent = '⚠️ Corrigez les nombres d\'équipes indiqués.'; msg.classList.add('ko'); return; }
+  if (!valide) { msg.textContent = 'Attention — Corrigez les nombres d\'équipes indiqués.'; msg.classList.add('ko'); return; }
 
-  // Détail par équipe : joueurs (≥ min FFR, bloquant) + éducateurs (≥ 0). Totaux calculés ici
+  // Détail par équipe : joueurs (≥ minimum configuré, bloquant) + éducateurs (≥ 0). Totaux calculés ici
   // pour l'envoi de compatibilité (nb_joueurs_total) — le serveur recalcule de toute façon.
   const detail = {};
   let totalJoueurs = 0;
@@ -691,7 +793,7 @@ async function onConfirmerPresence(e) {
     detail[nomCat] = eqs;
   });
   if (!detailValide) {
-    msg.textContent = '⚠️ Indiquez les joueurs ainsi que le prénom et le nom de chaque éducateur accompagnant.';
+    msg.textContent = 'Attention — Indiquez les joueurs ainsi que le prénom et le nom de chaque éducateur accompagnant.';
     msg.classList.add('ko');
     return;
   }
@@ -700,7 +802,7 @@ async function onConfirmerPresence(e) {
   const erreurDeplacement = document.querySelector('.rep-deplacement-erreur');
   if (!mode) {
     if (erreurDeplacement) erreurDeplacement.textContent = 'Choisissez le mode de déplacement du club.';
-    msg.textContent = '⚠️ Indiquez comment votre club se rendra au tournoi.';
+    msg.textContent = 'Attention — Indiquez comment votre club se rendra au tournoi.';
     msg.classList.add('ko');
     return;
   }
@@ -709,7 +811,7 @@ async function onConfirmerPresence(e) {
   const equipesGroupees = brutGroupees === '' ? '' : parseInt(brutGroupees, 10);
   if (mode.value === 'mixte' && brutGroupees !== '' && (!/^\d+$/.test(brutGroupees) || equipesGroupees > nombreEquipesReponse())) {
     if (erreurDeplacement) erreurDeplacement.textContent = 'Le nombre d’équipes en groupe doit être compris entre 0 et ' + nombreEquipesReponse() + '.';
-    msg.textContent = '⚠️ Corrigez le nombre d’équipes voyageant en groupe.';
+    msg.textContent = 'Attention — Corrigez le nombre d’équipes voyageant en groupe.';
     msg.classList.add('ko');
     return;
   }
@@ -717,7 +819,7 @@ async function onConfirmerPresence(e) {
 
   const commandeLue = lireCommandeRestauration(false);
   if (commandeLue.error) {
-    msg.textContent = '⚠️ ' + commandeLue.error;
+    msg.textContent = 'Attention — ' + commandeLue.error;
     msg.classList.add('ko');
     return;
   }
@@ -730,6 +832,7 @@ async function onConfirmerPresence(e) {
     commande: commandeLue.commande, calcul: calcul, modeDeplacement: mode.value,
     equipesGroupees: mode.value === 'mixte' ? equipesGroupees : (mode.value === 'groupe' ? nbEquipes : 0)
   };
+  majEtapeReponse(4);
   afficherRecapitulatifConfirmation(confirmationEnAttente);
 }
 
@@ -793,11 +896,11 @@ async function envoyerPresenceConfirmee(bouton) {
       commande_restauration: JSON.stringify(etat.commande)
     });
     const suiviEmail = texteSuiviConfirmation(resultat, true);
-    afficherConfirmation('🎉 Merci, votre participation est enregistrée !',
+    afficherConfirmation('Merci, votre participation est enregistrée !',
       'Montant total prévu : ' + eurosDepuisCentimes(etat.calcul.total) + '. Votre dossier complet vous sera envoyé prochainement par l\'organisation.' + suiviEmail);
   } catch (erreur) {
     const msg = document.getElementById('rep-form-msg');
-    msg.textContent = '⚠️ ' + erreur.message;
+    msg.textContent = 'Attention — ' + erreur.message;
     msg.classList.add('ko');
     bouton.disabled = false;
     bouton.textContent = texte;
@@ -819,7 +922,7 @@ async function envoyerDecline(bouton) {
     bouton.disabled = false;
     bouton.textContent = texte;
     const zone = document.getElementById('rep-zone-absent');
-    zone.insertAdjacentHTML('beforeend', '<p class="rep-form-msg ko">⚠️ ' + echapper(erreur.message) + '</p>');
+    zone.insertAdjacentHTML('beforeend', '<p class="rep-form-msg ko">Attention — ' + echapper(erreur.message) + '</p>');
   }
 }
 
@@ -830,7 +933,9 @@ function afficherConfirmation(titre, texte) {
    document.getElementById('rep-zone-absent'),
    document.querySelector('.rep-deja')].forEach(function (el) { if (el) el.hidden = true; });
   const zone = document.getElementById('rep-message-final');
-  zone.innerHTML = '<div class="rep-merci"><h2>' + echapper(titre) + '</h2><p>' + echapper(texte) + '</p></div>';
+  majEtapeReponse(4);
+  zone.innerHTML = '<div class="rep-merci">' + iconeReponse('coche', 'rep-icone-section') +
+    '<div><h2>' + echapper(titre) + '</h2><p>' + echapper(texte) + '</p></div></div>';
   zone.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 

@@ -75,7 +75,8 @@ function noeud(tag, id) {
     focus() { this.focus_++; },
     querySelector(sel) { return chercher(this, sel); },
     closest(sel) { let e = this; while (e) { if (corresponds(e, sel)) return e; e = e.parent; } return null; },
-    get firstChild() { return this.enfants[0] || null; }
+    get firstChild() { return this.enfants[0] || null; },
+    get parentNode() { return this.parent; }
   };
   n.classList = {
     contains(c) { return (' ' + n.className + ' ').indexOf(' ' + c + ' ') >= 0; },
@@ -186,23 +187,28 @@ egal(vm.runInContext('construireOngletsEcran(null, [])', ctx), null, '⛔ un éc
 const apercu = noeud('section', 'ap-test');
 const action = noeud('div'); action.className = 'ligne-action';
 const avantAction = noeud('p'); avantAction.textContent = 'note';
-apercu.appendChild(avantAction); apercu.appendChild(action);
+const corpsApercu = noeud('div');
+const intro = noeud('textarea', 'intro-test');
+const rendu = noeud('iframe', 'rendu-test');
+corpsApercu.appendChild(intro); corpsApercu.appendChild(rendu);
+apercu.appendChild(avantAction); apercu.appendChild(corpsApercu); apercu.appendChild(action);
 const pieces = noeud('section', 'pj-test');
 pieces.className = 'carte';
 const h2 = noeud('h2'); h2.textContent = 'Pièces jointes';
 const champ = noeud('input');
 pieces.appendChild(h2); pieces.appendChild(champ);
-vm.runInContext('fusionnerPiecesJointes("ap-test", "pj-test")', ctx);
-ok(apercu.enfants.indexOf(pieces) >= 0, 'la section des pièces jointes rejoint l’aperçu');
-ok(apercu.enfants.indexOf(pieces) === apercu.enfants.indexOf(action) - 1,
-  '⭐ elle se pose juste AVANT le bouton d’envoi : on ne prépare pas l’email d’un côté et ses documents de l’autre');
+vm.runInContext('fusionnerPiecesJointes("ap-test", "pj-test", "rendu-test")', ctx);
+ok(corpsApercu.enfants.indexOf(pieces) >= 0, 'la section des pièces jointes rejoint l’aperçu');
+ok(corpsApercu.enfants.indexOf(pieces) === corpsApercu.enfants.indexOf(intro) + 1 &&
+   corpsApercu.enfants.indexOf(pieces) === corpsApercu.enfants.indexOf(rendu) - 1,
+  '⭐ le dépôt se pose entre la phrase d’introduction et l’aperçu réel');
 ok(pieces.enfants.indexOf(champ) >= 0, 'ses champs sont toujours là — la section est déplacée, pas recréée');
 ok(pieces.querySelector('h2') === null, 'son titre de carte est rétrogradé');
 ok(pieces.querySelector('h3') && pieces.querySelector('h3').textContent === 'Pièces jointes',
   'en sous-titre, avec le même libellé');
 ok(pieces.classList.contains('cv-sous-carte'), 'et elle perd son habillage de carte');
 const structure = apercu.enfants.slice();
-vm.runInContext('fusionnerPiecesJointes("ap-test", "pj-test")', ctx);
+vm.runInContext('fusionnerPiecesJointes("ap-test", "pj-test", "rendu-test")', ctx);
 ok(apercu.enfants.length === structure.length && apercu.enfants.every(function (e, i) { return e === structure[i]; }),
   'une seconde fusion ne refait rien');
 
@@ -224,7 +230,7 @@ ok(ecrans.includes(' preparerOngletsInvitation();'), 'appelé à la construction
 [['initiale', 'Invitation initiale'], ['final', 'Dossier final'], ['clubs', 'Clubs invités']].forEach(function (o) {
   ok(ecrans.indexOf("cle:'" + o[0] + "',titre:'" + o[1] + "'") >= 0, 'onglet « ' + o[1] + ' »');
 });
-ok(ecrans.includes("fusionnerPiecesJointes('bloc-apercu-invitation','bloc-pieces-jointes-invitation')") &&
+ok(ecrans.includes("fusionnerPiecesJointes('bloc-apercu-invitation','bloc-pieces-jointes-invitation','apercu-invitation-rendu')") &&
    ecrans.includes("fusionnerPiecesJointes('bloc-apercu-dossier-email','bloc-pieces-jointes-dossier')"),
   'chaque lot de pièces jointes rejoint l’aperçu de SON email');
 /* ⛔ Les deux dépliants d'origine restent CONSTRUITS : l'assistant mobile, le repli sans
@@ -264,6 +270,8 @@ egal(buckets.slice(1, 5), ['0', '1', '2', '3'],
   '⭐ le tri met l’action requise en premier, les cartes traitées ensuite');
 
 const css = lire('css/theme-r92.css');
+ok(/\.cv-invitation-initiale\s*\{[^}]*grid-template-columns:minmax\(0,1fr\)/.test(css),
+  'l’aperçu ordinateur occupe une ligne pleine largeur sous les quatre cartes');
 /* Un état = UNE règle qui nomme LES DEUX écrans : c'est ce qui garantit qu'ils ne divergeront pas. */
 ETATS.forEach(function (e) {
   const liseré = new RegExp('\\.club-invite-item\\.club-etat-' + e + ',\\s*\\n?\\s*\\.theme-clair \\.suivi-club-ligne\\.club-etat-' + e + ' \\{[^}]*border-left-color');

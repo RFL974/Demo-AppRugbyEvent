@@ -12,7 +12,8 @@ const g={tournoi_nom:'Tournoi de rugby',tournoi_date:'2027-01-24',tournoi_lieu:'
  heure_rdv:'08:45',heure_debut:'10:00',pause_dejeuner_debut:'12:15',pause_dejeuner_duree_min:'90',heure_fin_communiquee:'16:06',
  tarif_engagement_oui:'oui',tarif_engagement_montant:'50,00',tarif_engagement_mode:'par_equipe',
  tarif_engagement_modalites:'Virement bancaire ou chèque à l’ordre du club',date_limite_confirmation:'2027-01-19',
- date_limite_reponse:'2027-01-04',contact_reponse_nom:'Camille Dupont',contact_reponse_email:'camille.dupont@example.invalid',
+ date_limite_reponse:'2027-01-04',contact_reponse_nom:'Camille Dupont',contact_reponse_tel:'06 12 34 56 78',contact_reponse_email:'camille.dupont@example.invalid',
+ referent_nom:'Camille Dupont',referent_tel:'06 12 34 56 78',securite_referent_identique:'oui',
  repas_sur_place_oui:'oui',repas_sur_place_mode:'prix_personne',repas_sur_place_montant:'10.00',
  gouter_fin_tournoi_oui:'oui',gouter_fin_tournoi_mode:'offert_organisateur',buvette_disponible:'oui',espace_sandwich_disponible:'oui'};
 const cats=[{categorie:'U10',presente:'oui',forme_jeu:'RE — 7x7',format_mi_temps:'2',duree_mi_temps_min:'10',pause_mi_temps_min:'2',
@@ -25,10 +26,27 @@ for(const output of [html,text]){
  assert(output.includes('10.00 € par personne'));assert(output.includes('https://example.invalid/reponse'));
 }
 assert(!html.includes('🍽️ Repas'));assert(!html.includes('<strong>Repas :</strong>'));
+assert(html.includes('max-width:1420px'));assert(html.includes('Organisation adaptée à chaque catégorie'));
+assert(html.includes('<details class="cv-email-organisation" open'));
+assert(html.includes('<summary'));
+assert(html.includes('assets/email-icons/chevron-up.png'));
+assert(html.includes('assets/email-icons/chevron-down.png'));
+assert(html.includes('Votre réponse'));assert(html.includes('Votre dossier'));
+assert(html.includes('Rappel sécurité'));assert(!html.includes('Rappel sécurité FFR'));
+assert(html.includes('assets/email-icons/rugby.png'));assert(html.includes('assets/email-icons/timer.png'));
+assert(html.includes('Équipes par catégories'));assert(!html.includes('Équipes par club'));
+assert(html.includes('06\u00a012\u00a034\u00a056\u00a078'));
+assert(html.includes('white-space:nowrap;overflow-wrap:normal;word-break:normal'));
+assert(html.includes('Référent tournoi :</span><strong style="color:#0C1C2E;display:block'));
+assert(html.indexOf('Modalités d&#39;inscription') < html.indexOf('Réponse à l&#39;invitation'));
 assert(c.emailHtmlInvitation({...g,tarif_engagement_mode:'par_club'},cats,...args).includes('50 € par club'));
 assert.equal(c.libelleTarifEngagement({...g,tarif_engagement_mode:'',tarif_engagement_montant:'50,00'}),'50 € par équipe engagée');
 assert.equal(c.libelleTarifEngagement({...g,tarif_engagement_mode:'',tarif_engagement_montant:'50 € par club'}),'50 € par club');
-vm.runInContext('configCourante={global:{},categories:[]}',c);
-assert(c.emailHtmlDossier(g,{club_nom:'Club exemple',categories_engagees:'U10'},'','Bonjour,','Voici le dossier.','https://example.invalid/dossier').includes(c.emailTitreSection("La journée en un coup d'œil")));
+c.__cats=cats;vm.runInContext('configCourante={global:{},categories:__cats}',c);
+const dossier=c.emailHtmlDossier(g,{club_nom:'Club exemple',categories_engagees:'U10'},'https://example.invalid/affiche.png','Bonjour,','Voici le dossier.','https://example.invalid/dossier');
+assert(dossier.includes("La journée en un coup d'œil"));
+assert(dossier.includes('Affiche — Tournoi de rugby'));
+assert(dossier.includes('Votre dossier')&&dossier.includes('assets/email-icons/organisation.png'));
+assert(!dossier.includes('Licence FFR')&&!dossier.includes('FDM EDR'));
 console.log('OK — invitation sans frise, précommande de repas, euros et unité de facturation, frise du dossier conservée.');
 module.exports={html,text};

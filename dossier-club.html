@@ -13,31 +13,42 @@
 
   <!-- Feuille de style DÉDIÉE : fond blanc, texte sombre, pensée pour l'impression A4
        (contrairement aux autres pages, sombres et pensées pour l'écran). -->
-  <link rel="stylesheet" href="css/dossier.css?v=refonte-ciel-verre-20260920-participants2">
+  <link rel="stylesheet" href="css/dossier.css?v=refonte-ciel-verre-20260925-dossier-final4">
   <!-- Bandeau partenaires (emplacement F) : mêmes règles que la page des scores et que
        l'aperçu de l'admin, pour que les trois montrent rigoureusement la même chose. -->
   <link rel="stylesheet" href="css/sponsors.css?v=refonte-ciel-verre-20260920">
 </head>
-<body>
+<body class="page-dossier">
 
   <!-- Bandeau d'outils (jamais imprimé) : export PDF pour tous ; le retour admin et le
        titre « aperçu avant envoi » ne s'affichent QUE si la page est ouverte depuis
        l'administration (paramètre ?admin=1). Les clubs qui reçoivent le lien par email
        (sans ce paramètre) ne voient donc jamais de lien vers la plateforme d'administration. -->
-  <div class="barre-outils no-print"><div class="cv-club-marque"><img src="assets/logo-tournoi.svg" alt="" width="36" height="36"><span>Démo Racing <small>Espace clubs</small></span></div><span class="cv-club-page">Votre dossier</span>
-    <a class="btn-outil admin-seul" href="admin.html" hidden>← Retour à l'administration</a>
-    <span class="barre-outils-titre admin-seul" hidden>Dossier club — aperçu avant envoi</span>
-    <!-- Le pied de page du navigateur (date, titre, adresse, n° de page) n'est pas
-         commandable en CSS : c'est une case de la fenêtre d'impression. Le JETON, lui, a
-         déjà quitté l'adresse (masquerJetonDeLUrl) — il ne s'imprime plus, quoi qu'on coche. -->
-    <span class="barre-outils-astuce">Astuce : dans la fenêtre d'impression, décochez
-      « En-têtes et pieds de page » pour une feuille sans adresse ni date en marge.</span>
-    <button type="button" class="btn-outil btn-principal" id="bouton-imprimer">🖨️ Exporter en PDF</button>
-  </div>
+  <header class="barre-outils dossier-navigation no-print">
+    <div class="rep-navigation-interieur">
+      <a class="rep-marque" id="dossier-lien-marque" href="invitation-club.html" aria-label="Revenir à l'invitation">
+        <img src="assets/logo-tournoi.svg" alt="" width="38" height="38">
+        <span><strong>MaxiLou</strong><small>DÉMO RACING</small></span>
+      </a>
+      <nav class="rep-navigation-etapes" aria-label="Parcours du club">
+        <a id="dossier-lien-invitation" href="invitation-club.html">Invitation</a>
+        <a id="dossier-lien-reponse" href="reponse-invitation.html">Votre réponse</a>
+        <span class="est-actif" aria-current="page">Votre dossier</span>
+      </nav>
+      <div class="rep-navigation-tournoi" id="dossier-navigation-tournoi" aria-live="polite"></div>
+    </div>
+  </header>
 
   <!-- Le dossier lui-même, entièrement construit par js/dossier.js à partir des
        données du tournoi (Config Zone A + Zone B). Toute section sans donnée
        est masquée entièrement — pas de « non communiqué ». -->
+  <div class="dossier-outils no-print">
+      <a class="btn-outil admin-seul" href="admin.html" hidden>Retour à l'administration</a>
+      <span class="barre-outils-titre admin-seul" hidden>Dossier club — aperçu avant envoi</span>
+      <button type="button" class="btn-outil btn-principal" id="bouton-imprimer">
+        <img src="assets/email-icons/enregistrer.svg" alt="" width="18" height="18">Exporter en PDF
+      </button>
+  </div>
   <main class="feuille" id="dossier">
     <div class="message-chargement" id="message-dossier">Chargement du dossier…</div>
   </main>
@@ -49,12 +60,13 @@
   <script src="js/config.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/commun.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/commun-dossier.js"></script>
+  <script src="js/terrains-dossier.js?v=refonte-ciel-verre-20260925-plans2"></script>
   <script src="js/api.js"></script>
   <script src="js/vendor/qrcode.js"></script>
   <!-- Partenaires : le même moteur que la page des scores. Seul le bandeau permanent
        (emplacement F) est utilisé ici — jamais de message plein écran sur un dossier. -->
   <script src="js/sponsors.js"></script>
-  <script src="js/dossier.js?v=refonte-ciel-verre-20260920"></script>
+  <script src="js/dossier.js?v=refonte-ciel-verre-20260925-dossier-final5"></script>
 
 </body>
 </html>

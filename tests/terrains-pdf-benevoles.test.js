@@ -96,6 +96,6 @@ test('le raccordement invalide les sorties après chaque changement de plan', fu
 test('le HTML charge le générateur après pdf-lib avec une URL propre', function () {
   const html = fs.readFileSync(path.join(racine, 'admin.html'), 'utf8');
   const vendor = html.indexOf('js/vendor/pdf-lib.min.js');
-  const module = html.indexOf('js/admin-terrains-pdf.js?v=refonte-ciel-verre-20260920-terrains-pdf2');
+  const module = html.indexOf('js/admin-terrains-pdf.js?v=refonte-ciel-verre-20260925-dossier-plans2');
   assert.ok(vendor !== -1 && module > vendor);
 });

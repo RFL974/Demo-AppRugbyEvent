@@ -399,7 +399,7 @@ function carteCategorie(c) {
   if (recup) lignes.push(ligneCarte('Récupération', recup + ' min minimum entre deux matchs'));
   const effectif = resumeEffectif(c);
   if (effectif) lignes.push(ligneCarte('Effectif', effectif + ' par équipe'));
-  lignes.push(ligneCarte('Équipes par club', phraseMaxEquipes(c)));
+  lignes.push(ligneCarte('Équipes par catégories', phraseMaxEquipes(c)));
   if (txt(c.arbitrage_organisation)) lignes.push(ligneCarte('Arbitrage', txt(c.arbitrage_organisation)));
   const reglement = resumeReglement(c); // déjà échappé / lien sûr
   if (reglement) lignes.push(ligneCarteHtml('Règlement', reglement));
@@ -459,8 +459,9 @@ function rappelEffectifFFR(cats) {
   });
   if (!aEffectifMin) return '';
   // Texte partagé avec l'email d'invitation (FFR_RAPPEL_EFFECTIF, commun.js) : une seule source.
-  return '<p class="inv-rappel-effectif">⚠️ <strong>Rappel sécurité FFR</strong> — ' +
-    echapper(FFR_RAPPEL_EFFECTIF) + '</p>';
+  return '<p class="inv-rappel-effectif"><img class="d-icone" src="assets/email-icons/securite.svg" alt="">'
+    + '<span><strong>Rappel sécurité</strong> — ' +
+    echapper(FFR_RAPPEL_EFFECTIF) + '</span></p>';
 }
 
 /** Vrai si au moins une catégorie joue l'après-midi en « poules de niveau ». */

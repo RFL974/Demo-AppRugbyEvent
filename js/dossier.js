@@ -86,7 +86,9 @@ async function initDossier() {
       // bandeau partenaires a besoin de `config.global` autant que de `sponsors`.
       donneesPubliques: data
     };
+    renseignerNavigationDossier(config.global || {}, club, ctx);
     zone.innerHTML = construireDossier(config.global || {}, config.categories || [], club, ctx);
+    if (typeof brancherPlansTerrainsDossier === 'function') brancherPlansTerrainsDossier(zone);
     // Le bandeau partenaires du dossier compte comme n'importe quel emplacement : son temps
     // d'exposition et ses clics rejoignent la fiche de visibilité du partenaire.
     if (typeof sponsorsBrancherMesure === 'function' && zone.querySelector('[data-sponsor]')) {
@@ -102,6 +104,60 @@ async function initDossier() {
     // Jeton invalide/expiré (le backend renvoie « Lien invalide ou expiré. ») → message courtois.
     await afficherLienDossierExpire(zone);
   }
+}
+
+/** En-tête de parcours identique à celui de « Votre réponse ». Les liens conservent le jeton
+ *  uniquement dans leur href : il reste absent de l'adresse visible et du document imprimé. */
+function renseignerNavigationDossier(g, club, ctx) {
+  const meta = document.getElementById('dossier-navigation-tournoi');
+  if (meta) {
+    meta.innerHTML = '<strong>' + echapper(txt(g.tournoi_nom) || 'Le tournoi') + '</strong>'
+      + '<span>' + [txt(g.tournoi_date) ? dateLongueFr(g.tournoi_date) : '', txt(g.tournoi_lieu)]
+        .filter(Boolean).map(echapper).join(' · ') + '</span>';
+  }
+  const invitation = new URL('invitation-club.html', window.location.href);
+  const reponse = new URL('reponse-invitation.html', window.location.href);
+  [invitation, reponse].forEach(function (url) {
+    if (txt(g.tournoi_nom)) url.searchParams.set('tournoi', txt(g.tournoi_nom));
+    if (ctx.club) url.searchParams.set('club', ctx.club);
+    if (ctx.token) url.searchParams.set('token', ctx.token);
+  });
+  ['dossier-lien-marque', 'dossier-lien-invitation'].forEach(function (id) {
+    const a = document.getElementById(id); if (a) a.href = invitation.toString();
+  });
+  const aReponse = document.getElementById('dossier-lien-reponse');
+  if (aReponse) aReponse.href = reponse.toString();
+}
+
+function iconeDossier(nom, classe) {
+  return '<img class="d-icone' + (classe ? ' ' + classe : '') + '" src="assets/email-icons/'
+    + echapper(nom) + '.svg" alt="">';
+}
+
+function iconeSectionDossier(titre) {
+  const t = String(titre || '').toLowerCase();
+  if (t.indexOf('journée') !== -1) return 'horloge';
+  if (t.indexOf('équipes') !== -1) return 'equipes';
+  if (t.indexOf('planning') !== -1) return 'calendar';
+  if (t.indexOf('inscription') !== -1 || t.indexOf('options') !== -1) return 'modalites';
+  if (t.indexOf('engagement') !== -1) return 'coche';
+  if (t.indexOf('parking') !== -1 || t.indexOf('pratiques') !== -1) return 'pin';
+  if (t.indexOf('terrain') !== -1) return 'terrain';
+  if (t.indexOf('sécurité') !== -1) return 'securite';
+  if (t.indexOf('scores') !== -1) return 'monde';
+  if (t.indexOf('catégories') !== -1) return 'organisation';
+  if (t.indexOf('encadrement') !== -1) return 'membres';
+  if (t.indexOf('modalités') !== -1) return 'modalites';
+  return 'dossier';
+}
+
+/** Variante locale du bloc partagé : même masquage des sections vides, avec l'icône filaire
+ *  déjà utilisée dans l'invitation et dans l'email. */
+function sectionDossier(titre, contenuHtml, classe) {
+  if (!contenuHtml) return '';
+  return '<section class="d-section' + (classe ? ' ' + classe : '') + '">'
+    + '<h2>' + iconeDossier(iconeSectionDossier(titre), 'd-icone-section')
+    + '<span>' + titre + '</span></h2><div class="d-section-contenu">' + contenuHtml + '</div></section>';
 }
 
 /**
@@ -318,34 +374,116 @@ function construireDossier(g, categories, club, ctx) {
     if (filtre.length) { catsFormat = filtre; filtreApplique = true; }
   }
 
-  // L'ORDRE DIT LE RÔLE DU DOCUMENT. L'invitation VEND : affiche en héros, cadre sportif haut,
-  // « votre réponse » en bas. Le dossier ORGANISE : le club l'ouvre pour savoir où se garer, à
-  // quelle heure être là et qui appeler — donc le JOUR J d'abord, et le cadre sportif (qu'il a
-  // déjà lu à l'invitation, deux mois plus tôt) en RAPPEL plus bas. Même charte, autre rôle.
+  // L'ORDRE DIT LE RÔLE DU DOCUMENT : d'abord les informations pratiques, puis l'inscription
+  // réellement enregistrée, la journée, le planning publié et l'implantation des terrains.
+  // Le cadre sportif déjà transmis dans l'invitation reste ensuite disponible comme rappel.
   return [
+    '<div class="dossier-hero-grille">',
+    '<div class="dossier-hero-contenu">',
     enteteDossier(g, club, filtreApplique ? catsFormat : []),   //  1. qui reçoit, quoi, quand — et pour QUI
-    bandeauPartenaires(ctx),                                    //  1 bis. qui soutient le tournoi
     accueilPersonnalise(g, club),                               //  2. le mot d'accueil
+    '</div>',
+    afficheDossier(g),
+    '</div>',
+    bandeauPartenaires(ctx),                                    //  1 bis. qui soutient le tournoi
     barrePartage(g, ctx),                                       //  2 bis. partager à ses éducateurs
-    sectionJournee(g, catsFormat),                              //  3. LE JOUR J : la journée en un coup d'œil
-    '<div class="cv-dossier-grid"><div>',
-    sectionMesEquipes(ctx),                                     //  3 bis. … avec QUI (équipes, poules)
-    sectionMonPlanning(ctx, catsFormat),                        //  3 ter. … et QUAND (matchs du club)
-    '</div><aside>',
-    sectionInfosPratiques(g),                                   //  4.   … où, et ce qu'on y trouve
-    sectionParking(g),                                          //  5.   … comment y accéder
-    sectionContact(g),                                          //  6.   … qui appeler (remonté : c'était en bas)
-    sectionSecurite(g),                                         //  7.   … et en cas de pépin
-    sectionSuivi(g, cats),                                      //  8.   … suivre les scores sur place
-    '</aside></div>',
+    '<div class="d-infos-pratiques-grid">',
+    sectionInfosPratiques(g),                                   //  3. où et ce qu'on y trouve
+    sectionParking(g),                                          //  3 bis. comment y accéder
+    sectionContact(g),                                          //  3 ter. qui appeler
+    sectionSecurite(g),                                         //  3 quater. en cas de pépin
+    '</div>',
+    sectionCommandeClub(club, g),                               //  4. inscription, options et paiement
+    sectionJournee(g, catsFormat),                              //  5. la journée en un coup d'œil
+    sectionMesEquipes(ctx),                                     //  6. équipes et poules
+    sectionMonPlanning(ctx, catsFormat),                        //  7. planning publié du club
+    sectionPlansTerrains(g),                                   //  8 bis. vue du site + grands plans cotés
     sectionCategories(catsFormat, filtreApplique),              //  9. RAPPEL SPORTIF (déjà lu à l'invitation)
+    '<div class="d-dossier-fin-grid">',
     sectionEncadrement(g),                                      // 10. ce qu'on attend du club
-    sectionMonEngagement(g, club, ctx),                         // 10 bis. ce que le club a déclaré
-    sectionModalites(g),                                        // 11. l'administratif
+    sectionSuivi(g, cats),                                      // 10 bis. suivi en ligne
+    sectionMonEngagement(g, club, ctx),                         // 10 ter. ce que le club a déclaré
+    '</div>',
     bandeauActions(g),                                          // 12. agenda, itinéraires, liens
     mentionGeneration(),                                        // 13. daté (le PDF fige, pas la page)
     piedDocument(g, false)                                      // 14. pied (sans liens : le bandeau les porte)
   ].join('');
+}
+
+function montantDossier(valeur) {
+  const n = Number(String(valeur == null ? '' : valeur).trim().replace(',', '.'));
+  return isFinite(n) && n >= 0 ? n : 0;
+}
+
+function eurosDossier(valeur) {
+  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR',
+    minimumFractionDigits: montantDossier(valeur) % 1 ? 2 : 0 }).format(montantDossier(valeur));
+}
+
+/** Récapitulatif strictement issu de la réponse figée du club. Aucune option absente n'est
+ * inventée : une carte repas/goûter n'existe que si sa quantité enregistrée est positive. */
+function sectionCommandeClub(club, g) {
+  if (!club) return '';
+  const detail = jsonSur(club.detail_effectifs, {});
+  const commande = detail && detail._restauration && typeof detail._restauration === 'object'
+    ? detail._restauration : null;
+  if (!commande) return '';
+
+  const inscription = commande.inscription || {};
+  const repas = commande.repas || {};
+  const gouter = commande.gouter || {};
+  const parCat = jsonSur(club.nb_equipes_par_categorie, {}) || {};
+  const categories = Object.keys(parCat).filter(function (cat) { return Number(parCat[cat]) > 0; })
+    .sort(comparerCategorie);
+  const nbEquipes = Math.max(0, Number(inscription.nb_equipes) || categories.reduce(function (s, cat) {
+    return s + (Number(parCat[cat]) || 0);
+  }, 0));
+  const qRepas = Math.max(0, Number(repas.joueurs) || 0) + Math.max(0, Number(repas.educateurs) || 0);
+  const qGouter = Math.max(0, Number(gouter.joueurs) || 0) + Math.max(0, Number(gouter.educateurs) || 0);
+  const total = montantDossier(commande.total);
+  const cartes = [];
+
+  if (nbEquipes) {
+    cartes.push('<div class="d-commande-item"><span>Équipes engagées</span><strong>' + nbEquipes
+      + ' équipe' + (nbEquipes > 1 ? 's' : '') + '</strong>'
+      + (categories.length ? '<small>' + categories.map(echapper).join(' · ') + '</small>' : '') + '</div>');
+  }
+  if (montantDossier(inscription.sous_total) > 0) {
+    const quantite = Math.max(0, Number(inscription.quantite) || nbEquipes);
+    cartes.push('<div class="d-commande-item"><span>Engagement</span><strong>'
+      + (quantite && montantDossier(inscription.prix_unitaire) > 0
+        ? quantite + ' × ' + eurosDossier(inscription.prix_unitaire) : eurosDossier(inscription.sous_total))
+      + '</strong><small>' + eurosDossier(inscription.sous_total) + '</small></div>');
+  }
+  [[repas, qRepas, 'Repas précommandés', 'repas'], [gouter, qGouter, 'Goûters commandés', 'goûter']]
+    .forEach(function (item) {
+      if (!item[1]) return;
+      const prix = montantDossier(item[0].prix_unitaire);
+      cartes.push('<div class="d-commande-item"><span>' + item[2] + '</span><strong>' + item[1] + ' '
+        + item[3] + (item[1] > 1 ? (item[3] === 'repas' ? '' : 's') : '') + '</strong><small>'
+        + (prix ? item[1] + ' × ' + eurosDossier(prix) + ' · ' : '') + eurosDossier(item[0].sous_total)
+        + '</small></div>');
+    });
+  cartes.push('<div class="d-commande-item est-total"><span>Total à régler</span><strong>'
+    + eurosDossier(total) + '</strong><small>Montant enregistré avec votre réponse</small></div>');
+
+  const paye = String(club.paiement_statut || '').trim().toLowerCase() === 'payé';
+  let statut = total <= 0 ? 'Aucun paiement attendu' : (paye ? 'Paiement reçu' : 'Paiement en attente');
+  if (paye && txt(club.date_paiement)) statut += ' · ' + dateLongueFr(club.date_paiement);
+  const rappelPaiement = ['Le statut suit les règlements enregistrés par l’organisateur.'];
+  if (total > 0 && g && txt(g.date_limite_confirmation)) {
+    rappelPaiement.push('À régler avant le ' + dateLongueFr(g.date_limite_confirmation));
+  }
+  if (total > 0 && g && String(txt(g.tarif_engagement_oui)).toLowerCase() === 'oui' &&
+      txt(g.tarif_engagement_modalites)) {
+    rappelPaiement.push('Paiement : ' + txt(g.tarif_engagement_modalites));
+  }
+  return sectionDossier('Votre inscription et vos options',
+    '<p class="d-commande-intro">Récapitulatif enregistré pour ' + echapper(txt(club.club_nom)) + '</p>'
+    + '<div class="d-commande-grille">' + cartes.join('') + '</div>'
+    + '<div class="d-paiement-ligne"><span>' + echapper(rappelPaiement.join(' · ')) + '</span>'
+    + '<strong class="d-paiement-statut ' + (paye ? 'est-paye' : (total <= 0 ? 'est-neutre' : '')) + '">'
+    + echapper(statut) + '</strong></div>', 'd-commande-section');
 }
 
 /**
@@ -392,12 +530,25 @@ function enteteDossier(g, club, catsEngagees) {
         noms.map(echapper).join('<span class="inv-quand-sep"> · </span>') + '</p>';
     }
   }
-  return heroDocument(g, {
-    surtitre: 'Votre dossier pour la journée',
-    mention: mention,
-    afficheCompacte: true,
-    sansPresentation: true   // le descriptif du tournoi a été lu à l'invitation (décision Romain)
-  });
+  const meta = [];
+  if (txt(g.tournoi_date)) meta.push('<span>' + iconeDossier('calendar') + echapper(dateLongueFr(g.tournoi_date)) + '</span>');
+  if (txt(g.tournoi_lieu)) meta.push('<span>' + iconeDossier('pin') + echapper(txt(g.tournoi_lieu)) + '</span>');
+  return '<header class="dossier-hero">'
+    + '<p class="inv-surtitre">Votre dossier pour la journée</p>'
+    + '<h1 class="inv-titre">' + echapper(txt(g.tournoi_nom) || 'Le tournoi') + '</h1>'
+    + (meta.length ? '<p class="dossier-hero-meta">' + meta.join('') + '</p>' : '')
+    + (mention ? '<div class="inv-hero-mention">' + mention + '</div>' : '')
+    + '</header>';
+}
+
+function afficheDossier(g) {
+  let src = txt(g.tournoi_affiche_id) ? urlAffiche(g.tournoi_affiche_id, 1200) : '';
+  if (!src && txt(g.tournoi_nom).toLowerCase() === 'tournoi des petits champions') {
+    src = 'assets/affiche-tournoi-des-petits-champions-2027.png';
+  }
+  if (!src) return '';
+  return '<figure class="dossier-affiche"><img src="' + echapper(src) + '" alt="Affiche — '
+    + echapper(txt(g.tournoi_nom) || 'Le tournoi') + '"></figure>';
 }
 
 /* --------------------------------------------------------------------------
@@ -439,19 +590,19 @@ function barrePartage(g, ctx) {
   const whatsapp = 'https://wa.me/?text=' + encodeURIComponent(texte);
 
   return '<div class="d-partage no-print">' +
-    '<p class="d-partage-titre">Vos éducateurs seront sur le terrain, pas devant leur boîte mail.</p>' +
+    '<div class="d-partage-entete">' + iconeDossier('equipes', 'd-icone-section') +
+      '<p class="d-partage-titre">Transmettre le dossier à vos éducateurs</p></div>' +
     '<div class="d-partage-actions">' +
       '<button type="button" class="d-action" id="bouton-partager" ' +
         'data-url="' + echapper(lien) + '" data-texte="' + echapper(texte) + '" ' +
-        'data-titre="' + echapper('Dossier — ' + nom) + '">📤 Partager le dossier à mes équipes</button>' +
+        'data-titre="' + echapper('Dossier — ' + nom) + '">' + iconeDossier('fleche-droite') + 'Partager le dossier</button>' +
       '<span class="d-partage-choix" id="d-partage-choix" hidden>' +
-        '<a class="d-action" href="' + echapper(mail) + '">✉️ Par email</a>' +
-        '<a class="d-action" href="' + echapper(whatsapp) + '" target="_blank" rel="noopener">💬 WhatsApp</a>' +
-        '<button type="button" class="d-action" id="bouton-copier-lien">🔗 Copier le lien</button>' +
+        '<a class="d-action" href="' + echapper(mail) + '">' + iconeDossier('courriel') + 'Par email</a>' +
+        '<a class="d-action" href="' + echapper(whatsapp) + '" target="_blank" rel="noopener">' + iconeDossier('reponse') + 'WhatsApp</a>' +
+        '<button type="button" class="d-action" id="bouton-copier-lien">' + iconeDossier('monde') + 'Copier le lien</button>' +
       '</span>' +
     '</div>' +
-    '<p class="d-partage-note">Ils ouvriront <strong>ce dossier</strong>, à jour au moment où ils ' +
-      'le consultent. Le lien vaut accès : partagez-le à votre encadrement, pas au-delà.</p>' +
+    '<p class="d-partage-note">Le dossier reste à jour au moment où ils le consultent. Le lien vaut accès : partagez-le à votre encadrement, pas au-delà.</p>' +
     '<span class="message-form" id="d-partage-msg"></span>' +
   '</div>';
 }
@@ -514,7 +665,7 @@ function afficherLienAcopier(lien, message) {
  *  propre au dossier. La note ne s'affiche JAMAIS seule : sans heures, pas de section. */
 function sectionJournee(g, cats) {
   const frise = friseJournee(g, cats);
-  return section('La journée en un coup d\'œil', frise && (frise +
+  return sectionDossier('La journée en un coup d\'œil', frise && (frise +
     '<p class="d-note">Après le dernier match : retour aux vestiaires puis cérémonie de remise ' +
     'des trophées — l\'événement se termine à l\'issue de la remise. Horaires indicatifs — ' +
     'le planning détaillé fera foi le jour du tournoi.</p>'), 'inv-journee');
@@ -555,7 +706,7 @@ function sectionMesEquipes(ctx) {
   }).join('');
 
   const attendu = !publie || liste.some(function (e) { return !txt(e.poule); });
-  return section('Vos équipes', '<ul class="d-equipes">' + lignes + '</ul>' +
+  return sectionDossier('Vos équipes', '<ul class="d-equipes">' + lignes + '</ul>' +
     (attendu ? '<p class="d-note">Les poules et le planning s\'afficheront ici dès qu\'ils seront ' +
       'arrêtés par l\'organisation.</p>' : ''));
 }
@@ -636,7 +787,7 @@ function sectionMonPlanning(ctx, catsFormat) {
     '</div>';
   }).join('');
 
-  return section('Votre planning', blocs, 'd-planning-section');
+  return sectionDossier('Votre planning', blocs, 'd-planning-section');
 }
 
 /** Un tableau de matchs : heure, votre équipe, adversaire, terrain. La catégorie n'y figure
@@ -697,15 +848,15 @@ function sectionMonEngagement(g, club, ctx) {
     url.searchParams.set('club', ctx.club);
     url.searchParams.set('token', ctx.token);
     action = '<p class="d-engagement-action"><a class="d-action" href="' + echapper(url.toString()) +
-      '">✏️ Modifier ma réponse</a></p>';
+      '">' + iconeDossier('reponse') + 'Modifier ma réponse</a></p>';
   }
-  return section('Votre engagement', lignes + action);
+  return sectionDossier('Votre engagement', lignes + action);
 }
 
 /** 4) INFOS PRATIQUES : lieu + adresse, puis la logistique si elle est renseignée
  *  (paramètres optionnels de la Zone A : logistique_parking / _buvette / _vestiaires). */
 function sectionInfosPratiques(g) {
-  return section('Infos pratiques', listeOuVide([
+  return sectionDossier('Infos pratiques', listeOuVide([
     ligne('Lieu', echapper(txt(g.tournoi_lieu))),
     ligne('Adresse', echapper(txt(g.tournoi_adresse))),
     ligne('Parking', echapper(txt(g.logistique_parking))),
@@ -716,7 +867,7 @@ function sectionInfosPratiques(g) {
 
 /** 5) PARKING & ACCÈS : texte + photo (plan du parking) en pleine largeur. */
 function sectionParking(g) {
-  return section('Parking & accès',
+  return sectionDossier('Parking & accès',
     (txt(g.parking_texte) ? '<p class="d-parking-texte">' + echapper(txt(g.parking_texte)) + '</p>' : '') +
     (txt(g.parking_photo_id)
       ? '<img class="d-parking-photo" src="' + echapper(urlAffiche(g.parking_photo_id, 1000)) + '" ' +
@@ -729,7 +880,7 @@ function sectionParking(g) {
 function sectionContact(g) {
   if (!txt(g.referent_nom) && !txt(g.referent_tel)) return '';
   return '<section class="d-section d-contact">' +
-    '<h2>Votre contact</h2>' +
+    '<h2>' + iconeDossier('telephone', 'd-icone-section') + '<span>Votre contact</span></h2>' +
     '<p class="d-contact-ligne">' +
       (txt(g.referent_nom) ? '<strong>' + echapper(txt(g.referent_nom)) + '</strong>' : '') +
       (txt(g.referent_tel)
@@ -745,7 +896,7 @@ function sectionSecurite(g) {
   const refSecu = referentSecurite(g);
   const contactSecu = [refSecu.nom ? echapper(refSecu.nom) : '', refSecu.tel ? echapper(telephoneLisible(refSecu.tel)) : '']
     .filter(Boolean).join(' — ');
-  return section('Sécurité', listeOuVide([
+  return sectionDossier('Sécurité', listeOuVide([
     ligne('Poste de secours', secours
       ? 'Sur place' + (txt(g.securite_secours_precisions) ? ' — ' + echapper(txt(g.securite_secours_precisions)) : '')
       : ''),
@@ -753,51 +904,42 @@ function sectionSecurite(g) {
   ]));
 }
 
-/** 8) SUIVI & ORGANISATION : lien live + QR, table de marque, résumé des terrains. */
+/** 8) SUIVI & ORGANISATION : lien live + QR et résumé des terrains. */
 function sectionSuivi(g, cats) {
   const urlLive = urlSuiviPublic(g);
   const terrains = resumeTerrains(g, cats);
-  return section('Suivi des scores & organisation',
+  return sectionDossier('Suivi des scores & organisation',
     '<div class="d-suivi">' +
       '<div class="d-suivi-texte">' + listeOuVide([
         ligne('Scores en direct', '<a href="' + echapper(urlLive) + '" target="_blank" rel="noopener">' + echapper(urlLive) + '</a>'),
-        ligne('Table de marque', echapper(txt(g.table_marque_organisation))),
         ligne('Terrains', echapper(terrains))
       ]) + '</div>' +
       '<div class="d-qr" id="d-qr" data-url="' + echapper(urlLive) + '"><span class="d-qr-legende">Scores en direct</span></div>' +
     '</div>');
 }
 
+/** Plans réellement validés dans l'écran Terrains. À l'écran : vue globale puis détail au clic.
+ *  À l'impression/PDF : chaque grand terrain est développé automatiquement en pleine largeur. */
+function sectionPlansTerrains(g) {
+  if (typeof htmlPlansTerrainsDossier !== 'function') return '';
+  return sectionDossier('Plan des terrains', htmlPlansTerrainsDossier(g.plan_terrains_visuel), 'd-plans-section');
+}
+
 /** 9) RAPPEL SPORTIF : les mêmes cartes que l'invitation, limitées aux catégories ENGAGÉES
  *  par le club quand on les connaît. En RAPPEL (plus bas) : le club a choisi son engagement
  *  sur ces informations-là, il ne les redécouvre pas ici. */
 function sectionCategories(cats, filtreApplique) {
-  return section(filtreApplique ? 'Rappel — vos catégories engagées' : 'Rappel — les catégories du tournoi',
+  return sectionDossier(filtreApplique ? 'Rappel — vos catégories engagées' : 'Rappel — les catégories du tournoi',
     cartesCategories(cats), 'inv-categories');
 }
 
-/** 10) ENCADREMENT & ASSURANCE : ratio, diplômes, attestation si requise, mentions FFR. */
+/** 10) ENCADREMENT & ASSURANCE : uniquement les exigences réellement configurées. */
 function sectionEncadrement(g) {
   const attestation = String(txt(g.assurance_attestation_requise)).toLowerCase() === 'oui';
-  return section('Encadrement & assurance', listeOuVide([
+  return sectionDossier('Encadrement & assurance', listeOuVide([
     ligne('Encadrement', echapper(txt(g.encadrement_ratio))),
     ligne('Diplômes exigés', echapper(txt(g.encadrement_diplomes))),
-    ligne('Assurance', attestation ? 'Attestation d\'assurance du club à fournir' : ''),
-    // Mentions réglementaires FFR (toujours affichées) : licence obligatoire + FDM EDR.
-    ligne('Licences', 'Tous les joueurs participant au tournoi doivent être titulaires d\'une licence FFR validée.'),
-    ligne('Feuille de match', 'La feuille de match dématérialisée des Écoles de Rugby (FDM EDR) est utilisée pour l\'ensemble des rencontres du tournoi. Elle remplace la composition d\'équipe, la feuille de régulation et la feuille de score papier.')
-  ]));
-}
-
-/** 11) MODALITÉS D'INSCRIPTION : date limite de paiement, tarif d'engagement
- *  (montant + modalités) SEULEMENT si un tarif est demandé. */
-function sectionModalites(g) {
-  const tarifOui = String(txt(g.tarif_engagement_oui)).toLowerCase() === 'oui';
-  return section('Modalités d\'inscription', listeOuVide([
-    ligne('Date limite de paiement',
-      txt(g.date_limite_confirmation) ? echapper(dateLongueFr(g.date_limite_confirmation)) : ''),
-    ligne('Tarif d\'engagement', tarifOui ? echapper(libelleTarifEngagement(g)) : ''),
-    ligne('Modalités de paiement', tarifOui ? echapper(txt(g.tarif_engagement_modalites)) : '')
+    ligne('Assurance', attestation ? 'Attestation d\'assurance du club à fournir' : '')
   ]));
 }
 
@@ -816,19 +958,19 @@ function bandeauActions(g) {
   const boutons = [];
 
   if (construireICS(g)) {
-    boutons.push('<button type="button" class="d-action" id="bouton-ics">📅 Ajouter à mon agenda</button>');
+    boutons.push('<button type="button" class="d-action" id="bouton-ics">' + iconeDossier('calendar') + 'Ajouter à mon agenda</button>');
   }
   if (adresse) {
     const q = encodeURIComponent(adresse);
-    boutons.push('<a class="d-action" href="https://www.google.com/maps/search/?api=1&query=' + q + '" target="_blank" rel="noopener">🗺️ Itinéraire (Google Maps)</a>');
-    boutons.push('<a class="d-action" href="https://waze.com/ul?q=' + q + '&navigate=yes" target="_blank" rel="noopener">🚗 Itinéraire (Waze)</a>');
+    boutons.push('<a class="d-action" href="https://www.google.com/maps/search/?api=1&query=' + q + '" target="_blank" rel="noopener">' + iconeDossier('pin') + 'Itinéraire Google Maps</a>');
+    boutons.push('<a class="d-action" href="https://waze.com/ul?q=' + q + '&navigate=yes" target="_blank" rel="noopener">' + iconeDossier('terrain') + 'Itinéraire Waze</a>');
   }
   if (txt(g.url_site_association)) {
-    boutons.push('<a class="d-action" href="' + echapper(txt(g.url_site_association)) + '" target="_blank" rel="noopener">🌐 Site de l\'association</a>');
+    boutons.push('<a class="d-action" href="' + echapper(txt(g.url_site_association)) + '" target="_blank" rel="noopener">' + iconeDossier('monde') + 'Site de l\'association</a>');
   }
   // « Relayer sur les réseaux » pointe vers le compte configuré dans `url_instagram`.
   if (txt(g.url_instagram)) {
-    boutons.push('<a class="d-action" href="' + echapper(txt(g.url_instagram)) + '" target="_blank" rel="noopener">📣 Relayer sur les réseaux</a>');
+    boutons.push('<a class="d-action" href="' + echapper(txt(g.url_instagram)) + '" target="_blank" rel="noopener">' + iconeDossier('fleche-droite') + 'Relayer sur les réseaux</a>');
   }
   if (!boutons.length) return '';
 

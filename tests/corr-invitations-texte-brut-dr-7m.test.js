@@ -209,7 +209,10 @@ function criteres(b) {
   });
   C('R', 'R4', 'cohérence : les URL du texte sont EXACTEMENT celles des liens « Consulter le règlement » de l\'HTML', () => {
     const h = html(b, CONFIG);
-    const hrefs = [...h.matchAll(/<a href="([^"]*)"[^>]*>Consulter le règlement<\/a>/g)].map((m) => lisible(m[1])).sort();
+    // Le rendu responsive contient la comparaison ordinateur et les cartes mobiles ; une même
+    // ressource peut donc apparaître dans les deux variantes sans changer les URL transmises.
+    const hrefs = [...new Set([...h.matchAll(/<a href="([^"]*)"[^>]*>Consulter le règlement<\/a>/g)]
+      .map((m) => lisible(m[1])))].sort();
     const urls = [...base.matchAll(/règlement : (\S+)/g)].map((m) => m[1]).sort();
     return hrefs.length === 2 && JSON.stringify(hrefs) === JSON.stringify(urls);
   });
@@ -293,8 +296,8 @@ function criteres(b) {
     const i = ls.indexOf('VOUS ÊTES INVITÉS');
     return i !== -1 && ls[i + 1] === b.bac.introCartesEmail(b.bac.catsInvitationTriees());
   });
-  C('N', 'N9', 'repères FFR : effectif minimum et « pourquoi ce format »', () =>
-    ls.indexOf('RAPPEL IMPORTANT — ' + constante('FFR_RAPPEL_EFFECTIF')) !== -1 &&
+  C('N', 'N9', 'rappel sécurité : effectif minimum et « pourquoi ce format »', () =>
+    ls.indexOf('RAPPEL SÉCURITÉ — ' + constante('FFR_RAPPEL_EFFECTIF')) !== -1 &&
     ls.indexOf('POURQUOI CE FORMAT ? ' + constante('FFR_POURQUOI_FORMAT')) !== -1);
   C('N', 'N10', 'services et tarif', () =>
     ls.indexOf('Sur place : buvette, espace sandwich.') !== -1 && ls.indexOf('Tarif d\'engagement : 20 € par équipe engagée') !== -1);
@@ -305,7 +308,7 @@ function criteres(b) {
   C('N', 'N12', 'signature en fin de texte', () => ls.slice(-3).join('|') === '|Au plaisir de vous accueillir,|L\'organisation du tournoi');
   C('N', 'N13', 'ordre des blocs aligné sur le menu « Invitation initiale »', () => {
     const reperes = ['{{SALUTATION}}', INTRO, '▶ Répondre à l\'invitation : {{LIEN_REPONSE}}', 'Première ligne du descriptif fictif.',
-      'VOUS ÊTES INVITÉS', '- U10 : ', 'RAPPEL IMPORTANT', 'MODALITÉS D\'INSCRIPTION',
+      'VOUS ÊTES INVITÉS', '- U10 : ', 'RAPPEL SÉCURITÉ', 'MODALITÉS D\'INSCRIPTION',
       'Date limite de paiement', 'RÉPONSE À L\'INVITATION', 'Réponse souhaitée avant le',
       'Contact : ', 'SUR PLACE', 'Sur place : ', 'Voir la version en ligne : ', 'Au plaisir de vous accueillir,'];
     let pos = -1;

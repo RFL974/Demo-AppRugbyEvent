@@ -13,14 +13,27 @@
 
   <!-- Même feuille « document » (fond blanc, charte) que l'invitation / le dossier.
        En-tête vitrine partagé avec l'invitation refondue (blason centré, grand titre). -->
-  <link rel="stylesheet" href="css/dossier.css?v=refonte-ciel-verre-20260920-participants2">
+  <link rel="stylesheet" href="css/dossier.css?v=refonte-ciel-verre-20260925-dossier-final4">
 </head>
-<body>
-  <header class="barre-outils no-print"><div class="cv-club-marque"><img src="assets/logo-tournoi.svg" alt="" width="36" height="36"><span>Démo Racing <small>Espace clubs</small></span></div><span class="cv-club-page">Votre réponse</span></header>
+<body class="page-reponse">
+  <header class="barre-outils rep-navigation no-print">
+    <div class="rep-navigation-interieur">
+      <a class="rep-marque" id="rep-lien-marque" href="invitation-club.html" aria-label="Revenir à l'invitation">
+        <img src="assets/logo-tournoi.svg" alt="" width="38" height="38">
+        <span><strong>MaxiLou</strong><small>DÉMO RACING</small></span>
+      </a>
+      <nav class="rep-navigation-etapes" aria-label="Parcours du club">
+        <a id="rep-lien-invitation" href="invitation-club.html">Invitation</a>
+        <span class="est-actif" aria-current="page">Votre réponse</span>
+        <span>Votre dossier</span>
+      </nav>
+      <div class="rep-navigation-tournoi" id="rep-navigation-tournoi" aria-live="polite"></div>
+    </div>
+  </header>
 
   <!-- Toute la page est construite par js/reponse.js après validation du jeton côté backend.
        Aucun lien vers l'administration : page publique destinée au contact du club. -->
-  <main class="feuille" id="reponse">
+  <main class="feuille rep-feuille" id="reponse">
     <div class="message-chargement" id="message-reponse">Chargement…</div>
   </main>
 
@@ -28,7 +41,7 @@
   <script src="js/commun.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/commun-dossier.js"></script>
   <script src="js/api.js"></script>
-  <script src="js/reponse.js?v=refonte-ciel-verre-20260920-participants2"></script>
+  <script src="js/reponse.js?v=refonte-ciel-verre-20260920-participants2-reponse1"></script>
 
 </body>
 </html>

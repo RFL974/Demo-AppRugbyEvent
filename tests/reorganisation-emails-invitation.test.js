@@ -129,10 +129,10 @@ const htmlInitial = bac.emailHtmlInvitation(g, cats, '', 'Bonjour Camille,', 'In
 const texteInitial = bac.emailTexteInvitation(g, cats, 'Bonjour Camille,', 'Introduction.',
   'https://exemple.invalid/reponse', 'https://exemple.invalid/invitation');
 const titresInitiaux = [
-  bac.emailTitreSection("Modalités d'inscription"),
-  bac.emailTitreSection("Réponse à l'invitation"),
-  bac.emailTitreSection('Contacts & sécurité'),
-  bac.emailTitreSection('Sur place')
+  'Modalités d&#39;inscription',
+  'Réponse à l&#39;invitation',
+  'Contacts &amp; sécurité',
+  'Sur place'
 ];
 dansOrdre(htmlInitial, titresInitiaux, 'HTML initial : ordre identique au menu');
 dansOrdre(texteInitial, ["MODALITÉS D'INSCRIPTION", "RÉPONSE À L'INVITATION", 'CONTACTS & SÉCURITÉ', 'SUR PLACE'],
@@ -144,9 +144,9 @@ vrai(htmlInitial.includes('Sam Sécurité') && htmlInitial.includes('Local près
 vrai(texteInitial.includes('Sam Sécurité') && texteInitial.includes('Local près du club-house'),
   'texte initial : référent sécurité et secours présents');
 egal(occurrences(htmlInitial, '35 € par équipe'), 1, 'le tarif n’est plus dupliqué dans Sur place');
-egal(occurrences(htmlInitial, "Répondre à l'invitation"), 1,
+egal(occurrences(htmlInitial, 'class="cv-email-cta"'), 1,
   'HTML initial : un seul bouton de réponse, conservé en bas du message');
-vrai(htmlInitial.indexOf("Répondre à l'invitation") > htmlInitial.indexOf(titresInitiaux[3]),
+vrai(htmlInitial.indexOf('class="cv-email-cta"') > htmlInitial.indexOf(titresInitiaux[3]),
   'HTML initial : le bouton unique se trouve après la dernière section du menu');
 vrai(htmlInitial.includes('Goûter de fin de tournoi') && htmlInitial.includes('Offert par l&#39;organisateur du tournoi'),
   'HTML initial : le goûter offert est annoncé sans ambiguïté');
@@ -156,16 +156,22 @@ const htmlFinal = bac.emailHtmlDossier(config.global, club, '', 'Bonjour,', 'Vot
   'https://exemple.invalid/dossier');
 const texteFinal = bac.emailTexteDossier(config.global, club, 'Bonjour,', 'Votre dossier.',
   'https://exemple.invalid/dossier');
-dansOrdre(htmlFinal, [bac.emailTitreSection('Parking & accès'), bac.emailTitreSection('Encadrement & assurance'),
-  bac.emailTitreSection('Dossier complet')], 'HTML final : ordre identique au menu');
+['Infos pratiques', 'Parking &amp; accès', 'Contacts &amp; sécurité', 'Encadrement &amp; assurance',
+  'Rappel — vos catégories engagées', "Modalités d'inscription", 'Votre espace en ligne'].forEach(function (titre) {
+  vrai(htmlFinal.includes(titre), 'HTML final : section conservée — ' + titre);
+});
+vrai(htmlFinal.indexOf("La journée en un coup d'œil") < htmlFinal.indexOf('Rappel — vos catégories engagées'),
+  'HTML final : le jour J précède le rappel sportif');
 dansOrdre(texteFinal, ['PARKING & ACCÈS', 'ENCADREMENT & ASSURANCE', 'DOSSIER COMPLET'],
   'texte final : ordre identique au menu');
 vrai(htmlFinal.includes('Parking P3, entrée nord') && htmlFinal.includes('1 éducateur pour 8 joueurs'),
   'HTML final : les deux cartes de saisie alimentent le message');
 vrai(texteFinal.includes('Parking P3, entrée nord') && texteFinal.includes('1 éducateur pour 8 joueurs'),
   'texte final : les deux cartes de saisie alimentent le message');
-vrai(htmlFinal.indexOf(bac.emailTitreSection('Dossier complet')) < htmlFinal.indexOf(bac.emailTitreSection("La journée en un coup d'œil")),
-  'HTML final : le contenu assemblé vient sous Dossier complet');
+vrai(htmlFinal.includes('cv-email-navigation') && htmlFinal.includes('assets/email-icons/organisation.png'),
+  'HTML final : navigation et pictogrammes réemploient la charte de l’invitation');
+vrai(!htmlFinal.includes('Licence FFR') && !htmlFinal.includes('FDM EDR'),
+  'HTML final : aucune exigence fédérale non configurée n’est ajoutée');
 vrai(texteFinal.indexOf('DOSSIER COMPLET') < texteFinal.indexOf('LA JOURNÉE'),
   'texte final : le contenu assemblé vient sous Dossier complet');
 

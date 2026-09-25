@@ -1281,19 +1281,22 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 @media (max-width:767px) { .theme-clair .cv-cat-section .grille-reglages { grid-template-columns:1fr; } .cv-cat-onglets { gap:4px; } .theme-clair .cv-cat-onglet { padding:11px 14px; } }
 
 /* --------------------------------------------------------------------------
-   ÉCRAN « INVITER UN CLUB » — onglets, et pour « Invitation initiale » quatre
-   cartes de préparation à gauche, l'aperçu de l'email (pièces jointes incluses)
-   à droite. Les cartes sont celles du HTML : seul leur assemblage change.
+   ÉCRAN « INVITER UN CLUB » — onglets. Dans « Invitation initiale », les quatre
+   cartes de préparation occupent d'abord toute la largeur ; l'aperçu du véritable
+   email reçu sur ordinateur (pièces jointes incluses) vient juste dessous.
+   Les cartes sont celles du HTML : seul leur assemblage change.
    -------------------------------------------------------------------------- */
 .cv-panneau { min-width:0; }
 .theme-clair .cv-panneau > .carte:first-child,
 .theme-clair .cv-panneau > :first-child > .carte:first-child { border-top-left-radius:0; }
 .cv-panneau > .carte { margin:0; }
 
-.cv-invitation-initiale { display:grid; grid-template-columns:minmax(0,1.9fr) minmax(330px,.95fr); gap:24px; align-items:start; }
+.cv-invitation-initiale { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; align-items:start; }
 .cv-invitation-initiale > * { min-width:0; }
 .cv-invitation-cartes { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; align-items:start; }
 .cv-invitation-cartes > * { min-width:0; }
+.cv-invitation-initiale #bloc-apercu-invitation { width:100%; }
+.theme-clair .cv-invitation-initiale .ae-iframe { height:900px; }
 
 /* La carte « Pièces jointes » devient une partie de l'aperçu : plus de carte dans la carte. */
 .theme-clair .cv-sous-carte { margin:24px 0 0; padding:20px 0 0; background:none; border:0; border-top:1px solid var(--cv-bordure); border-radius:0; box-shadow:none; }
@@ -1301,13 +1304,15 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 
 /* Onglet « Dossier final » : Parking puis Encadrement à gauche, l'aperçu de l'email du dossier
    (pièces jointes incluses) à droite, et le dossier complet sous l'ensemble. */
-.cv-dossier-final { display:grid; grid-template-columns:minmax(0,1.25fr) minmax(330px,.95fr); gap:24px; align-items:start; }
+.cv-dossier-final { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; align-items:start; }
 .cv-dossier-final > * { min-width:0; }
 .cv-dossier-cartes { display:grid; gap:24px; align-content:start; }
+.cv-dossier-final #bloc-apercu-dossier-email { grid-column:1/-1; }
+.theme-clair .cv-dossier-final #bloc-apercu-dossier-email .ae-iframe { height:960px; }
 .cv-dossier-final #bloc-dossier { grid-column:1/-1; }
 
 @media (max-width:1399px) {
-  .cv-invitation-initiale, .cv-dossier-final { grid-template-columns:1fr; }
+  .cv-dossier-final { grid-template-columns:1fr; }
   .cv-dossier-final #bloc-dossier { grid-column:auto; }
 }
 @media (max-width:1099px) {

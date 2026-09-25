@@ -55,6 +55,54 @@ function empreintePackTerrains(plan) {
   });
 }
 
+/**
+ * Copie minimale du plan validé destinée au dossier du club.
+ *
+ * Le PDF bénévoles travaille avec un objet riche et mutable (poignées de déplacement, mémoire
+ * d'annulation, éléments laissés de côté…). Le dossier n'a besoin que de la géométrie effectivement
+ * posée. Cette projection évite donc de publier l'état de l'éditeur tout en conservant exactement
+ * les grands visuels cotés : dimensions, mini-terrains, en-buts et table de marque.
+ */
+function planTerrainsPourDossier(plan) {
+  if (!plan) return null;
+  const nombre = function (v) { return nombrePackTerrains_(v); };
+  const fields = (plan.fieldsPlan || []).map(function (fp) {
+    const f = fp.field || {};
+    const zones = (fp.zones || []).map(function (z) {
+      return {
+        cat: String(z.cat || ''),
+        color: String(z.color || ''),
+        tiles: (z.tiles || []).map(function (t) {
+          return {
+            id: String(t.id || t.label || ''), x: nombre(t.x), y: nombre(t.y),
+            w: nombre(t.w), h: nombre(t.h), eb: nombre(t.eb), ebAxe: String(t.ebAxe || '')
+          };
+        }).filter(function (t) { return t.w > 0 && t.h > 0; })
+      };
+    }).filter(function (z) { return z.tiles.length > 0; });
+    // Un grand terrain configuré reste utile dans la vue d'implantation même s'il n'a encore
+    // aucun mini-terrain. Le masquer déformerait le site réel présenté au club.
+    if (!(nombre(f.L) > 0) || !(nombre(f.W) > 0)) return null;
+    return {
+      code: String(fp.code || f.code || ''),
+      field: {
+        nom: String(f.nom || fp.code || ''), code: String(f.code || fp.code || ''),
+        type: String(f.type || ''), nature: String(f.nature || ''), L: nombre(f.L), W: nombre(f.W),
+        x: nombre(f.x), y: nombre(f.y), rot: nombre(f.rot)
+      },
+      zones: zones
+    };
+  }).filter(Boolean);
+  if (!fields.length) return null;
+  return {
+    version: 1,
+    fields: fields,
+    couloir: nombre((plan.ctxManuel || {}).m),
+    tableL: nombre((plan.ctxManuel || {}).tmL),
+    tableW: nombre((plan.ctxManuel || {}).tmW)
+  };
+}
+
 function echapperPackTerrains_(valeur) {
   if (typeof echapper === 'function') return echapper(String(valeur == null ? '' : valeur));
   return String(valeur == null ? '' : valeur).replace(/[&<>"']/g, function (c) {
@@ -518,6 +566,7 @@ if (typeof module !== 'undefined' && module.exports) {
     planTerrainsValide: planTerrainsValide_,
     htmlSortiesTerrains: htmlSortiesTerrains,
     genererPackTerrainsPdf: genererPackTerrainsPdf,
+    planTerrainsPourDossier: planTerrainsPourDossier,
     dataUriEnOctets: dataUriEnOctets_
   };
 }

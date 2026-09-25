@@ -2514,6 +2514,15 @@ function onAppliquerRepartition() {
 async function appliquerRepartition_() {
   if (!repartitionCalculee) return;
   const message = document.getElementById('message-repartition');
+  // Le dossier final reprend les GRANDS plans cotés du PDF bénévoles. Il faut donc figer la même
+  // géométrie avant l'application : une composition seule (Rugby 1 → 1,2,3) ne permettrait pas de
+  // restituer les positions, rotations, en-buts et tables de marque sans les réinventer.
+  if (!repartitionCalculee.tablesPosees || !empreintePlacementTerrainsValide ||
+      (typeof empreintePackTerrains === 'function' &&
+       empreintePackTerrains(repartitionCalculee) !== empreintePlacementTerrainsValide)) {
+    afficherMessage(message, 'Valide d’abord le placement : le dossier final utilisera exactement ces grands plans.', 'ko');
+    return;
+  }
   const par = repartitionCalculee.parCategorie;
   const avecTerrains = Object.keys(par).filter(function (n) { return par[n] && par[n].length; });
 
@@ -2569,6 +2578,9 @@ async function appliquerRepartition_() {
   const bouton = document.getElementById('bouton-appliquer-repartition');
   if (bouton) { bouton.disabled = true; bouton.textContent = 'Application…'; }
   const compositionJson = JSON.stringify(composition);
+  const planDossier = typeof planTerrainsPourDossier === 'function'
+    ? planTerrainsPourDossier(repartitionCalculee) : null;
+  const planDossierJson = planDossier ? JSON.stringify(planDossier) : '';
   // ⭐ Ce qui est DÉJÀ ACQUIS quand une panne survient en cours de SÉRIE (repli seulement) : sans ce
   //   relevé, le message d'échec ne disait rien de ce que le serveur avait pourtant enregistré.
   const acquises = [];
@@ -2596,7 +2608,7 @@ async function appliquerRepartition_() {
   /** Ce que l'écran fait une fois l'application ACQUISE, quel que soit le chemin. */
   const conclure = async function (texte) {
     configCourante.global = Object.assign({}, configCourante.global,
-      { repartition_grands_terrains: compositionJson });
+      { repartition_grands_terrains: compositionJson, plan_terrains_visuel: planDossierJson });
     injecterReglages(configCourante.global, configCourante.categories); // les cartes catégories montrent les nouveaux terrains
     // IMPORTANT : on efface l'état « répartition en attente » AVANT de rafraîchir
     // le fil — sinon le verrou de la barre latérale voit encore « répartition
@@ -2623,7 +2635,8 @@ async function appliquerRepartition_() {
       if (backendSansGroupeeConstate) throw refusGroupeeConstate_();
       groupee = await ecrireAdmin('appliquerRepartitionTerrains', {
         categories: JSON.stringify(demandes),
-        repartition_grands_terrains: compositionJson
+        repartition_grands_terrains: compositionJson,
+        plan_terrains_visuel: planDossierJson
       }, { delaiMs: DELAI_ECRITURE_TERRAINS_MS });
     } catch (erreur) {
       // ⛔ REPLI, et il est EXPLICITE. Un backend d'avant ce lot ne connaît pas l'action : il le DIT
@@ -2663,7 +2676,10 @@ async function appliquerRepartition_() {
       (((res || {}).avertissements) || []).forEach(function (a) { avertis.push(nom + ' : ' + a.message); });
     }
     // Mémorise la composition des grands terrains (pour le filtre de la page Saisie).
-    await ecrireAdmin('enregistrerPlanTerrains', { repartition_grands_terrains: compositionJson },
+    await ecrireAdmin('enregistrerPlanTerrains', {
+      repartition_grands_terrains: compositionJson,
+      plan_terrains_visuel: planDossierJson
+    },
       { delaiMs: DELAI_ECRITURE_TERRAINS_MS });
     await conclure('✅ Terrains appliqués aux catégories en mode Auto (' + noms.join(', ') + ').');
   } catch (erreur) {

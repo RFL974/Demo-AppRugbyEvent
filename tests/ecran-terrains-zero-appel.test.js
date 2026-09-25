@@ -93,6 +93,10 @@ const CLASSEMENT = {
   '#carte-zoom-ajuste': 'local', '#bouton-valider-placement': 'local', '.repart-chip-pivot': 'local',
   // Le plan AU CLAVIER (2ᵉ passage) : chaque mini-terrain, posé ou mis de côté, est un bouton.
   '.carte-tuile-g': 'local', '.carte-table-g': 'local', '.repart-chip': 'local',
+  // Sorties PDF locales : réglages, génération, aperçu, partage/téléchargement et fermeture.
+  '#terrains-pdf-contenu': 'local', '#terrains-pdf-terrain': 'local',
+  '#bouton-apercu-pdf-terrains': 'local', '#bouton-partager-pdf-terrains': 'local',
+  '#bouton-telecharger-pdf-terrains': 'local', '#fermer-apercu-pdf-terrains': 'local',
   // Les DEUX seules actions serveur de l'écran
   '#bouton-enregistrer-terrains': 'action', '#bouton-appliquer-repartition': 'action'
 };

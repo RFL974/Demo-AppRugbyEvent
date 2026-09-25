@@ -583,15 +583,18 @@ function construireOngletsEcran(ecran, groupes) {
 /**
  * Les pièces jointes rejoignent leur aperçu : on ne prépare pas un email d'un côté et ses
  * documents de l'autre. La SECTION d'origine est déplacée telle quelle (mêmes champs, même zone
- * de dépôt, mêmes identifiants) juste avant le bouton d'envoi, et perd son habillage de carte.
+ * de dépôt, mêmes identifiants) avant l'élément d'ancrage demandé ou, par défaut, juste avant le
+ * bouton d'envoi. Elle perd son habillage de carte.
  */
-function fusionnerPiecesJointes(idApercu, idPieces) {
+function fusionnerPiecesJointes(idApercu, idPieces, idAvant) {
  const apercu=document.getElementById(idApercu);
  const pieces=document.getElementById(idPieces);
  if(!apercu||!pieces||pieces.classList.contains('cv-sous-carte'))return;
  const titre=pieces.querySelector('h2');
  if(titre){const h3=document.createElement('h3');h3.textContent=titre.textContent;titre.replaceWith(h3);}
  pieces.classList.add('cv-sous-carte');
+ const avant=idAvant?document.getElementById(idAvant):null;
+ if(avant&&avant.parentNode){avant.parentNode.insertBefore(pieces,avant);return;}
  const envoi=apercu.querySelector(':scope > .ligne-action');
  if(envoi)apercu.insertBefore(pieces,envoi);else apercu.appendChild(pieces);
 }
@@ -615,7 +618,7 @@ function preparerOngletsInvitation() {
  if(!ecran||ecran.querySelector('.cv-onglets'))return;
  const modalites=document.getElementById('bloc-modalites');
  if(modalites)modalites.querySelector('h2').textContent='Modalités d’inscription au tournoi';
- fusionnerPiecesJointes('bloc-apercu-invitation','bloc-pieces-jointes-invitation');
+ fusionnerPiecesJointes('bloc-apercu-invitation','bloc-pieces-jointes-invitation','apercu-invitation-rendu');
  fusionnerPiecesJointes('bloc-apercu-dossier-email','bloc-pieces-jointes-dossier');
  const CARTES_INITIALE=['bloc-modalites','bloc-reponse','bloc-contacts-securite','bloc-surplace'];
  const CARTES_FINAL=['bloc-parking','bloc-encadrement'];
@@ -626,8 +629,9 @@ function preparerOngletsInvitation() {
     blocs:CARTES_FINAL.concat(['bloc-apercu-dossier-email','bloc-dossier'])},
    {cle:'clubs',titre:'Clubs invités',blocs:['bloc-clubs-invites']}
  ]);
- // Les cartes de préparation forment un bloc à elles seules : leur hauteur ne doit pas suivre
- // celle de l'aperçu, bien plus haut, sinon un trou s'ouvre entre les rangées.
+ // Les cartes de préparation forment un bloc à elles seules, posé AVANT l'aperçu pleine largeur :
+ // l'organisateur règle d'abord les quatre familles d'informations puis contrôle le véritable
+ // rendu ordinateur de l'email, sans colonne étroite ni contenu tronqué.
  grouperCartesPanneau(ecran.id+'-p-initiale','cv-invitation-cartes',CARTES_INITIALE);
  grouperCartesPanneau(ecran.id+'-p-final','cv-dossier-cartes',CARTES_FINAL);
  // Les dépliants sont désormais vides : on les garde dans le DOM (ils restent les points

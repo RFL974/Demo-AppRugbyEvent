@@ -12,7 +12,7 @@
   <!-- Notre feuille de style commune -->
   <link rel="stylesheet" href="css/styles.css?v=refonte-ciel-verre-20260920">
   <!-- Surcouche moderne navy/blanc/ciel (re-skin admin — retirer cette ligne pour revenir en arrière) -->
-  <link rel="stylesheet" href="css/theme-r92.css?v=refonte-ciel-verre-20260920-participants2-dps2-terrains-pdf2">
+  <link rel="stylesheet" href="css/theme-r92.css?v=refonte-ciel-verre-20260925-dossier-final1">
   <link rel="stylesheet" href="css/municipal.css?v=refonte-ciel-verre-20260920-municipal2">
   <!-- Mode « écrans » : barre latérale + onglets sur grand écran (structure construite par js/ecrans.js) -->
   <link rel="stylesheet" href="css/ecrans.css?v=refonte-ciel-verre-20260920">
@@ -691,11 +691,6 @@
           <label class="ae-champ"><span class="ae-label">Phrase d'introduction</span>
             <textarea class="r-input" id="apercu-invitation-intro" rows="2"></textarea>
           </label>
-          <p class="ae-salutation">
-            La salutation <strong>« Bonjour {prénom}, »</strong> et les sections ci-dessous
-            (catégories, jour J, sur place, réponse) sont générées automatiquement à partir des
-            infos du tournoi. Aperçu du <strong>rendu réel</strong> de l'email :
-          </p>
           <iframe id="apercu-invitation-rendu" class="ae-iframe" title="Aperçu du rendu de l'email"></iframe>
           <div class="ligne-action">
             <button type="button" class="bouton bouton-doux" id="bouton-regenerer-invitation">↻ Régénérer depuis les infos du tournoi</button>
@@ -1320,7 +1315,8 @@
   <script src="js/api.js"></script>
   <script src="js/admin.js?v=refonte-ciel-verre-20260920-participants3-municipal1"></script>
   <script src="js/admin-infos-publication.js?v=refonte-ciel-verre-20260920"></script>
-  <script src="js/admin-invitations.js?v=refonte-ciel-verre-20260920-participants2"></script>
+  <script src="js/terrains-dossier.js?v=refonte-ciel-verre-20260925-plans2"></script>
+  <script src="js/admin-invitations.js?v=refonte-ciel-verre-20260925-dossier-final2"></script>
   <script src="js/admin-suivi-clubs.js?v=refonte-ciel-verre-20260920-participants2"></script>
   <script src="js/admin-reglages.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/admin-choix-categories.js?v=refonte-ciel-verre-20260920"></script>
@@ -1329,13 +1325,13 @@
   <script src="js/admin-equipes.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/admin-tableau-bord.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/admin-generation.js?v=refonte-ciel-verre-20260920"></script>
-  <script src="js/admin-terrains.js?v=refonte-ciel-verre-20260920-terrains-pdf2"></script>
+  <script src="js/admin-terrains.js?v=refonte-ciel-verre-20260925-dossier-plans1"></script>
   <!-- Partenaires : le moteur partagé avec la page publique, puis l'écran d'administration. -->
   <script src="js/sponsors.js"></script>
   <script src="js/admin-sponsors.js?v=retours-partenaires-20260919"></script>
   <!-- pdf-lib : remplissage du formulaire officiel FFR (AcroForm) côté navigateur, sans build. -->
   <script src="js/vendor/pdf-lib.min.js"></script>
-  <script src="js/admin-terrains-pdf.js?v=refonte-ciel-verre-20260920-terrains-pdf2"></script>
+  <script src="js/admin-terrains-pdf.js?v=refonte-ciel-verre-20260925-dossier-plans2"></script>
   <script src="js/admin-autorisation.js?v=refonte-ciel-verre-20260920-participants3-dps1-municipal1"></script>
   <script src="js/admin-dps.js?v=refonte-ciel-verre-20260920-dps2"></script>
   <script src="js/admin-municipal.js?v=refonte-ciel-verre-20260920-municipal2"></script>
@@ -1357,7 +1353,7 @@
        6) ecrans.js    → barre latérale + onglets sur GRAND écran
        7) assistant.js → assistant à cartes sur mobile (verrou « Suivant »),
                          et aiguillage entre les deux modes au chargement. -->
-  <script src="js/ecrans.js?v=refonte-ciel-verre-20260920-participants3-municipal1"></script>
+  <script src="js/ecrans.js?v=refonte-ciel-verre-20260920-participants3-municipal1-invitation-ordinateur2"></script>
   <script src="js/assistant.js?v=refonte-ciel-verre-20260920-participants3-municipal1"></script>
 
 </body>

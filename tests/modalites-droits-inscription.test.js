@@ -63,12 +63,16 @@ verifier('sans tarif, Droits d’inscription passe à non et Montant / équipe e
   /name="org_droits_montant"[^>]* disabled/.test(saisie));
 
 verifier('les emails initial et final parlent désormais de date limite de paiement',
-  invitations.includes("ligneJ('Date limite de paiement'") &&
+  /ligneJ\([^\n]*'Date limite de paiement'/.test(invitations) &&
+  /ligne\([^\n]*'Date limite de paiement'/.test(invitations) &&
   invitations.includes("Date limite de paiement : ") &&
   !invitations.includes('Confirmation des effectifs avant le') &&
   !invitations.includes('Confirmation attendue avant le'));
-verifier('le dossier club emploie le même libellé',
-  dossier.includes("ligne('Date limite de paiement'") && !dossier.includes('Confirmation attendue avant le'));
+verifier('le dossier club regroupe la date limite avec le paiement sans carte redondante',
+  dossier.includes("rappelPaiement.push('À régler avant le '") &&
+  dossier.includes('g.date_limite_confirmation') &&
+  !dossier.includes('sectionModalites(g)') &&
+  !dossier.includes('Confirmation attendue avant le'));
 verifier('le PDF donne la priorité au tarif courant pour B.5',
   source.includes("var droitsOuiEff = tarifOuiP || v('org_droits_oui');") &&
   source.includes("tarifOuiP === 'oui' && mTarifP"));
