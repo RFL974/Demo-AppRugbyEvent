@@ -74,6 +74,51 @@ function suiviClubEffectifs(club) {
   };
 }
 
+function suiviLibelleDeplacement(club) {
+  const modes = {
+    groupe: 'Bus ou covoiturage organisé',
+    libre: 'Chaque famille par ses propres moyens',
+    mixte: 'Un peu des deux'
+  };
+  const mode = String((club && club.mode_deplacement) || '').trim().toLowerCase();
+  if (!modes[mode]) return 'Non renseigné';
+  if (mode !== 'mixte' || String(club.nb_equipes_groupees || '').trim() === '') return modes[mode];
+  return modes[mode] + ' · environ ' + parseInt(club.nb_equipes_groupees, 10) + ' équipe(s) en groupe';
+}
+
+/** Les adultes présents restent rattachés à l'équipe déclarée, jamais au carnet durable du club. */
+function suiviHtmlEducateurs(club) {
+  const detail = suiviClubDetail(club);
+  const groupes = [];
+  Object.keys(detail).sort().forEach(function (categorie) {
+    if (!Array.isArray(detail[categorie])) return;
+    detail[categorie].forEach(function (equipe, index) {
+      const personnes = Array.isArray(equipe && equipe.educateurs) ? equipe.educateurs : [];
+      groupes.push('<div class="cv-fiche-educateurs-equipe"><strong>' + echapper(categorie) + ' · équipe ' + (index + 1) + '</strong>' +
+        (personnes.length ? '<ul>' + personnes.map(function (personne) {
+          return '<li>' + echapper(String(personne.prenom || '').trim() + ' ' + String(personne.nom || '').trim()) + '</li>';
+        }).join('') + '</ul>' : '<small>Noms non encore renseignés</small>') + '</div>');
+    });
+  });
+  return groupes.length ? '<div class="cv-fiche-educateurs">' + groupes.join('') + '</div>'
+    : '<p class="cv-fiche-vide">Aucun éducateur nominatif renseigné.</p>';
+}
+
+/** Dans le suivi, on montre seulement la complétude. Les chiffres appartiendront à « Demande de DPS ». */
+function suiviHtmlDonneesDps(estimation) {
+  if (!estimation || estimation.contrat !== 'estimation-public-1') {
+    return '<p class="suivi-dps-indisponible">Données DPS : calcul disponible après mise à jour du serveur.</p>';
+  }
+  const manquants = Math.max(0, Number(estimation.sans_mode) || 0);
+  const renseignes = Math.max(0, Number(estimation.renseignes) || 0);
+  const participants = Math.max(0, Number(estimation.participants) || 0);
+  return '<div class="suivi-dps-etat"><strong>Données pour la demande de DPS</strong><span>' + renseignes + ' club' +
+    (renseignes > 1 ? 's' : '') + ' participant' + (renseignes > 1 ? 's' : '') + ' sur ' + participants +
+    ' avec un déplacement exploitable.</span>' + (manquants
+      ? '<small>À compléter : ' + manquants + ' club' + (manquants > 1 ? 's' : '') + '.</small>'
+      : '<small>Les réponses reçues sont prêtes pour le futur calcul détaillé.</small>') + '</div>';
+}
+
 function suiviPrestationReglage(type, global) {
   const actif = type === 'repas' ? estOui(global.repas_sur_place_oui) : estOui(global.gouter_fin_tournoi_oui);
   const mode = String(type === 'repas' ? global.repas_sur_place_mode : global.gouter_fin_tournoi_mode).trim();
@@ -542,6 +587,9 @@ function suiviHtmlFiche(club) {
         'aria-label="Fermer la fiche de ' + echapper(nom) + '">×</button>' +
     '</div>' +
     '<section class="cv-fiche-section"><h4>Réponse</h4>' + suiviBadgeReponse(club, etat) + '</section>' +
+    (etat.accepte ? '<section class="cv-fiche-section"><h4>Déplacement</h4><p class="cv-fiche-note">' +
+      echapper(suiviLibelleDeplacement(club)) + '</p></section>' +
+      '<section class="cv-fiche-section"><h4>Éducateurs présents</h4>' + suiviHtmlEducateurs(club) + '</section>' : '') +
     '<section class="cv-fiche-section"><h4>Commandes</h4>' + suiviHtmlLignesCommande(etat) + '</section>' +
     '<section class="cv-fiche-section"><h4>Paiement <span class="suivi-badge est-' + paiement.cle + '">' +
       echapper(paiement.libelle) + '</span></h4>' +
@@ -762,6 +810,7 @@ function suiviTerminerFocusGeste(geste) {
 
 function afficherSuiviClubs() {
   const resume = document.getElementById('suivi-clubs-resume');
+  const donneesDps = document.getElementById('suivi-clubs-donnees-dps');
   const filtres = document.getElementById('suivi-clubs-filtres');
   const liste = document.getElementById('liste-suivi-clubs');
   if (!resume || !filtres || !liste) return;
@@ -769,6 +818,7 @@ function afficherSuiviClubs() {
   const etatListe = suiviEtatListe();
   if (!etatListe.connue) {
     resume.innerHTML = ''; filtres.innerHTML = '';
+    if (donneesDps) donneesDps.innerHTML = '';
     liste.innerHTML = suiviHtmlEtatListe(etatListe);
     suiviClubSelectionne = ''; suiviFicheDepliee = false;
     afficherFicheClub();
@@ -786,6 +836,8 @@ function afficherSuiviClubs() {
     if (e.paiementAttendu) compte.paiement++;
   });
   resume.innerHTML = suiviHtmlResume(compte);
+  if (donneesDps) donneesDps.innerHTML = suiviHtmlDonneesDps(
+    typeof estimationPublicCourante === 'undefined' ? null : estimationPublicCourante);
   filtres.innerHTML = suiviHtmlFiltres(compte);
 
   const affiches = clubs.filter(function (club) { return suiviCorrespondFiltre(suiviClubEtat(club)); })

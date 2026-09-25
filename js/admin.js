@@ -168,6 +168,8 @@ let afficheDataURI = '';
 let parkingDataURI = '';
 /* Liste des clubs invités (chargée avec la clé admin — jamais dans les données publiques). */
 let clubsInvitesCourants = [];
+/* Calcul préparatoire du public attendu, relu avec la liste des participations. */
+let estimationPublicCourante = null;
 
 /* Point de passage COMMUN de la majorité des écritures de l'admin : exige la clé ADMIN
  * (voir api.js).
@@ -623,6 +625,7 @@ const ADMIN_ETAPES = {
      ⛔ Elle n'est pas SUPPRIMÉE, elle est DIFFÉRÉE : avec un backend d'avant (pas de `comptes`),
      `onTelechargerPdfAutorisation` l'exige avant de générer — le PDF ne comptera donc jamais zéro
      club. ⚠️ `dossier` continue, lui, de la réclamer : son sélecteur de club en dépend vraiment. */
+  dps: { ressources: ['dossierAutorisation'] },
   autorisation: { ressources: ['dossierAutorisation'] },
   /* ⭐ Lot « Publication » — L'ÉTAT DE L'ACCÈS À LA TABLE DE MARQUE EST UNE RESSOURCE D'ÉCRAN.
      🔬 LE DÉFAUT FERMÉ. `majPublication()` appelait `chargerAccesScores()`, donc `getAccesScoresAdmin`
@@ -853,7 +856,7 @@ function ouvrirEtapeAdmin(idEtape) {
   //   depuis, on la relit MAINTENANT. ⛔ Jamais lors de la première lecture : elle vient
   //   d'inscrire sa base de révision, il n'y a rien à rattraper. ⛔ Et jamais déconnecté :
   //   cette relecture est protégée par la clé, elle rouvrirait une demande de saisie.
-  if (idEtape === 'autorisation' && dejaLue && adminConnecte &&
+  if ((idEtape === 'autorisation' || idEtape === 'dps') && dejaLue && adminConnecte &&
       typeof majAutorisationSiObsolete === 'function') {
     majAutorisationSiObsolete().catch(function () { /* la feuille garde son message */ });
   }

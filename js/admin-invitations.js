@@ -1644,6 +1644,8 @@ function onModalitesChange(evenement) {
 function appliquerSuiviTarifsEnregistres(resultat) {
   if (!resultat || !Array.isArray(resultat.clubs)) return;
   clubsInvitesCourants = resultat.clubs;
+  if (resultat.estimation_public) estimationPublicCourante = resultat.estimation_public;
+  if (typeof afficherEstimationPublicAutorisation === 'function') afficherEstimationPublicAutorisation();
   afficherClubsInvites();
   if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
 }
@@ -1892,6 +1894,8 @@ async function chargerClubsInvites() {
   try {
     const res = await ecrireAdmin('listerClubsInvites', {}, { delaiMs: DELAI_LECTURE_CLUBS_MS });
     clubsInvitesCourants = (res && res.clubs) || [];
+    estimationPublicCourante = (res && res.estimation_public) || null;
+    if (typeof afficherEstimationPublicAutorisation === 'function') afficherEstimationPublicAutorisation();
     etatLectureClubs.lue = true;
     etatLectureClubs.enCours = false;
     etatLectureClubs.erreur = '';
@@ -2679,6 +2683,8 @@ async function appliquerEtatJeuDemo(res) {
   const clubs = res.clubs;
   const appliquer = function () {
     clubsInvitesCourants = clubs;
+    if (res.estimation_public) estimationPublicCourante = res.estimation_public;
+    if (typeof afficherEstimationPublicAutorisation === 'function') afficherEstimationPublicAutorisation();
     afficherClubsInvites();
     if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
     if (typeof majApercuDossier === 'function') majApercuDossier();

@@ -31,6 +31,7 @@ const ASSISTANT_ETAPES = [
   { id: 'equipes',   titre: 'Équipes',      icone: '👥', blocs: ['bloc-equipes'] },
   { id: 'terrains',  titre: 'Terrains',     icone: '🗺️', blocs: ['bloc-terrains'] },
   { id: 'poules',    titre: 'Poules',       icone: '🎲', blocs: ['bloc-generation'] },
+  { id: 'dps',       titre: 'DPS',          icone: '⛑️', blocs: ['bloc-dps'], libre: true },
   { id: 'autorisation', titre: 'Autorisation', icone: '🏛️', blocs: ['bloc-autorisation'] },
   /* Partenaires vient juste avant Publication : on prépare les fiches et leur visibilité,
      puis on décide de mettre la page en ligne. */

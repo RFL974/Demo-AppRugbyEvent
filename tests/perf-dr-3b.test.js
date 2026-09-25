@@ -146,6 +146,10 @@ const SRC_AUTORISATION = [
   bloc(F_AUTORISATION, 'function autorisationPhotographierBase(', '{'),
   ligne(F_AUTORISATION, 'var autorisationComptes'),
   ligne(F_AUTORISATION, 'var autorisationServeurPorteConfig'),
+  ligne(F_AUTORISATION, 'var autorisationEstimationErreur'),
+  bloc(F_AUTORISATION, 'function libelleDeplacementPublic(', '{'),
+  bloc(F_AUTORISATION, 'function rendreEstimationPublicAutorisation(', '{'),
+  bloc(F_AUTORISATION, 'function afficherEstimationPublicAutorisation(', '{'),
   bloc(F_AUTORISATION, 'function autorisationFrappeProuvee(', '{'),
   bloc(F_AUTORISATION, 'function remplacerSaisieAutorisation(', '{'),
   bloc(F_AUTORISATION, 'function comptesAutorisationValides(', '{'),
@@ -402,11 +406,11 @@ async function controles() {
     memesElements(apres1, ['clubsInvites']) && memesElements(b1.journal, ['clubsInvites']),
     'journal : ' + b1.journal.join(', '));
 
-  await b1.ouvrirEtapeAdmin('autorisation');
+  await b1.ouvrirEtapeAdmin('dps');
   const apres2 = b1.journal.slice();
   await b1.ouvrirEtapeAdmin('invitation');
   await b1.ouvrirEtapeAdmin('autorisation');
-  verifier('4.2', 'autorisation → 1 getDossierAutorisation (clubs déjà lus), aucun doublon',
+  verifier('4.2', 'DPS puis autorisation → 1 getDossierAutorisation au total, aucun doublon',
     memesElements(apres2, ['clubsInvites', 'dossierAutorisation']) &&
     b1.journal.filter((x) => x === 'dossierAutorisation').length === 1,
     'journal : ' + b1.journal.join(', '));

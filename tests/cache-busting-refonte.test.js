@@ -52,6 +52,17 @@ let controles = 0;
 function vrai(valeur, message) { assert.ok(valeur, message); controles++; }
 
 const VERSION = 'refonte-ciel-verre-20260920';
+const VERSIONS_PROPRES = {
+  'css/dossier.css': VERSION + '-participants2',
+  'css/theme-r92.css': VERSION + '-participants2',
+  'js/admin-autorisation.js': VERSION + '-participants3',
+  'js/admin-invitations.js': VERSION + '-participants2',
+  'js/admin-suivi-clubs.js': VERSION + '-participants2',
+  'js/admin.js': VERSION + '-participants3',
+  'js/assistant.js': VERSION + '-participants3',
+  'js/ecrans.js': VERSION + '-participants3',
+  'js/reponse.js': VERSION + '-participants2'
+};
 
 /** Le recensement des fichiers livrés par la refonte. */
 const LIVRES = [
@@ -60,7 +71,7 @@ const LIVRES = [
   'js/admin-autorisation.js', 'js/admin-choix-categories.js', 'js/admin-conformite-ffr.js',
   'js/admin-equipes.js', 'js/admin-generation.js', 'js/admin-infos-publication.js',
   'js/admin-reglages.js', 'js/admin-suivi-clubs.js', 'js/admin-tableau-bord.js',
-  'js/admin-terrains.js', 'js/admin.js', 'js/commun.js', 'js/config.js', 'js/dialog.js',
+  'js/admin-terrains.js', 'js/admin.js', 'js/assistant.js', 'js/commun.js', 'js/config.js', 'js/dialog.js',
   'js/dossier.js', 'js/ecrans.js', 'js/invitation.js', 'js/perfs.js', 'js/reponse.js',
   'js/saisie-protegee.js', 'js/saisie.js', 'js/tournoi.js',
 ];
@@ -91,11 +102,12 @@ pages.forEach(page => {
     const [, chemin, requete] = m;
     if (LIVRES.indexOf(chemin) === -1) continue;
     vues.add(chemin);
-    if (requete !== '?v=' + VERSION) fautives.push(page + ' → ' + chemin + (requete || ' (sans version)'));
+    const versionAttendue = VERSIONS_PROPRES[chemin] || VERSION;
+    if (requete !== '?v=' + versionAttendue) fautives.push(page + ' → ' + chemin + (requete || ' (sans version)'));
   }
 });
 vrai(fautives.length === 0,
-  '⛔ toute référence HTML à un fichier livré porte « ?v=' + VERSION + '  » — fautives : ' +
+  '⛔ toute référence HTML à un fichier livré porte la version globale ou son suffixe propre déclaré — fautives : ' +
   fautives.join(', '));
 
 vrai(LIVRES.filter(f => !vues.has(f) && SANS_APPEL_HTML.indexOf(f) === -1).length === 0,

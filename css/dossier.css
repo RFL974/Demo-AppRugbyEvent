@@ -582,12 +582,24 @@ body {
 /* Détail PAR ÉQUIPE (session 23) : joueurs + éducateurs de chaque équipe engagée. */
 .rep-cat-detail { margin: 8px 0 0 26px; display: grid; gap: 6px; }
 .rep-equipe {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px;
   padding: 6px 10px; background: #fff; border: 1px solid #e3ebf3; border-radius: 8px;
 }
 .rep-eq-nom { font-weight: 600; min-width: 70px; }
 .rep-equipe label { font-size: 0.9rem; color: var(--d-texte); }
-.rep-equipe input { width: 64px; margin-left: 6px; }
+.rep-equipe input[type="number"] { width: 64px; margin-left: 6px; }
+.rep-eq-educateurs-noms { flex-basis: 100%; display: grid; gap: 8px; }
+.rep-educateurs-titre { color: var(--d-navy); font-size: 0.88rem; font-weight: 700; }
+.rep-educateur {
+  display: grid; grid-template-columns: 82px minmax(140px, 1fr) minmax(140px, 1fr);
+  align-items: center; gap: 8px 12px; padding: 8px 10px; background: #f7fafe; border-radius: 7px;
+}
+.rep-educateur > span { color: var(--d-gris); font-size: 0.82rem; font-weight: 600; }
+.rep-educateur label { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.rep-educateur input[type="text"] {
+  width: 100%; min-width: 0; min-height: 40px; padding: 7px 9px; border: 1px solid var(--d-filet);
+  border-radius: 7px; color: var(--d-texte); background: #fff; font: inherit;
+}
 .rep-eq-note { flex-basis: 100%; font-size: 0.82rem; line-height: 1.4; }
 .rep-eq-note-conseil { color: #8a5a0c; }
 .rep-eq-note-mini { color: #b3261e; font-weight: 600; }
@@ -598,6 +610,17 @@ body {
   background: #f5f8fc; border-left: 3px solid var(--d-bleu); border-radius: 0 6px 6px 0;
   font-size: 0.95rem;
 }
+.rep-deplacement {
+  display: grid; gap: 9px; margin: 18px 0 0; padding: 14px; border: 1px solid #dce7f2;
+  border-radius: 10px; background: #fbfdff;
+}
+.rep-deplacement legend { padding: 0 6px; color: var(--d-navy); font-weight: 700; }
+.rep-deplacement > label { display: flex; align-items: flex-start; gap: 9px; line-height: 1.4; }
+.rep-deplacement input[type="radio"] { flex: 0 0 auto; margin-top: 3px; }
+.rep-deplacement-mixte { flex-wrap: wrap; padding: 8px 10px; background: #f5f8fc; border-radius: 7px; }
+.rep-deplacement-mixte input { width: 74px; }
+.rep-deplacement-mixte small { color: var(--d-gris); }
+.rep-deplacement-erreur { color: #b3261e; font-size: 0.84rem; }
 .rep-finances { margin-bottom: 18px; }
 .rep-rappel-paiement {
   display: grid; gap: 6px; padding: 12px 14px; background: #f5f8fc;
@@ -712,6 +735,8 @@ body {
  .feuille { margin:12px; padding:18px; }
  .barre-outils { padding:12px; position:static; }
  .d-section { padding:16px; }
+ .rep-educateur { grid-template-columns:1fr; }
+ .rep-educateur label { grid-template-columns:72px minmax(0,1fr); }
 }
 /* ============================================================================
    IMPRESSION — l'« export PDF » du navigateur. Une feuille A4 propre :

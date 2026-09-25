@@ -45,6 +45,9 @@ const ECRANS_DEF = [
   { id: 'equipes',     titre: 'Équipes',           icone: 'equipe',   blocs: ['bloc-equipes'],            cles: ['equipes'] },
   { id: 'terrains',    titre: 'Terrains',          icone: 'terrain',  blocs: ['bloc-terrains'],           cles: ['terrains'] },
   { id: 'poules',      titre: 'Poules & planning', icone: 'poules',   blocs: ['bloc-generation'],         cles: ['poules'] },
+  /* Le dimensionnement du secours est un chantier opérationnel distinct de l'autorisation FFR.
+     Il réutilise la même lecture administrative mémorisée : l'écran dédié n'ajoute aucun appel. */
+  { id: 'dps', titre: 'Demande de DPS', icone: 'secours', blocs: ['bloc-dps'], cles: [], libre: true },
   /* Demande d'autorisation (feuille de report du formulaire FFR) : APRÈS Poules & planning —
      elle exploite le planning généré (phases, terrains, prédictions de phase 2) — et AVANT la
      Publication (on dépose la demande avant d'annoncer). Libre : jamais verrouillée. */
@@ -161,6 +164,7 @@ const ECRANS_ICONES = {
   ballon:    '<ellipse cx="12" cy="12" rx="5" ry="8" transform="rotate(45 12 12)"></ellipse><path d="M9 9l6 6M10.5 7.5l6 6M7.5 10.5l6 6"></path>',
   monde:     '<circle cx="12" cy="12" r="8"></circle><path d="M4 12h16M12 4c2.5 2.5 2.5 13 0 16M12 4c-2.5 2.5-2.5 13 0 16"></path>',
   dossier:   '<path d="M6 3h8l4 4v14H6z"></path><path d="M14 3v4h4M9 12h6M9 16h4"></path>',
+  secours:   '<path d="M12 3l7 3v5c0 4.6-2.9 8-7 10-4.1-2-7-5.4-7-10V6l7-3z"></path><path d="M12 7v8M8 11h8"></path>',
   /* Partenaires : une poignée de main stylisée (deux mains qui se rejoignent). */
   sponsor:   '<path d="M3 10.5l3-3 3.5 3.5 2.5-1 2.5 1L18 7.5l3 3"></path><path d="M3 10.5v4l4.5 4 2-2 2 2 2-2 2 2 4.5-4v-4"></path>',
   courrier:  '<rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="M3.5 7l8.5 6 8.5-6"></path>',
@@ -463,6 +467,7 @@ const DESCRIPTIONS_CIEL = {
  equipes:'Gérez les équipes participantes et leurs effectifs.',
  terrains:'Déclarez les grands terrains et prévisualisez la répartition des mini-terrains.',
  poules:'Consultez les rencontres par horaire et par terrain.',
+ dps:'Estimez le public attendu et préparez le dimensionnement du dispositif de secours.',
  autorisation:'Préparez les informations et les documents nécessaires à votre demande.',
  sponsors:'Gérez les partenaires, leurs emplacements et leurs résultats.',
  publication:'Pilotez la visibilité du tournoi et l’accès à la table de marque.',

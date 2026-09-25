@@ -1384,6 +1384,18 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 .theme-clair .cv-fiche-entete + .cv-fiche-section { padding-top:0; border-top:0; }
 .theme-clair .cv-fiche-section h4 { display:flex; align-items:center; gap:10px; margin:0; font-size:14px; font-weight:650; letter-spacing:-.01em; }
 .theme-clair .cv-fiche-section small { color:var(--cv-secondaire); font-size:12px; }
+.theme-clair .cv-fiche-educateurs { display:grid; gap:10px; width:100%; }
+.theme-clair .cv-fiche-educateurs-equipe { padding:10px 12px; border-radius:9px; background:var(--cv-selection); font-size:13px; }
+.theme-clair .cv-fiche-educateurs-equipe strong { display:block; }
+.theme-clair .cv-fiche-educateurs-equipe ul { margin:6px 0 0; padding-left:20px; }
+.theme-clair .cv-fiche-educateurs-equipe li + li { margin-top:3px; }
+.theme-clair .suivi-clubs-donnees-dps { margin:14px 0; }
+.theme-clair .suivi-dps-etat,.theme-clair .suivi-dps-indisponible {
+  margin:0; padding:12px 14px; border-left:4px solid var(--cv-action); border-radius:0 10px 10px 0;
+  background:var(--cv-selection); color:var(--cv-texte); font-size:13px;
+}
+.theme-clair .suivi-dps-etat { display:flex; flex-wrap:wrap; gap:4px 12px; align-items:baseline; }
+.theme-clair .suivi-dps-etat small { flex-basis:100%; color:var(--cv-secondaire); }
 .theme-clair .cv-fiche-note { margin:0; color:var(--cv-secondaire); font-size:13px; }
 .theme-clair .cv-fiche-vide { margin:0; color:var(--cv-secondaire); font-size:13px; line-height:1.6; }
 .theme-clair .cv-fiche-commande { display:flex; flex-direction:column; gap:8px; width:100%; margin:0; }
@@ -1561,3 +1573,47 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 .theme-clair .carte-apercu { fill:#1d9e75; fill-opacity:.35; stroke:#0f6e56; stroke-width:2; }
 .theme-clair .carte-apercu[data-refus="oui"] { fill:#e24b4a; fill-opacity:.3; stroke:#a32d2d; }
 .theme-clair .repart-apercu.est-etiquette { transform:translate(14px,14px); }
+
+/* L'estimation DPS réutilise la lecture déjà nécessaire à la demande d'autorisation : aucun
+   appel n'est déclenché par l'ouverture du détail ni par le tableau. */
+.theme-clair .autorisation-public { margin:14px 0 18px; padding:18px; border:1px solid var(--cv-bordure); border-radius:14px; background:#f8fbfe; }
+.theme-clair .autorisation-public > h3 { margin:0 0 12px; font-size:18px; color:var(--cv-texte); }
+.theme-clair .autorisation-public-etat { padding:12px 14px; border-radius:9px; background:#eef4f8; color:var(--cv-secondaire); }
+.theme-clair .autorisation-public-cartes { display:grid; grid-template-columns:minmax(190px,1.25fr) repeat(3,minmax(115px,.75fr)); gap:10px; }
+.theme-clair .autorisation-public-cartes > div { padding:13px; border:1px solid #dce7f2; border-radius:10px; background:#fff; }
+.theme-clair .autorisation-public-cartes .est-principale { border-color:#78b9e6; background:#e8f5ff; }
+.theme-clair .autorisation-public-cartes span,.theme-clair .autorisation-public-cartes small { display:block; color:var(--cv-secondaire); font-size:12px; line-height:1.35; }
+.theme-clair .autorisation-public-cartes strong { display:block; margin-top:2px; color:var(--cv-texte); font-size:27px; font-variant-numeric:tabular-nums; }
+.theme-clair .autorisation-public-cartes small { margin-top:5px; }
+.theme-clair .autorisation-public-alerte { margin-bottom:12px; padding:11px 13px; border-left:4px solid var(--cv-attention); border-radius:0 8px 8px 0; background:#fff8e7; line-height:1.45; }
+.theme-clair .autorisation-public-methode { margin-top:12px; border:1px solid var(--cv-bordure); border-radius:10px; background:#fff; overflow:hidden; }
+.theme-clair .autorisation-public-methode > summary { min-height:44px; padding:11px 13px; color:var(--cv-action); font-weight:700; cursor:pointer; list-style:none; box-sizing:border-box; }
+.theme-clair .autorisation-public-methode > summary::-webkit-details-marker { display:none; }
+.theme-clair .autorisation-public-methode > summary::before { content:'›'; display:inline-grid; place-items:center; width:21px; height:21px; margin-right:9px; border-radius:50%; background:var(--cv-selection); font-size:20px; line-height:1; vertical-align:middle; transition:transform .16s ease; }
+.theme-clair .autorisation-public-methode[open] > summary::before { transform:rotate(90deg); }
+.theme-clair .autorisation-public-methode-corps { padding:0 14px 14px; border-top:1px solid var(--cv-bordure); color:var(--cv-secondaire); font-size:13px; line-height:1.5; }
+.theme-clair .autorisation-public-methode-corps h4 { margin:14px 0 6px; color:var(--cv-texte); font-size:14px; }
+.theme-clair .autorisation-public-methode-corps ul { margin:6px 0 0; padding-left:20px; }
+.theme-clair .autorisation-public-bareme { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; }
+.theme-clair .autorisation-public-bareme > div { padding:9px; border:1px solid var(--cv-bordure); border-radius:8px; }
+.theme-clair .autorisation-public-bareme strong,.theme-clair .autorisation-public-bareme span { display:block; }
+.theme-clair .autorisation-public-bareme span { margin-top:3px; font-size:12px; }
+.theme-clair .autorisation-public-note { padding:9px 11px; border-radius:8px; background:#eef5fa; }
+.theme-clair .autorisation-public-tableau h4 { margin:18px 0 7px; font-size:14px; }
+.theme-clair .autorisation-public-tableau .table-scroll { overflow-x:auto; }
+.theme-clair .autorisation-public-tableau table { width:100%; min-width:560px; border-collapse:collapse; font-size:13px; }
+.theme-clair .autorisation-public-tableau th,.theme-clair .autorisation-public-tableau td { padding:8px 10px; border-bottom:1px solid var(--cv-bordure); text-align:left; }
+.theme-clair .autorisation-public-tableau thead th { color:var(--cv-secondaire); font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+.theme-clair .autorisation-public-vide,.theme-clair .autorisation-public-limite { margin:12px 0 0; color:var(--cv-secondaire); font-size:12px; }
+@media (max-width:760px) {
+  .theme-clair .autorisation-public-cartes { grid-template-columns:repeat(2,minmax(0,1fr)); }
+  .theme-clair .autorisation-public-cartes .est-principale { grid-column:1 / -1; }
+  .theme-clair .autorisation-public-bareme { grid-template-columns:1fr; }
+}
+@media (max-width:380px) {
+  .theme-clair .autorisation-public { padding:13px; }
+  .theme-clair .autorisation-public-cartes { grid-template-columns:1fr; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .theme-clair .autorisation-public-methode > summary::before { transition:none; }
+}

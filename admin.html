@@ -12,7 +12,7 @@
   <!-- Notre feuille de style commune -->
   <link rel="stylesheet" href="css/styles.css?v=refonte-ciel-verre-20260920">
   <!-- Surcouche moderne navy/blanc/ciel (re-skin admin — retirer cette ligne pour revenir en arrière) -->
-  <link rel="stylesheet" href="css/theme-r92.css?v=refonte-ciel-verre-20260920">
+  <link rel="stylesheet" href="css/theme-r92.css?v=refonte-ciel-verre-20260920-participants2">
   <!-- Mode « écrans » : barre latérale + onglets sur grand écran (structure construite par js/ecrans.js) -->
   <link rel="stylesheet" href="css/ecrans.css?v=refonte-ciel-verre-20260920">
   <!-- Encarts partenaires : les MÊMES règles que la page publique, pour que l'aperçu de
@@ -659,6 +659,7 @@
           Les clubs qui demandent une action apparaissent en premier.
         </p>
         <div id="suivi-clubs-resume" class="suivi-clubs-resume" aria-live="polite"></div>
+        <div id="suivi-clubs-donnees-dps" class="suivi-clubs-donnees-dps" aria-live="polite"></div>
         <div class="suivi-pdf-actions">
           <button type="button" class="bouton bouton-doux" id="bouton-pdf-suivi-restauration">
             Télécharger le récapitulatif repas et goûters (PDF)
@@ -1019,6 +1020,17 @@
         </div>
       </section>
 
+      <!-- Estimation opérationnelle du public pour préparer le dispositif prévisionnel de secours. -->
+      <section class="carte" id="bloc-dps">
+        <h2>Demande de dispositif prévisionnel de secours</h2>
+        <div class="autorisation-public" aria-labelledby="autorisation-public-titre">
+          <h3 id="autorisation-public-titre">Public attendu pour le dispositif de secours</h3>
+          <div id="autorisation-public-attendu" aria-live="polite">
+            <p class="vide">Estimation en cours de chargement…</p>
+          </div>
+        </div>
+      </section>
+
       <!-- Amont : demande d'autorisation de tournoi EDR (feuille de report du formulaire FFR) -->
       <section class="carte" id="bloc-autorisation">
         <h2>Informations et documents</h2>
@@ -1245,10 +1257,10 @@
   <script src="js/commun.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/dialog.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/api.js"></script>
-  <script src="js/admin.js?v=refonte-ciel-verre-20260920"></script>
+  <script src="js/admin.js?v=refonte-ciel-verre-20260920-participants3"></script>
   <script src="js/admin-infos-publication.js?v=refonte-ciel-verre-20260920"></script>
-  <script src="js/admin-invitations.js?v=mail-initial-20260920"></script>
-  <script src="js/admin-suivi-clubs.js?v=refonte-ciel-verre-20260920"></script>
+  <script src="js/admin-invitations.js?v=refonte-ciel-verre-20260920-participants2"></script>
+  <script src="js/admin-suivi-clubs.js?v=refonte-ciel-verre-20260920-participants2"></script>
   <script src="js/admin-reglages.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/admin-choix-categories.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/admin-conformite-ffr.js?v=refonte-ciel-verre-20260920"></script>
@@ -1262,7 +1274,7 @@
   <script src="js/admin-sponsors.js?v=retours-partenaires-20260919"></script>
   <!-- pdf-lib : remplissage du formulaire officiel FFR (AcroForm) côté navigateur, sans build. -->
   <script src="js/vendor/pdf-lib.min.js"></script>
-  <script src="js/admin-autorisation.js?v=refonte-ciel-verre-20260920"></script>
+  <script src="js/admin-autorisation.js?v=refonte-ciel-verre-20260920-participants3"></script>
   <!-- Feuille de fin de journée : réutilise pdf-lib (chargé juste au-dessus) pour le PDF. -->
   <script src="js/admin-feuille-jour.js"></script>
   <!-- Générateur de QR code LOCAL (MIT, js/vendor/qrcode.js — déjà utilisé par le dossier club).
@@ -1281,8 +1293,8 @@
        6) ecrans.js    → barre latérale + onglets sur GRAND écran
        7) assistant.js → assistant à cartes sur mobile (verrou « Suivant »),
                          et aiguillage entre les deux modes au chargement. -->
-  <script src="js/ecrans.js?v=refonte-ciel-verre-20260920"></script>
-  <script src="js/assistant.js?v=tarifs-mobile-demo-20260920"></script>
+  <script src="js/ecrans.js?v=refonte-ciel-verre-20260920-participants3"></script>
+  <script src="js/assistant.js?v=refonte-ciel-verre-20260920-participants3"></script>
 
 </body>
 </html>

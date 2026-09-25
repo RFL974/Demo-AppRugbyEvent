@@ -83,7 +83,7 @@ const contexte = vm.createContext({
 vm.runInContext(source, contexte, { filename: 'js/ecrans.js' });
 
 console.log('\nNavigation libre de la barre latérale pour la démo');
-egal(ids.length, 14, 'les 14 onglets actuels sont couverts');
+egal(ids.length, 15, 'les 15 onglets actuels, dont le DPS, sont couverts');
 ids.forEach(function (id) {
   contexte.ecransActiver(id, { sansScroll: true });
   vrai(ecrans[id].hidden === false, '« ' + id + ' » s’ouvre même lorsque tout reste à faire');

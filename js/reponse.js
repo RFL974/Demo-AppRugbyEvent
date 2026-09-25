@@ -259,6 +259,8 @@ function formulairePresence(data) {
   const p = data.paiement || {};
   const commandes = blocCommandePrestation('repas', 'Repas', p.repas_prix_personne) +
     blocCommandePrestation('gouter', 'Goûter', p.gouter_prix_personne);
+  const modeDeplacement = txt(data.club.mode_deplacement);
+  const equipesGroupees = txt(data.club.nb_equipes_groupees);
 
   return '<form id="form-presence" class="rep-form"><div class="cv-reponse-champs">' +
     blocModalitesPaiement(data) +
@@ -270,6 +272,16 @@ function formulairePresence(data) {
       '<span>Total joueurs engagés : <strong id="rep-total-joueurs">0</strong></span>' +
       '<span>Total éducateurs : <strong id="rep-total-educateurs">0</strong></span>' +
     '</div>' +
+    '<fieldset class="rep-deplacement"><legend>Informations pratiques</legend>' +
+      '<p class="rep-question">Afin de vous accueillir dans les meilleures conditions, merci de nous indiquer comment votre club se rendra au tournoi.</p>' +
+      '<p class="rep-aide">Cette information nous sert à dimensionner le poste de secours et le parking.</p>' +
+      '<label><input type="radio" name="mode_deplacement" value="groupe"' + (modeDeplacement === 'groupe' ? ' checked' : '') + '> En bus ou en covoiturage organisé par le club</label>' +
+      '<label><input type="radio" name="mode_deplacement" value="libre"' + (modeDeplacement === 'libre' ? ' checked' : '') + '> Chaque famille vient par ses propres moyens</label>' +
+      '<label><input type="radio" name="mode_deplacement" value="mixte"' + (modeDeplacement === 'mixte' ? ' checked' : '') + '> Un peu des deux</label>' +
+      '<label class="rep-deplacement-mixte"' + (modeDeplacement === 'mixte' ? '' : ' hidden') + '>Environ combien d’équipes voyagent en groupe ? ' +
+        '<input type="number" id="rep-equipes-groupees" min="0" step="1" inputmode="numeric" value="' + echapper(equipesGroupees) + '"> <small>(facultatif)</small></label>' +
+      '<span class="rep-deplacement-erreur" role="alert"></span>' +
+    '</fieldset>' +
     (commandes ? '<section class="rep-commandes"><h2 class="rep-titre">Repas et goûter</h2>' + commandes + '</section>' : '') +
     '</div><aside class="cv-reponse-recap"><section class="rep-total-du"><h2>Total à payer</h2>' +
       '<div id="rep-detail-paiement"></div>' +
@@ -304,24 +316,61 @@ function majDetailEquipes(ligne) {
   zone.querySelectorAll('.rep-equipe').forEach(function (eq, i) {
     actuels[i] = {
       j: eq.querySelector('.rep-eq-joueurs').value,
-      e: eq.querySelector('.rep-eq-educateurs').value
+      e: eq.querySelector('.rep-eq-educateurs').value,
+      educateurs: lireNomsEducateursEquipe(eq)
     };
   });
   const init = (detailInitial && detailInitial[nomCat]) || [];
   let html = '';
   for (let i = 0; i < nb; i++) {
-    const v = actuels[i] || (init[i] ? { j: String(init[i].j), e: String(init[i].e) } : { j: '', e: '1' });
+    const v = actuels[i] || (init[i] ? {
+      j: String(init[i].j), e: String(init[i].e), educateurs: Array.isArray(init[i].educateurs) ? init[i].educateurs : []
+    } : { j: '', e: '1', educateurs: [] });
     html +=
       '<div class="rep-equipe">' +
         '<span class="rep-eq-nom">Équipe ' + (i + 1) + '</span>' +
         '<label>joueurs <input type="number" class="rep-eq-joueurs" min="1" inputmode="numeric" value="' + echapper(v.j) + '"></label>' +
         '<label>éducateurs <input type="number" class="rep-eq-educateurs" min="0" inputmode="numeric" value="' + echapper(v.e) + '"></label>' +
+        '<div class="rep-eq-educateurs-noms"></div>' +
         '<span class="rep-eq-note" role="status"></span>' +
       '</div>';
   }
   zone.innerHTML = html;
-  zone.querySelectorAll('.rep-equipe').forEach(function (eq) { majNoteEquipe(ligne, eq); });
+  zone.querySelectorAll('.rep-equipe').forEach(function (eq, i) {
+    majNomsEducateursEquipe(eq, (actuels[i] || init[i] || {}).educateurs || []);
+    majNoteEquipe(ligne, eq);
+  });
   majTotaux();
+}
+
+/** Noms déjà saisis dans une équipe, sans les normaliser avant la validation. */
+function lireNomsEducateursEquipe(equipe) {
+  return Array.prototype.map.call(equipe.querySelectorAll('.rep-educateur'), function (ligne) {
+    return {
+      prenom: ligne.querySelector('.rep-educateur-prenom').value,
+      nom: ligne.querySelector('.rep-educateur-nom').value
+    };
+  });
+}
+
+/** Aligne les lignes nominatives sur le nombre d'éducateurs annoncé, en conservant la saisie. */
+function majNomsEducateursEquipe(equipe, repli) {
+  const zone = equipe.querySelector('.rep-eq-educateurs-noms');
+  if (!zone) return;
+  const actuels = lireNomsEducateursEquipe(equipe);
+  const init = actuels.length ? actuels : (Array.isArray(repli) ? repli : []);
+  const nombre = parseInt(equipe.querySelector('.rep-eq-educateurs').value, 10);
+  const total = isFinite(nombre) && nombre > 0 ? nombre : 0;
+  let html = total ? '<span class="rep-educateurs-titre">Éducateurs accompagnants</span>' : '';
+  for (let i = 0; i < total; i++) {
+    const personne = init[i] || {};
+    html += '<div class="rep-educateur">' +
+      '<span>Éducateur ' + (i + 1) + '</span>' +
+      '<label>Prénom <input type="text" class="rep-educateur-prenom" autocomplete="given-name" maxlength="80" value="' + echapper(personne.prenom || '') + '"></label>' +
+      '<label>Nom <input type="text" class="rep-educateur-nom" autocomplete="family-name" maxlength="80" value="' + echapper(personne.nom || '') + '"></label>' +
+    '</div>';
+  }
+  zone.innerHTML = html;
 }
 
 /** Note FFR d'UNE équipe : au minimum → recommandation DOUCE (jamais bloquante) ; sous le minimum
@@ -481,7 +530,14 @@ function brancherEvenements() {
     if (ligne.querySelector('.rep-cat-case').checked) majDetailEquipes(ligne);
   });
   restaurerCommandeInitiale();
+  majAffichageDeplacementMixte();
   majMontantTotal();
+}
+
+function majAffichageDeplacementMixte() {
+  const choisi = document.querySelector('input[name="mode_deplacement"]:checked');
+  const detail = document.querySelector('.rep-deplacement-mixte');
+  if (detail) detail.hidden = !choisi || choisi.value !== 'mixte';
 }
 
 function onClicReponse(e) {
@@ -506,6 +562,13 @@ function onClicReponse(e) {
 
 /** Coche/décoche une catégorie : montre/masque son champ « nombre d'équipes ». */
 function onChangeReponse(e) {
+  if (e.target.name === 'mode_deplacement') {
+    annulerRecapitulatif();
+    majAffichageDeplacementMixte();
+    const erreur = document.querySelector('.rep-deplacement-erreur');
+    if (erreur) erreur.textContent = '';
+    return;
+  }
   const tous = e.target.closest('.rep-prestation-tous');
   if (tous) {
     annulerRecapitulatif();
@@ -536,6 +599,10 @@ function onChangeReponse(e) {
 
 /** Validation EN DIRECT du nombre d'équipes vs le maximum de la catégorie. */
 function onInputReponse(e) {
+  if (e.target.closest('#rep-equipes-groupees, .rep-educateur-prenom, .rep-educateur-nom')) {
+    annulerRecapitulatif();
+    return;
+  }
   const quantite = e.target.closest('.rep-prestation-quantite');
   if (quantite) {
     annulerRecapitulatif();
@@ -554,6 +621,7 @@ function onInputReponse(e) {
   if (eqInput) {
     annulerRecapitulatif();
     const ligne = eqInput.closest('.rep-cat');
+    if (eqInput.classList.contains('rep-eq-educateurs')) majNomsEducateursEquipe(eqInput.closest('.rep-equipe'));
     majNoteEquipe(ligne, eqInput.closest('.rep-equipe'));
     majTotaux();
   }
@@ -609,7 +677,13 @@ async function onConfirmerPresence(e) {
       let ed = parseInt(eq.querySelector('.rep-eq-educateurs').value, 10);
       if (!isFinite(ed) || ed < 0) ed = 0;
       if (!isFinite(j) || j < 1 || (isFinite(effMin) && j < effMin)) { detailValide = false; }
-      eqs.push({ j: j, e: ed });
+      const educateurs = lireNomsEducateursEquipe(eq).map(function (personne) {
+        return { prenom: txt(personne.prenom), nom: txt(personne.nom) };
+      });
+      if (educateurs.length !== ed || educateurs.some(function (personne) { return !personne.prenom || !personne.nom; })) {
+        detailValide = false;
+      }
+      eqs.push({ j: j, e: ed, educateurs: educateurs });
       if (isFinite(j)) totalJoueurs += j;
       totalEducateurs += ed;
     });
@@ -617,10 +691,29 @@ async function onConfirmerPresence(e) {
     detail[nomCat] = eqs;
   });
   if (!detailValide) {
-    msg.textContent = '⚠️ Indiquez les joueurs de chaque équipe (minimum FFR respecté).';
+    msg.textContent = '⚠️ Indiquez les joueurs ainsi que le prénom et le nom de chaque éducateur accompagnant.';
     msg.classList.add('ko');
     return;
   }
+
+  const mode = document.querySelector('input[name="mode_deplacement"]:checked');
+  const erreurDeplacement = document.querySelector('.rep-deplacement-erreur');
+  if (!mode) {
+    if (erreurDeplacement) erreurDeplacement.textContent = 'Choisissez le mode de déplacement du club.';
+    msg.textContent = '⚠️ Indiquez comment votre club se rendra au tournoi.';
+    msg.classList.add('ko');
+    return;
+  }
+  const champGroupees = document.getElementById('rep-equipes-groupees');
+  const brutGroupees = txt(champGroupees && champGroupees.value);
+  const equipesGroupees = brutGroupees === '' ? '' : parseInt(brutGroupees, 10);
+  if (mode.value === 'mixte' && brutGroupees !== '' && (!/^\d+$/.test(brutGroupees) || equipesGroupees > nombreEquipesReponse())) {
+    if (erreurDeplacement) erreurDeplacement.textContent = 'Le nombre d’équipes en groupe doit être compris entre 0 et ' + nombreEquipesReponse() + '.';
+    msg.textContent = '⚠️ Corrigez le nombre d’équipes voyageant en groupe.';
+    msg.classList.add('ko');
+    return;
+  }
+  if (erreurDeplacement) erreurDeplacement.textContent = '';
 
   const commandeLue = lireCommandeRestauration(false);
   if (commandeLue.error) {
@@ -634,7 +727,8 @@ async function onConfirmerPresence(e) {
     (repDonnees && repDonnees.paiement) || {});
   confirmationEnAttente = {
     parCat: parCat, detail: detail, totalJoueurs: totalJoueurs, totalEducateurs: totalEducateurs,
-    commande: commandeLue.commande, calcul: calcul
+    commande: commandeLue.commande, calcul: calcul, modeDeplacement: mode.value,
+    equipesGroupees: mode.value === 'mixte' ? equipesGroupees : (mode.value === 'groupe' ? nbEquipes : 0)
   };
   afficherRecapitulatifConfirmation(confirmationEnAttente);
 }
@@ -647,6 +741,7 @@ function afficherRecapitulatifConfirmation(etat) {
     return '<li><strong>' + echapper(cat) + '</strong> : ' + etat.parCat[cat] + ' équipe(s)</li>';
   }).join('');
   const lignes = [];
+  const modes = { groupe: 'bus ou covoiturage organisé', libre: 'chaque famille par ses propres moyens', mixte: 'un peu des deux' };
   if (etat.calcul.inscription) lignes.push('<li>Frais d\'inscription : <strong>' + echapper(eurosDepuisCentimes(etat.calcul.inscription)) + '</strong></li>');
   if (etat.calcul.repas) lignes.push('<li>Repas : ' + etat.calcul.repasQuantite + ' × ' +
     echapper(eurosDepuisCentimes(prixEnCentimes(repDonnees.paiement.repas_prix_personne))) +
@@ -657,6 +752,8 @@ function afficherRecapitulatifConfirmation(etat) {
   recap.innerHTML = '<section class="rep-recap"><h2>Vérifiez votre confirmation</h2>' +
     '<p>Vous allez confirmer les éléments suivants :</p><ul>' + equipes + '</ul>' +
     '<p><strong>' + etat.totalJoueurs + ' joueurs</strong> et <strong>' + etat.totalEducateurs + ' éducateurs</strong>.</p>' +
+    '<p><strong>Déplacement :</strong> ' + echapper(modes[etat.modeDeplacement] || '') +
+      (etat.modeDeplacement === 'mixte' && etat.equipesGroupees !== '' ? ' (' + etat.equipesGroupees + ' équipe(s) en groupe)' : '') + '.</p>' +
     (lignes.length ? '<ul class="rep-recap-paiement">' + lignes.join('') + '</ul>' : '<p>Aucun montant supplémentaire dû.</p>') +
     '<p class="rep-recap-total">Total à payer : <strong>' + echapper(eurosDepuisCentimes(etat.calcul.total)) + '</strong></p>' +
     '<div class="rep-actions"><button type="button" class="rep-btn rep-btn-neutre" id="btn-modifier-reponse">Modifier</button>' +
@@ -691,6 +788,8 @@ async function envoyerPresenceConfirmee(bouton) {
       nb_equipes_par_categorie: JSON.stringify(etat.parCat),
       detail_effectifs: JSON.stringify(etat.detail),
       nb_joueurs_total: etat.totalJoueurs,
+      mode_deplacement: etat.modeDeplacement,
+      nb_equipes_groupees: etat.equipesGroupees,
       commande_restauration: JSON.stringify(etat.commande)
     });
     const suiviEmail = texteSuiviConfirmation(resultat, true);

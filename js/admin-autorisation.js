@@ -315,6 +315,9 @@ function rendreFeuilleAutorisation(dossier) {
  */
 function invaliderAutorisationAffichee() {
   autorisationComptes = null;                       // même raison qu'en B2-0.5 : ils décrivent la feuille effacée
+  estimationPublicCourante = null;
+  autorisationEstimationErreur = '';
+  afficherEstimationPublicAutorisation();
   const zoneSaisie = document.getElementById('autorisation-saisie');
   const zoneFeuille = document.getElementById('autorisation-feuille');
   if (zoneFeuille) {
@@ -478,9 +481,74 @@ var autorisationComptes = null;
  *  conséquence est bornée et ne touche AUCUNE valeur `org_*` : aucune action du crochet n'en écrit
  *  (voir B2-0.5 §3), seule la liste des catégories des récompenses pourrait être d'un tour en retard. */
 var autorisationServeurPorteConfig = null;
+var autorisationEstimationErreur = '';
 /* ⛔ Borne dure du rattrapage : on ne boucle jamais sans fin, même si une écriture arrive à
    chaque tour. Au-delà, la dette RESTE et sera reprise à la prochaine ouverture. */
 var AUTORISATION_TOURS_MAX = 5;
+
+function libelleDeplacementPublic(mode) {
+  return { groupe: 'Transport groupé', libre: 'Familles autonomes', mixte: 'Déplacement mixte' }[mode] || 'Non renseigné';
+}
+
+function rendreEstimationPublicAutorisation(estimation, erreur) {
+  if (!estimation || estimation.contrat !== 'estimation-public-1') {
+    return '<div class="autorisation-public-etat"' + (erreur ? ' role="alert"' : '') + '>' +
+      (erreur ? '⚠️ Estimation indisponible : ' + echapper(erreur) : 'Estimation en cours de chargement…') + '</div>';
+  }
+  var renseignes = Number(estimation.renseignes || 0);
+  var participants = Number(estimation.participants || 0);
+  var incomplets = Math.max(0, participants - renseignes);
+  var avertissement = erreur
+    ? '<div class="autorisation-public-alerte" role="alert">⚠️ Actualisation impossible : dernière estimation connue affichée.</div>'
+    : (incomplets
+      ? '<div class="autorisation-public-alerte"><strong>Estimation encore incomplète.</strong> ' + incomplets +
+        ' club' + (incomplets > 1 ? 's participants n’ont' : ' participant n’a') +
+        ' pas encore fourni un déplacement exploitable. ' + (incomplets > 1 ? 'Ils ne sont' : 'Il n’est') +
+        ' pas ajouté au chiffre au hasard.</div>'
+      : '');
+  var cartes = '<div class="autorisation-public-cartes">' +
+    '<div class="est-principale"><span>Estimation centrale</span><strong>' + Number(estimation.centrale || 0) +
+      '</strong><small>spectateurs, hors joueurs et éducateurs</small></div>' +
+    '<div><span>Hypothèse basse</span><strong>' + Number(estimation.basse || 0) + '</strong></div>' +
+    '<div><span>Hypothèse haute</span><strong>' + Number(estimation.haute || 0) + '</strong></div>' +
+    '<div><span>Couverture</span><strong>' + renseignes + '/' + participants + '</strong><small>clubs invités répondants</small></div>' +
+    '</div>';
+  var methode = '<details class="autorisation-public-methode"><summary>Comprendre le barème et la méthode de calcul</summary>' +
+    '<div class="autorisation-public-methode-corps"><h4>Barème par joueur engagé</h4>' +
+    '<div class="autorisation-public-bareme"><div><strong>Transport groupé</strong><span>0,25 · 0,40 · 0,60</span></div>' +
+    '<div><strong>Familles autonomes</strong><span>0,60 · 1,10 · 1,80</span></div>' +
+    '<div><strong>Déplacement mixte</strong><span>0,50 · 0,80 · 1,20</span></div></div>' +
+    '<h4>Ajustements appliqués</h4><ul><li>U6 et U8 : coefficient majoré de 20 %.</li>' +
+    '<li>U12 : coefficient réduit de 20 %.</li><li>Le nombre d’équipes groupées affine le mode mixte.</li>' +
+    '<li>Les joueurs et les éducateurs ne sont pas comptés dans le public.</li></ul>' +
+    '<h4>Construction de la fourchette</h4><p>Le calcul est fait club par club. Les estimations centrales sont additionnées ; ' +
+    'les écarts bas et hauts sont combinés statistiquement, sans additionner mécaniquement tous les scénarios extrêmes.</p>' +
+    '<p class="autorisation-public-note"><strong>Périmètre :</strong> clubs invités ayant répondu. Le public du club organisateur ' +
+    'n’est pas encore inclus. Sans distance calculée, « familles autonomes » conserve volontairement une fourchette large.</p></div></details>';
+  var contributions = Array.isArray(estimation.contributions) ? estimation.contributions : [];
+  var tableau = '';
+  if (contributions.length) {
+    tableau = '<div class="autorisation-public-tableau"><h4>Contribution des réponses reçues</h4><div class="table-scroll"><table>' +
+      '<thead><tr><th scope="col">Club</th><th scope="col">Déplacement</th><th scope="col">Joueurs</th>' +
+      '<th scope="col">Centrale</th><th scope="col">Haute</th></tr></thead><tbody>' +
+      contributions.map(function (c) { return '<tr><th scope="row">' + echapper(c.club || 'Club') + '</th><td>' +
+        echapper(libelleDeplacementPublic(c.mode)) + '</td><td>' + Number(c.joueurs || 0) + '</td><td>' +
+        Number(c.centrale || 0) + '</td><td><strong>' + Number(c.haute || 0) + '</strong></td></tr>'; }).join('') +
+      '</tbody></table></div></div>';
+  } else {
+    tableau = '<p class="autorisation-public-vide">Aucune réponse exploitable pour calculer une estimation.</p>';
+  }
+  return avertissement + cartes + methode + tableau +
+    '<p class="autorisation-public-limite">Estimation indicative : elle ne remplace pas le dimensionnement du dispositif de secours.</p>';
+}
+
+function afficherEstimationPublicAutorisation() {
+  var zone = document.getElementById('autorisation-public-attendu');
+  if (!zone) return;
+  zone.innerHTML = rendreEstimationPublicAutorisation(
+    typeof estimationPublicCourante === 'undefined' ? null : estimationPublicCourante,
+    autorisationEstimationErreur);
+}
 
 /** Efface la FEUILLE affichée — ⛔ jamais le formulaire de saisie : aucune action du crochet
  *  n'écrit de champ `org_*`, et l'effacer perdrait une saisie en cours (voir B2-0.5 §3).
@@ -491,6 +559,9 @@ function invaliderFeuilleAutorisationAffichee() {
   //   instant. Les garder alimenterait le PDF avec des nombres que la feuille ne montre plus —
   //   exactement le mensonge silencieux que l'invalidation existe pour empêcher.
   autorisationComptes = null;
+  estimationPublicCourante = null;
+  autorisationEstimationErreur = '';
+  afficherEstimationPublicAutorisation();
   const zoneFeuille = document.getElementById('autorisation-feuille');
   if (zoneFeuille) {
     zoneFeuille.innerHTML = '<div class="ffr-bloc ffr-neutre">Feuille de report en cours de ' +
@@ -683,6 +754,7 @@ async function majAutorisation(opt) {
   const zoneSaisie = document.getElementById('autorisation-saisie');
   const zoneFeuille = document.getElementById('autorisation-feuille');
   if (!zoneSaisie || !zoneFeuille) return { ok: false, motif: 'zones-absentes' };
+  afficherEstimationPublicAutorisation();
   // ⭐ Une réponse est DÉPASSÉE si une écriture est arrivée depuis le départ de la requête.
   //   ⛔ Sans `revisionCible` (appels historiques : initAdmin, reset, enregistrement du
   //   dossier), ce contrôle est inactif — le comportement d'avant est intact.
@@ -732,6 +804,9 @@ async function majAutorisation(opt) {
     // ⭐ Les comptes du serveur : ils dispensent le PDF de la lecture `listerClubsInvites`.
     //   ⛔ Absents (backend d'avant), ils restent `null` — le PDF reprend le chemin d'avant.
     autorisationComptes = comptesAutorisationValides(rep && rep.comptes);
+    estimationPublicCourante = (rep && rep.estimation_public) || null;
+    autorisationEstimationErreur = '';
+    afficherEstimationPublicAutorisation();
     // ⭐ La config voyage avec la feuille depuis ce lot : le rattrapage d'obsolescence n'a plus à
     //   émettre un `getConfigAdmin` séparé. ⛔ Absente (backend d'avant) : rien n'est touché, et
     //   l'appelant garde sa relecture — voir `majAutorisationSiObsolete`.
@@ -743,6 +818,8 @@ async function majAutorisation(opt) {
     if (depassee()) return { ok: false, motif: 'revision-depassee' };
     reseauOk = false;
     autorisationComptes = null;
+    autorisationEstimationErreur = String((e && e.message) || 'erreur réseau').replace(/\.\s*$/, '');
+    afficherEstimationPublicAutorisation();
     // ⛔ On ne dit plus « connecte-toi avec la clé admin » quoi qu'il arrive : c'était la seule
     //   explication proposée, et elle était FAUSSE dans le cas le plus fréquent — un serveur lent
     //   ou muet. Le motif réel est nommé, et « Réessayer » relance la lecture sans recharger.

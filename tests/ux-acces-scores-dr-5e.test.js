@@ -34,7 +34,7 @@
  *  réputé accessible, mais 🔬 138 tabulations étaient nécessaires pour l'atteindre sur
  *  téléphone (mesure de la revue ; 72 depuis le fil d'étapes au recontrôle du 2026-09-12, page
  *  ouverte sans clé admin — le chiffre dépend de l'état du classeur, le défaut non), parce que
- *  les TREIZE cartes du carrousel restaient toutes dans l'ordre de tabulation alors qu'une
+ *  les QUATORZE cartes du carrousel restaient toutes dans l'ordre de tabulation alors qu'une
  *  seule est visible. Sept promesses de plus :
  *   ⑭  exactement UNE carte est active, focalisable et annoncée ;
  *   ⑮  toutes les cartes inactives sortent du parcours de focus (`inert`) ;
@@ -486,11 +486,11 @@ function section1() {
     !!ligneEcr && /libre:\s*true/.test(ligneEcr[0]),
     'l\'accès serait verrouillé sur ordinateur');
 
-  /* La carte Dossier est fusionnée dans Inviter ; Suivi des clubs ajoute ensuite une étape dédiée. */
+  /* La carte Dossier est fusionnée dans Inviter ; Suivi des clubs et DPS ont chacun leur étape. */
   const nbAsst = (asst.match(/\{\s*id:\s*'[^']+',\s*titre:/g) || []).length;
   const nbEcr = (ecr.match(/\{\s*id:\s*'[^']+',\s*titre:/g) || []).length;
-  verifier('1.7', 'le suivi des clubs porte le parcours à 13 cartes et 14 écrans',
-    nbAsst === 13 && nbEcr === 14,
+  verifier('1.7', 'le suivi des clubs et le DPS portent le parcours à 14 cartes et 15 écrans',
+    nbAsst === 14 && nbEcr === 15,
     'compté ' + nbAsst + ' cartes et ' + nbEcr + ' écrans — la structure guidée a bougé');
 
   /* Le bloc est rempli à l'ouverture, avant que le mode guidé ne déplace les blocs. */
@@ -717,12 +717,12 @@ function section9() {
 }
 
 /* ========================================================================== */
-/*  BANC DU CARROUSEL — treize cartes, un focus, et le VRAI verrou.            */
+/*  BANC DU CARROUSEL — quatorze cartes, un focus, et le VRAI verrou.         */
 /* ========================================================================== */
 
 /**
- * ⭐ POURQUOI CE SECOND BANC. Le carrousel mobile garde ses TREIZE cartes dans le document en
- * même temps : il ne fait que faire glisser la piste. Les douze cartes hors écran gardaient
+ * ⭐ POURQUOI CE SECOND BANC. Le carrousel mobile garde ses QUATORZE cartes dans le document en
+ * même temps : il ne fait que faire glisser la piste. Les treize cartes hors écran gardaient
  * donc leurs commandes dans l'ordre de tabulation — 🔬 138 tabulations mesurées le 2026-09-12
  * pour atteindre « Ouvrir la table de marque ». Le lien du lot était focalisable, donc déclaré
  * accessible, sans l'être pour une personne réelle. Ce banc joue le VRAI `allerA` sur un DOM
