@@ -92,7 +92,7 @@ const CLASSEMENT = {
   '#bouton-repartir': 'local', '#carte-zoom-moins': 'local', '#carte-zoom-plus': 'local',
   '#carte-zoom-ajuste': 'local', '#bouton-valider-placement': 'local', '.repart-chip-pivot': 'local',
   // Le plan AU CLAVIER (2ᵉ passage) : chaque mini-terrain, posé ou mis de côté, est un bouton.
-  '.carte-tuile-g': 'local', '.repart-chip': 'local',
+  '.carte-tuile-g': 'local', '.carte-table-g': 'local', '.repart-chip': 'local',
   // Les DEUX seules actions serveur de l'écran
   '#bouton-enregistrer-terrains': 'action', '#bouton-appliquer-repartition': 'action'
 };
@@ -218,6 +218,8 @@ await essai('Z.clavier', async () => {
   const b = await bancCompte();
   await b.repartir();
   const id = b.tuileNonPleine();
+  await zero(b, 'flèche droite sur une table de marque', () =>
+    b.touche(b.doc.querySelector('#repartition-carte g[data-table-field]'), 'ArrowRight'));
   await zero(b, 'flèche droite sur un mini-terrain posé', () => b.touche(b.tuileEl(id), 'ArrowRight'));
   await zero(b, 'Maj + flèche bas', () => b.touche(b.tuileEl(id), 'ArrowDown', { shiftKey: true }));
   await zero(b, 'flèche gauche', () => b.touche(b.tuileEl(id), 'ArrowLeft'));

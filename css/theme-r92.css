@@ -1540,6 +1540,10 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 .theme-clair .carte-tuile { font:700 11px Inter,system-ui,sans-serif; fill:#fff; text-anchor:middle; letter-spacing:.02em; }
 .theme-clair .carte-table { fill:#1f2933; stroke:#fff; stroke-width:1.2; stroke-opacity:.75; }
 .theme-clair .carte-tm { font:700 10px Inter,system-ui,sans-serif; fill:#fff; text-anchor:middle; }
+.carte-table-g { cursor:grab; }
+.carte-table-g:active { cursor:grabbing; }
+.carte-table-g .carte-tm { pointer-events:none; }
+.theme-clair .carte-table-g:hover .carte-table,.theme-clair .carte-table-g:focus .carte-table { stroke:var(--cv-action); stroke-width:2.5; stroke-opacity:1; }
 .theme-clair .carte-echelle line { stroke:var(--cv-secondaire); stroke-width:1; }
 .theme-clair .carte-echelle text { font:400 12px Inter,system-ui,sans-serif; fill:var(--cv-secondaire); }
 /* Le mini-terrain survolé s'épaissit : on sait ce qu'on va mettre de côté avant de cliquer. */
@@ -1573,6 +1577,37 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 .theme-clair .carte-apercu { fill:#1d9e75; fill-opacity:.35; stroke:#0f6e56; stroke-width:2; }
 .theme-clair .carte-apercu[data-refus="oui"] { fill:#e24b4a; fill-opacity:.3; stroke:#a32d2d; }
 .theme-clair .repart-apercu.est-etiquette { transform:translate(14px,14px); }
+
+/* Les sorties bénévoles restent sous le plan qu'elles décrivent. Leur état « prêt » dépend de
+   l'empreinte du placement validé : une cote modifiée désactive immédiatement les actions. */
+.theme-clair .terrains-sorties { margin-top:20px; padding:18px; border:1px solid var(--cv-bordure); border-radius:14px; background:#f8fbfe; }
+.theme-clair .terrains-sorties-entete { display:flex; flex-wrap:wrap; align-items:flex-start; justify-content:space-between; gap:12px; }
+.theme-clair .terrains-sorties-surtitre { margin:0 0 4px; color:var(--cv-action); font-size:11px; font-weight:750; letter-spacing:.08em; text-transform:uppercase; }
+.theme-clair .terrains-sorties h4 { margin:0; color:var(--cv-texte); font-size:19px; }
+.theme-clair .terrains-sorties-etat { display:inline-flex; align-items:center; min-height:30px; padding:5px 10px; border-radius:999px; background:#f3e7e5; color:#8f2d25; font-size:12px; font-weight:700; }
+.theme-clair .terrains-sorties-etat.est-pret { background:#e3f5ed; color:#0f6e56; }
+.theme-clair .terrains-sorties-intro { max-width:760px; margin:12px 0 16px; color:var(--cv-secondaire); font-size:13px; line-height:1.55; }
+.theme-clair .terrains-sorties-reglages { display:grid; grid-template-columns:repeat(2,minmax(180px,280px)); gap:12px; }
+.theme-clair .terrains-sorties-reglages label { color:var(--cv-secondaire); font-size:12px; font-weight:650; }
+.theme-clair .terrains-sorties-reglages select { display:block; width:100%; margin-top:5px; }
+.theme-clair .terrains-sorties-actions { display:flex; flex-wrap:wrap; align-items:center; gap:9px; margin-top:16px; }
+.theme-clair .terrains-sorties-actions .message-form { flex:1 1 240px; min-width:0; }
+.terrains-pdf-dialogue { width:min(94vw,1000px); height:min(90vh,780px); padding:0; border:0; border-radius:14px; box-shadow:0 24px 70px rgba(4,18,33,.3); }
+.terrains-pdf-dialogue::backdrop { background:rgba(4,18,33,.62); }
+.theme-clair .terrains-pdf-dialogue-entete { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:12px 16px; border-bottom:1px solid var(--cv-bordure); background:#fff; }
+.theme-clair .terrains-pdf-dialogue-entete h4 { margin:0; font-size:16px; }
+.terrains-pdf-dialogue iframe { display:block; width:100%; height:calc(100% - 58px); border:0; background:#e9eef2; }
+
+@media (max-width:640px) {
+  .theme-clair .terrains-sorties { padding:15px; }
+  .theme-clair .terrains-sorties-reglages { grid-template-columns:1fr; }
+  .theme-clair .terrains-sorties-actions .bouton { flex:1 1 100%; }
+  .terrains-pdf-dialogue { width:100vw; height:100vh; max-width:none; max-height:none; border-radius:0; }
+}
+
+@media (prefers-reduced-motion:reduce) {
+  .terrains-pdf-dialogue { scroll-behavior:auto; }
+}
 
 /* L'estimation DPS réutilise la lecture déjà nécessaire à la demande d'autorisation : aucun
    appel n'est déclenché par l'ouverture du détail ni par le tableau. */

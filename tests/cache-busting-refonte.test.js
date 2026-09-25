@@ -54,9 +54,11 @@ function vrai(valeur, message) { assert.ok(valeur, message); controles++; }
 const VERSION = 'refonte-ciel-verre-20260920';
 const VERSIONS_PROPRES = {
   'css/dossier.css': VERSION + '-participants2',
-  'css/theme-r92.css': VERSION + '-participants2-dps2',
+  'css/theme-r92.css': VERSION + '-participants2-dps2-terrains-pdf2',
   'js/admin-autorisation.js': VERSION + '-participants3-dps1',
   'js/admin-dps.js': VERSION + '-dps2',
+  'js/admin-terrains.js': VERSION + '-terrains-pdf2',
+  'js/admin-terrains-pdf.js': VERSION + '-terrains-pdf2',
   'js/admin-invitations.js': VERSION + '-participants2',
   'js/admin-suivi-clubs.js': VERSION + '-participants2',
   'js/admin.js': VERSION + '-participants3',
@@ -72,7 +74,7 @@ const LIVRES = [
   'js/admin-autorisation.js', 'js/admin-choix-categories.js', 'js/admin-conformite-ffr.js', 'js/admin-dps.js',
   'js/admin-equipes.js', 'js/admin-generation.js', 'js/admin-infos-publication.js',
   'js/admin-reglages.js', 'js/admin-suivi-clubs.js', 'js/admin-tableau-bord.js',
-  'js/admin-terrains.js', 'js/admin.js', 'js/assistant.js', 'js/commun.js', 'js/config.js', 'js/dialog.js',
+  'js/admin-terrains.js', 'js/admin-terrains-pdf.js', 'js/admin.js', 'js/assistant.js', 'js/commun.js', 'js/config.js', 'js/dialog.js',
   'js/dossier.js', 'js/ecrans.js', 'js/invitation.js', 'js/perfs.js', 'js/reponse.js',
   'js/saisie-protegee.js', 'js/saisie.js', 'js/tournoi.js',
 ];

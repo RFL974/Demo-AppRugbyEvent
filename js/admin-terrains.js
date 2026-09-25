@@ -293,8 +293,8 @@ function injecterTerrains() {
   // Répartition automatique (étape 2)
   h += '</section><section class="cv-terrains-plan"><h3 class="terr-titre">Répartition automatique</h3>';
   h += '<p class="note-generation">Répartit les mini-terrains entre catégories <strong>selon le nombre ' +
-       'd\'équipes</strong>, en gardant chaque catégorie groupée et en réservant la table des marques. ' +
-       'Prévisualise la carte, puis applique.</p>';
+       'd\'équipes</strong>, en gardant chaque catégorie groupée. La table de marque reste libre et ' +
+       'se place directement sur la carte. Prévisualise, ajuste, puis applique.</p>';
   h += '<button type="button" class="bouton" id="bouton-repartir">' + svgIcone('terrain') + 'Répartir les terrains</button>';
   // ⭐ La zone d'annonce vit HORS de `#repartition-resultat`, qui est réécrit à chaque geste : un
   //   `aria-live` recréé en même temps que son texte n'est pas annoncé par les lecteurs d'écran.
@@ -485,14 +485,20 @@ function rafraichirIndicesTerrains() {
 }
 
 /* --- Écouteurs délégués posés sur #zone-terrains (voir initAdmin) --- */
-function onZoneTerrainsInput() { recalculerCapacite(); }
+function onZoneTerrainsInput(evenement) {
+  if (evenement && evenement.target.closest && evenement.target.closest('#terrains-sorties')) return;
+  recalculerCapacite();
+  if (typeof invaliderPackTerrains === 'function') invaliderPackTerrains();
+}
 
 function onZoneTerrainsChange(evenement) {
+  if (evenement.target.closest && evenement.target.closest('#terrains-sorties')) return;
   if (evenement.target.classList.contains('dim-plein')) {
     const taille = evenement.target.closest('.dim-ligne').querySelector('.dim-taille');
     if (taille) taille.hidden = evenement.target.checked; // masque L×W si « terrain entier »
   }
   recalculerCapacite();
+  if (typeof invaliderPackTerrains === 'function') invaliderPackTerrains();
 }
 
 function onZoneTerrainsClick(evenement) {
@@ -655,6 +661,9 @@ const PALETTE_CAT = ['#2E8FE0', '#27ae60', '#e67e22', '#8e44ad', '#16a085', '#c0
 
 /* Répartition calculée en attente d'application (null = rien de calculé). */
 let repartitionCalculee = null;
+/* Empreinte du dernier placement explicitement validé. Les sorties bénévoles ne sont disponibles
+   que tant que la géométrie courante porte exactement cette empreinte. */
+let empreintePlacementTerrainsValide = '';
 
 /** Nombre d'équipes par catégorie (d'après les équipes saisies). */
 function equipesParCategorie() {
@@ -730,72 +739,6 @@ function repartitionProportionnelle(total, poids) {
   return base;
 }
 
-/**
- * Position de la table des marques : petite zone (tmL×tmW) placée dans le COULOIR le plus
- * proche du point cible (tX,tY) — donc entre les mini-terrains, sans en supprimer aucun.
- * (ox,oy) = origine de la zone ; renvoie des coordonnées absolues. split = deux tables (partage).
- */
-function positionTableMarques(g, m, zoneL, zoneW, tmL, tmW, ox, oy, tX, tY, split) {
-  const cxs = []; for (let i = 0; i < g.cols - 1; i++) cxs.push(i * (g.a + m) + g.a + m / 2); // couloirs verticaux
-  const cys = []; for (let j = 0; j < g.rows - 1; j++) cys.push(j * (g.b + m) + g.b + m / 2); // couloirs horizontaux
-  const proche = function (arr, cible, defaut) {
-    return arr.length ? arr.reduce(function (p, c) { return Math.abs(c - cible) < Math.abs(p - cible) ? c : p; }) : defaut;
-  };
-  const cx = proche(cxs, tX, zoneL / 2);
-  const cy = proche(cys, tY, zoneW / 2);
-  const x = Math.max(0, Math.min(cx - tmL / 2, zoneL - tmL)); // reste dans la zone
-  const y = Math.max(0, Math.min(cy - tmW / 2, zoneW - tmW));
-  return { x: ox + x, y: oy + y, w: tmL, h: tmW, split: !!split };
-}
-
-/**
- * Profondeur d'en-but utilisable derrière la ligne de but d'un GRAND terrain (m).
- *
- * ⭐ DÉDUITE, plus saisie : elle vaut le plus grand en-but des catégories effectivement posées
- * sur ce terrain. L'organisateur déclare l'en-but par CATÉGORIE (c'est la donnée qui manquait au
- * gabarit des mini-terrains) ; ce terrain-là en réserve donc au moins autant derrière sa propre
- * ligne de but. Aucune saisie en double.
- * ⚠️ APPROXIMATION ASSUMÉE, et c'est sa limite : l'en-but d'une catégorie est celui de son
- * mini-terrain, qui vit DANS la surface de jeu du grand terrain. Rien ne garantit qu'il reste
- * autant d'espace au-delà des poteaux du grand terrain. Elle ne sert qu'à décider où poser la
- * TABLE DE MARQUE quand la surface de jeu est pleine — jamais à placer un mini-terrain.
- * @param {{zones:Array}} fp le grand terrain POSÉ (pas le field brut : il faut ses mini-terrains)
- */
-function profondeurEnBut(fp) {
-  let max = 0;
-  ((fp || {}).zones || []).forEach(function (z) {
-    (z.tiles || []).forEach(function (t) { const e = parseFloat(t.eb) || 0; if (e > max) max = e; });
-  });
-  return max;
-}
-
-/**
- * Pose la table de marque dans l'EN-BUT, DERRIÈRE une ligne de but. Le grand terrain est déclaré
- * d'une ligne de poteaux à l'autre : il reste de la place de part et d'autre (bandes de
- * profondeur `enBut` sur toute la largeur), invisible pour le calcul tant qu'on ne regarde que
- * le rectangle de jeu — d'où le « pas de place » alors qu'il en reste dans la réalité.
- * L'en-but n'est pas un couloir de circulation mais de l'espace DÉDIÉ : le couloir des
- * mini-terrains ne s'y applique pas (ils sont tous devant la ligne de but). La table est posée
- * au fond de la bande (côté ligne de ballon mort), du côté le plus proche du point visé.
- * @return {?{x,y,w,h,enBut:boolean}} coordonnées dans le repère du terrain (x<0 ou x>L), ou null.
- */
-function placerDansEnBut(fp, tmL, tmW, cx, cy) {
-  const field = (fp || {}).field || {};
-  const e = profondeurEnBut(fp);
-  if (!(e > 0) || tmL <= 0 || tmW <= 0) return null;
-  let best = null, bestD = Infinity;
-  [[tmL, tmW], [tmW, tmL]].forEach(function (o) {
-    const w = o[0], h = o[1];
-    if (w > e + 0.001 || h > field.W + 0.001) return;        // ne tient pas dans la bande
-    const y = Math.max(0, Math.min(cy - h / 2, field.W - h)); // au plus près, sans sortir en largeur
-    [-e, field.L + e - w].forEach(function (x) {              // fond de l'en-but, à gauche puis à droite
-      const d = Math.pow(x + w / 2 - cx, 2) + Math.pow(y + h / 2 - cy, 2);
-      if (d < bestD) { bestD = d; best = { x: x, y: y, w: w, h: h, enBut: true }; }
-    });
-  });
-  return best;
-}
-
 /* --------------------------------------------------------------------------
    Sous-étapes du calcul de répartition (voir l'orchestrateur allouerTerrains).
    Chaque étape est une fonction NOMMÉE ; celles qui posent des mini-terrains
@@ -844,7 +787,7 @@ function attribuerDemisTerrains(normaux, fieldsNormaux, fieldsRestants, m, avert
   if (normaux.length && fieldsRestants > 0) {
     const creneaux = 2 * fieldsRestants;                  // nb de demi-terrains à distribuer
     // Estimation du nb de mini-terrains qu'une catégorie tient sur une MOITIÉ de grand terrain
-    // (moyenne sur les grands terrains restants, table des marques déduite).
+    // (moyenne sur les grands terrains restants).
     function estimDemi(cat) {
       let s = 0;
       fieldsNormaux.forEach(function (f) {
@@ -894,14 +837,14 @@ function construireFilesAttribution(plein, normaux) {
 }
 
 /** Pose une catégorie SEULE sur un grand terrain : packing des mini-terrains
- *  (numérotés via ctx.numero) + table des marques dans le couloir central. */
+ *  (numérotés via ctx.numero). */
 function poserTerrainSolo(ctx, f, code, cat, estPlein) {
   if (estPlein) {                                       // U14 : le match occupe tout le terrain
     ctx.numero++; const id = String(ctx.numero);
     ctx.parCategorie[cat.name].push(id);
     return { field: f, code: code, mode: 'plein', zones: [{ cat: cat.name, color: ctx.couleur[cat.name],
       tiles: [marquerEnBut({ id: id, x: 0, y: 0, w: f.L, h: f.W, label: cat.name + ' · ' + id }, cat.tile)],
-      table: { x: Math.max(0, f.L / 2 - ctx.tmL / 2), y: Math.max(0, f.W - ctx.tmW), w: ctx.tmL, h: ctx.tmW, split: false } }] };
+      table: null }] };
   }
   const rects = packerZone(0, 0, f.L, f.W, cat.tile, ctx.m); // packing à orientations mixtes
   if (rects.length === 0) ctx.avert.push(f.nom + ' : trop petit pour un terrain ' + cat.name + '.');
@@ -912,20 +855,16 @@ function poserTerrainSolo(ctx, f, code, cat, estPlein) {
     tiles.push(marquerEnBut({ id: id, x: r.x, y: r.y, w: r.w, h: r.h, label: id }, cat.tile));
     ctx.parCategorie[cat.name].push(id);
   });
-  // Table des marques : petite zone posée dans le couloir central (grille de référence).
-  const gRef = grille(f.L, f.W, cat.tile, ctx.m);
-  const table = rects.length ? positionTableMarques(gRef, ctx.m, f.L, f.W, ctx.tmL, ctx.tmW, 0, 0, f.L / 2, f.W / 2, false) : null;
   return { field: f, code: code, mode: 'solo', zones: [{ cat: cat.name, color: ctx.couleur[cat.name],
-    tiles: tiles, table: table }] };
+    tiles: tiles, table: null }] };
 }
 
 /** Pose DEUX catégories sur un grand terrain SCINDÉ en deux moitiés (coupe
- *  gauche/droite si le terrain est large, haut/bas sinon) : packing par moitié
- *  + une table des marques par moitié, côté séparation centrale. */
+ *  gauche/droite si le terrain est large, haut/bas sinon) : packing par moitié. */
 function poserTerrainScinde(ctx, f, code, cA, cB) {
   const horizontal = f.L >= f.W;                        // terrain large → coupe gauche/droite
   const zones = [];
-  function demi(cat, ox, oy, zL, zW, suff, cote) {
+  function demi(cat, ox, oy, zL, zW) {
     const rects = packerZone(ox, oy, zL, zW, cat.tile, ctx.m); // packing à orientations mixtes
     if (rects.length === 0) ctx.avert.push(f.nom + ' (demi) : trop petit pour ' + cat.name + '.');
     const tiles = [];                                    // tous les mini-terrains sont jouables
@@ -935,21 +874,16 @@ function poserTerrainScinde(ctx, f, code, cA, cB) {
       tiles.push(marquerEnBut({ id: id, x: r.x, y: r.y, w: r.w, h: r.h, label: id }, cat.tile));
       ctx.parCategorie[cat.name].push(id);
     });
-    // Table des marques : petite zone posée côté séparation centrale (→ deux tables face à face).
-    const gRef = grille(zL, zW, cat.tile, ctx.m);
-    const tX = horizontal ? (cote === 'gauche' ? zL : 0) : zL / 2;
-    const tY = horizontal ? zW / 2 : (cote === 'haut' ? zW : 0);
-    const table = rects.length ? positionTableMarques(gRef, ctx.m, zL, zW, ctx.tmL, ctx.tmW, ox, oy, tX, tY, true) : null;
-    zones.push({ cat: cat.name, color: ctx.couleur[cat.name], tiles: tiles, table: table });
+    zones.push({ cat: cat.name, color: ctx.couleur[cat.name], tiles: tiles, table: null });
   }
   if (horizontal) {
     const hL = (f.L - ctx.m) / 2;
-    demi(cA, 0, 0, hL, f.W, 'G', 'gauche');
-    demi(cB, hL + ctx.m, 0, hL, f.W, 'D', 'droite');
+    demi(cA, 0, 0, hL, f.W);
+    demi(cB, hL + ctx.m, 0, hL, f.W);
   } else {
     const hW = (f.W - ctx.m) / 2;
-    demi(cA, 0, 0, f.L, hW, 'H', 'haut');
-    demi(cB, 0, hW + ctx.m, f.L, hW, 'B', 'bas');
+    demi(cA, 0, 0, f.L, hW);
+    demi(cB, 0, hW + ctx.m, f.L, hW);
   }
   return { field: f, code: code, mode: 'split', zones: zones };
 }
@@ -1029,19 +963,16 @@ function mixerEnSecours(ctx, fieldsPlan, normaux) {
       if (fp.mode === 'plein') continue;
       if (fp.zones.length === 1 && fp.zones[0].cat === pire.name) continue; // déjà rempli pour elle
       const occ = [];
-      fp.zones.forEach(function (z) { z.tiles.forEach(function (t) { occ.push(t); }); if (z.table) occ.push(z.table); });
+      fp.zones.forEach(function (z) { z.tiles.forEach(function (t) { occ.push(t); }); });
       const nouv = placerDansLibre(fp.field.L, fp.field.W, occ, pire.tile.l, pire.tile.w, ctx.m, 1);
       if (!nouv.length) continue;
       const r = nouv[0]; ctx.numero++; const id = String(ctx.numero);
-      const tuile = marquerEnBut({ id: id, x: r.x, y: r.y, w: r.w, h: r.h, label: id }, cat.tile);
+      const tuile = marquerEnBut({ id: id, x: r.x, y: r.y, w: r.w, h: r.h, label: id }, pire.tile);
       ctx.parCategorie[pire.name].push(id);
       let zone = fp.zones.find(function (z) { return z.cat === pire.name; });
       if (zone) { zone.tiles.push(tuile); }
-      else {                                              // 2ᵉ catégorie sur ce terrain → sa propre table
-        const tm = placerDansLibre(fp.field.L, fp.field.W, occ.concat([r]), ctx.tmL, ctx.tmW, ctx.m, 1);
-        fp.zones.forEach(function (z) { if (z.table) z.table.split = true; });
-        fp.zones.push({ cat: pire.name, color: ctx.couleur[pire.name], tiles: [tuile],
-          table: tm.length ? { x: tm[0].x, y: tm[0].y, w: ctx.tmL, h: ctx.tmW, split: true } : null });
+      else {
+        fp.zones.push({ cat: pire.name, color: ctx.couleur[pire.name], tiles: [tuile], table: null });
         fp.mode = 'split';
       }
       posee = true; aMixe = true;
@@ -1053,7 +984,7 @@ function mixerEnSecours(ctx, fieldsPlan, normaux) {
 
 /**
  * Calcule la répartition complète : quelle catégorie sur quel grand terrain, avec
- * la position de chaque mini-terrain (pour la carte) et la table des marques.
+ * la position de chaque mini-terrain pour la carte.
  * ORCHESTRATEUR : enchaîne les 5 étapes ci-dessus autour d'un contexte partagé `ctx`.
  * @return { fieldsPlan, parCategorie:{cat:[ids]}, couleur:{cat:hex}, avert:[] }
  */
@@ -1108,7 +1039,7 @@ function allouerTerrains(fields, cats, m, tmL, tmW) {
   const fieldsPropres = [];
   fieldsPlan.forEach(function (fp) {
     fp.zones = fp.zones.filter(function (z) { return z.tiles.length; });
-    if (fp.zones.length === 1 && fp.mode === 'split') { fp.mode = 'solo'; fp.zones[0].table && (fp.zones[0].table.split = false); }
+    if (fp.zones.length === 1 && fp.mode === 'split') fp.mode = 'solo';
     if (fp.zones.length) fieldsPropres.push(fp);
   });
 
@@ -1133,6 +1064,7 @@ function onRepartir() {
 
   const tm = lireTailleTM();
   repartitionCalculee = allouerTerrains(fields, cats, m, tm.l, tm.w);
+  empreintePlacementTerrainsValide = '';
   // Grands terrains déclarés mais non retenus par l'attribution : dessinés VIDES sur la carte,
   // pour servir de cibles au glisser-déposer de l'ajustement manuel.
   const codesVides = construireCodes(fields);
@@ -1143,10 +1075,7 @@ function onRepartir() {
   // Contexte de l'ajustement manuel (mêmes données que le calcul : dimensions, couloir, TM).
   repartitionCalculee.ctxManuel = { cats: cats, m: m, tmL: tm.l, tmW: tm.w };
   repartitionCalculee.misDeCote = [];
-  // Les TABLES DES MARQUES ne sont posées qu'À LA FIN, une fois le placement validé : tant qu'on
-  // déplace des mini-terrains, elles occuperaient de la place et empêcheraient des positions
-  // pourtant légitimes (elles se recalculent de toute façon après chaque changement).
-  retirerTablesMarques(repartitionCalculee);
+  initialiserTablesMarquesLibres(repartitionCalculee);
   // ⭐ Point de passage UNIQUE des identifiants : le calcul les a posés avec un compteur global,
   //   la renumérotation leur donne leur nom définitif « CODE-n ». Sans cet appel, le premier
   //   affichage montrerait des numéros et les suivants des codes.
@@ -1154,79 +1083,46 @@ function onRepartir() {
   afficherRepartition(repartitionCalculee, cats);
 }
 
-/** Retire toutes les tables des marques du plan (elles seront posées à la validation).
- *  `z.table` est nettoyé aussi : le calcul automatique en pose encore, et la table appartient
- *  désormais au GRAND TERRAIN (`fp.table`), plus à une catégorie. */
-function retirerTablesMarques(res) {
+/** Une table par grand terrain, visible immédiatement et indépendante du packing des mini-terrains. */
+function initialiserTablesMarquesLibres(res) {
+  const ctx = res.ctxManuel || {};
+  const tmL = ctx.tmL > 0 ? ctx.tmL : TM_L_DEFAUT;
+  const tmW = ctx.tmW > 0 ? ctx.tmW : TM_W_DEFAUT;
   (res.fieldsPlan || []).forEach(function (fp) {
-    fp.table = null;
     (fp.zones || []).forEach(function (z) { z.table = null; });
+    fp.table = {
+      x: Math.max(0, (fp.field.L - tmL) / 2),
+      y: Math.max(0, (fp.field.W - tmW) / 2),
+      w: Math.min(tmL, fp.field.L),
+      h: Math.min(tmW, fp.field.W)
+    };
   });
   res.tablesPosees = false;
 }
 
-/** Tout ce qui occupe déjà un grand terrain : les mini-terrains et sa table de marque.
- *  Point de passage unique — le placement manuel et la pose des tables voient la même chose. */
+/** Tout ce qui réserve la place d'un mini-terrain. La table, libre, n'entre pas dans ce calcul. */
 function obstaclesDuTerrain(fp) {
   const occ = [];
   (fp.zones || []).forEach(function (z) {
     z.tiles.forEach(function (t) { occ.push(t); });
-    if (z.table) occ.push(z.table);   // héritage du calcul automatique
   });
-  if (fp.table) occ.push(fp.table);
   return occ;
 }
 
-/**
- * Pose les TABLES DES MARQUES une fois le placement des mini-terrains validé : **UNE SEULE par
- * GRAND TERRAIN**, quel que soit le nombre de catégories qui s'y partagent la place. Une table par
- * catégorie était plus sûre contre les erreurs de saisie, mais demandait trop de bénévoles : un
- * grand terrain accueillant de l'U8 et de l'U10 mobilisait deux tables.
- * Elle se pose dans l'espace LIBRE le plus proche du barycentre de TOUS les mini-terrains du grand
- * terrain (couloir respecté), et à défaut dans l'EN-BUT déclaré (derrière une ligne de but) : la
- * surface de jeu peut être pleine alors qu'il reste de la place au-delà des poteaux.
- * Un terrain « plein » (U14) a la sienne sur la ligne de touche, mais À L'EXTÉRIEUR du terrain :
- * le match occupe TOUTE la surface de jeu, la table n'a rien à y faire.
- */
-function poserTablesMarques(res) {
-  const ctx = res.ctxManuel || {};
-  const m = ctx.m || 0, tmL = ctx.tmL || TM_L_DEFAUT, tmW = ctx.tmW || TM_W_DEFAUT;
-  const manquantes = [];
-  const sansEnBut = [];   // terrains sans place ET sans en-but déclaré : le message dit quoi faire
-  (res.fieldsPlan || []).forEach(function (fp) {
-    fp.table = null;
-    (fp.zones || []).forEach(function (z) { z.table = null; }); // une seule table, portée par le terrain
-    const tuiles = [];
-    (fp.zones || []).forEach(function (z) { z.tiles.forEach(function (t) { tuiles.push(t); }); });
-    if (!tuiles.length) return;                                 // grand terrain non utilisé
-
-    if (fp.mode === 'plein') {
-      // Le match occupe le grand terrain ENTIER : la table se met le long de la ligne de touche,
-      // mais DEHORS (y = W, donc au-delà de la touche) — à mi-longueur pour tout voir.
-      fp.table = { x: Math.max(0, fp.field.L / 2 - tmL / 2), y: fp.field.W,
-                   w: tmL, h: tmW, horsTerrain: true };
-      return;
-    }
-    // Barycentre de TOUS les mini-terrains du grand terrain : la table est au centre de gravité
-    // de ce qu'elle doit surveiller, toutes catégories confondues.
-    let sx = 0, sy = 0;
-    tuiles.forEach(function (t) { sx += t.x + t.w / 2; sy += t.y + t.h / 2; });
-    const cx = sx / tuiles.length, cy = sy / tuiles.length;
-    const place = placerPresDe(fp.field.L, fp.field.W, tuiles, tmL, tmW, m, cx, cy);
-    if (place) { fp.table = { x: place.x, y: place.y, w: place.w, h: place.h }; return; }
-    // Plus un mètre carré entre les deux lignes de but : on regarde DERRIÈRE, dans l'en-but.
-    const dansEnBut = placerDansEnBut(fp, tmL, tmW, cx, cy);
-    if (dansEnBut) { fp.table = dansEnBut; return; }
-    manquantes.push(fp.field.nom);
-    if (!profondeurEnBut(fp)) sansEnBut.push(fp.field.nom);
-  });
-  res.tablesPosees = true;
-  res.tablesManquantes = manquantes;
-  res.tablesSansEnBut = sansEnBut;
+/** Une modification du plan rend la validation obsolète sans déplacer la table choisie. */
+function invaliderPlacementTerrains(res) {
+  if (!res) return;
+  res.tablesPosees = false;
+  empreintePlacementTerrainsValide = '';
+  if (typeof invaliderPackTerrains === 'function') invaliderPackTerrains();
 }
 
 /** Affiche le résumé + la carte + le bouton « Appliquer ». */
 function afficherRepartition(res, cats) {
+  if (empreintePlacementTerrainsValide && typeof empreintePackTerrains === 'function' &&
+      empreintePackTerrains(res) !== empreintePlacementTerrainsValide) {
+    empreintePlacementTerrainsValide = '';
+  }
   const teams = equipesParCategorie();
   let h = '<h3 class="terr-titre">Résultat de la répartition</h3>';
 
@@ -1250,10 +1146,11 @@ function afficherRepartition(res, cats) {
 
   h += '<div class="carte-outils">' +
          '<span class="carte-outils-titre">Plan du site</span>' +
-         '<span class="carte-aide">Glissez la <strong>plaque de nom</strong> pour déplacer un terrain, la poignée <strong>⟲</strong> pour l’orienter (pas de 15°, libre avec Alt), le badge <strong>⟳</strong> d’un mini-terrain pour le faire pivoter sur place.<br>' +
+         '<span class="carte-aide">Glissez la <strong>plaque de nom</strong> pour déplacer un terrain, la poignée <strong>⟲</strong> pour l’orienter (pas de 15°, libre avec Alt), la zone <strong>TM</strong> pour placer librement la table de marque, et le badge <strong>⟳</strong> d’un mini-terrain pour le faire pivoter sur place.<br>' +
            '⌨️ <strong>Au clavier</strong> : <kbd>Tab</kbd> atteint chaque mini-terrain. Posé — <kbd>Entrée</kbd> le met de côté, ' +
            '<kbd>R</kbd> le pivote, les <kbd>flèches</kbd> le déplacent de 1 m (5 m avec <kbd>Maj</kbd>). Mis de côté — ' +
            '<kbd>Entrée</kbd> le pose, <kbd>R</kbd> le pivote, <kbd>T</kbd> change de grand terrain. ' +
+           'Sur une table — les <kbd>flèches</kbd> la déplacent de 1 m (5 m avec <kbd>Maj</kbd>). ' +
            '<kbd>Échap</kbd> annule le dernier geste.</span>' +
          '<span class="carte-zoom">' +
            '<button type="button" class="bouton-icone" id="carte-zoom-moins" aria-label="Réduire le plan">−</button>' +
@@ -1295,42 +1192,29 @@ function afficherRepartition(res, cats) {
       }).join('') + '</div>';
   }
 
-  // ÉTAPE DE VALIDATION : les tables des marques ne sont posées qu'une fois le placement figé —
-  // pendant les déplacements elles occuperaient de la place et bloqueraient des positions valides.
   h += '<div class="ligne-action">';
   if (!res.tablesPosees) {
-    h += '<button type="button" class="bouton" id="bouton-valider-placement">📍 Valider le placement ' +
-         '(pose les tables de marque)</button>';
+    h += '<button type="button" class="bouton" id="bouton-valider-placement">📍 Valider le placement</button>';
   } else {
     h += '<button type="button" class="bouton" id="bouton-appliquer-repartition">✅ Appliquer aux catégories</button>';
   }
   h += '<span id="message-repartition" class="message-form"></span></div>';
 
   if (!res.tablesPosees) {
-    h += '<p class="note-generation">Les <strong>tables de marque</strong> ne sont pas encore posées : ' +
-         'place d\'abord tous les mini-terrains comme tu le souhaites, puis valide — il en sera posé ' +
-         '<strong>une seule par grand terrain</strong>, au centre de ce qu\'elle surveille.</p>';
+    h += '<p class="note-generation">La zone grise <strong>« TM »</strong> représente la table de marque : ' +
+         '<strong>une seule par grand terrain</strong>. Son placement est entièrement libre sur le grand ' +
+         'terrain : fais-la glisser où tu le souhaites. Elle ne réserve aucune place, ne contraint pas ' +
+         'les mini-terrains et n’est jamais placée automatiquement dans un en-but. Valide lorsque le ' +
+         'plan te convient.</p>';
   } else {
     h += '<p class="note-generation">La zone grise <strong>« TM »</strong> = table de marque : ' +
          '<strong>une seule par grand terrain</strong>, même quand deux catégories s\'y partagent la ' +
-         'place (une table par catégorie demandait trop de bénévoles). Elle est posée dans l\'espace ' +
-         'libre le plus proche du centre des mini-terrains qu\'elle couvre, et à défaut ' +
-         '<strong>dans l\'en-but</strong> (bande hachurée derrière la ligne de but) quand la surface ' +
-         'de jeu est pleine. Sur un grand terrain occupé <strong>en entier</strong> (U14), elle se ' +
-         'met <strong>sur la ligne de touche, à l\'extérieur du terrain</strong>. Déplace encore un ' +
-         'terrain et elles seront recalculées.</p>';
-    if ((res.tablesManquantes || []).length) {
-      const sans = res.tablesSansEnBut || [];
-      h += '<div class="repart-avert">⚠️ Pas de place pour la table de marque : ' +
-           echapper(res.tablesManquantes.join(', ')) + '. ' +
-           (sans.length
-             ? 'Aucun <strong>en-but</strong> déclaré pour les catégories posées sur ' +
-               echapper(sans.join(', ')) + ' : renseigne la profondeur d\'en-but de la catégorie dans ' +
-               '« Options avancées » → « Taille de terrain par catégorie », et la table pourra s\'y ' +
-               'poser. Sinon, libère '
-             : 'Même l\'en-but est trop peu profond : agrandis-le s\'il est sous-estimé, libère ') +
-           'un peu d\'espace ou réduis la taille de la table.</div>';
-    }
+         'place. Sa position est celle choisie sur la carte, sans calcul automatique ni réservation ' +
+         'd’espace. Si tu la déplaces, le plan devra simplement être validé de nouveau.</p>';
+  }
+
+  if (typeof htmlSortiesTerrains === 'function') {
+    h += htmlSortiesTerrains(res, empreintePlacementTerrainsValide);
   }
 
   document.getElementById('repartition-resultat').innerHTML = h;
@@ -1342,6 +1226,7 @@ function afficherRepartition(res, cats) {
   //    ceux des pastilles juste au-dessus. Posés sur le CONTENEUR, ils survivent aux redessins
   //    de la seule carte (`redessinerCarte`).
   brancherPlanLibre();
+  if (typeof brancherSortiesTerrains === 'function') brancherSortiesTerrains();
   const zoomBloc = document.querySelector('.carte-zoom');
   if (zoomBloc) zoomBloc.addEventListener('click', function (ev) {
     const b = ev.target.closest('button'); if (!b) return;
@@ -1422,8 +1307,7 @@ function retirerMiniTerrain(iField, id) {
     if (!z.tiles.length) fp.zones.splice(zi, 1);
     if (!fp.zones.length && fp.mode === 'plein') fp.mode = 'solo'; // terrain redevenu libre
     if (fp.zones.length === 1 && fp.mode === 'split') fp.mode = 'solo'; // plus qu'une catégorie
-    // Le plan a changé : les tables déjà posées ne valent plus rien (recalculées à la validation).
-    if (res.tablesPosees) retirerTablesMarques(res);
+    if (res.tablesPosees) invaliderPlacementTerrains(res);
     renumeroterRepartition(res);
     afficherRepartition(res, res.ctxManuel.cats);
     return;
@@ -1558,15 +1442,13 @@ function poserMiniTerrainSur(iField, iChip, xm, ym) {
     }
   }
   res.misDeCote.splice(iChip, 1);
-  // Le plan a changé : d'éventuelles tables déjà posées ne valent plus rien, on repart d'un
-  // placement à valider (elles seront recalculées d'un coup à la validation).
-  if (res.tablesPosees) retirerTablesMarques(res);
+  if (res.tablesPosees) invaliderPlacementTerrains(res);
   renumeroterRepartition(res);
   afficherRepartition(res, ctx.cats);
   return true;
 }
 
-/** « Valider le placement » : fige la disposition et pose les tables de marque d'un seul coup.
+/** « Valider le placement » : fige la disposition, y compris les tables de marque libres.
  *  Des mini-terrains laissés de côté ne bloquent PAS : c'est un choix légitime (terrain qu'on ne
  *  souhaite pas utiliser). On le rappelle simplement — la journée sera plus longue, et le système
  *  d'arbitrage le vérifiera à la génération du planning. */
@@ -1574,14 +1456,16 @@ function onValiderPlacement() {
   const res = repartitionCalculee;
   if (!res || !res.ctxManuel) return;
   const restants = (res.misDeCote || []).length;
-  poserTablesMarques(res);
+  res.tablesPosees = true;
+  empreintePlacementTerrainsValide = typeof empreintePackTerrains === 'function'
+    ? empreintePackTerrains(res) : '';
   afficherRepartition(res, res.ctxManuel.cats);
   afficherMessage(document.getElementById('message-repartition'),
     restants
       ? '✅ Placement validé — ' + restants + ' mini-terrain(s) laissé(s) de côté ne seront pas ' +
         'utilisés. Moins de terrains = journée plus longue : l\'arbitrage des horaires le vérifiera ' +
         'à la génération du planning.'
-      : '✅ Placement validé, tables de marque posées.', 'ok');
+      : '✅ Placement validé, tables de marque comprises.', 'ok');
 }
 
 /** Pivote une pastille mise de côté (longueur ↔ largeur) et réaffiche. */
@@ -1995,11 +1879,13 @@ function groupeTerrain(fp, ppm, iField, ox, oy) {
   if (fp.table) {
     const cxT = (fp.table.x + fp.table.w / 2) * ppm, cyT = (fp.table.y + fp.table.h / 2) * ppm;
     const tw = Math.max(fp.table.w * ppm, 22), th = Math.max(fp.table.h * ppm, 16);
-    g += '<rect x="' + (cxT - tw / 2).toFixed(1) + '" y="' + (cyT - th / 2).toFixed(1) + '" width="' + tw.toFixed(1) +
-         '" height="' + th.toFixed(1) + '" rx="3" class="carte-table"><title>Table de marque du terrain' +
-         (fp.table.enBut ? ' (dans l\'en-but)' : '') +
-         (fp.table.horsTerrain ? ' (sur la touche, hors du terrain)' : '') + '</title></rect>';
+    g += '<g class="carte-table-g" data-table-field="' + iField + '" role="button" tabindex="0" ' +
+         'aria-label="Table de marque de ' + echapper(f.nom) + ', position ' + Math.round(fp.table.x) +
+         ' par ' + Math.round(fp.table.y) + ' mètres. Faire glisser ou utiliser les flèches pour la déplacer.">' +
+         '<rect x="' + (cxT - tw / 2).toFixed(1) + '" y="' + (cyT - th / 2).toFixed(1) + '" width="' + tw.toFixed(1) +
+         '" height="' + th.toFixed(1) + '" rx="3" class="carte-table"><title>Table de marque libre du terrain</title></rect>';
     if (tw > 20 && th > 12) g += '<text x="' + cxT.toFixed(1) + '" y="' + (cyT + 4).toFixed(1) + '" class="carte-tm">TM</text>';
+    g += '</g>';
   }
   g += '</g></g>';
   return g;
@@ -2085,6 +1971,51 @@ function metresSousPointeur(fp, rect, clientX, clientY) {
   return { xm: p.x / ppm, ym: p.y / ppm, ppm: ppm };
 }
 
+/** Maintient la table dans le grand terrain sans lui appliquer les règles des mini-terrains. */
+function bornerPositionTable(fp, x, y) {
+  const table = fp.table || {};
+  return {
+    x: Math.max(0, Math.min(x, Math.max(0, fp.field.L - (table.w || 0)))),
+    y: Math.max(0, Math.min(y, Math.max(0, fp.field.W - (table.h || 0))))
+  };
+}
+
+/** Déplacement libre d'une table de marque, sans recherche de place ni collision. */
+function demarrerDeplacementTable(evenement, iField) {
+  const res = repartitionCalculee;
+  const fp = res && res.fieldsPlan[iField];
+  const groupe = evenement.target.closest('g[data-terrain]');
+  const rect = groupe && groupe.querySelector('.carte-terrain');
+  if (!fp || !fp.table || !rect) return;
+  evenement.preventDefault();
+  evenement.stopPropagation();
+  const depart = metresSousPointeur(fp, rect, evenement.clientX, evenement.clientY);
+  if (!depart) return;
+  const x0 = fp.table.x, y0 = fp.table.y;
+  let aBouge = false;
+  function bouger(ev) {
+    const p = metresSousPointeur(fp, rect, ev.clientX, ev.clientY);
+    if (!p) return;
+    const prochaine = bornerPositionTable(fp, x0 + p.xm - depart.xm, y0 + p.ym - depart.ym);
+    if (Math.abs(prochaine.x - fp.table.x) < 0.001 && Math.abs(prochaine.y - fp.table.y) < 0.001) return;
+    if (!aBouge) { invaliderPlacementTerrains(res); aBouge = true; }
+    fp.table.x = prochaine.x;
+    fp.table.y = prochaine.y;
+    redessinerCarte();
+  }
+  function finir() {
+    document.removeEventListener('pointermove', bouger);
+    document.removeEventListener('pointerup', finir);
+    document.removeEventListener('pointercancel', finir);
+    if (!aBouge) return;
+    focusApresRendu = { type: 'table', index: iField };
+    afficherRepartition(res, res.ctxManuel.cats);
+  }
+  document.addEventListener('pointermove', bouger);
+  document.addEventListener('pointerup', finir);
+  document.addEventListener('pointercancel', finir);
+}
+
 /** Redessine la seule carte, sans toucher au reste du panneau (plus rapide, et sans clignotement). */
 function redessinerCarte() {
   const bloc = document.getElementById('repartition-carte');
@@ -2109,6 +2040,7 @@ function demarrerDeplacementTerrain(evenement, iField) {
   const svg = evenement.target.closest('svg');
   if (!fp || !svg) return;
   evenement.preventDefault();
+  if (typeof invaliderPackTerrains === 'function') invaliderPackTerrains();
   const ppm = parseFloat(svg.getAttribute('data-ppm')) || 1;
   const depart = pointLocalSvg(svg, evenement.clientX, evenement.clientY);
   if (!depart) return;
@@ -2141,6 +2073,7 @@ function demarrerRotationTerrain(evenement, iField) {
   const fp = res && res.fieldsPlan[iField];
   if (!fp) return;
   evenement.preventDefault();
+  if (typeof invaliderPackTerrains === 'function') invaliderPackTerrains();
   const svg = evenement.target.closest('svg');
   const ppm = parseFloat(svg.getAttribute('data-ppm')) || 1;
   const groupe = svg.querySelector('g[data-terrain="' + iField + '"]');
@@ -2203,7 +2136,7 @@ function pivoterMiniTerrain(iField, id) {
     }
     t.x = spot.x; t.y = spot.y; t.w = spot.w; t.h = spot.h;
     if (t.ebAxe) t.ebAxe = t.ebAxe === 'x' ? 'y' : 'x';
-    if (res.tablesPosees) retirerTablesMarques(res);
+    if (res.tablesPosees) invaliderPlacementTerrains(res);
     afficherRepartition(res, res.ctxManuel.cats);
     return;
   }
@@ -2268,6 +2201,8 @@ function descripteurFocusPlan() {
   if (!a || !a.closest) return null;
   const t = a.closest('g[data-tuile]');
   if (t) return { type: 'tuile', id: t.getAttribute('data-tuile') };
+  const table = a.closest('g[data-table-field]');
+  if (table) return { type: 'table', index: parseInt(table.getAttribute('data-table-field'), 10) || 0 };
   const c = a.closest('.repart-chip');
   if (c) return { type: 'chip', index: parseInt(c.getAttribute('data-chip'), 10) || 0 };
   return null;
@@ -2307,6 +2242,8 @@ function rendreFocusApresRendu() {
   } else if (cible.type === 'chip') {
     const chips = document.querySelectorAll('#repart-tray .repart-chip');
     el = chips[Math.min(cible.index, chips.length - 1)] || null;
+  } else if (cible.type === 'table') {
+    el = document.querySelector('#repartition-carte g[data-table-field="' + cible.index + '"]');
   } else if (cible.type === 'id') {
     el = document.getElementById(cible.id);
   }
@@ -2342,10 +2279,30 @@ function deplacerTuileClavier(id, dx, dy) {
   if (refus) { annoncerClavier(t.id + ' ne peut pas aller là : ' + refus + '.'); return; }
   memoriserAvantGesteClavier();
   t.x = spot.x; t.y = spot.y;
-  if (res.tablesPosees) retirerTablesMarques(res);
+  if (res.tablesPosees) invaliderPlacementTerrains(res);
   focusApresRendu = { type: 'tuile', id: t.id };
   afficherRepartition(res, res.ctxManuel.cats);
   annoncerClavier(t.id + ' déplacé en ' + Math.round(spot.x) + ' ; ' + Math.round(spot.y) + ' mètres.');
+}
+
+/** Déplace une table de marque au clavier, librement et sans collision avec les terrains. */
+function deplacerTableClavier(iField, dx, dy) {
+  const res = repartitionCalculee;
+  const fp = res && res.fieldsPlan[iField];
+  if (!fp || !fp.table) return;
+  const prochaine = bornerPositionTable(fp, fp.table.x + dx, fp.table.y + dy);
+  if (Math.abs(prochaine.x - fp.table.x) < 0.001 && Math.abs(prochaine.y - fp.table.y) < 0.001) {
+    annoncerClavier('La table de marque est déjà au bord du terrain.');
+    return;
+  }
+  memoriserAvantGesteClavier();
+  fp.table.x = prochaine.x;
+  fp.table.y = prochaine.y;
+  invaliderPlacementTerrains(res);
+  focusApresRendu = { type: 'table', index: iField };
+  afficherRepartition(res, res.ctxManuel.cats);
+  annoncerClavier('Table de marque déplacée en ' + Math.round(prochaine.x) + ' ; ' +
+    Math.round(prochaine.y) + ' mètres sur ' + fp.field.nom + '.');
 }
 
 /** Le nom du grand terrain visé par « Entrée » depuis une pastille. */
@@ -2442,12 +2399,24 @@ function onClavierPlan(evenement) {
   const touche = evenement.key;
   const cible = evenement.target;
   const tuile = cible.closest && cible.closest('g[data-tuile]');
+  const table = cible.closest && cible.closest('g[data-table-field]');
   const chip = cible.closest && cible.closest('.repart-chip');
-  if (!tuile && !chip) return;
+  if (!tuile && !table && !chip) return;
   // ⛔ Le bouton ⟳ de la pastille est un VRAI bouton : on lui laisse Entrée et Espace.
   if (cible.closest && cible.closest('.repart-chip-pivot') && (touche === 'Enter' || touche === ' ')) return;
 
   if (touche === 'Escape') { evenement.preventDefault(); annulerGesteClavier(); return; }
+
+  if (table) {
+    const pasTable = evenement.shiftKey ? PAS_CLAVIER_LONG_M : PAS_CLAVIER_M;
+    const sensTable = { ArrowLeft: [-pasTable, 0], ArrowRight: [pasTable, 0],
+      ArrowUp: [0, -pasTable], ArrowDown: [0, pasTable] }[touche];
+    if (sensTable) {
+      evenement.preventDefault();
+      deplacerTableClavier(parseInt(table.getAttribute('data-table-field'), 10), sensTable[0], sensTable[1]);
+    }
+    return;
+  }
 
   if (tuile) {
     const id = tuile.getAttribute('data-tuile');
@@ -2513,6 +2482,8 @@ function brancherPlanLibre() {
   const bloc = document.getElementById('repartition-carte');
   if (!bloc) return;
   bloc.addEventListener('pointerdown', function (ev) {
+    const table = ev.target.closest('[data-table-field]');
+    if (table) { demarrerDeplacementTable(ev, parseInt(table.getAttribute('data-table-field'), 10)); return; }
     const plaque = ev.target.closest('[data-plaque]');
     if (plaque) { demarrerDeplacementTerrain(ev, parseInt(plaque.getAttribute('data-plaque'), 10)); return; }
     const rot = ev.target.closest('[data-rot]');

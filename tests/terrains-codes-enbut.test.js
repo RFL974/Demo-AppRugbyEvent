@@ -9,7 +9,7 @@
  *     L'en-but s'ajoute derrière CHAQUE ligne de but, sur l'axe de la longueur, et c'est ce
  *     gabarit que le packing manipule — donc la capacité annoncée baisse, et c'est la correction.
  *  3) Identifiants : CODE-rang, le rang repartant de 1 sur chaque grand terrain.
- *  4) En-but d'un GRAND terrain : déduit des mini-terrains posés dessus, plus saisi dans la fiche.
+ *  4) L'en-but reste une propriété des catégories, jamais une règle de placement d'une table.
  *
  *  Modules réels, DOM simulé ; aucune donnée métier lue ni écrite, aucun appel réseau.
  */
@@ -115,11 +115,9 @@ const avant = vm.runInContext('JSON.stringify(res)', ctx);
 vm.runInContext('renumeroterRepartition(res)', ctx);
 egal(vm.runInContext('JSON.stringify(res)', ctx), avant, 'la renumérotation est idempotente');
 
-/* --------------------------------- 4) l'en-but d'un grand terrain se DÉDUIT de ses tuiles */
-egal(vm.runInContext('profondeurEnBut(res.fieldsPlan[0])', ctx), 5, 'l’en-but du terrain suit ses mini-terrains');
-egal(vm.runInContext('profondeurEnBut(res.fieldsPlan[1])', ctx), 6, 'et vaut le plus grand de ceux qui y sont posés');
-egal(vm.runInContext('profondeurEnBut(res.fieldsPlan[2])', ctx), 0, 'aucun en-but sur un terrain occupé en entier');
-egal(vm.runInContext('profondeurEnBut(null)', ctx), 0, '⛔ un terrain inconnu ne fabrique pas d’espace');
+/* -------------------------------------- 4) l'en-but appartient seulement aux catégories */
+ok(!source.includes('function profondeurEnBut('), 'aucun en-but de grand terrain n’est déduit');
+ok(!source.includes('function placerDansEnBut('), 'une table de marque ne retourne plus dans un en-but');
 ok(!/parseFloat\(\(field \|\| \{\}\)\.enBut\)/.test(source), 'le champ en-but du grand terrain n’est plus lu');
 ok(!source.includes("tp-enbut"), 'et il a quitté la fiche du grand terrain');
 ok(source.includes('dim-enbut'), 'l’en-but se saisit désormais sur la ligne de la catégorie');
