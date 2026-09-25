@@ -55,23 +55,25 @@ const VERSION = 'refonte-ciel-verre-20260920';
 const VERSIONS_PROPRES = {
   'css/dossier.css': VERSION + '-participants2',
   'css/theme-r92.css': VERSION + '-participants2-dps2-terrains-pdf2',
-  'js/admin-autorisation.js': VERSION + '-participants3-dps1',
+  'js/admin-autorisation.js': VERSION + '-participants3-dps1-municipal1',
   'js/admin-dps.js': VERSION + '-dps2',
   'js/admin-terrains.js': VERSION + '-terrains-pdf2',
   'js/admin-terrains-pdf.js': VERSION + '-terrains-pdf2',
   'js/admin-invitations.js': VERSION + '-participants2',
   'js/admin-suivi-clubs.js': VERSION + '-participants2',
-  'js/admin.js': VERSION + '-participants3',
-  'js/assistant.js': VERSION + '-participants3',
-  'js/ecrans.js': VERSION + '-participants3',
+  'js/admin.js': VERSION + '-participants3-municipal1',
+  'js/assistant.js': VERSION + '-participants3-municipal1',
+  'js/ecrans.js': VERSION + '-participants3-municipal1',
+  'css/municipal.css': VERSION + '-municipal2',
+  'js/admin-municipal.js': VERSION + '-municipal2',
   'js/reponse.js': VERSION + '-participants2'
 };
 
 /** Le recensement des fichiers livrés par la refonte. */
 const LIVRES = [
-  'css/dossier.css', 'css/ecrans.css', 'css/saisie.css', 'css/sponsors.css', 'css/styles.css',
+  'css/dossier.css', 'css/ecrans.css', 'css/municipal.css', 'css/saisie.css', 'css/sponsors.css', 'css/styles.css',
   'css/theme-r92.css', 'css/tokens.css', 'css/tournoi-public.css',
-  'js/admin-autorisation.js', 'js/admin-choix-categories.js', 'js/admin-conformite-ffr.js', 'js/admin-dps.js',
+  'js/admin-autorisation.js', 'js/admin-choix-categories.js', 'js/admin-conformite-ffr.js', 'js/admin-dps.js', 'js/admin-municipal.js',
   'js/admin-equipes.js', 'js/admin-generation.js', 'js/admin-infos-publication.js',
   'js/admin-reglages.js', 'js/admin-suivi-clubs.js', 'js/admin-tableau-bord.js',
   'js/admin-terrains.js', 'js/admin-terrains-pdf.js', 'js/admin.js', 'js/assistant.js', 'js/commun.js', 'js/config.js', 'js/dialog.js',

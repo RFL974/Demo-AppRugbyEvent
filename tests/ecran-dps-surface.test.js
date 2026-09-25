@@ -81,7 +81,7 @@ const admin = lire('admin.html');
 vrai(admin.includes('id="dps-demande-prete"') && admin.includes('id="dps-champs-copie"') &&
   admin.includes('id="dps-fournisseurs"'), 'l’étape Demande prête possède ses trois zones');
 vrai(admin.includes('js/admin-dps.js?v=refonte-ciel-verre-20260920-dps2') &&
-  admin.includes('admin-autorisation.js?v=refonte-ciel-verre-20260920-participants3-dps1'),
+  admin.includes('admin-autorisation.js?v=refonte-ciel-verre-20260920-participants3-dps1-municipal1'),
   'les deux ressources modifiées ont une URL neuve sans changer la version globale');
 vrai(admin.includes('Version courte') && admin.includes('Version complète') &&
   admin.includes('Copier en une ligne') && admin.includes('Tout copier'),

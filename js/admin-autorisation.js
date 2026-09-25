@@ -320,6 +320,7 @@ function invaliderAutorisationAffichee() {
   autorisationEstimationErreur = '';
   afficherEstimationPublicAutorisation();
   afficherDpsAutorisation();
+  if (typeof afficherMunicipalAutorisation === 'function') afficherMunicipalAutorisation();
   const zoneSaisie = document.getElementById('autorisation-saisie');
   const zoneFeuille = document.getElementById('autorisation-feuille');
   if (zoneFeuille) {
@@ -498,6 +499,14 @@ function afficherDpsAutorisation() {
     autorisationEstimationErreur);
 }
 
+function afficherMunicipalAutorisation() {
+  if (typeof afficherMunicipalDepuisAutorisation !== 'function') return;
+  afficherMunicipalDepuisAutorisation(autorisationDossierCourant,
+    typeof configCourante === 'undefined' ? null : configCourante,
+    typeof estimationPublicCourante === 'undefined' ? null : estimationPublicCourante,
+    autorisationEstimationErreur);
+}
+
 function libelleDeplacementPublic(mode) {
   return { groupe: 'Transport groupé', libre: 'Familles autonomes', mixte: 'Déplacement mixte' }[mode] || 'Non renseigné';
 }
@@ -576,6 +585,7 @@ function invaliderFeuilleAutorisationAffichee() {
   autorisationEstimationErreur = '';
   afficherEstimationPublicAutorisation();
   afficherDpsAutorisation();
+  if (typeof afficherMunicipalAutorisation === 'function') afficherMunicipalAutorisation();
   const zoneFeuille = document.getElementById('autorisation-feuille');
   if (zoneFeuille) {
     zoneFeuille.innerHTML = '<div class="ffr-bloc ffr-neutre">Feuille de report en cours de ' +
@@ -829,6 +839,7 @@ async function majAutorisation(opt) {
     autorisationServeurPorteConfig = configFournie;
     autorisationDossierCourant = dossier;
     afficherDpsAutorisation();
+    if (typeof afficherMunicipalAutorisation === 'function') afficherMunicipalAutorisation();
     zoneFeuille.innerHTML = rendreFeuilleAutorisation(dossier);
   } catch (e) {
     if (depassee()) return { ok: false, motif: 'revision-depassee' };
@@ -837,6 +848,7 @@ async function majAutorisation(opt) {
     autorisationEstimationErreur = String((e && e.message) || 'erreur réseau').replace(/\.\s*$/, '');
     afficherEstimationPublicAutorisation();
     afficherDpsAutorisation();
+    if (typeof afficherMunicipalAutorisation === 'function') afficherMunicipalAutorisation();
     // ⛔ On ne dit plus « connecte-toi avec la clé admin » quoi qu'il arrive : c'était la seule
     //   explication proposée, et elle était FAUSSE dans le cas le plus fréquent — un serveur lent
     //   ou muet. Le motif réel est nommé, et « Réessayer » relance la lecture sans recharger.

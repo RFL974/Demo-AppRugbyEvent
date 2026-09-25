@@ -486,11 +486,11 @@ function section1() {
     !!ligneEcr && /libre:\s*true/.test(ligneEcr[0]),
     'l\'accès serait verrouillé sur ordinateur');
 
-  /* La carte Dossier est fusionnée dans Inviter ; Suivi des clubs et DPS ont chacun leur étape. */
+  /* La carte Dossier est fusionnée dans Inviter ; Suivi, DPS et Mairie ont chacun leur étape. */
   const nbAsst = (asst.match(/\{\s*id:\s*'[^']+',\s*titre:/g) || []).length;
   const nbEcr = (ecr.match(/\{\s*id:\s*'[^']+',\s*titre:/g) || []).length;
-  verifier('1.7', 'le suivi des clubs et le DPS portent le parcours à 14 cartes et 15 écrans',
-    nbAsst === 14 && nbEcr === 15,
+  verifier('1.7', 'le suivi des clubs, le DPS et la mairie portent le parcours à 15 cartes et 16 écrans',
+    nbAsst === 15 && nbEcr === 16,
     'compté ' + nbAsst + ' cartes et ' + nbEcr + ' écrans — la structure guidée a bougé');
 
   /* Le bloc est rempli à l'ouverture, avant que le mode guidé ne déplace les blocs. */

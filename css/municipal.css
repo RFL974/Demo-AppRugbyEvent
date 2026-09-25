@@ -1,0 +1,116 @@
+/* Demande municipale — espace de travail autonome, dans le langage visuel Ciel & Verre. */
+.theme-clair #bloc-municipal { padding:0; overflow:visible; background:transparent; box-shadow:none; border:0; }
+.municipal { --mun-bleu:#137fc0; --mun-encre:#17324d; --mun-doux:#f4f8fb; color:var(--mun-encre); }
+.municipal-entete { display:flex; justify-content:space-between; gap:24px; align-items:flex-start; margin-bottom:20px; }
+.municipal-entete h2 { margin:0; font-size:25px; letter-spacing:-.02em; }
+.municipal-entete p { max-width:720px; margin:7px 0 0; color:var(--cv-secondaire); line-height:1.5; }
+.municipal-performance { flex:0 0 auto; padding:8px 12px; border-radius:999px; background:#e7f4fc; color:#276288; font-size:11px; font-weight:700; }
+.municipal-etapes { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); padding:0; margin:0 0 18px; list-style:none; }
+.municipal-etapes button { position:relative; width:100%; display:grid; grid-template-columns:36px minmax(0,1fr); gap:2px 9px; padding:5px 15px 14px 0; border:0; border-bottom:2px solid #dfe8f0; background:transparent; color:var(--cv-secondaire); text-align:left; cursor:pointer; }
+.municipal-etapes button::before { content:attr(data-numero); grid-row:1/3; display:grid; place-items:center; width:34px; height:34px; border-radius:50%; background:#e7edf3; color:#62778b; font-weight:800; }
+.municipal-etapes button strong { align-self:end; font-size:12px; color:var(--mun-encre); }
+.municipal-etapes button small { font-size:10px; line-height:1.25; }
+.municipal-etapes button.est-actif { border-bottom-color:var(--mun-bleu); }
+.municipal-etapes button.est-actif::before { background:var(--mun-bleu); color:#fff; }
+.municipal-etapes button.est-actif strong { color:var(--mun-bleu); }
+.municipal-panneau { padding:20px; border:1px solid var(--cv-bordure); border-radius:15px; background:#fff; box-shadow:0 10px 28px rgba(36,65,91,.06); }
+.municipal-barre { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:14px; }
+.municipal-barre h3 { margin:0; font-size:18px; }
+.municipal-barre p { margin:4px 0 0; color:var(--cv-secondaire); font-size:12px; }
+.municipal-barre-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+.municipal-vide { padding:44px 20px; border:1px dashed #b9cad7; border-radius:12px; background:var(--mun-doux); text-align:center; }
+.municipal-vide strong,.municipal-vide span { display:block; }
+.municipal-vide strong { font-size:17px; }
+.municipal-vide span { max-width:510px; margin:6px auto 16px; color:var(--cv-secondaire); font-size:12px; line-height:1.5; }
+.municipal-espaces { display:grid; gap:10px; }
+.municipal-espace { border:1px solid var(--cv-bordure); border-radius:12px; background:#fff; overflow:hidden; }
+.municipal-espace > summary { display:grid; grid-template-columns:34px minmax(0,1fr) auto 20px; align-items:center; gap:10px; min-height:67px; padding:10px 14px; cursor:pointer; list-style:none; }
+.municipal-espace > summary::-webkit-details-marker { display:none; }
+.municipal-espace > summary::before { content:'⌂'; display:grid; place-items:center; width:32px; height:32px; border-radius:9px; background:#eaf5fc; color:var(--mun-bleu); font-size:17px; }
+.municipal-espace > summary::after { content:'⌄'; color:var(--mun-bleu); font-size:20px; transition:transform .18s; }
+.municipal-espace[open] > summary::after { transform:rotate(180deg); }
+.municipal-espace-titre strong,.municipal-espace-titre small { display:block; }
+.municipal-espace-titre strong { font-size:14px; }
+.municipal-espace-titre small { margin-top:3px; color:var(--cv-secondaire); font-size:11px; }
+.municipal-badge { padding:5px 9px; border-radius:999px; background:#eef3f7; color:#607588; font-size:10px; font-weight:750; }
+.municipal-badge.est-accord { background:#dff7ec; color:#147358; }
+.municipal-badge.est-attente { background:#fff2d4; color:#805408; }
+.municipal-espace-corps { padding:17px; border-top:1px solid var(--cv-bordure); background:#fbfdff; }
+.municipal-grille { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.municipal-champ { display:grid; gap:6px; min-width:0; color:var(--mun-encre); font-size:11px; font-weight:700; }
+.municipal-champ.est-large { grid-column:1/-1; }
+.municipal-champ input,.municipal-champ select,.municipal-champ textarea { width:100%; min-width:0; padding:9px 10px; border:1px solid #c7d4df; border-radius:8px; background:#fff; color:var(--mun-encre); font:inherit; font-size:12px; font-weight:500; }
+.municipal-champ textarea { min-height:74px; resize:vertical; }
+.municipal-section { margin-top:17px; padding-top:16px; border-top:1px solid var(--cv-bordure); }
+.municipal-section h4 { margin:0 0 10px; font-size:13px; }
+.municipal-cases { display:flex; flex-wrap:wrap; gap:8px; }
+.municipal-case { display:flex; align-items:center; gap:7px; padding:7px 9px; border:1px solid #d2dde6; border-radius:8px; background:#fff; color:#52677a; font-size:11px; font-weight:650; }
+.municipal-case input { accent-color:var(--mun-bleu); }
+.municipal-besoins { display:flex; flex-wrap:wrap; gap:7px; }
+.municipal-besoin { display:inline-flex; align-items:center; gap:6px; padding:6px 9px; border:1px solid #c7d9e7; border-radius:999px; background:#edf7fd; color:#286488; font-size:11px; }
+.municipal-besoin button { border:0; padding:0; background:transparent; color:inherit; cursor:pointer; font-size:14px; }
+.municipal-ajout-besoin { display:grid; grid-template-columns:170px minmax(150px,1fr) 72px minmax(150px,1fr) auto; gap:7px; margin-top:9px; }
+.municipal-ajout-besoin input,.municipal-ajout-besoin select { min-width:0; padding:8px 10px; border:1px solid #c7d4df; border-radius:8px; background:#fff; }
+.municipal-aide { margin:-4px 0 11px; color:var(--cv-secondaire); font-size:11px; line-height:1.45; }
+.municipal-depot { position:relative; display:grid; place-items:center; min-height:94px; padding:14px; border:1px dashed #9db9cc; border-radius:10px; background:#f5fafd; color:#526f84; text-align:center; font-size:11px; cursor:pointer; }
+.municipal-depot.est-survol { border-color:var(--mun-bleu); background:#e9f6fd; }
+.municipal-depot input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; }
+.municipal-fichiers { display:grid; gap:6px; margin-top:9px; }
+.municipal-fichier { display:grid; grid-template-columns:minmax(0,1fr) auto auto; gap:9px; align-items:center; padding:7px 9px; border:1px solid var(--cv-bordure); border-radius:8px; background:#fff; font-size:11px; }
+.municipal-fichier small { color:var(--cv-secondaire); }
+.municipal-fichier button { border:0; background:transparent; color:#a53636; cursor:pointer; }
+.municipal-espace-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+.municipal-recap { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:9px; margin-top:14px; }
+.municipal-recap > div { padding:12px; border-radius:10px; background:#f0f6fa; }
+.municipal-recap span,.municipal-recap strong { display:block; }
+.municipal-recap span { color:var(--cv-secondaire); font-size:10px; }
+.municipal-recap strong { margin-top:5px; font-size:18px; }
+.municipal-pied { display:flex; align-items:center; justify-content:space-between; gap:16px; margin-top:14px; }
+.municipal-pied small { color:var(--cv-secondaire); line-height:1.4; }
+.municipal-pied-actions { display:flex; flex-wrap:wrap; gap:8px; justify-content:flex-end; }
+.municipal-sources { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; }
+.municipal-source { padding:14px; border:1px solid var(--cv-bordure); border-radius:10px; background:#fff; }
+.municipal-source span,.municipal-source strong,.municipal-source small { display:block; }
+.municipal-source span { color:var(--mun-bleu); font-size:10px; font-weight:750; text-transform:uppercase; }
+.municipal-source strong { margin-top:5px; font-size:13px; }
+.municipal-source small { margin-top:5px; color:var(--cv-secondaire); line-height:1.4; }
+.municipal-alerte { margin:0 0 12px; padding:10px 12px; border-radius:9px; background:#fff5de; color:#77500e; font-size:11px; }
+.municipal-checklist { display:grid; gap:8px; }
+.municipal-check { display:grid; grid-template-columns:24px minmax(0,1fr) auto; gap:9px; align-items:center; padding:10px; border:1px solid var(--cv-bordure); border-radius:9px; }
+.municipal-check > b { display:grid; place-items:center; width:23px; height:23px; border-radius:50%; background:#eaf1f6; color:#617589; }
+.municipal-check.est-ok > b { background:#ddf6e9; color:#167256; }
+.municipal-check span { font-size:12px; }
+.municipal-check small { color:var(--cv-secondaire); font-size:10px; }
+.municipal-suivi { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.municipal-drawer-fond { position:fixed; inset:0; z-index:80; background:rgba(11,31,52,.32); backdrop-filter:blur(2px); }
+.municipal-drawer { position:fixed; z-index:81; top:0; right:0; bottom:0; width:min(440px,100vw); display:flex; flex-direction:column; background:#fff; box-shadow:-18px 0 45px rgba(18,40,61,.2); }
+.municipal-drawer-entete { display:flex; justify-content:space-between; gap:16px; align-items:flex-start; padding:22px; border-bottom:1px solid var(--cv-bordure); }
+.municipal-drawer-entete h3 { margin:0; font-size:21px; }
+.municipal-drawer-entete p { margin:5px 0 0; color:var(--cv-secondaire); font-size:11px; }
+.municipal-drawer-fermer { width:36px; height:36px; border:0; border-radius:50%; background:#eef4f8; color:var(--mun-encre); cursor:pointer; font-size:20px; }
+.municipal-drawer-corps { flex:1; overflow:auto; padding:20px 22px; }
+.municipal-drawer-pied { display:flex; justify-content:flex-end; gap:8px; padding:16px 22px; border-top:1px solid var(--cv-bordure); background:#fff; }
+.municipal-toast { min-height:18px; margin-top:10px; font-size:11px; }
+.municipal-toast.est-ok { color:#11785b; }
+.municipal-toast.est-ko { color:#a33737; }
+body.municipal-dialogue-ouvert { overflow:hidden; }
+
+@media (max-width:900px) {
+  .municipal-sources { grid-template-columns:1fr 1fr; }
+  .municipal-recap { grid-template-columns:1fr 1fr; }
+}
+@media (max-width:760px) {
+  .municipal-entete,.municipal-barre,.municipal-pied { display:block; }
+  .municipal-performance { display:inline-block; margin-top:10px; }
+  .municipal-etapes { grid-template-columns:1fr; gap:7px; }
+  .municipal-etapes li:not(:has(button.est-actif)) { display:none; }
+  .municipal-etapes button { border:0; padding-bottom:5px; }
+  .municipal-panneau { padding:14px; }
+  .municipal-barre-actions,.municipal-pied-actions { justify-content:stretch; margin-top:12px; }
+  .municipal-barre-actions .bouton,.municipal-pied-actions .bouton { flex:1; justify-content:center; }
+  .municipal-grille,.municipal-sources,.municipal-suivi { grid-template-columns:1fr; }
+  .municipal-ajout-besoin { grid-template-columns:1fr; }
+  .municipal-espace > summary { grid-template-columns:32px minmax(0,1fr) 18px; }
+  .municipal-badge { display:none; }
+}
+@media (prefers-reduced-motion:reduce) { .municipal-espace > summary::after { transition:none; } }

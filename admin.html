@@ -13,6 +13,7 @@
   <link rel="stylesheet" href="css/styles.css?v=refonte-ciel-verre-20260920">
   <!-- Surcouche moderne navy/blanc/ciel (re-skin admin — retirer cette ligne pour revenir en arrière) -->
   <link rel="stylesheet" href="css/theme-r92.css?v=refonte-ciel-verre-20260920-participants2-dps2-terrains-pdf2">
+  <link rel="stylesheet" href="css/municipal.css?v=refonte-ciel-verre-20260920-municipal2">
   <!-- Mode « écrans » : barre latérale + onglets sur grand écran (structure construite par js/ecrans.js) -->
   <link rel="stylesheet" href="css/ecrans.css?v=refonte-ciel-verre-20260920">
   <!-- Encarts partenaires : les MÊMES règles que la page publique, pour que l'aperçu de
@@ -1083,6 +1084,14 @@
         </section>
       </section>
 
+      <!-- Demande municipale : les espaces sont créés librement par l'organisateur. Le module
+           réutilise l'instantané déjà chargé pour le DPS et l'autorisation, sans lecture dédiée. -->
+      <section class="carte" id="bloc-municipal">
+        <div id="municipal-racine" aria-live="polite">
+          <p class="vide">Préparation de l’espace de travail municipal…</p>
+        </div>
+      </section>
+
       <!-- Amont : demande d'autorisation de tournoi EDR (feuille de report du formulaire FFR) -->
       <section class="carte" id="bloc-autorisation">
         <h2>Informations et documents</h2>
@@ -1309,7 +1318,7 @@
   <script src="js/commun.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/dialog.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/api.js"></script>
-  <script src="js/admin.js?v=refonte-ciel-verre-20260920-participants3"></script>
+  <script src="js/admin.js?v=refonte-ciel-verre-20260920-participants3-municipal1"></script>
   <script src="js/admin-infos-publication.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/admin-invitations.js?v=refonte-ciel-verre-20260920-participants2"></script>
   <script src="js/admin-suivi-clubs.js?v=refonte-ciel-verre-20260920-participants2"></script>
@@ -1327,8 +1336,9 @@
   <!-- pdf-lib : remplissage du formulaire officiel FFR (AcroForm) côté navigateur, sans build. -->
   <script src="js/vendor/pdf-lib.min.js"></script>
   <script src="js/admin-terrains-pdf.js?v=refonte-ciel-verre-20260920-terrains-pdf2"></script>
-  <script src="js/admin-autorisation.js?v=refonte-ciel-verre-20260920-participants3-dps1"></script>
+  <script src="js/admin-autorisation.js?v=refonte-ciel-verre-20260920-participants3-dps1-municipal1"></script>
   <script src="js/admin-dps.js?v=refonte-ciel-verre-20260920-dps2"></script>
+  <script src="js/admin-municipal.js?v=refonte-ciel-verre-20260920-municipal2"></script>
   <!-- Feuille de fin de journée : réutilise pdf-lib (chargé juste au-dessus) pour le PDF. -->
   <script src="js/admin-feuille-jour.js"></script>
   <!-- Générateur de QR code LOCAL (MIT, js/vendor/qrcode.js — déjà utilisé par le dossier club).
@@ -1347,8 +1357,8 @@
        6) ecrans.js    → barre latérale + onglets sur GRAND écran
        7) assistant.js → assistant à cartes sur mobile (verrou « Suivant »),
                          et aiguillage entre les deux modes au chargement. -->
-  <script src="js/ecrans.js?v=refonte-ciel-verre-20260920-participants3"></script>
-  <script src="js/assistant.js?v=refonte-ciel-verre-20260920-participants3"></script>
+  <script src="js/ecrans.js?v=refonte-ciel-verre-20260920-participants3-municipal1"></script>
+  <script src="js/assistant.js?v=refonte-ciel-verre-20260920-participants3-municipal1"></script>
 
 </body>
 </html>

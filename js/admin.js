@@ -626,6 +626,18 @@ const ADMIN_ETAPES = {
      `onTelechargerPdfAutorisation` l'exige avant de générer — le PDF ne comptera donc jamais zéro
      club. ⚠️ `dossier` continue, lui, de la réclamer : son sélecteur de club en dépend vraiment. */
   dps: { ressources: ['dossierAutorisation'] },
+  municipal: {
+    ressources: ['dossierAutorisation'],
+    avant: function () {
+      if (typeof afficherMunicipalDepuisAutorisation === 'function') {
+        afficherMunicipalDepuisAutorisation(
+          typeof autorisationDossierCourant === 'undefined' ? null : autorisationDossierCourant,
+          typeof configCourante === 'undefined' ? null : configCourante,
+          typeof estimationPublicCourante === 'undefined' ? null : estimationPublicCourante,
+          typeof autorisationEstimationErreur === 'undefined' ? '' : autorisationEstimationErreur);
+      }
+    }
+  },
   autorisation: { ressources: ['dossierAutorisation'] },
   /* ⭐ Lot « Publication » — L'ÉTAT DE L'ACCÈS À LA TABLE DE MARQUE EST UNE RESSOURCE D'ÉCRAN.
      🔬 LE DÉFAUT FERMÉ. `majPublication()` appelait `chargerAccesScores()`, donc `getAccesScoresAdmin`
@@ -856,7 +868,7 @@ function ouvrirEtapeAdmin(idEtape) {
   //   depuis, on la relit MAINTENANT. ⛔ Jamais lors de la première lecture : elle vient
   //   d'inscrire sa base de révision, il n'y a rien à rattraper. ⛔ Et jamais déconnecté :
   //   cette relecture est protégée par la clé, elle rouvrirait une demande de saisie.
-  if ((idEtape === 'autorisation' || idEtape === 'dps') && dejaLue && adminConnecte &&
+  if ((idEtape === 'autorisation' || idEtape === 'dps' || idEtape === 'municipal') && dejaLue && adminConnecte &&
       typeof majAutorisationSiObsolete === 'function') {
     majAutorisationSiObsolete().catch(function () { /* la feuille garde son message */ });
   }
