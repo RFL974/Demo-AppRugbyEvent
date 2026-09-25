@@ -147,6 +147,8 @@ const SRC_AUTORISATION = [
   ligne(F_AUTORISATION, 'var autorisationComptes'),
   ligne(F_AUTORISATION, 'var autorisationServeurPorteConfig'),
   ligne(F_AUTORISATION, 'var autorisationEstimationErreur'),
+  ligne(F_AUTORISATION, 'var autorisationDossierCourant'),
+  bloc(F_AUTORISATION, 'function afficherDpsAutorisation(', '{'),
   bloc(F_AUTORISATION, 'function libelleDeplacementPublic(', '{'),
   bloc(F_AUTORISATION, 'function rendreEstimationPublicAutorisation(', '{'),
   bloc(F_AUTORISATION, 'function afficherEstimationPublicAutorisation(', '{'),

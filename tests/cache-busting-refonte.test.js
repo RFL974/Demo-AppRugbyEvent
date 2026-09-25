@@ -13,7 +13,7 @@
  *  ne change pas, l'organisateur voit l'ancienne page — parfois un HTML neuf avec un script
  *  périmé, ce qui casse plus franchement qu'un simple retard d'affichage.
  *
- *  ⭐ LE CONTRAT DE CETTE LIVRAISON. Les 30 fichiers ci-dessous sont ceux que la branche
+ *  ⭐ LE CONTRAT DE CETTE LIVRAISON. Les fichiers ci-dessous sont ceux que la branche
  *  `refonte/ciel-et-verre` modifie ou ajoute par rapport à `origin/main` (recensement
  *  `git diff --name-only origin/main...refonte/ciel-et-verre -- 'css/*' 'js/*'`). Chacun doit
  *  être appelé avec UNE seule version, explicite et identique partout.
@@ -54,8 +54,9 @@ function vrai(valeur, message) { assert.ok(valeur, message); controles++; }
 const VERSION = 'refonte-ciel-verre-20260920';
 const VERSIONS_PROPRES = {
   'css/dossier.css': VERSION + '-participants2',
-  'css/theme-r92.css': VERSION + '-participants2',
-  'js/admin-autorisation.js': VERSION + '-participants3',
+  'css/theme-r92.css': VERSION + '-participants2-dps2',
+  'js/admin-autorisation.js': VERSION + '-participants3-dps1',
+  'js/admin-dps.js': VERSION + '-dps2',
   'js/admin-invitations.js': VERSION + '-participants2',
   'js/admin-suivi-clubs.js': VERSION + '-participants2',
   'js/admin.js': VERSION + '-participants3',
@@ -68,7 +69,7 @@ const VERSIONS_PROPRES = {
 const LIVRES = [
   'css/dossier.css', 'css/ecrans.css', 'css/saisie.css', 'css/sponsors.css', 'css/styles.css',
   'css/theme-r92.css', 'css/tokens.css', 'css/tournoi-public.css',
-  'js/admin-autorisation.js', 'js/admin-choix-categories.js', 'js/admin-conformite-ffr.js',
+  'js/admin-autorisation.js', 'js/admin-choix-categories.js', 'js/admin-conformite-ffr.js', 'js/admin-dps.js',
   'js/admin-equipes.js', 'js/admin-generation.js', 'js/admin-infos-publication.js',
   'js/admin-reglages.js', 'js/admin-suivi-clubs.js', 'js/admin-tableau-bord.js',
   'js/admin-terrains.js', 'js/admin.js', 'js/assistant.js', 'js/commun.js', 'js/config.js', 'js/dialog.js',

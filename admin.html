@@ -12,7 +12,7 @@
   <!-- Notre feuille de style commune -->
   <link rel="stylesheet" href="css/styles.css?v=refonte-ciel-verre-20260920">
   <!-- Surcouche moderne navy/blanc/ciel (re-skin admin — retirer cette ligne pour revenir en arrière) -->
-  <link rel="stylesheet" href="css/theme-r92.css?v=refonte-ciel-verre-20260920-participants2">
+  <link rel="stylesheet" href="css/theme-r92.css?v=refonte-ciel-verre-20260920-participants2-dps2">
   <!-- Mode « écrans » : barre latérale + onglets sur grand écran (structure construite par js/ecrans.js) -->
   <link rel="stylesheet" href="css/ecrans.css?v=refonte-ciel-verre-20260920">
   <!-- Encarts partenaires : les MÊMES règles que la page publique, pour que l'aperçu de
@@ -1020,15 +1020,67 @@
         </div>
       </section>
 
-      <!-- Estimation opérationnelle du public pour préparer le dispositif prévisionnel de secours. -->
+      <!-- La préparation DPS réutilise l'instantané authentifié de la demande d'autorisation.
+           Les copies, dépliants et liens externes restent entièrement locaux. -->
       <section class="carte" id="bloc-dps">
-        <h2>Demande de dispositif prévisionnel de secours</h2>
-        <div class="autorisation-public" aria-labelledby="autorisation-public-titre">
-          <h3 id="autorisation-public-titre">Public attendu pour le dispositif de secours</h3>
-          <div id="autorisation-public-attendu" aria-live="polite">
-            <p class="vide">Estimation en cours de chargement…</p>
-          </div>
+        <div class="dps-entete">
+          <h2>Tableau de préparation</h2>
+          <p class="note-generation">Prépare ta demande de dispositif prévisionnel de secours à partir des informations déjà disponibles.</p>
         </div>
+        <ol class="dps-etapes" aria-label="Avancement de la demande">
+          <li class="est-actif" data-dps-etape="1"><span>1</span><strong>Données collectées</strong><small>Faire le point</small></li>
+          <li data-dps-etape="2"><span>2</span><strong>Dossier à compléter</strong><small>Renseigner les éléments manquants</small></li>
+          <li data-dps-etape="3"><span>3</span><strong>Demande prête</strong><small>Vérifier et copier</small></li>
+          <li data-dps-etape="4"><span>4</span><strong>Suivi</strong><small>Après l'envoi</small></li>
+        </ol>
+        <div class="dps-tableau">
+          <div class="dps-colonne-principale">
+            <div class="autorisation-public" aria-labelledby="autorisation-public-titre">
+              <h3 id="autorisation-public-titre">Public attendu pour le dispositif de secours</h3>
+              <div id="autorisation-public-attendu" aria-live="polite">
+                <p class="vide">Estimation en cours de chargement…</p>
+              </div>
+            </div>
+            <section class="dps-origines" aria-labelledby="dps-origines-titre">
+              <div class="dps-sous-entete"><div><h3 id="dps-origines-titre">Origine des informations</h3>
+                <p>Les données sont reprises de l'organisme, du site et de l'édition actuelle.</p></div>
+                <span id="dps-fraicheur">Chargement…</span></div>
+              <div id="dps-origines-liste" aria-live="polite"><p class="vide">Informations en cours de chargement…</p></div>
+            </section>
+          </div>
+          <aside class="dps-actions" aria-labelledby="dps-actions-titre">
+            <h3 id="dps-actions-titre">À faire maintenant</h3>
+            <p>Complète seulement ce qui manque avant de préparer la demande.</p>
+            <div id="dps-actions-liste" aria-live="polite"><p class="vide">Vérification en cours…</p></div>
+            <button type="button" class="bouton" id="dps-continuer">Continuer la préparation</button>
+            <button type="button" class="bouton bouton-secondaire" id="dps-voir-copie">Voir les éléments à copier</button>
+            <p class="dps-sans-appel"><strong>Aucun appel supplémentaire.</strong> Les dépliants, copies et changements de format restent dans le navigateur.</p>
+          </aside>
+        </div>
+        <section class="dps-demande-prete" id="dps-demande-prete" aria-labelledby="dps-demande-titre" hidden>
+          <div class="dps-sous-entete"><div><span class="dps-surtitre">Étape 3 · Demande prête</span>
+            <h3 id="dps-demande-titre">Éléments à copier dans la demande en ligne</h3>
+            <p>Copie le dossier complet ou seulement le champ demandé par l'organisme choisi.</p></div>
+            <button type="button" class="bouton bouton-secondaire" data-dps-fermer>Fermer</button></div>
+          <div class="dps-outils-copie">
+            <div class="dps-formats" role="group" aria-label="Format du texte">
+              <button type="button" data-dps-mode="court">Version courte</button>
+              <button type="button" class="est-actif" data-dps-mode="complet">Version complète</button>
+            </div>
+            <span id="dps-etat-brouillon">Brouillon en cours de préparation</span>
+            <span id="dps-compteur" aria-live="polite"></span>
+            <div class="dps-actions-copie">
+              <button type="button" class="bouton bouton-secondaire" data-dps-copier="ligne">Copier en une ligne</button>
+              <button type="button" class="bouton" data-dps-copier="tout">Tout copier</button>
+            </div>
+          </div>
+          <div class="dps-champs-copie" id="dps-champs-copie"></div>
+          <div class="dps-fournisseurs-entete"><span class="dps-surtitre">Choisir un organisme</span>
+            <h3>Demander plusieurs devis</h3>
+            <p>Ces liens ouvrent les sites officiels. Aucune information n'est transmise automatiquement par MaxiLou.</p></div>
+          <div class="dps-fournisseurs" id="dps-fournisseurs"></div>
+          <div class="message-form" id="dps-message-copie" role="status" aria-live="polite"></div>
+        </section>
       </section>
 
       <!-- Amont : demande d'autorisation de tournoi EDR (feuille de report du formulaire FFR) -->
@@ -1274,7 +1326,8 @@
   <script src="js/admin-sponsors.js?v=retours-partenaires-20260919"></script>
   <!-- pdf-lib : remplissage du formulaire officiel FFR (AcroForm) côté navigateur, sans build. -->
   <script src="js/vendor/pdf-lib.min.js"></script>
-  <script src="js/admin-autorisation.js?v=refonte-ciel-verre-20260920-participants3"></script>
+  <script src="js/admin-autorisation.js?v=refonte-ciel-verre-20260920-participants3-dps1"></script>
+  <script src="js/admin-dps.js?v=refonte-ciel-verre-20260920-dps2"></script>
   <!-- Feuille de fin de journée : réutilise pdf-lib (chargé juste au-dessus) pour le PDF. -->
   <script src="js/admin-feuille-jour.js"></script>
   <!-- Générateur de QR code LOCAL (MIT, js/vendor/qrcode.js — déjà utilisé par le dossier club).

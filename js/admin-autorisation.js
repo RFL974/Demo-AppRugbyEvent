@@ -315,9 +315,11 @@ function rendreFeuilleAutorisation(dossier) {
  */
 function invaliderAutorisationAffichee() {
   autorisationComptes = null;                       // même raison qu'en B2-0.5 : ils décrivent la feuille effacée
+  autorisationDossierCourant = null;
   estimationPublicCourante = null;
   autorisationEstimationErreur = '';
   afficherEstimationPublicAutorisation();
+  afficherDpsAutorisation();
   const zoneSaisie = document.getElementById('autorisation-saisie');
   const zoneFeuille = document.getElementById('autorisation-feuille');
   if (zoneFeuille) {
@@ -482,9 +484,19 @@ var autorisationComptes = null;
  *  (voir B2-0.5 §3), seule la liste des catégories des récompenses pourrait être d'un tour en retard. */
 var autorisationServeurPorteConfig = null;
 var autorisationEstimationErreur = '';
+/* Le DPS partage exactement le même instantané : jamais de seconde lecture pour le recomposer. */
+var autorisationDossierCourant = null;
 /* ⛔ Borne dure du rattrapage : on ne boucle jamais sans fin, même si une écriture arrive à
    chaque tour. Au-delà, la dette RESTE et sera reprise à la prochaine ouverture. */
 var AUTORISATION_TOURS_MAX = 5;
+
+function afficherDpsAutorisation() {
+  if (typeof afficherDpsDepuisAutorisation !== 'function') return;
+  afficherDpsDepuisAutorisation(autorisationDossierCourant,
+    typeof configCourante === 'undefined' ? null : configCourante,
+    typeof estimationPublicCourante === 'undefined' ? null : estimationPublicCourante,
+    autorisationEstimationErreur);
+}
 
 function libelleDeplacementPublic(mode) {
   return { groupe: 'Transport groupé', libre: 'Familles autonomes', mixte: 'Déplacement mixte' }[mode] || 'Non renseigné';
@@ -559,9 +571,11 @@ function invaliderFeuilleAutorisationAffichee() {
   //   instant. Les garder alimenterait le PDF avec des nombres que la feuille ne montre plus —
   //   exactement le mensonge silencieux que l'invalidation existe pour empêcher.
   autorisationComptes = null;
+  autorisationDossierCourant = null;
   estimationPublicCourante = null;
   autorisationEstimationErreur = '';
   afficherEstimationPublicAutorisation();
+  afficherDpsAutorisation();
   const zoneFeuille = document.getElementById('autorisation-feuille');
   if (zoneFeuille) {
     zoneFeuille.innerHTML = '<div class="ffr-bloc ffr-neutre">Feuille de report en cours de ' +
@@ -813,6 +827,8 @@ async function majAutorisation(opt) {
     const configFournie = !!(rep && rep.config && rep.config.global && Array.isArray(rep.config.categories));
     if (configFournie) configCourante = rep.config;
     autorisationServeurPorteConfig = configFournie;
+    autorisationDossierCourant = dossier;
+    afficherDpsAutorisation();
     zoneFeuille.innerHTML = rendreFeuilleAutorisation(dossier);
   } catch (e) {
     if (depassee()) return { ok: false, motif: 'revision-depassee' };
@@ -820,6 +836,7 @@ async function majAutorisation(opt) {
     autorisationComptes = null;
     autorisationEstimationErreur = String((e && e.message) || 'erreur réseau').replace(/\.\s*$/, '');
     afficherEstimationPublicAutorisation();
+    afficherDpsAutorisation();
     // ⛔ On ne dit plus « connecte-toi avec la clé admin » quoi qu'il arrive : c'était la seule
     //   explication proposée, et elle était FAUSSE dans le cas le plus fréquent — un serveur lent
     //   ou muet. Le motif réel est nommé, et « Réessayer » relance la lecture sans recharger.
