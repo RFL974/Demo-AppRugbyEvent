@@ -17,7 +17,8 @@ vm.runInContext(`equipesCourantes=[{id_equipe:'e1',nom_equipe:'Accepté',categor
  {club_nom:'Déjà invité',statut:'Invité',club_contact_email:'club@example.invalid',invitation_envoyee:'2026-09-20'},
  {club_nom:'Sans email',statut:'Invité'},
  {club_nom:'Accepté',statut:'Accepté',club_contact_email:'club@example.invalid',categories_engagees:'U10',selection_enregistree:'2026-09-20'},
- {club_nom:'Décliné',statut:'Décliné',club_contact_email:'club@example.invalid'}];`,c);
+ {club_nom:'Décliné',statut:'Décliné',club_contact_email:'club@example.invalid'},
+ {club_nom:'Démo',club_id:'demo-racing-club',club_token:'demo-racing-token',statut:'Invité',club_contact_email:'demo-club@example.invalid'}];`,c);
 const clubs=vm.runInContext('clubsInvitesCourants',c);
 c.majApercuInvitation=()=>{};c.majApercuDossierEmail=()=>{};
 c.afficherClubsInvites();
@@ -48,6 +49,12 @@ c.rafraichirRessourceAdmin=async()=>{};
 (async()=>{
  await c.envoyerInvitationClubUI('Déjà invité');assert.equal(posts.length,0);
  await c.envoyerInvitationClubUI('Déjà invité',{relance:true});assert.equal(posts.length,1);assert.equal(posts[0].data.relance,'oui');
+ assert.equal(posts[0].action,'envoyerInvitationClub');
+ assert.equal(posts[0].data.sujet,'Invitation test');assert.equal(posts[0].data.html_modele,'<p>Test</p>');
+ assert.equal(posts[0].data.texte_modele,'Test');assert.equal(posts[0].data.base_reponse,'https://example.invalid/reponse');
+ assert.equal(posts[0].data.base_invitation,'https://example.invalid/invitation');assert.equal(posts[0].data.pieces_jointes.length,0);
+ assert.ok(posts[0].data.id_envoi);assert.equal(posts[0].data.confirmer_renvoi,'non');
+ await c.envoyerInvitationClubUI('Démo');assert.equal(posts.length,1);assert.match(alerts.at(-1),/non distribuable/);
  await c.envoyerInvitationClubUI('Nouveau');assert.equal(posts.length,2);assert.equal(clubs[0].invitation_envoyee,'2026-09-20');
  assert(/data-club="Nouveau" disabled>Envoyer l’invitation/.test(dom['liste-clubs-invites'].innerHTML));
  await c.envoyerInvitationClubUI('Nouveau');assert.equal(posts.length,2);

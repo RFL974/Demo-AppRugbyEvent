@@ -1332,6 +1332,20 @@ function estInvitable(statut) {
   return !estAccepte(statut) && !memeTexteSouple(statut, 'Décliné');
 }
 
+/**
+ * Les contacts posés par le jeu Démo ont une adresse réservée qui ne peut recevoir aucun mail.
+ * Deux preuves sont exigées (marque du jeu + domaine réservé) : si l'organisateur remplace ensuite
+ * l'adresse par une vraie adresse de test autorisée, l'envoi redevient possible.
+ */
+function estDestinataireDemoNonDistribuable(club) {
+  const c = club || {};
+  const email = String(c.club_contact_email || '').trim();
+  const marque = [c.club_id, c.club_token].some(function (v) {
+    return String(v || '').trim().indexOf('demo-racing-') === 0;
+  });
+  return marque && /@example\.invalid$/i.test(email);
+}
+
 /** Sélecteur des boutons qui déclenchent l'envoi d'invitation d'un club (liste « Clubs invités », suivi, fiche). */
 function selecteurBoutonsInvitation(nom) {
   const n = (window.CSS && CSS.escape) ? CSS.escape(nom) : String(nom).replace(/"/g, '\\"');
@@ -1360,6 +1374,10 @@ async function envoyerInvitationClubUI(nom, options) {
     }
     const email = String(club.club_contact_email || '').trim();
     if (!email) { await dialogAlerter('« ' + nom + ' » n\'a pas d\'email de contact : à inviter manuellement.'); return; }
+    if (estDestinataireDemoNonDistribuable(club)) {
+      await dialogAlerter('« ' + email + ' » est une adresse de démonstration non distribuable. Modifie les coordonnées du club avec une adresse de test autorisée avant l’envoi.');
+      return;
+    }
     const sujet = sujetInvitationCourant();
     if (!sujet) { afficherMessage(message, '⚠️ L\'objet de l\'aperçu ne peut pas être vide.', 'ko'); return; }
     const refus = refusEmailSaisiesNonEnregistrees(CARTES_EMAIL_INVITATION);
