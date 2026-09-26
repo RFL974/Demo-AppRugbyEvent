@@ -121,7 +121,7 @@ function ecrans(b) {
   return { clubs, suivi, equipes, resume: (b.doc.getElementById('suivi-clubs-resume') || { textContent: '' }).textContent };
 }
 const ATTENDUES_ECRAN = ATTENDU.EQUIPES.map((e) => [e.nom_equipe, e.club, e.categorie, String(e.joueurs), String(e.educateurs)]).map(json).sort();
-const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE', 'RC SAINT-CLOUD']).sort();
+const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.slice().sort();
 
 (async () => {
   /* ============================== I — inventaire ============================== */
@@ -142,7 +142,8 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
     t.vrai(!b.erreurBranchement, 'I.4 tous les écouteurs de la page se branchent (aucun nom manquant)', b.erreurBranchement);
     await b.demo();
     const accepte = B.clubLigne(b, 'CLAMART');
-    const attente = B.clubLigne(b, 'RC BOULOGNE');
+    const avecAttente = await banc({ monde: B.MI.amorcerClubs });
+    const attente = B.clubLigne(avecAttente, 'CLUB FICTIF A');
     t.vrai(json(releverLigne(accepte)) === json(LIGNE_ACCEPTE) && json(releverLigne(attente)) === json(LIGNE_ATTENTE),
       'I.5 contrôles créés par le rendu : ligne « Accepté » (envoyer, crayon, statut, retirer, 5 catégories, prénom, ajouter les équipes) et ligne en attente',
       [releverLigne(accepte), releverLigne(attente)]);
@@ -205,22 +206,23 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
       await b.cliquerDemo();                                    // clic ou Entrée PENDANT l'envoi
       await b.global('onCreerJeuDemo')();                        // appel direct (Entrée sur un bouton resté actif)
     });
-    t.vrai(actions(r).join() === 'creerJeuDemoRacing' && r.attendues.length === 1 && r.fond.length === 0 && r.requetes[0].delaiMs === 30000,
-      'D.1 un clic sur un tournoi vide : UNE requête (creerJeuDemoRacing), bloquante, délai 30 s, aucune relecture', r.resume);
+    t.vrai(actions(r).join() === 'creerJeuDemoRacing' && r.attendues.length === 1 && r.fond.length === 0 && r.requetes[0].delaiMs === 60000,
+      'D.1 un clic sur un tournoi vide : UNE requête (creerJeuDemoRacing), bloquante, délai ciblé 60 s, aucune relecture', r.resume);
     t.vrai(pendantEnvoi && pendantEnvoi.desactive && pendantEnvoi.occupe === 'true' && /Création/.test(pendantEnvoi.texte),
       'D.2 pendant l\'envoi : bouton désactivé, occupé, libellé « Création… » ; clic et Entrée n\'envoient rien de plus', pendantEnvoi);
     const msg = b.texte('message-jeu-demo');
     t.vrai(/✅ Jeu de démonstration créé/.test(msg) && msg.indexOf('U10 : 10 équipes, 118 joueurs, 14 éducateurs · U12 : 11 équipes, 209 joueurs, 20 éducateurs — total : 21 équipes, 327 joueurs, 34 éducateurs') !== -1,
       'D.3 message : totaux RELUS par le serveur — U10 10/118/14, U12 11/209/20, total 21/327/34', msg);
     const v = ecrans(b);
-    t.vrai(json(v.clubs.map((c) => c.nom).sort()) === json(CLUBS_JEU) && !v.clubs.some((c) => /RACING|CHATENAY/.test(c.nom)),
-      'D.4 « Clubs invités » : les 12 clubs du jeu, ni RACING 92 (organisateur) ni CHATENAY-MALABRY', v.clubs.map((c) => c.nom));
+    t.vrai(json(v.clubs.map((c) => c.nom).sort()) === json(CLUBS_JEU) &&
+      !v.clubs.some((c) => /RACING|CHATENAY|RC BOULOGNE|RC SAINT[ -]CLOUD|RC PUTEAUX/.test(c.nom)),
+      'D.4 « Clubs invités » : exactement les 9 clubs porteurs d’équipes ; organisateur et clubs exclus absents', v.clubs.map((c) => c.nom));
     t.vrai(v.clubs.filter((c) => ATTENDU.CLUBS_AVEC_EQUIPES.indexOf(c.nom) !== -1).length === 9 &&
       v.clubs.filter((c) => ATTENDU.CLUBS_AVEC_EQUIPES.indexOf(c.nom) !== -1).every((c) => c.etat === 'Équipes ajoutées') &&
       v.clubs.every((c) => c.contact === 'Contact Démo – ' + c.nom + ' · ' + 'demo-' + c.nom.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-') + '@example.invalid'),
       'D.5 chaque club accepté est « Équipes ajoutées » ; contacts fictifs « Contact Démo – CLUB · demo-club@example.invalid »', v.clubs.slice(0, 3));
-    t.vrai(json(v.suivi.slice().sort()) === json(CLUBS_JEU) && /2\s*Réponses attendues\s*9\s*Participants\s*1\s*Ne participent pas/.test(v.resume),
-      'D.6 « Suivi des clubs » : les mêmes 12 clubs — 2 réponses attendues, 9 participants, 1 refus', [v.suivi, v.resume]);
+    t.vrai(json(v.suivi.slice().sort()) === json(CLUBS_JEU) && /0\s*Réponse(?:s)? attendue(?:s)?\s*9\s*Participants\s*0\s*Ne participent pas/.test(v.resume),
+      'D.6 « Suivi des clubs » : les mêmes 9 clubs — 0 réponse attendue, 9 participants, 0 refus', [v.suivi, v.resume]);
     t.vrai(json(v.equipes.map((e) => json([e.nom, e.club, e.categorie, e.joueurs, e.educateurs])).sort()) === json(ATTENDUES_ECRAN),
       'D.7 « Équipes » : les 21 lignes exactes — nom, club, catégorie, joueurs, éducateurs', v.equipes.map((e) => [e.nom, e.club, e.categorie, e.joueurs, e.educateurs]));
     // Concordance : ce que Clubs invités annonce pour chaque club = ce que l'écran Équipes lui rattache.
@@ -254,8 +256,8 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
     const o = await banc({ panne: (e) => (e.action === 'listerClubsInvites' ? 'retarder' : null) });
     o.global("marquerRessourceAdmin('clubsInvites', false)");
     await o.jouer(async () => { const nav = o.global('ouvrirEtapeAdmin')('invitation'); await BC.tour(); await o.cliquerDemo(); await nav; });
-    t.vrai(ecrans(o).clubs.length === 12 && json(o.global('clubsInvitesCourants')) === json(o.srv.clubs()),
-      'D.16 lecture de navigation partie avant le jeu et arrivée après : l\'écran garde l\'état le plus récent (12 clubs), jamais l\'ancien', ecrans(o).clubs.length);
+    t.vrai(ecrans(o).clubs.length === 9 && json(o.global('clubsInvitesCourants')) === json(o.srv.clubs()),
+      'D.16 lecture de navigation partie avant le jeu et arrivée après : l\'écran garde l\'état le plus récent (9 clubs), jamais l\'ancien', ecrans(o).clubs.length);
     const d = await banc();
     const dbl = await d.jouer(() => Promise.all([d.cliquerDemo(), d.cliquerDemo()]));
     t.vrai(actions(dbl).join() === 'creerJeuDemoRacing' && d.srv.equipes().length === 21, 'D.14 double clic rapide : une seule requête, aucun doublon', dbl.resume);
@@ -271,14 +273,14 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
       /^⚠️ Réponse du serveur non reçue.*pas confirmée/.test(p1.b.texte('message-jeu-demo')) && !/✅/.test(p1.b.texte('message-jeu-demo')) &&
       p1.b.id('message-jeu-demo').type !== 'ok' && !p1.b.boutonDemo().disabled,
       'P.1 réponse perdue (404 après écriture) : aucun renvoi automatique, relecture seule des deux listes en arrière-plan, « non confirmée », bouton rendu', [p1.r.resume, p1.b.texte('message-jeu-demo')]);
-    t.vrai(ecrans(p1.b).equipes.length === 21 && ecrans(p1.b).clubs.length === 12, 'P.2 après la relecture, les écrans montrent ce que le serveur a réellement écrit', '');
+    t.vrai(ecrans(p1.b).equipes.length === 21 && ecrans(p1.b).clubs.length === 9, 'P.2 après la relecture, les écrans montrent ce que le serveur a réellement écrit', '');
     const p2 = await p1.b.demo();
     t.vrai(actions(p2).join() === 'creerJeuDemoRacing' && json(p2.requetes[0].reponse.modifies) === '[]' && p1.b.srv.equipes().length === 21 &&
       /déjà en place/.test(p1.b.texte('message-jeu-demo')), 'P.3 nouveau clic après la réponse perdue : rien réécrit, rien doublé, « déjà en place »', p2.resume);
     for (const [code, mode] of [['P.4', 'silence'], ['P.5', 'delai']]) {
       const x = await cas(mode);
-      t.vrai(actions(x.r).filter((a) => a === 'creerJeuDemoRacing').length === 1 && x.r.retourMs === 30000 && /délai de 30 s dépassé/.test(x.b.texte('message-jeu-demo')) &&
-        !x.b.boutonDemo().disabled && !x.r.bloque, code + ' réponse ' + (mode === 'silence' ? 'silencieuse' : 'trop lente') + ' : bouton libéré au bout de 30 s, « non confirmée », jamais renvoyée',
+      t.vrai(actions(x.r).filter((a) => a === 'creerJeuDemoRacing').length === 1 && x.r.retourMs === 60000 && /délai de 60 s dépassé/.test(x.b.texte('message-jeu-demo')) &&
+        !x.b.boutonDemo().disabled && !x.r.bloque, code + ' réponse ' + (mode === 'silence' ? 'silencieuse' : 'trop lente') + ' : bouton libéré au bout de 60 s, « non confirmée », jamais renvoyée',
         [x.r.resume, x.r.retourMs, x.b.texte('message-jeu-demo')]);
     }
     for (const [code, mode, ecrit] of [['P.6', 'http400-avant', false], ['P.7', 'http409-avant', false], ['P.8', 'http500-avant', false], ['P.9', 'http500-apres', true], ['P.10', 'reseau-avant', false]]) {
@@ -344,7 +346,7 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
     await b.demo();
     const edition = B.clubLigne(b, 'CLUB FICTIF A').querySelector('.club-edit-prenom');
     const u12 = B.clubLigne(b, 'CLUB FICTIF B').querySelectorAll('.club-cat-case').find((c) => c.value === 'U12');
-    t.vrai(!!edition && edition.value === 'PRÉNOM EN COURS' && u12 && u12.checked === false && ecrans(b).clubs.length === 15,
+    t.vrai(!!edition && edition.value === 'PRÉNOM EN COURS' && u12 && u12.checked === false && ecrans(b).clubs.length === 12,
       'B.1 coordonnées en cours d\'édition et case décochée d\'un panneau : conservées quand le jeu redessine la liste', [edition && edition.value, u12 && u12.checked]);
     const e = await banc({ monde: (m) => m.appeler('ajouterEquipe', m.classeur, 'CLUB REEL', 'U8', '10', '1') });
     e.global('afficherEquipes(equipesCourantes)');
@@ -843,7 +845,7 @@ const CLUBS_JEU = ATTENDU.CLUBS_AVEC_EQUIPES.concat(['RC PUTEAUX', 'RC BOULOGNE'
     const r = await b.jouer(() => b.global('onReinitialiser')());
     const v = ecrans(b);
     const fictifs = (json(['Clubs', 'Participations', 'Equipes'].map((o) => b.srv.appeler('lireOngletSimple', b.srv.classeur, o))).match(/example\.invalid/g) || []).length;
-    t.vrai(avantReset.equipes.length === 21 && avantReset.clubs.length === 12 && r.attendues[0].action === 'preparerReinitialisation' && r.attendues.some((q) => q.action === 'reinitialiserTournoi') && v.clubs.length === 0 && v.suivi.length === 0 && v.equipes.length === 0 &&
+    t.vrai(avantReset.equipes.length === 21 && avantReset.clubs.length === 9 && r.attendues[0].action === 'preparerReinitialisation' && r.attendues.some((q) => q.action === 'reinitialiserTournoi') && v.clubs.length === 0 && v.suivi.length === 0 && v.equipes.length === 0 &&
       b.srv.equipes().length === 0 && fictifs === 0, 'R.1 réinitialiser depuis l\'écran : Clubs invités, Suivi, Équipes vides ; plus aucune donnée fictive du jeu dans le classeur',
     [r.resume, v.clubs.length, v.equipes.length, fictifs]);
     // ⭐ 4ᵉ passage : réinitialisation BORNÉE (3 min), jamais renvoyée ; issue inconnue → relecture complète, message honnête.

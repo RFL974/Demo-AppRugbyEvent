@@ -49,12 +49,27 @@ const essai = async (code, fn) => { try { await fn(); } catch (e) { t.vrai(false
 const attendre = (ms) => new Promise((r) => setTimeout(r, ms));
 const txt = (e) => (e ? e.textContent.replace(/\s+/g, ' ').trim() : '');
 
+/** Clubs sans équipe propres aux scénarios d'interaction de ce banc — ils ne font plus partie du jeu produit. */
+function peuplerClubsScenarioSuivi(m) {
+  const ajouter = (club, reponse) => {
+    m.appeler('ajouterClubInvite', m.classeur, { club_nom: club, club_contact_prenom: 'Contact', club_contact_nom: 'Démo – ' + club,
+      club_contact_email: 'demo-' + club.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '@example.invalid' });
+    m.appeler('ecrireEngagementClub', m.classeur, club, reponse, true);
+  };
+  ajouter('RC PUTEAUX', { statut: 'Décliné', invitation_envoyee: '2026-09-03', date_reponse: '2026-09-07', confirmation_reponse_envoyee: '2026-09-07 18:40:00' });
+  ajouter('RC BOULOGNE', { statut: 'Invité', invitation_envoyee: '2026-09-03', derniere_relance_reponse: '2026-09-15' });
+  ajouter('RC SAINT-CLOUD', { statut: 'Invité' });
+}
+
 /** Un banc prêt : jeu de démonstration, page à l'état d'une connexion neuve (liste des clubs pas encore lue). */
 async function preparer(o) {
   const opts = o || {};
   let entree = null;
   const b = await B.banc(Object.assign({ lire: LIRE, backend: CODE, documentReel: true, avantServir: (e) => { entree = e; },
-    monde: (m) => { m.postMesure({ action: 'creerJeuDemoRacing', cle: B.MI.CLE_ADMIN }); } }, opts.banc || {}));
+    monde: (m) => {
+      m.postMesure({ action: 'creerJeuDemoRacing', cle: B.MI.CLE_ADMIN });
+      if (!opts.sansExtras) peuplerClubsScenarioSuivi(m);
+    } }, opts.banc || {}));
   const orig = b.srv.postMesure;
   b.srv.postMesure = (corps, lib) => {
     const remplacer = b.remplacer && b.remplacer[corps.action];
@@ -503,7 +518,7 @@ const clubMemoire = (b, nom) => b.global('clubsInvitesCourants').filter((c) => c
   });
   await essai('V.I10', async () => {                                    // ancien frontend / nouveau frontend, même backend figé
     const ancien = await B.banc({ lire: LECTEUR_AVANT, backend: CODE, documentReel: true,
-      monde: (m) => { m.postMesure({ action: 'creerJeuDemoRacing', cle: B.MI.CLE_ADMIN }); } });
+      monde: (m) => { m.postMesure({ action: 'creerJeuDemoRacing', cle: B.MI.CLE_ADMIN }); peuplerClubsScenarioSuivi(m); } });
     ancien.global('configCourante = ' + json(ancien.srv.config()));
     ancien.global('equipesCourantes = ' + json(ancien.srv.equipes()));
     ancien.ctx.dialogConfirmer = async () => true;
@@ -523,15 +538,14 @@ const clubMemoire = (b, nom) => b.global('clubsInvitesCourants').filter((c) => c
   /* ============================== V.X — cohérence du jeu ============================== */
   console.log('\nV.X — cohérence : jeu de démonstration, Suivi, Équipes, autorisation');
   await essai('V.X', async () => {
-    const clubs = b.global('clubsInvitesCourants');
+    const propre = await preparer({ sansExtras: true });
+    const clubs = propre.global('clubsInvitesCourants');
     const statut = (n) => (clubs.filter((c) => c.club_nom === n)[0] || {}).statut;
-    const acceptes = clubs.filter((c) => b.global('estAccepte')(c.statut));
-    const eq = b.srv.equipes();
+    const acceptes = clubs.filter((c) => propre.global('estAccepte')(c.statut));
+    const eq = propre.srv.equipes();
     const somme = (l, j, e) => l.reduce((s, x) => ({ j: s.j + Number(x[j] || 0), e: s.e + Number(x[e] || 0) }), { j: 0, e: 0 });
-    t.vrai(clubs.length === 12 && acceptes.length === 9 && statut('RC PUTEAUX') === 'Décliné' && statut('RC BOULOGNE') === 'Invité' &&
-      !!(clubs.filter((c) => c.club_nom === 'RC BOULOGNE')[0] || {}).derniere_relance_reponse && statut('RC SAINT-CLOUD') === 'Invité' &&
-      !clubs.some((c) => /RACING 92/.test(c.club_nom)),
-      'V.X1 Suivi : 12 clubs, 9 participants, RC PUTEAUX décliné, RC BOULOGNE invité et relancé, RC SAINT-CLOUD invité, RACING 92 jamais invité',
+    t.vrai(clubs.length === 9 && acceptes.length === 9 && !clubs.some((c) => /RACING 92|RC BOULOGNE|RC SAINT[ -]CLOUD|RC PUTEAUX|CHATENAY/.test(c.club_nom)),
+      'V.X1 Suivi : exactement 9 clubs participants ; organisateur et clubs exclus absents',
       clubs.map((c) => c.club_nom + ':' + c.statut));
     const tout = somme(eq, 'nb_joueurs', 'nb_educateurs');
     const invites = somme(eq.filter((e) => !/^RACING 92/.test(e.nom_equipe)), 'nb_joueurs', 'nb_educateurs');
@@ -539,17 +553,17 @@ const clubMemoire = (b, nom) => b.global('clubsInvitesCourants').filter((c) => c
     t.vrai(eq.length === 21 && tout.j === 327 && tout.e === 34 && json(invites) === json(declares) && declares.j === 262 && declares.e === 28,
       'V.X2 Équipes : 21 équipes, 327 joueurs, 34 éducateurs ; les 9 participants du Suivi déclarent exactement leurs équipes (262 / 28, RACING 92 à part)',
       { equipes: eq.length, tout, invites, declares });
-    t.vrai(/2Réponsesattendues9Participants1Neparticipentpas7Paiementsattendus/.test(txt(b.id('suivi-clubs-resume')).replace(/\s/g, '')),
-      'V.X3 compteurs du Suivi : 2 réponses attendues, 9 participants, 1 ne participe pas, 7 paiements attendus', txt(b.id('suivi-clubs-resume')));
-    const aut = b.srv.appeler('getDossierAutorisation', b.srv.classeur);
+    t.vrai(/0Réponsesattendues9Participants0Neparticipentpas7Paiementsattendus/.test(txt(propre.id('suivi-clubs-resume')).replace(/\s/g, '')),
+      'V.X3 compteurs du Suivi : 0 réponse attendue, 9 participants, 0 ne participe pas, 7 paiements attendus', txt(propre.id('suivi-clubs-resume')));
+    const aut = propre.srv.appeler('getDossierAutorisation', propre.srv.classeur);
     const champs = {};
     ((aut && aut.dossier && aut.dossier.sections) || []).forEach((s) => (s.champs || []).forEach((c) => { champs[String(c.libelle).replace(/’/g, '\'')] = String(c.valeur); }));
     t.vrai(champs['Nombre de clubs'] === '9' && champs['Nombre d\'équipes (minimum 3)'] === '21' && champs['Nombre de participants'] === '327' &&
       champs['Nombre d\'éducateurs'] === '34',
       'V.X4 demande d\'autorisation : 9 clubs, 21 équipes, 327 participants, 34 éducateurs', champs);
-    const gen = b.srv.postMesure({ action: 'genererPoulesEtPlanning', cle: B.MI.CLE_ADMIN }).reponse;
-    const poules = b.srv.appeler('lireOngletSimple', b.srv.classeur, 'Poules').length;
-    const matchs = b.srv.appeler('lireOngletSimple', b.srv.classeur, 'Matchs').length;
+    const gen = propre.srv.postMesure({ action: 'genererPoulesEtPlanning', cle: B.MI.CLE_ADMIN }).reponse;
+    const poules = propre.srv.appeler('lireOngletSimple', propre.srv.classeur, 'Poules').length;
+    const matchs = propre.srv.appeler('lireOngletSimple', propre.srv.classeur, 'Matchs').length;
     t.vrai(!gen.error && poules === 4 && matchs === 45, 'V.X5 génération sur le jeu : 4 poules, 45 matchs', { gen: gen.error || 'ok', poules, matchs });
   });
 

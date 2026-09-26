@@ -61,7 +61,7 @@ const VERSIONS_PROPRES = {
   'js/pdf-ciel-verre.js': 'refonte-ciel-verre-20260925-pdf-identite1',
   'js/admin-terrains.js': 'refonte-ciel-verre-20260925-terrain-orientation1',
   'js/admin-terrains-pdf.js': 'refonte-ciel-verre-20260925-terrain-orientation1',
-  'js/admin-invitations.js': 'refonte-ciel-verre-20260925-dossier-final2',
+  'js/admin-invitations.js': 'refonte-ciel-verre-20260926-demo-dataset21',
   'js/admin-generation.js': 'refonte-ciel-verre-20260926-texte1',
   'js/admin-suivi-clubs.js': VERSION + '-participants2',
   'js/admin.js': VERSION + '-participants3-municipal1',

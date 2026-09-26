@@ -2808,7 +2808,9 @@ async function enregistrerCatsClub(bouton) {
    ⛔ Refus du serveur (données existantes incompatibles, catégories absentes) : rien n'a été écrit ; les
    conflits sont montrés un par un et l'état relu est appliqué.
    -------------------------------------------------------------------------- */
-const DELAI_JEU_DEMO_MS = 30000;
+// Action groupée : le backend peut attendre le verrou 20 s et Apps Script ajoute une latence
+// significative avant/après l'exécution. Ce délai ciblé ne modifie pas ceux des autres écritures.
+const DELAI_JEU_DEMO_MS = 60000;
 const LIBELLE_BOUTON_JEU_DEMO = 'Démo — Créer le jeu de démonstration';
 let jeuDemoEnCours = false;
 

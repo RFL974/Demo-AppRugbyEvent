@@ -108,6 +108,15 @@ const CLASSEMENT = {
 async function preparer(o) {
   const b = await B.banc(Object.assign({ lire: LIRE, backend: CODE, documentReel: true, monde: (m) => {
     m.postMesure({ action: 'creerJeuDemoRacing', cle: B.MI.CLE_ADMIN });
+    // Fixtures propres à ce banc d'interactions : ces clubs sans équipe ne font plus partie du jeu produit.
+    const ajouterScenario = (club, reponse) => {
+      m.appeler('ajouterClubInvite', m.classeur, { club_nom: club, club_contact_prenom: 'Contact', club_contact_nom: 'Démo – ' + club,
+        club_contact_email: 'demo-' + club.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '@example.invalid' });
+      m.appeler('ecrireEngagementClub', m.classeur, club, reponse, true);
+    };
+    ajouterScenario('RC PUTEAUX', { statut: 'Décliné', invitation_envoyee: '2026-09-03', date_reponse: '2026-09-07', confirmation_reponse_envoyee: '2026-09-07 18:40:00' });
+    ajouterScenario('RC BOULOGNE', { statut: 'Invité', invitation_envoyee: '2026-09-03', derniere_relance_reponse: '2026-09-15' });
+    ajouterScenario('RC SAINT-CLOUD', { statut: 'Invité' });
     m.appeler('ecrireParamGlobal', m.feuilles.get('Config'), 'parking_photo_id', 'fichier-fictif-parking');
     m.appeler('ecrireEngagementClub', m.classeur, 'CLAMART', { alerte_ecart: 'Écart fictif : une équipe de plus' }, false);
   } }, o || {}));
