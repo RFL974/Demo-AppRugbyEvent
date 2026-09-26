@@ -1655,6 +1655,138 @@ function messageEnvoisNonServis(res) {
   return parties.join('');
 }
 
+/* ⭐ MAIL-GROUPE-STATUS-01 — RÉPONSE PERDUE D'UN ENVOI GROUPÉ : VÉRIFIER, JAMAIS RENVOYER.
+   Un envoi groupé est UN geste : un identifiant d'envoi pour tous ses clubs. Si sa réponse se perd (404, délai, réseau),
+   l'écran lit l'état de CE geste (`getSendGroupStatus` : même identifiant, clubs visés) au plus trois fois — ~4 s, ~12 s,
+   ~27 s — et s'arrête dès qu'il est tranché : chaque club est confirmé (mail parti), en cours, interrompu ou non confirmé
+   (absent : jamais « échec » sans preuve). ⛔ Jamais de second POST d'envoi groupé.
+   ⭐ Le geste incertain (identifiant, clubs visés, instant) survit 30 min à un rechargement de l'onglet (sessionStorage :
+   ni clé, ni adresse, ni contenu) : le clic suivant VÉRIFIE d'abord, n'envoie rien tant que l'envoi précédent est en
+   cours, et dit ce qu'il a servi s'il est tranché — le clic d'après n'écrit qu'aux clubs restants. */
+const STOCKAGE_ENVOI_GROUPE_INCERTAIN = 'r92_envoi_groupe_incertain';
+const CLE_ENVOI_GROUPE = cleEnvoi('groupe', 'invitations');
+/* Les clubs visés par l'envoi groupé à l'issue incertaine (noms, dans l'ordre de l'écran) : vivent comme sa marque. */
+let clubsEnvoiGroupeIncertain = [];
+
+/** Garde le geste groupé à l'issue incertaine (identifiant, clubs visés) pour la durée de l'onglet. */
+function memoriserEnvoiGroupeIncertain(idEnvoi, clubs) {
+  clubsEnvoiGroupeIncertain = clubs.slice();
+  try { sessionStorage.setItem(STOCKAGE_ENVOI_GROUPE_INCERTAIN, JSON.stringify({ id: idEnvoi, clubs: clubs, t: Date.now() })); }
+  catch (e) { /* stockage indisponible : la reprise reste possible dans cet onglet */ }
+}
+/** Les clubs gardés en session pour ce geste disparaissent (son identifiant a été oublié en mémoire). */
+function retirerEnvoiGroupeIncertainStocke() {
+  clubsEnvoiGroupeIncertain = [];
+  try { sessionStorage.removeItem(STOCKAGE_ENVOI_GROUPE_INCERTAIN); } catch (e) { /* stockage indisponible */ }
+}
+/** Le geste groupé est tranché (ou réussi) : ses marques, en mémoire et en session, disparaissent. */
+function oublierEnvoiGroupeIncertain() {
+  envoisIncertains.delete(CLE_ENVOI_GROUPE);
+  oublierIdEnvoi(CLE_ENVOI_GROUPE);
+  retirerEnvoiGroupeIncertainStocke();
+}
+/** Au chargement : un envoi groupé encore incertain de cet onglet (moins de 30 min) reprend son identifiant et ses clubs. */
+function restaurerEnvoiGroupeIncertain() {
+  let brut = null, e = null;
+  try { brut = sessionStorage.getItem(STOCKAGE_ENVOI_GROUPE_INCERTAIN); } catch (x) { return; }   // stockage indisponible
+  if (!brut) return;
+  try { e = JSON.parse(brut); } catch (x) { e = null; }                                         // illisible : jeté ci-dessous
+  const valide = e && typeof e === 'object' && typeof e.id === 'string' && e.id && Array.isArray(e.clubs) && e.clubs.length &&
+    e.clubs.every(function (n) { return typeof n === 'string' && n.trim(); }) && Date.now() - Number(e.t) < DUREE_ENVOI_INCERTAIN_MS;
+  if (!valide) { retirerEnvoiGroupeIncertainStocke(); return; }
+  idsEnvois.set(CLE_ENVOI_GROUPE, e.id);
+  envoisIncertains.add(CLE_ENVOI_GROUPE);
+  clubsEnvoiGroupeIncertain = e.clubs.slice();
+}
+restaurerEnvoiGroupeIncertain();
+
+/** UNE lecture de l'état d'un envoi groupé. ⛔ Ne lève jamais : { lecture: 'indisponible' | 'echouee' } sinon. */
+async function lireStatutEnvoiGroupe(idEnvoi, clubs) {
+  try {
+    if (typeof apiPostProtege !== 'function' || typeof lireCleLocale !== 'function') return { lecture: 'indisponible' };
+    if (!lireCleLocale('admin')) return { lecture: 'indisponible' };    // jamais de fenêtre de clé pendant une vérification
+    const r = await apiPostProtege('getSendGroupStatus', { id_envoi: idEnvoi, clubs: clubs }, 'admin', 'admin', { delaiMs: DELAI_VERIFICATION_ENVOI_MS });
+    return r && Array.isArray(r.confirmes) && typeof r.termine === 'boolean' ? r : { lecture: 'echouee' };
+  } catch (erreur) {
+    // Backend d'avant ce lot : l'action n'existe pas — on retombe sur la relecture historique.
+    return { lecture: /action inconnue/i.test(String((erreur && erreur.message) || '')) ? 'indisponible' : 'echouee' };
+  }
+}
+
+/**
+ * L'état d'un envoi groupé à l'issue incertaine, lu au plus `VERIFICATIONS_ENVOI_MS.length` fois (une seule, tout de suite,
+ * avec `immediat`), jusqu'à ce qu'il soit TERMINÉ. Un geste introuvable ne tranche que si le serveur a répondu
+ * (`reponseRecue` : statut HTTP reçu, sa requête est finie) ; sinon la demande attend peut-être encore le verrou : on relit.
+ * @return {Promise<{verdict: string, statut: ?Object, lectures: Array}>} verdict : 'termine' | 'en_cours' | 'absent' | 'indisponible'
+ */
+async function verifierEnvoiGroupeIncertain(idEnvoi, clubs, options) {
+  const o = options || {};
+  const instants = o.immediat ? [0] : VERIFICATIONS_ENVOI_MS;
+  const debut = Date.now();
+  const lectures = [];
+  let dernier = null;
+  for (let i = 0; i < instants.length; i++) {
+    const attente = instants[i] - (Date.now() - debut);
+    if (attente > 0) await new Promise(function (reprendre) { setTimeout(reprendre, attente); });
+    const s = await lireStatutEnvoiGroupe(idEnvoi, clubs);
+    lectures.push({ apres_ms: Date.now() - debut, etat: s.lecture || (s.termine ? 'termine' : s.geste_trouve ? 'en_cours' : 'absent'),
+      confirmes: s.lecture ? null : s.confirmes.length, en_cours: s.lecture ? null : (s.en_cours || []).length });
+    if (s.lecture === 'indisponible') return { verdict: 'indisponible', statut: null, lectures: lectures };
+    if (s.lecture) continue;                                            // lecture ratée : la suivante dira
+    dernier = s;
+    if (s.termine) return { verdict: 'termine', statut: s, lectures: lectures };
+    if (!s.geste_trouve && o.reponseRecue) return { verdict: 'absent', statut: s, lectures: lectures };
+  }
+  if (!dernier) return { verdict: 'indisponible', statut: null, lectures: lectures };
+  return { verdict: dernier.geste_trouve ? 'en_cours' : 'absent', statut: dernier, lectures: lectures };
+}
+
+/** Le bilan d'un envoi groupé lu au serveur : « 7 confirmé(s) sur 9 ; 1 en cours : A ; … ». Chaque club non confirmé est
+ *  nommé, comme le résumé d'un envoi groupé réussi nomme ses échecs. PUR. */
+function bilanEnvoiGroupe(s) {
+  const liste = function (k) { return Array.isArray(s[k]) ? s[k] : []; };
+  const parties = [liste('confirmes').length + ' confirmé(s) sur ' + s.total];
+  [['en_cours', 'en cours'], ['absents', 'non confirmé(s) — aucune trace d’envoi'],
+    ['non_confirmes', 'interrompu(s) pendant l’envoi, peut-être reçu(s)'], ['echecs', 'interrompu(s) avant l’envoi, rien n’est parti']]
+    .forEach(function (p) { if (liste(p[0]).length) parties.push(liste(p[0]).length + ' ' + p[1] + ' : ' + liste(p[0]).join(', ')); });
+  const hors = s.hors_liste || {};
+  if (hors.confirmes) parties.push(hors.confirmes + ' autre(s) club(s) servi(s) par ce geste, absent(s) de la liste de l’écran');
+  return parties.join(' ; ');
+}
+
+/**
+ * Le message d'un envoi groupé vérifié auprès du serveur. `erreur` : la réponse perdue de CE geste (ou null : l'envoi
+ * PRÉCÉDENT, vérifié avant un nouveau clic). PUR. @return {{texte: string, ton: string}}
+ */
+function messageVerificationGroupe(verdict, s, erreur) {
+  const contexte = erreur ? 'réponse du serveur non reçue — ' + causeIncertaine(erreur) + ' ; vérifié auprès du serveur, rien n’a été renvoyé'
+    : 'envoi groupé précédent vérifié auprès du serveur : rien n’a été renvoyé';
+  if (verdict === 'termine') {
+    const nb = function (k) { return Array.isArray(s[k]) ? s[k].length : 0; };
+    const suivi = nb('suivi_en_attente') ? ' La mise à jour du suivi est encore en cours pour ' + nb('suivi_en_attente') + ' club(s) : ' +
+      '« Rafraîchir » l’affichera dans un moment.' : '';
+    if (nb('confirmes') === s.total) {
+      return { ton: 'ok', texte: '✅ Envoi groupé confirmé : ' + s.total + '/' + s.total + ' (' + contexte + ').' + suivi };
+    }
+    const restants = ' La liste est relue : un nouvel envoi n’écrira qu’aux clubs non invités.';
+    if (!nb('confirmes') && nb('echecs') === s.total) {
+      return { ton: 'ko', texte: '❌ Aucun envoi parti : l’envoi groupé a été interrompu avant le départ des e-mails (' + contexte + ').' + restants };
+    }
+    return { ton: 'ko', texte: (nb('confirmes') ? '⚠️ Envoi partiel : ' : '⚠️ Aucun envoi confirmé : ') + bilanEnvoiGroupe(s) + ' (' + contexte + ').' +
+      suivi + restants };
+  }
+  if (verdict === 'en_cours') {
+    return { ton: 'ko', texte: '⚠️ Traitement encore en cours : ' + bilanEnvoiGroupe(s) + ' (' + contexte + '). Ne relance pas l’envoi : ' +
+      'rien n’est renvoyé automatiquement, et « Rafraîchir » dans un moment dira qui l’a reçue.' };
+  }
+  if (verdict === 'absent') {
+    return { ton: 'ko', texte: '⚠️ Aucun envoi confirmé (' + (erreur ? 'réponse du serveur non reçue — ' + causeIncertaine(erreur) + ' ; ' : '') +
+      'aucune trace de ce geste au serveur). Rien n’est renvoyé automatiquement ; la liste est relue : « Invité le … » montre qui l’a reçue.' };
+  }
+  return { ton: 'ko', texte: messageIncertain('les envois ne sont pas confirmés — certains clubs ont peut-être reçu l’invitation', erreur,
+    'la liste est relue : « Invité le … » montre qui l’a reçue, et un nouvel envoi n’écrit qu’aux autres') };
+}
+
 /**
  * Envoi GROUPÉ des invitations : résumé AVANT confirmation (éligibles / sans email / déjà
  * invités exclus), puis envoi tolérant aux pannes côté backend
@@ -1668,6 +1800,22 @@ async function onEnvoyerInvitationsGroupe() {
   envoisEnCours.add(cle);
   const texte = bouton ? bouton.textContent : '';
   try {
+    // ⭐ MAIL-GROUPE-STATUS-01 — un envoi groupé resté incertain (réponse perdue, même avant un rechargement de l'onglet) est
+    //   d'abord VÉRIFIÉ, sans rien envoyer : encore en cours → rien ne part ; tranché → ce qu'il a servi est dit et la liste
+    //   relue (le clic suivant n'écrit qu'aux clubs restants). Introuvable ou vérification impossible : la confirmation
+    //   habituelle, qui prévient, puis le MÊME identifiant (le serveur répondrait « déjà envoyé » aux clubs servis).
+    if (envoisIncertains.has(cle) && idsEnvois.has(cle) && clubsEnvoiGroupeIncertain.length) {
+      occuperBouton(bouton, 'Vérification…');
+      const avant = await verifierEnvoiGroupeIncertain(idsEnvois.get(cle), clubsEnvoiGroupeIncertain, { immediat: true });
+      libererBouton(bouton, texte);
+      if (avant.verdict === 'termine' || avant.verdict === 'en_cours') {
+        if (avant.verdict === 'termine') oublierEnvoiGroupeIncertain();
+        const verifie = messageVerificationGroupe(avant.verdict, avant.statut, null);
+        afficherMessage(message, verifie.texte, verifie.ton);
+        if (avant.verdict === 'termine' && typeof rafraichirRessourceAdmin === 'function') rafraichirRessourceAdmin('clubsInvites');
+        return;
+      }
+    }
     const sujet = sujetInvitationCourant();
     const piecesAEnvoyer = piecesJointesDossierPourEnvoi('invitation');
     if (!sujet) { afficherMessage(message, '⚠️ L\'objet de l\'aperçu ne peut pas être vide.', 'ko'); return; }
@@ -1701,6 +1849,13 @@ async function onEnvoyerInvitationsGroupe() {
 
     occuperBouton(bouton, 'Envoi…');
     afficherMessage(message, 'Envoi en cours…', 'ok');
+    // ⭐ MAIL-GROUPE-STATUS-01 — les clubs visés (leurs seuls noms) et le diagnostic de CE geste (voir noterDiagnosticEnvoi) :
+    //   ni clé, ni adresse, ni contenu.
+    const clubsVises = eligibles.map(function (c) { return String(c.club_nom || ''); });
+    const diag = { geste: 'groupe', nb_clubs: clubsVises.length, id_envoi: '', debut: new Date().toISOString(), fin: '', duree_ms: 0,
+      statut: null, erreur: null, mesures_serveur: null, verification: null };
+    const t0 = Date.now();
+    const finDiag = function () { diag.fin = new Date().toISOString(); diag.duree_ms = Date.now() - t0; diag.id_envoi = idsEnvois.get(cle) || diag.id_envoi; };
     let res;
     try {
       res = await ecrireEnvoiEmail('envoyerInvitationsGroupe', Object.assign({
@@ -1708,16 +1863,33 @@ async function onEnvoyerInvitationsGroupe() {
         base_reponse: baseReponseInvitation(), base_invitation: lienInvitationPublique(),
         renvoyer: 'non', pieces_jointes: piecesAEnvoyer
       }, ETAT_DANS_LA_REPONSE), { cle: cle, incertain: envoisIncertains.has(cle), nbClubs: eligibles.length });
+      finDiag();
     } catch (erreur) {
-      if (!issueIncertaine(erreur)) { oublierIdEnvoi(cle); afficherMessage(message, '⚠️ ' + erreur.message, 'ko'); return; }
-      envoisIncertains.add(cle);
-      afficherMessage(message, messageIncertain('les envois ne sont pas confirmés — certains clubs ont peut-être reçu l’invitation',
-        erreur, 'la liste est relue : « Invité le … » montre qui l’a reçue, et un nouvel envoi n’écrit qu’aux autres'), 'ko');
+      finDiag();
+      qualifierErreurEnvoi(diag, erreur);
+      if (!issueIncertaine(erreur)) {
+        oublierIdEnvoi(cle); retirerEnvoiGroupeIncertainStocke(); noterDiagnosticEnvoi(diag);
+        afficherMessage(message, '⚠️ ' + erreur.message, 'ko'); return;
+      }
+      envoisIncertains.add(cle);                                          // l'identifiant du geste est gardé pour la reprise
+      memoriserEnvoiGroupeIncertain(diag.id_envoi, clubsVises);           // … avec ses clubs, même si l'onglet est rechargé (30 min)
+      // ⭐ MAIL-GROUPE-STATUS-01 — l'issue est VÉRIFIÉE (même identifiant, lecture seule) au lieu d'être laissée inconnue.
+      //   ⛔ Aucun POST d'envoi groupé n'est rejoué ; le bouton reste occupé jusqu'à la fin de la vérification.
+      afficherMessage(message, messageIncertain('les envois ne sont pas encore confirmés — certains clubs ont peut-être reçu l’invitation',
+        erreur, 'vérification auprès du serveur en cours…'), 'ko');
+      occuperBouton(bouton, 'Vérification…');
+      const verif = await verifierEnvoiGroupeIncertain(diag.id_envoi, clubsVises, { reponseRecue: diag.statut != null });
+      diag.verification = { verdict: verif.verdict, lectures: verif.lectures };
+      noterDiagnosticEnvoi(diag);
+      if (verif.verdict === 'termine') oublierEnvoiGroupeIncertain();
+      const verifie = messageVerificationGroupe(verif.verdict, verif.statut, erreur);
+      afficherMessage(message, verifie.texte, verifie.ton);
       if (typeof rafraichirRessourceAdmin === 'function') rafraichirRessourceAdmin('clubsInvites');
       return;
     }
-    envoisIncertains.delete(cle);
-    oublierIdEnvoi(cle);
+    diag.mesures_serveur = (res && res.mesures) || null;
+    noterDiagnosticEnvoi(diag);
+    oublierEnvoiGroupeIncertain();
     // ⭐ R2 — l'état appliqué doit être postérieur à l'envoi qu'on vient de faire : la liste relue sous le verrou par
     //   le serveur (4ᵉ passage), posée par le registre — aucune lecture commencée AVANT ne sera resservie. Backend
     //   d'avant, ou issue que le serveur n'a pas pu noter tout de suite : relecture, comme avant.
