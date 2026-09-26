@@ -453,6 +453,9 @@ const clubMemoire = (b, nom) => b.global('clubsInvitesCourants').filter((c) => c
     t.vrai(g.dlg.length === 1 && envois(r).length === 1 && g.srv.courriels.length === 1 && /Invitation envoyée/.test(txt(g.id('message-suivi-clubs'))),
       'V.I3 première invitation, double clic : une confirmation, une requête, un e-mail', [g.dlg.length, r.resume, g.srv.courriels.length]);
   });
+  /* ⭐ MAIL-STATUS-OBS-01 — après une réponse perdue, l'issue est VÉRIFIÉE (getSendStatus, même identifiant) : l'invitation
+     partie est CONFIRMÉE, le geste est clos. Le filet MAIL-01 (même identifiant → « déjà partie ») reste en place quand la
+     vérification est impossible : V.I4b (vérifiée au clic suivant, sans rien envoyer) et V.I4c (serveur muet → rejeu). */
   await essai('V.I4', async () => {
     const g = await avecDialogues();
     g.poserPanne(panneUnique('envoyerInvitationClub', 'http404-apres'));
@@ -460,15 +463,46 @@ const clubMemoire = (b, nom) => b.global('clubsInvitesCourants').filter((c) => c
     const m1 = txt(g.id('message-suivi-clubs'));
     await ouvrirFiche(g, 'RC SAINT-CLOUD', true);
     const relu = { invite: !!clubMemoire(g, 'RC SAINT-CLOUD').invitation_envoyee, bouton: txt(boutonFiche(g, 'relance-reponse')) };
+    const lectures = r1.requetes.filter((q) => q.action === 'getSendStatus');
+    t.vrai(/^✅ Envoi confirmé : invitation partie vers demo-rc-saint-cloud@example\.invalid/.test(m1) && /rien n’a été renvoyé/.test(m1) &&
+      relu.invite && relu.bouton === 'Relancer la réponse' && g.srv.courriels.length === 1 && envois(r1).length === 1 && envois(r1)[0].corps.relance === 'non' &&
+      lectures.length === 1 && lectures[0].corps.id_envoi === envois(r1)[0].corps.id_envoi && lectures[0].reponse.etat === 'fait' &&
+      !g.global('envoisIncertains').has('invitation|rc saint-cloud') && !g.global('idsEnvois').has('invitation|rc saint-cloud') &&
+      donneesServeur(g, 'RC SAINT-CLOUD').derniere_relance_reponse === '',
+      'V.I4 première invitation, réponse perdue (404) : UNE vérification (même identifiant) → « ✅ Envoi confirmé », geste clos, UN seul e-mail, `relance: non`, aucune date de relance au serveur',
+      [m1.slice(0, 120), relu, g.srv.courriels.length, r1.resume]);
+  });
+  await essai('V.I4b', async () => {
+    const g = await avecDialogues();
+    let premiere = true;
+    // La réponse de l'envoi se perd ET les trois vérifications échouent (réseau) : le geste reste incertain.
+    g.poserPanne((e) => (e.action === 'envoyerInvitationClub' && premiere ? (premiere = false, 'http404-apres') : e.action === 'getSendStatus' ? 'reseau-avant' : null));
+    const r1 = await cliquerSuivi(g, 'RC SAINT-CLOUD');
+    const m1 = txt(g.id('message-suivi-clubs'));
+    g.poserPanne(null);
+    const dialoguesAvant = g.dlg.length;
+    const r2 = await cliquerSuivi(g, 'RC SAINT-CLOUD');
+    const m2 = txt(g.id('message-suivi-clubs'));
+    t.vrai(/non reçue/.test(m1) && /pas confirmé/.test(m1) && r1.requetes.filter((q) => q.action === 'getSendStatus').length === 3 &&
+      envois(r2).length === 0 && r2.requetes.filter((q) => q.action === 'getSendStatus').length === 1 && g.dlg.length === dialoguesAvant &&
+      /^✅ Invitation déjà partie vers/.test(m2) && /vérifié auprès du serveur/.test(m2) && /rien n’a été renvoyé/.test(m2) && g.srv.courriels.length === 1,
+      'V.I4b vérification impossible (3 lectures ratées) : « non confirmé » ; au clic suivant, UNE lecture d\'abord → « déjà partie », AUCUNE confirmation, AUCUN POST d\'envoi',
+      [m1.slice(0, 120), m2, r1.resume, r2.resume, g.srv.courriels.length]);
+  });
+  await essai('V.I4c', async () => {
+    const g = await avecDialogues();
+    let premiere = true;
+    // Serveur sans `getSendStatus` joignable (toutes les lectures ratées, clic suivant compris) : le filet MAIL-01 joue.
+    g.poserPanne((e) => (e.action === 'envoyerInvitationClub' && premiere ? (premiere = false, 'http404-apres') : e.action === 'getSendStatus' ? 'reseau-avant' : null));
+    const r1 = await cliquerSuivi(g, 'RC SAINT-CLOUD');
     const r2 = await cliquerSuivi(g, 'RC SAINT-CLOUD');
     const d2 = g.dlg[1] || {}, m2 = txt(g.id('message-suivi-clubs'));
-    t.vrai(/non reçue/.test(m1) && relu.invite && relu.bouton === 'Relancer la réponse' && /^Envoyer l'invitation à « RC SAINT-CLOUD »/.test(d2.texte) && /pas été confirmé/.test(d2.texte) && d2.ok === 'Envoyer' &&
+    t.vrai(/^Envoyer l'invitation à « RC SAINT-CLOUD »/.test(d2.texte) && /pas été confirmé/.test(d2.texte) && d2.ok === 'Envoyer' &&
       /^✅ Invitation déjà partie vers/.test(m2) && /rien n’a été renvoyé/.test(m2) && g.srv.courriels.length === 1 &&
-      envois(r2).length === 1 && envois(r2)[0].corps.id_envoi === envois(r1)[0].corps.id_envoi &&
-      envois(r1)[0].corps.relance === 'non' && envois(r2)[0].corps.relance === 'non' &&
-      donneesServeur(g, 'RC SAINT-CLOUD').derniere_relance_reponse === '',
-      'V.I4 première invitation, réponse perdue (404) puis même geste : même identifiant, même demande `relance: non`, « déjà partie », UN seul e-mail, aucune date de relance au serveur',
-      [m1.slice(0, 90), relu, d2, m2, g.srv.courriels.length, r1.resume, r2.resume]);
+      envois(r2).length === 1 && envois(r2)[0].corps.id_envoi === envois(r1)[0].corps.id_envoi && envois(r2)[0].reponse.rejeu === true &&
+      envois(r1)[0].corps.relance === 'non' && envois(r2)[0].corps.relance === 'non' && donneesServeur(g, 'RC SAINT-CLOUD').derniere_relance_reponse === '',
+      'V.I4c vérification toujours impossible : le clic suivant reprend le MÊME geste (même identifiant, `relance: non`) → « déjà partie », UN seul e-mail (filet MAIL-01 intact)',
+      [d2, m2, g.srv.courriels.length, r1.resume, r2.resume]);
   });
   await essai('V.I5', async () => {
     const g = await avecDialogues();

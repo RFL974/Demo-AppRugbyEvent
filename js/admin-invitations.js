@@ -1356,6 +1356,160 @@ function selecteurBoutonsInvitation(nom) {
    Vit exactement comme sa marque dans `envoisIncertains` (posée à l'issue incertaine, retirée au succès). */
 const naturesEnvoisIncertains = new Map();
 
+/* ⭐ MAIL-STATUS-OBS-01 — RÉPONSE PERDUE D'UNE INVITATION : VÉRIFIER, JAMAIS RENVOYER.
+   Google perd parfois la réponse d'un envoi (HTTP 404 constaté en V19 après ~38 s, e-mail pourtant parti). Après une issue
+   incertaine, l'écran lit l'état de CE geste (`getSendStatus`, même identifiant d'envoi) au plus trois fois — ~4 s, ~12 s,
+   ~27 s après — et s'arrête dès qu'il est tranché : fait / envoyé → envoi confirmé ; réservé / en envoi → en cours ;
+   absent → non confirmé (jamais « échec » : l'absence de réponse ne prouve rien).
+   ⛔ Jamais de second POST d'envoi : seul un nouveau clic, confirmé, peut renvoyer — et le même identifiant y fait répondre
+   « déjà envoyé ». ⭐ L'identifiant d'un geste incertain survit à un rechargement de l'onglet (sessionStorage, 30 min, ni
+   clé, ni adresse, ni contenu) : le clic suivant VÉRIFIE d'abord, et n'envoie rien si l'e-mail est déjà parti. */
+const VERIFICATIONS_ENVOI_MS = [4000, 12000, 27000];
+const DELAI_VERIFICATION_ENVOI_MS = 10000;
+const STOCKAGE_ENVOIS_INCERTAINS = 'r92_envois_incertains';
+const DUREE_ENVOI_INCERTAIN_MS = 30 * 60 * 1000;
+
+function lireEnvoisIncertainsStockes() {
+  try {
+    const o = JSON.parse(sessionStorage.getItem(STOCKAGE_ENVOIS_INCERTAINS) || '{}');
+    return o && typeof o === 'object' && !Array.isArray(o) ? o : {};
+  } catch (e) { return {}; }
+}
+function ecrireEnvoisIncertainsStockes(o) {
+  try {
+    if (Object.keys(o).length) sessionStorage.setItem(STOCKAGE_ENVOIS_INCERTAINS, JSON.stringify(o));
+    else sessionStorage.removeItem(STOCKAGE_ENVOIS_INCERTAINS);
+  } catch (e) { /* stockage indisponible : la reprise reste possible dans cet onglet */ }
+}
+/** Garde l'identifiant d'un geste d'invitation à l'issue incertaine (et sa nature) pour la durée de l'onglet. */
+function memoriserEnvoiIncertain(cle, idEnvoi, relance) {
+  const o = lireEnvoisIncertainsStockes();
+  o[cle] = { id: idEnvoi, relance: relance === true, t: Date.now() };
+  ecrireEnvoisIncertainsStockes(o);
+}
+/** L'identifiant gardé en session pour ce geste disparaît (il a été oublié en mémoire). */
+function retirerEnvoiIncertainStocke(cle) {
+  const o = lireEnvoisIncertainsStockes();
+  if (o[cle]) { delete o[cle]; ecrireEnvoisIncertainsStockes(o); }
+}
+/** Le geste est tranché (parti, ou rien n'est parti) : ses marques, en mémoire et en session, disparaissent. */
+function oublierEnvoiIncertain(cle) {
+  envoisIncertains.delete(cle);
+  naturesEnvoisIncertains.delete(cle);
+  oublierIdEnvoi(cle);
+  retirerEnvoiIncertainStocke(cle);
+}
+/** Au chargement : les gestes d'invitation encore incertains de cet onglet (moins de 30 min) reprennent leur identifiant. */
+function restaurerEnvoisIncertains() {
+  const o = lireEnvoisIncertainsStockes();
+  const maintenant = Date.now();
+  let perimes = false;
+  Object.keys(o).forEach(function (cle) {
+    const e = o[cle];
+    if (cle.indexOf('invitation|') !== 0 || !e || typeof e.id !== 'string' || !e.id || !(maintenant - Number(e.t) < DUREE_ENVOI_INCERTAIN_MS)) {
+      delete o[cle]; perimes = true; return;
+    }
+    idsEnvois.set(cle, e.id);
+    envoisIncertains.add(cle);
+    naturesEnvoisIncertains.set(cle, e.relance === true);
+  });
+  if (perimes) ecrireEnvoisIncertainsStockes(o);
+}
+restaurerEnvoisIncertains();
+
+/** UNE lecture de l'état d'un geste d'invitation. ⛔ Ne lève jamais : { lecture: 'indisponible' | 'echouee' } sinon. */
+async function lireStatutEnvoi(nom, idEnvoi) {
+  try {
+    if (typeof apiPostProtege !== 'function' || typeof lireCleLocale !== 'function') return { lecture: 'indisponible' };
+    if (!lireCleLocale('admin')) return { lecture: 'indisponible' };    // jamais de fenêtre de clé pendant une vérification
+    const r = await apiPostProtege('getSendStatus', { club_nom: nom, id_envoi: idEnvoi }, 'admin', 'admin', { delaiMs: DELAI_VERIFICATION_ENVOI_MS });
+    return r && typeof r.etat === 'string' ? r : { lecture: 'echouee' };
+  } catch (erreur) {
+    // Backend d'avant ce lot : l'action n'existe pas — on retombe sur la relecture historique.
+    return { lecture: /action inconnue/i.test(String((erreur && erreur.message) || '')) ? 'indisponible' : 'echouee' };
+  }
+}
+
+/**
+ * L'état d'un geste à l'issue incertaine, lu au plus `VERIFICATIONS_ENVOI_MS.length` fois (une seule, tout de suite, avec
+ * `immediat`). « absent » ne tranche que si le serveur a répondu (`reponseRecue` : statut HTTP reçu, sa requête est finie) ;
+ * sinon la demande attend peut-être encore le verrou : on relit.
+ * @return {Promise<{verdict: string, statut: ?Object, lectures: Array}>} verdict : 'fait' | 'envoye' | 'en_cours' |
+ *   'absent' | 'non_confirme' | 'interrompu' | 'indisponible'
+ */
+async function verifierEnvoiIncertain(nom, idEnvoi, options) {
+  const o = options || {};
+  const instants = o.immediat ? [0] : VERIFICATIONS_ENVOI_MS;
+  const debut = Date.now();
+  const lectures = [];
+  let dernier = null;
+  for (let i = 0; i < instants.length; i++) {
+    const attente = instants[i] - (Date.now() - debut);
+    if (attente > 0) await new Promise(function (reprendre) { setTimeout(reprendre, attente); });
+    const s = await lireStatutEnvoi(nom, idEnvoi);
+    lectures.push({ apres_ms: Date.now() - debut, etat: s.etat || s.lecture, issue: s.issue || '' });
+    if (s.lecture === 'indisponible') return { verdict: 'indisponible', statut: null, lectures: lectures };
+    if (s.lecture) continue;                                            // lecture ratée : la suivante dira
+    dernier = s;
+    if (s.etat === 'fait' || s.etat === 'envoye') return { verdict: s.etat, statut: s, lectures: lectures };
+    if (s.etat !== 'absent' && !s.en_cours) {
+      return { verdict: s.issue === 'interrompu_avant_envoi' ? 'interrompu' : 'non_confirme', statut: s, lectures: lectures };
+    }
+    if (s.etat === 'absent' && o.reponseRecue) return { verdict: 'absent', statut: s, lectures: lectures };
+  }
+  if (!dernier) return { verdict: 'indisponible', statut: null, lectures: lectures };
+  return { verdict: dernier.en_cours ? 'en_cours' : 'absent', statut: dernier, lectures: lectures };
+}
+
+/** Le message d'une invitation (ou relance) à l'issue incertaine, une fois son état lu. PUR. */
+function messageVerificationEnvoi(verdict, relance, email, erreur) {
+  const perdue = 'réponse du serveur non reçue — ' + causeIncertaine(erreur);
+  const quoi = relance ? 'Relance' : 'Invitation';
+  if (verdict === 'fait') {
+    return '✅ Envoi confirmé : ' + quoi.toLowerCase() + ' partie vers ' + email + ' (' + perdue + ' ; vérifié auprès du serveur, rien n’a été renvoyé).';
+  }
+  if (verdict === 'envoye') {
+    return '✅ Mail envoyé à ' + email + '. La mise à jour du suivi est encore en cours (' + perdue + ' ; rien n’a été renvoyé) : ' +
+      '« Rafraîchir » l’affichera dans un moment.';
+  }
+  if (verdict === 'en_cours') {
+    return '⚠️ Envoi toujours en cours vers ' + email + ' (' + perdue + '). Rien n’est renvoyé automatiquement : « Rafraîchir » dans un ' +
+      'moment dira s’il est parti.';
+  }
+  if (verdict === 'absent') {
+    return '⚠️ L’envoi à ' + email + ' n’a pas pu être confirmé (' + perdue + ' ; aucune trace de ce geste au serveur). Rien n’est ' +
+      'renvoyé automatiquement ; la liste est relue.';
+  }
+  if (verdict === 'non_confirme') {
+    return '⚠️ L’envoi à ' + email + ' a été interrompu en cours d’envoi : non confirmé, le club l’a peut-être reçu (' + perdue + '). ' +
+      'Rien n’est renvoyé automatiquement.';
+  }
+  if (verdict === 'interrompu') {
+    return '❌ Échec confirmé : l’envoi à ' + email + ' a été interrompu avant le départ de l’e-mail, rien n’est parti (' + perdue + ').';
+  }
+  return messageIncertain('l’envoi à ' + email + ' n’est pas confirmé — le club l’a peut-être reçu', erreur,
+    'la liste est relue : « Invité le … » dira s’il est parti');
+}
+
+/* ⭐ MAIL-STATUS-OBS-01 — DIAGNOSTIC DISCRET d'un envoi individuel : les 20 derniers gestes, dans `diagnosticsEnvois` (et une
+   ligne de console). Début, fin, durée, statut HTTP quand l'erreur le porte, type d'erreur, identifiant du geste, mesures du
+   serveur, vérifications. ⛔ Jamais la clé, le contenu envoyé, l'adresse du club, un jeton ni du HTML.
+   ⚠️ Ni l'adresse finale ni la redirection de la réponse : js/api.js ne les expose pas, et il reste inchangé. */
+const diagnosticsEnvois = [];
+function noterDiagnosticEnvoi(d) {
+  diagnosticsEnvois.push(d);
+  if (diagnosticsEnvois.length > 20) diagnosticsEnvois.shift();
+  try { (d.erreur ? console.warn : console.debug)('[envoi ' + d.geste + ']', JSON.stringify(d)); } catch (e) { /* pas de console */ }
+}
+/** Le type d'une erreur d'envoi, et son statut HTTP quand le message de js/api.js le porte (« … erreur (404). »). */
+function qualifierErreurEnvoi(d, erreur) {
+  const m = erreur && erreur.reponse ? null : /^Le serveur a répondu avec une erreur \((\d{3})\)\.$/.exec(String((erreur && erreur.message) || ''));
+  if (m) d.statut = Number(m[1]);
+  d.erreur = erreur && erreur.reponse ? 'refus' : erreur && erreur.name === 'AbortError' ? 'delai'
+    : d.statut != null ? 'http' : erreur && erreur.name === 'SyntaxError' ? 'reponse_illisible'
+      : /fetch|network|réseau/i.test(String((erreur && erreur.message) || '')) ? 'reseau' : 'autre';
+}
+
 /** Envoi INDIVIDUEL de l'invitation à un club (même contenu que l'aperçu). Une action = au plus un e-mail. */
 async function envoyerInvitationClubUI(nom, options) {
   const opt = options || {};
@@ -1377,6 +1531,27 @@ async function envoyerInvitationClubUI(nom, options) {
     if (estDestinataireDemoNonDistribuable(club)) {
       await dialogAlerter('« ' + email + ' » est une adresse de démonstration non distribuable. Modifie les coordonnées du club avec une adresse de test autorisée avant l’envoi.');
       return;
+    }
+    // ⭐ MAIL-STATUS-OBS-01 — un geste resté incertain (réponse perdue, même avant un rechargement de l'onglet) est d'abord
+    //   VÉRIFIÉ, sans rien envoyer : déjà parti → dit, rien ne repart ; encore en cours → on attend. Sinon : la confirmation
+    //   habituelle, qui prévient, puis le MÊME identifiant (le serveur répondrait « déjà envoyé »).
+    if (envoisIncertains.has(cle) && idsEnvois.has(cle)) {
+      marquerBoutonsEnvoi(selecteurBoutonsInvitation(nom), true, 'Vérification…');
+      const avant = await verifierEnvoiIncertain(nom, idsEnvois.get(cle), { immediat: true });
+      marquerBoutonsEnvoi(selecteurBoutonsInvitation(nom), false);
+      const relanceAvant = naturesEnvoisIncertains.get(cle) === true;
+      if (avant.verdict === 'fait' || avant.verdict === 'envoye') {
+        oublierEnvoiIncertain(cle);
+        afficherMessage(message, '✅ ' + (relanceAvant ? 'Relance' : 'Invitation') + ' déjà partie vers ' + email +
+          ' (envoi précédent vérifié auprès du serveur) : rien n’a été renvoyé.', 'ok');
+        if (typeof rafraichirRessourceAdmin === 'function') rafraichirRessourceAdmin('clubsInvites');
+        return;
+      }
+      if (avant.verdict === 'en_cours') {
+        afficherMessage(message, '⚠️ L’envoi précédent à ' + email + ' est toujours en cours côté serveur : rien n’a été renvoyé. ' +
+          '« Rafraîchir » dans un moment dira s’il est parti.', 'ko');
+        return;
+      }
     }
     const sujet = sujetInvitationCourant();
     if (!sujet) { afficherMessage(message, '⚠️ L\'objet de l\'aperçu ne peut pas être vide.', 'ko'); return; }
@@ -1404,6 +1579,11 @@ async function envoyerInvitationClubUI(nom, options) {
       { ok: vraieRelance ? 'Relancer' : 'Envoyer' })) return;
     marquerBoutonsEnvoi(selecteurBoutonsInvitation(nom), true);
     afficherMessage(message, '⏳ Envoi à ' + email + '…', 'ok');
+    // ⭐ MAIL-STATUS-OBS-01 — diagnostic de CE geste (voir noterDiagnosticEnvoi) : ni clé, ni contenu, ni adresse.
+    const diag = { geste: vraieRelance ? 'relance' : 'invitation', club: nom, id_envoi: '', debut: new Date().toISOString(), fin: '',
+      duree_ms: 0, statut: null, erreur: null, mesures_serveur: null, verification: null };
+    const t0 = Date.now();
+    const finDiag = function () { diag.fin = new Date().toISOString(); diag.duree_ms = Date.now() - t0; diag.id_envoi = idsEnvois.get(cle) || diag.id_envoi; };
     let res;
     try {
       res = await ecrireEnvoiEmail('envoyerInvitationClub', {
@@ -1411,18 +1591,35 @@ async function envoyerInvitationClubUI(nom, options) {
         base_reponse: baseReponseInvitation(), base_invitation: lienInvitationPublique(),
         pieces_jointes: piecesAEnvoyer, relance: vraieRelance ? 'oui' : 'non'
       }, { cle: cle, incertain: envoisIncertains.has(cle) });
+      finDiag();
     } catch (erreur) {
-      if (!issueIncertaine(erreur)) { oublierIdEnvoi(cle); afficherMessage(message, '⚠️ ' + erreur.message, 'ko'); return; }
+      finDiag();
+      qualifierErreurEnvoi(diag, erreur);
+      if (!issueIncertaine(erreur)) {
+        oublierIdEnvoi(cle); retirerEnvoiIncertainStocke(cle); noterDiagnosticEnvoi(diag);
+        afficherMessage(message, '⚠️ ' + erreur.message, 'ko'); return;
+      }
       envoisIncertains.add(cle);                                          // l'identifiant du geste est gardé pour la reprise
       naturesEnvoisIncertains.set(cle, vraieRelance);                      // … et sa nature (invitation ou relance), pour les textes
-      afficherMessage(message, messageIncertain('l’envoi à ' + email + ' n’est pas confirmé — le club l’a peut-être reçu',
-        erreur, 'la liste est relue : « Invité le … » dira s’il est parti'), 'ko');
+      memoriserEnvoiIncertain(cle, diag.id_envoi, vraieRelance);           // … même si l'onglet est rechargé (30 min)
+      // ⭐ MAIL-STATUS-OBS-01 — l'issue est VÉRIFIÉE (même identifiant, lecture seule) au lieu d'être laissée inconnue.
+      //   ⛔ Aucun POST d'envoi n'est rejoué ; le bouton reste occupé jusqu'à la fin de la vérification.
+      afficherMessage(message, messageIncertain('l’envoi à ' + email + ' n’est pas encore confirmé', erreur,
+        'vérification auprès du serveur en cours…'), 'ko');
+      marquerBoutonsEnvoi(selecteurBoutonsInvitation(nom), true, 'Vérification…');
+      const verif = await verifierEnvoiIncertain(nom, diag.id_envoi, { reponseRecue: diag.statut != null });
+      diag.verification = { verdict: verif.verdict, lectures: verif.lectures };
+      if (verif.statut && verif.statut.mesures) diag.mesures_serveur = verif.statut.mesures;
+      noterDiagnosticEnvoi(diag);
+      if (verif.verdict === 'fait' || verif.verdict === 'envoye' || verif.verdict === 'interrompu') oublierEnvoiIncertain(cle);
+      afficherMessage(message, messageVerificationEnvoi(verif.verdict, vraieRelance, email, erreur),
+        verif.verdict === 'fait' || verif.verdict === 'envoye' ? 'ok' : 'ko');
       if (typeof rafraichirRessourceAdmin === 'function') rafraichirRessourceAdmin('clubsInvites');
       return;
     }
-    envoisIncertains.delete(cle);
-    naturesEnvoisIncertains.delete(cle);
-    oublierIdEnvoi(cle);
+    diag.mesures_serveur = (res && res.mesures) || null;
+    noterDiagnosticEnvoi(diag);
+    oublierEnvoiIncertain(cle);
     // Lot « Suivi des clubs » : le résultat va AUSSI au club de la liste courante (remplacée pendant l'envoi, elle aurait
     // gardé « invitation non envoyée » — et un second clic aurait mené à « Envoyer quand même ? »).
     const envoi = {};

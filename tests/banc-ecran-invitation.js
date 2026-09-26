@@ -136,7 +136,12 @@ function navigateur(srv, lire, options) {
   const ctx = vm.createContext({
     console, URL, setTimeout: minuterie, clearTimeout, document: doc, window: { open() {}, location: lieu }, navigator: {}, performance, AbortController,
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
-    sessionStorage: { getItem: (k) => (k === 'r92_cle_admin' ? MI.CLE_ADMIN : ''), setItem() {}, removeItem() {} },
+    // ⭐ Option `stockageSession` (MAIL-STATUS-OBS-01) : une Map qui SURVIT au navigateur — deux navigateurs sur la même Map
+    //    simulent un rechargement de l'onglet. Sans l'option : le stockage inerte d'avant (seule la clé admin est lue).
+    sessionStorage: o.stockageSession
+      ? { getItem: (k) => (k === 'r92_cle_admin' ? MI.CLE_ADMIN : o.stockageSession.has(k) ? o.stockageSession.get(k) : null),
+        setItem: (k, v) => { o.stockageSession.set(k, String(v)); }, removeItem: (k) => { o.stockageSession.delete(k); } }
+      : { getItem: (k) => (k === 'r92_cle_admin' ? MI.CLE_ADMIN : ''), setItem() {}, removeItem() {} },
     location: lieu,
     API_URL: 'http://127.0.0.1:9/exec', SNAPSHOT_URL: '', fetch: fetchSimule, Blob: function () {},
     dialogConfirmer: async (texte) => { dialogues.push(texte); const r = reponses.length ? reponses.shift() : true; return typeof r === 'function' ? r() : r; },
