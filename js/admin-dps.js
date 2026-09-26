@@ -27,6 +27,7 @@ var DPS_FOURNISSEURS = [
 var dpsInstantaneCourant = null;
 var dpsModeCourant = 'complet';
 var dpsDemandeOuverte = false;
+var dpsPdfEnCours = false;
 
 function dpsTexte_(valeur) {
   return String(valeur == null ? '' : valeur).trim();
@@ -317,6 +318,108 @@ function dpsCopier_(cible) {
   if (champ) return dpsCopierTexte_(champ.valeur, champ.libelle);
 }
 
+/** Produit le dossier de préparation DPS dans le navigateur, sans lecture ni écriture réseau. */
+async function dpsConstruirePdf_() {
+  if (!window.PDFLib || !window.PdfCielVerre) throw new Error('Bibliothèque PDF indisponible.');
+  if (!dpsInstantaneCourant || !dpsInstantaneCourant.dossier) throw new Error('Données du dossier indisponibles.');
+  var PDFDocument = PDFLib.PDFDocument, pdf = await PDFDocument.create();
+  var kit = await PdfCielVerre.creer(pdf, PDFLib);
+  var instantane = dpsInstantaneCourant, config = instantane.config || {}, g = config.global || {};
+  var champs = dpsConstruireChamps(instantane.dossier, config, instantane.estimation, 'complet');
+  var manquants = champs.filter(function (champ) { return champ.valeur.indexOf('À compléter') !== -1; });
+  var estimation = instantane.estimation && instantane.estimation.contrat === 'estimation-public-1'
+    ? instantane.estimation : null;
+  var organisateur = dpsChampDossier_(instantane.dossier, 'Nom du club ou de la structure organisatrice') || 'Organisateur à compléter';
+  var nom = dpsTexte_(g.tournoi_nom) || 'Tournoi à compléter';
+  var dateLieu = [dpsDateLisible_(g.tournoi_date), dpsTexte_(g.tournoi_lieu)].filter(Boolean).join(' - ');
+
+  var couverture = kit.pageCouverture({ surtitre:'DISPOSITIF PREVISIONNEL DE SECOURS',
+    titre:'DOSSIER DPS', sousTitre:nom + (dateLieu ? '\n' + dateLieu : ''),
+    statut:manquants.length ? 'Brouillon - ' + manquants.length + ' bloc(s) à compléter' : 'Prêt à transmettre' });
+  couverture.drawText('PRÉPARÉ POUR', { x:50, y:350, size:8, font:kit.bold, color:kit.c.cyan });
+  kit.paragraphe(couverture, organisateur, 50, 330, 480,
+    { taille:15, interligne:20, bold:true, couleur:kit.c.surface });
+  kit.metrique(couverture, { x:50, y:190, w:150, h:94,
+    valeur:estimation ? String(Number(estimation.centrale || 0)) : '-', libelle:'spectateurs attendus\nhors joueurs et éducateurs',
+    fond:kit.c.surface, bordure:kit.c.ciel });
+  kit.metrique(couverture, { x:215, y:190, w:150, h:94,
+    valeur:estimation ? Number(estimation.basse || 0) + '-' + Number(estimation.haute || 0) : '-',
+    libelle:'fourchette estimée', fond:kit.c.surface, bordure:kit.c.ciel });
+  kit.metrique(couverture, { x:380, y:190, w:150, h:94,
+    valeur:estimation ? Number(estimation.renseignes || 0) + '/' + Number(estimation.participants || 0) : '-',
+    libelle:'clubs renseignés', fond:kit.c.surface, bordure:kit.c.ciel });
+  kit.paragraphe(couverture,
+    'Document de préparation généré localement par MaxiLou. Les informations restent à valider avec l’organisme de secours choisi.',
+    50, 138, 475, { taille:9, interligne:13, couleur:kit.c.ciel });
+
+  var page = kit.nouvellePage('DOSSIER DPS', 'Synthèse de la demande');
+  kit.etiquette(page, manquants.length ? 'Brouillon à compléter' : 'Informations vérifiées', 38, 746,
+    manquants.length ? { fond:kit.c.surface, bordure:kit.c.attention, couleur:kit.c.attention } :
+      { fond:kit.c.surface, bordure:kit.c.succes, couleur:kit.c.succes });
+  kit.paragraphe(page, 'Chaque bloc reprend l’instantané déjà affiché dans MaxiLou : aucun appel supplémentaire n’est effectué pour produire ce PDF.',
+    38, 726, 515, { taille:8, interligne:11, couleur:kit.c.secondaire });
+  var colonnes = [{ x:38, y:685 }, { x:305, y:685 }], largeurCarte = 252;
+  champs.forEach(function (champ, index) {
+    var colonne = colonnes[index % 2];
+    var lignes = kit.lignes(champ.valeur, kit.regular, 9, largeurCarte - 30).length;
+    var h = Math.max(90, 57 + lignes * 13);
+    if (colonne.y - h < 62) {
+      page = kit.nouvellePage('DOSSIER DPS', 'Synthèse de la demande - suite');
+      colonnes = [{ x:38, y:748 }, { x:305, y:748 }];
+      colonne = colonnes[index % 2];
+    }
+    kit.carte(page, { x:colonne.x, y:colonne.y - h, w:largeurCarte, h:h,
+      surtitre:'INFORMATION ' + (index + 1), titre:champ.libelle, texte:champ.valeur,
+      accent:champ.valeur.indexOf('À compléter') !== -1 ? kit.c.attention : kit.c.cyan });
+    colonne.y -= h + 12;
+  });
+
+  page = kit.nouvellePage('DOSSIER DPS', 'Organismes de secours à solliciter');
+  kit.paragraphe(page,
+    'Comparer plusieurs propositions permet d’adapter le dispositif au risque réel, au public attendu et aux contraintes du site.',
+    38, 752, 510, { taille:10, interligne:15, couleur:kit.c.secondaire });
+  var py = 690;
+  DPS_FOURNISSEURS.forEach(function (fournisseur, index) {
+    kit.carte(page, { x:38, y:py - 94, w:519, h:84, surtitre:'OPTION ' + (index + 1),
+      titre:fournisseur.nom, texte:fournisseur.action + ' - ' + fournisseur.note + '\n' + fournisseur.url,
+      accent:index % 2 ? kit.c.ciel : kit.c.cyan, taille:8, interligne:12 });
+    py -= 106;
+  });
+  kit.carte(page, { x:38, y:65, w:519, h:78, surtitre:'À RETENIR',
+    titre:'Un support de préparation, pas une validation réglementaire',
+    texte:'Le dimensionnement final et les délais sont à confirmer avec l’organisme retenu. Aucun formulaire externe n’est envoyé automatiquement.',
+    accent:kit.c.action, fond:kit.c.selection, taille:8, interligne:11 });
+
+  kit.pieds('DOSSIER DPS');
+  return pdf.save();
+}
+
+async function dpsTelechargerPdf_(bouton) {
+  var message = document.getElementById('dps-message-copie');
+  if (dpsPdfEnCours) return;
+  dpsPdfEnCours = true;
+  if (bouton) bouton.disabled = true;
+  if (typeof afficherMessage === 'function') afficherMessage(message, 'Composition locale du dossier PDF…', '');
+  try {
+    var octets = await dpsConstruirePdf_();
+    var blob = new Blob([octets], { type:'application/pdf' }), url = URL.createObjectURL(blob);
+    var a = document.createElement('a'), g = (dpsInstantaneCourant.config || {}).global || {};
+    var slug = (dpsTexte_(g.tournoi_nom) || 'tournoi').toLowerCase()
+      .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    a.href = url; a.download = 'dossier-dps-' + (slug || 'tournoi') + '.pdf';
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    if (typeof afficherMessage === 'function') afficherMessage(message,
+      '✅ Dossier DPS généré localement. Vérifie les mentions « À compléter » avant transmission.', 'ok');
+  } catch (e) {
+    if (typeof afficherMessage === 'function') afficherMessage(message,
+      'PDF non généré : ' + String(e && e.message || e), 'ko');
+  } finally {
+    dpsPdfEnCours = false;
+    if (bouton) bouton.disabled = false;
+  }
+}
+
 document.addEventListener('DOMContentLoaded', function () {
   var section = document.getElementById('bloc-dps');
   if (!section) return;
@@ -330,6 +433,7 @@ document.addEventListener('DOMContentLoaded', function () {
     if (!bouton || bouton.tagName === 'A') return;
     if (bouton.id === 'dps-continuer') dpsNaviguerVersManquant_();
     else if (bouton.id === 'dps-voir-copie') dpsOuvrirDemande_();
+    else if (bouton.id === 'dps-telecharger-pdf') dpsTelechargerPdf_(bouton);
     else if (bouton.hasAttribute('data-dps-fermer')) dpsFermerDemande_();
     else if (bouton.hasAttribute('data-dps-mode')) {
       dpsModeCourant = bouton.getAttribute('data-dps-mode') === 'court' ? 'court' : 'complet';

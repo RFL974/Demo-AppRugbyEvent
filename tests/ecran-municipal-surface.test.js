@@ -19,7 +19,8 @@ const css = lire('css/municipal.css');
 vrai(html.includes('id="bloc-municipal"') && html.includes('id="municipal-racine"'),
   'la surface municipale existe dans la page admin');
 vrai(html.includes('css/municipal.css?v=refonte-ciel-verre-20260920-municipal2') &&
-  html.includes('js/admin-municipal.js?v=refonte-ciel-verre-20260920-municipal2'),
+  html.includes('js/admin-municipal.js?v=refonte-ciel-verre-20260925-pdf-identite1') &&
+  html.includes('js/pdf-ciel-verre.js?v=refonte-ciel-verre-20260925-pdf-identite1'),
   'les nouvelles ressources ont une URL de cache dédiée');
 const ordreOrganiser = ['autorisation', 'dps', 'municipal', 'terrains', 'poules']
   .map((id) => ecrans.indexOf("id: '" + id + "'"));
@@ -66,6 +67,9 @@ vrai(code.includes('municipalEnregistrementEnCours') && code.includes('if (munic
   'un double clic ne peut pas lancer deux écritures');
 vrai(code.includes('PDFDocument.create()') && code.includes('copyPages') && code.includes('embedJpg'),
   'le dossier PDF assemble localement les pages et annexes');
+vrai(code.includes('PdfCielVerre.creer') && code.includes('pageCouverture') &&
+  code.includes('À confirmer avec la commune') && code.includes('Aucune exigence municipale n’est présumée'),
+  'le PDF municipal applique la DA Ciel & Verre sans inventer d’exigence locale');
 vrai(!/fetch\s*\(|apiGet\s*\(|apiPost\s*\(/.test(code),
   'la surface n’ajoute aucun appel de lecture ni accès réseau direct');
 vrai(css.includes('width:min(440px,100vw)') && css.includes('@media (max-width:760px)') &&

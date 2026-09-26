@@ -83,6 +83,18 @@ test('le module de sortie n’a aucune primitive de lecture ou écriture distant
   assert.match(source, /cachePdfTerrains\[cle\]/);
 });
 
+test('un plan réinitialisé ne peut pas régénérer les anciens petits terrains', function () {
+  const plan = fixture();
+  plan.fieldsPlan.forEach(function (fp) { fp.zones = []; fp.table = null; });
+  plan.parCategorie = {};
+  plan.tablesPosees = false;
+  const sourcePdf = modulePdf.empreintePackTerrains(plan);
+  const dossier = modulePdf.planTerrainsPourDossier(plan);
+  assert.doesNotMatch(sourcePdf, /RUG\d-\d|U8|U10/);
+  assert.ok(dossier.fields.every(function (fp) { return fp.zones.length === 0; }));
+  assert.match(modulePdf.htmlSortiesTerrains(plan, ''), /id="bouton-telecharger-pdf-terrains" disabled/);
+});
+
 test('le raccordement invalide les sorties après chaque changement de plan', function () {
   const source = fs.readFileSync(path.join(racine, 'js/admin-terrains.js'), 'utf8');
   assert.match(source, /onZoneTerrainsInput\(evenement\)[\s\S]{0,180}closest\('#terrains-sorties'\)[\s\S]{0,180}invaliderPackTerrains/);
@@ -91,6 +103,11 @@ test('le raccordement invalide les sorties après chaque changement de plan', fu
   assert.match(source, /demarrerDeplacementTerrain[\s\S]{0,450}invaliderPackTerrains/);
   assert.match(source, /demarrerRotationTerrain[\s\S]{0,350}invaliderPackTerrains/);
   assert.match(source, /onValiderPlacement[\s\S]{0,500}empreintePackTerrains/);
+});
+
+test('la grille Terrains peut rétrécir à 390 px sans pousser la page', function () {
+  const css = fs.readFileSync(path.join(racine, 'css/theme-r92.css'), 'utf8');
+  assert.match(css, /\.cv-terrains\s*>\s*\*\s*\{[^}]*min-width\s*:\s*0/);
 });
 
 test('le HTML charge le générateur après pdf-lib avec une URL propre', function () {

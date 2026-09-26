@@ -525,7 +525,7 @@ function rendreEstimationPublicAutorisation(estimation, erreur) {
       ? '<div class="autorisation-public-alerte"><strong>Estimation encore incomplète.</strong> ' + incomplets +
         ' club' + (incomplets > 1 ? 's participants n’ont' : ' participant n’a') +
         ' pas encore fourni un déplacement exploitable. ' + (incomplets > 1 ? 'Ils ne sont' : 'Il n’est') +
-        ' pas ajouté au chiffre au hasard.</div>'
+        ' pas ajouté' + (incomplets > 1 ? 's' : '') + ' au chiffre au hasard.</div>'
       : '');
   var cartes = '<div class="autorisation-public-cartes">' +
     '<div class="est-principale"><span>Estimation centrale</span><strong>' + Number(estimation.centrale || 0) +
@@ -1609,7 +1609,7 @@ function remplirFormatSportifAut(categories, matchsParCat, setT) {
  * reste vide et ÉDITABLE dans le PDF fédéral. ⛔ Le label EDR n'est JAMAIS présumé (DR-7B) :
  * vide ⇒ ni « oui » ni « non » coché, les deux cases restent éditables.
  */
-function planRemplissageAutorisation(g, nbClubs, nbEquipes, categories, matchsParCat, nbParticipants, nbEducateurs) {
+function planRemplissageAutorisation(g, nbClubs, nbEquipes, categories, matchsParCat, nbParticipants, nbEducateurs, nbTerrains) {
   g = g || {};
   function v(k) { return String(g[k] == null ? '' : g[k]).trim(); }
   var textes = {}, cases = [];
@@ -1662,6 +1662,9 @@ function planRemplissageAutorisation(g, nbClubs, nbEquipes, categories, matchsPa
   var naturesTPdf = naturesTerrainsAut(g);
   if (naturesTPdf.length) naturesTPdf.forEach(function (n) { choix(n, casesNature); });
   else choix(v('org_type_terrain'), casesNature);
+  // Source prioritaire : valeur résolue par le backend dans la feuille de report. Elle reflète
+  // la configuration réelle des terrains et évite de recompter différemment dans le navigateur.
+  setT('Texte19', nbTerrains || v('org_nb_terrains'));
   setT('Texte20', v('org_nb_vestiaires'));
 
   // B.3 Arbitrage — éducateurs : cascade ADDITIVE (miroir de totalEducateursAutorisation, session
@@ -1940,7 +1943,21 @@ async function onTelechargerPdfAutorisation() {
       const cat = String(m.categorie == null ? '' : m.categorie).trim();
       if (cat) (matchsParCat[cat] = matchsParCat[cat] || []).push(m);
     });
-    const plan = planRemplissageAutorisation(g, nbClubs, nbEquipes, cats, matchsParCat, nbParticipants, nbEducateurs);
+    const nbTerrains = (function () {
+      const sections = autorisationDossierCourant && Array.isArray(autorisationDossierCourant.sections)
+        ? autorisationDossierCourant.sections : [];
+      for (let i = 0; i < sections.length; i++) {
+        const champs = Array.isArray(sections[i].champs) ? sections[i].champs : [];
+        for (let j = 0; j < champs.length; j++) {
+          if (champs[j].libelle === 'Nombre de terrains utilisés') {
+            return String(champs[j].valeur == null ? '' : champs[j].valeur).trim();
+          }
+        }
+      }
+      return '';
+    })();
+    const plan = planRemplissageAutorisation(g, nbClubs, nbEquipes, cats, matchsParCat,
+      nbParticipants, nbEducateurs, nbTerrains);
     const out = await appliquerPlanPdfAutorisation(PDFLib, bytes, plan);
     telechargerFichierAutorisation(out, 'demande-autorisation-' + (g.tournoi_date || 'tournoi') + '.pdf', 'application/pdf');
     afficherMessage(message, '✅ PDF téléchargé. Les valeurs préremplies y sont figées : vérifie-les, ' +

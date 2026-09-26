@@ -71,6 +71,17 @@ vrai(ancienSansReglages.couloir === null && ancienSansReglages.tableL === null &
 vrai(lirePlanTerrainsDossier('') === null && lirePlanTerrainsDossier('{') === null,
   'une donnée absente ou illisible ne fabrique aucun terrain par défaut');
 
+const apresReset = JSON.parse(JSON.stringify(publie));
+apresReset.fields.forEach(function (fp) { fp.zones = []; });
+const reluApresReset = lirePlanTerrainsDossier(JSON.stringify(apresReset));
+const htmlApresReset = htmlPlansTerrainsDossier(JSON.stringify(apresReset));
+vrai(reluApresReset.fields[0].field.x === 12 && reluApresReset.fields[0].field.y === 18 &&
+  reluApresReset.fields[0].field.rot === 12 && reluApresReset.fields.every(function (fp) { return fp.zones.length === 0; }),
+  'après reset, le dossier conserve x/y/orientation des grands terrains et aucune zone');
+vrai(!/RUG1-1|RUG1-2|FOO1-1|U10|U12/.test(htmlApresReset) &&
+  htmlApresReset.includes('Aucun mini-terrain affecté') && htmlApresReset.includes('Disponible'),
+  'après reset, aucun ancien petit terrain ni affectation ne réapparaît dans le dossier ou son PDF imprimé');
+
 const html = htmlPlansTerrainsDossier(JSON.stringify(publie));
 vrai(html.includes('Vue globale des terrains') && html.includes('data-plan-index="0"') && html.includes('data-plan-index="2"'),
   'la vue globale rend chaque grand terrain cliquable');

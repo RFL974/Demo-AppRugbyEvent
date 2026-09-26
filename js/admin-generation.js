@@ -195,7 +195,7 @@ async function onGenerer() {
       if (!await confirmerEnGardantLeFocus(
           '⚠️ ATTENTION : ' + vus + ' match(s) ont déjà un score saisi.\n\n' +
           'Régénérer va EFFACER DÉFINITIVEMENT toutes les poules, tous les matchs et TOUS ces scores.\n\n' +
-          'Veux-tu vraiment tout regénérer ?', { ok: 'Continuer', danger: true })) return;
+          'Veux-tu vraiment tout régénérer ?', { ok: 'Continuer', danger: true })) return;
       const cle = await demanderCleEnGardantLeFocus('admin',
           'Confirmation forte : ' + vus + ' score(s) seront effacés.\n\nEntre la clé admin pour confirmer :');
       if (cle == null) return;                       // annulé → rien n'est effacé

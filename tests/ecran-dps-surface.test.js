@@ -80,16 +80,23 @@ vrai(/Actualisation impossible : dernière lecture connue affichée/.test(code) 
 const admin = lire('admin.html');
 vrai(admin.includes('id="dps-demande-prete"') && admin.includes('id="dps-champs-copie"') &&
   admin.includes('id="dps-fournisseurs"'), 'l’étape Demande prête possède ses trois zones');
-vrai(admin.includes('js/admin-dps.js?v=refonte-ciel-verre-20260920-dps2') &&
-  admin.includes('admin-autorisation.js?v=refonte-ciel-verre-20260920-participants3-dps1-municipal1'),
+vrai(admin.includes('js/admin-dps.js?v=refonte-ciel-verre-20260925-pdf-identite1') &&
+  admin.includes('admin-autorisation.js?v=refonte-ciel-verre-20260925-terrains-pdf1') &&
+  admin.includes('js/pdf-ciel-verre.js?v=refonte-ciel-verre-20260925-pdf-identite1'),
   'les deux ressources modifiées ont une URL neuve sans changer la version globale');
 vrai(admin.includes('Version courte') && admin.includes('Version complète') &&
-  admin.includes('Copier en une ligne') && admin.includes('Tout copier'),
-  'les quatre commandes de copie sont visibles dans le HTML initial');
+  admin.includes('Copier en une ligne') && admin.includes('Tout copier') &&
+  admin.includes('id="dps-telecharger-pdf"'),
+  'les commandes de copie et le téléchargement PDF sont visibles dans le HTML initial');
 vrai(admin.includes('id="dps-compteur"') && !code.includes('role="table"'),
   'le compteur est annoncé sans détourner un rôle de tableau pour des boutons');
 vrai(code.includes("'Copier le brouillon'") && code.includes('Sortie de travail uniquement'),
   'une sortie incomplète est explicitement présentée comme un brouillon interne');
+vrai(code.includes('async function dpsConstruirePdf_') && code.includes('PdfCielVerre.creer') &&
+  code.includes('Document de préparation généré localement par MaxiLou'),
+  'le dossier PDF DPS est composé localement avec la signature Ciel & Verre');
+vrai(code.includes('dpsPdfEnCours') && code.includes('if (dpsPdfEnCours) return'),
+  'un double clic ne peut pas lancer deux générations PDF DPS');
 
 const autorisation = lire('js/admin-autorisation.js');
 vrai(autorisation.includes('autorisationDossierCourant = dossier') &&

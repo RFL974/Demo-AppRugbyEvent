@@ -74,6 +74,7 @@ body.theme-clair { color:var(--cv-texte); background:#f0f7fc; padding:24px 32px;
    autant dire le rendu d'avant. Le plan est la pièce maîtresse de cet écran, il prend toute la
    largeur ; les fiches de terrain, elles, sont des dépliants et n'en demandent pas tant. */
 .cv-terrains { display:grid; grid-template-columns:minmax(0,1fr); gap:24px; align-items:start; }
+.cv-terrains > * { min-width:0; }
 .cv-terrains-plan { background:#f2f8fc; border-radius:12px; padding:20px; min-height:300px; }
 .suivi-cellule[data-label="Paiement"] > small:nth-of-type(n+2) { display:none; }
 .cv-detail-club { padding:20px; background:#fff; border:1px solid var(--cv-bordure); border-radius:12px; display:flex; flex-direction:column; gap:12px; }
@@ -1699,7 +1700,7 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 .theme-clair .dps-formats button.est-actif { background:var(--cv-action); color:#fff; }
 .theme-clair #dps-etat-brouillon { color:#855405; font-size:11px; }
 .theme-clair #dps-compteur { color:var(--cv-secondaire); font-size:11px; white-space:nowrap; }
-.theme-clair .dps-actions-copie { display:flex; gap:8px; }
+.theme-clair .dps-actions-copie { display:flex; flex-wrap:wrap; gap:8px; }
 .theme-clair .dps-actions-copie .bouton { min-height:44px; justify-content:center; }
 .theme-clair .dps-champs-copie { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:12px; }
 .theme-clair .dps-champ-copie { min-width:0; padding:11px; border:1px solid var(--cv-bordure); border-radius:9px; background:#fff; }

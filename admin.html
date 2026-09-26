@@ -12,7 +12,7 @@
   <!-- Notre feuille de style commune -->
   <link rel="stylesheet" href="css/styles.css?v=refonte-ciel-verre-20260920-terrain-orientation1">
   <!-- Surcouche moderne navy/blanc/ciel (re-skin admin — retirer cette ligne pour revenir en arrière) -->
-  <link rel="stylesheet" href="css/theme-r92.css?v=refonte-ciel-verre-20260925-dossier-final1">
+  <link rel="stylesheet" href="css/theme-r92.css?v=refonte-ciel-verre-20260926-r101-responsive1">
   <link rel="stylesheet" href="css/municipal.css?v=refonte-ciel-verre-20260920-municipal2">
   <!-- Mode « écrans » : barre latérale + onglets sur grand écran (structure construite par js/ecrans.js) -->
   <link rel="stylesheet" href="css/ecrans.css?v=refonte-ciel-verre-20260920">
@@ -970,7 +970,7 @@
           suivi des scores), puis le rappel du format sportif, l'encadrement et les modalités.
           Chaque club a son <strong>dossier personnel</strong> — son nom, ses catégories engagées.<br>
           💡 Toute section <strong>sans donnée</strong> est simplement <strong>masquée</strong> —
-          tu peux générer le dossier à tout moment et le regénérer quand tu complètes les infos.<br>
+          tu peux générer le dossier à tout moment et le régénérer quand tu complètes les infos.<br>
           👉 Pour l'<strong>envoi</strong> à un club (accueil personnalisé + email automatique),
           utilise <strong>« Envoyer le dossier final »</strong> sur la carte du club dans
           <strong>« Suivi des clubs »</strong>.
@@ -1068,6 +1068,7 @@
             <div class="dps-actions-copie">
               <button type="button" class="bouton bouton-secondaire" data-dps-copier="ligne">Copier en une ligne</button>
               <button type="button" class="bouton" data-dps-copier="tout">Tout copier</button>
+              <button type="button" class="bouton" id="dps-telecharger-pdf">Télécharger le dossier PDF</button>
             </div>
           </div>
           <div class="dps-champs-copie" id="dps-champs-copie"></div>
@@ -1324,17 +1325,18 @@
   <!-- Versionnée pour que le navigateur ne conserve pas l'ancien parcours bloquant après déploiement. -->
   <script src="js/admin-equipes.js?v=refonte-ciel-verre-20260920"></script>
   <script src="js/admin-tableau-bord.js?v=refonte-ciel-verre-20260920"></script>
-  <script src="js/admin-generation.js?v=refonte-ciel-verre-20260920"></script>
+  <script src="js/admin-generation.js?v=refonte-ciel-verre-20260926-texte1"></script>
   <script src="js/admin-terrains.js?v=refonte-ciel-verre-20260925-terrain-orientation1"></script>
   <!-- Partenaires : le moteur partagé avec la page publique, puis l'écran d'administration. -->
   <script src="js/sponsors.js"></script>
   <script src="js/admin-sponsors.js?v=retours-partenaires-20260919"></script>
   <!-- pdf-lib : remplissage du formulaire officiel FFR (AcroForm) côté navigateur, sans build. -->
   <script src="js/vendor/pdf-lib.min.js"></script>
+  <script src="js/pdf-ciel-verre.js?v=refonte-ciel-verre-20260925-pdf-identite1"></script>
   <script src="js/admin-terrains-pdf.js?v=refonte-ciel-verre-20260925-terrain-orientation1"></script>
-  <script src="js/admin-autorisation.js?v=refonte-ciel-verre-20260920-participants3-dps1-municipal1"></script>
-  <script src="js/admin-dps.js?v=refonte-ciel-verre-20260920-dps2"></script>
-  <script src="js/admin-municipal.js?v=refonte-ciel-verre-20260920-municipal2"></script>
+  <script src="js/admin-autorisation.js?v=refonte-ciel-verre-20260925-terrains-pdf1"></script>
+  <script src="js/admin-dps.js?v=refonte-ciel-verre-20260925-pdf-identite1"></script>
+  <script src="js/admin-municipal.js?v=refonte-ciel-verre-20260925-pdf-identite1"></script>
   <!-- Feuille de fin de journée : réutilise pdf-lib (chargé juste au-dessus) pour le PDF. -->
   <script src="js/admin-feuille-jour.js"></script>
   <!-- Générateur de QR code LOCAL (MIT, js/vendor/qrcode.js — déjà utilisé par le dossier club).

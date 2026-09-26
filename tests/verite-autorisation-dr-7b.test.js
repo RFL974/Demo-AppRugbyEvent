@@ -93,7 +93,7 @@ const avecLabel = (label) => {
   if (label !== undefined) g.org_label_edr = label;
   return g;
 };
-const plan = (bac, g) => bac.planRemplissageAutorisation(g, 6, 12, CATS, {}, 120, 24);
+const plan = (bac, g, nbTerrains) => bac.planRemplissageAutorisation(g, 6, 12, CATS, {}, 120, 24, nbTerrains);
 const normal = (p) => JSON.stringify({ textes: p.textes, cases: p.cases.slice().sort() });
 
 async function controles() {
@@ -155,6 +155,10 @@ async function controles() {
   });
   verifier(plan(bac, avecLabel('')).textes.Texte8 === '01/06/2025',
     '2.4 la date du dernier label reste reportée telle quelle (Texte8)');
+  verifier(plan(bac, avecLabel(''), '4').textes.Texte19 === '4',
+    '2.5 le nombre de terrains résolu par le serveur est reporté dans Texte19');
+  verifier(plan(bac, Object.assign(avecLabel(''), { org_nb_terrains: '3' })).textes.Texte19 === '3',
+    '2.6 la saisie manuelle reste le repli lorsque la feuille serveur ne fournit aucun total');
 
   /* ======================================================================== */
   console.log('\n§ 3 — Auto-preuve et non-régression : code d\'AVANT contre code ACTUEL');
@@ -238,6 +242,14 @@ async function controles() {
   const sansClub = await produire(Object.assign(avecLabel(''), { org_club_nom: '' }));
   verifier(sansClub.noms.indexOf('Texte1') !== -1 && vide.noms.indexOf('Texte1') === -1,
     '5.7 exemple : nom du club vide ⇒ Texte1 éditable ; nom saisi ⇒ Texte1 figé');
+  const avecTerrains = await (async function () {
+    const p = plan(bac, avecLabel(''), '4');
+    const octets = await bac.appliquerPlanPdfAutorisation(PDFLib, gabarit, p);
+    const doc = await PDFLib.PDFDocument.load(octets);
+    return doc.getForm().getFields().map((f) => f.getName());
+  })();
+  verifier(avecTerrains.indexOf('Texte19') === -1,
+    '5.8 le nombre de terrains est bien gravé dans le PDF officiel et n’est plus un champ vide');
 }
 
 /* ========================================================================== */

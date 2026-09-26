@@ -597,69 +597,155 @@ function municipalPdfLignes_(texte, police, taille, largeur) {
   return lignes.length ? lignes : [''];
 }
 async function municipalConstruirePdf_() {
-  if (!window.PDFLib) throw new Error('Bibliothèque PDF indisponible.');
-  var PDFDocument = PDFLib.PDFDocument, StandardFonts = PDFLib.StandardFonts, rgb = PDFLib.rgb;
-  var pdf = await PDFDocument.create();
-  var regular = await pdf.embedFont(StandardFonts.Helvetica), bold = await pdf.embedFont(StandardFonts.HelveticaBold);
-  var page, y;
-  function nouvellePage(titre) {
-    page = pdf.addPage([595.28, 841.89]); y = 790;
-    page.drawText(municipalPdfTexte_(titre), { x: 45, y:y, size:20, font:bold, color:rgb(.07,.38,.62) }); y -= 34;
-  }
-  function ligne(libelle, valeur) {
-    if (y < 90) nouvellePage('Demande municipale - suite');
-    if (libelle) { page.drawText(municipalPdfTexte_(libelle), { x:45, y:y, size:9, font:bold, color:rgb(.18,.29,.39) }); y -= 14; }
-    municipalPdfLignes_(valeur || 'A completer', regular, 10, 505).forEach(function (l) { page.drawText(l, { x:45, y:y, size:10, font:regular, color:rgb(.15,.22,.29) }); y -= 14; });
-    y -= 8;
-  }
+  if (!window.PDFLib || !window.PdfCielVerre) throw new Error('Bibliothèque PDF indisponible.');
+  var PDFDocument = PDFLib.PDFDocument, pdf = await PDFDocument.create();
+  var kit = await PdfCielVerre.creer(pdf, PDFLib), pagesMarquees = [];
   var g = (configCourante && configCourante.global) || {};
   var d = municipalEtat.demande.destinataire, o = municipalEtat.demande.organisateur;
-  nouvellePage('Dossier de demande municipale');
-  ligne('Destinataire', [d.commune, d.service, d.interlocuteur, d.email, d.telephone].filter(Boolean).join(' - ') || 'A confirmer avec la commune');
-  ligne('Canal et echeance', [(MUNICIPAL_CANAUX.find(function (c) { return c[0] === d.canal; }) || ['', 'A confirmer'])[1], municipalDateLisible_(d.date_limite)].filter(Boolean).join(' - '));
-  ligne('Manifestation', g.tournoi_nom || 'A completer');
-  ligne('Date et lieu', [municipalDateLisible_(g.tournoi_date), g.tournoi_lieu, g.tournoi_adresse].filter(Boolean).join(' - '));
-  ligne('Description', g.tournoi_description || 'A completer');
-  ligne('Organisateur', municipalChampDossier_('Nom du club ou de la structure organisatrice') || g.org_club_nom || 'A completer');
-  ligne('Contact', [municipalChampDossier_('Représenté par (M./Mme)') || g.org_representant_nom || g.referent_nom,
-    g.org_representant_tel || g.referent_tel, g.org_representant_mail || g.referent_mail].filter(Boolean).join(' - ') || 'A completer');
-  ligne('Identifiants organisateur', [o.adresse, o.rna && 'RNA ' + o.rna, o.siret && 'SIRET ' + o.siret,
-    o.code_ape && 'APE ' + o.code_ape, o.assurance && 'Assurance ' + o.assurance].filter(Boolean).join(' - ') || 'A confirmer selon la procedure locale');
-  ligne('Public attendu', municipalEstimation && municipalEstimation.contrat === 'estimation-public-1' ?
-    Number(municipalEstimation.centrale || 0) + ' spectateurs, hors joueurs et educateurs' : 'A completer');
-  ligne('Categories', municipalCategories_().join(', ') || 'A completer');
-  ligne('Volets du dossier', MUNICIPAL_VOLETS.filter(function (v) { return municipalEtat.demande.volets[v[0]]; }).map(function (v) { return v[1]; }).join(', ') || 'A confirmer avec la commune');
-  ligne('Objet du dossier', municipalEtat.demande.notes || 'Mise a disposition des espaces et moyens decrits dans les pages suivantes.');
-  municipalEtat.demande.espaces.forEach(function (e, i) {
-    nouvellePage('Espace ' + (i + 1) + ' - ' + (e.nom || 'Sans nom'));
-    ligne('Type et adresse', [e.type, e.adresse].filter(Boolean).join(' - '));
-    ligne('Proprietaire, gestionnaire et interlocuteur', [e.gestionnaire_nom, e.interlocuteur_nom, e.gestionnaire_tel, e.gestionnaire_mail].filter(Boolean).join(' - '));
-    ligne('Creneau demande', [[municipalDateLisible_(e.date), municipalDateLisible_(e.date_fin)].filter(Boolean).join(' au '), e.debut && e.fin ? e.debut + ' - ' + e.fin : ''].filter(Boolean).join(' - '));
-    ligne('Montage et demontage', [e.montage_debut, e.demontage_fin].filter(Boolean).join(' - ') || 'Sans creneau distinct renseigne');
-    ligne('Usages', MUNICIPAL_USAGES.filter(function (u) { return e.usages[u[0]]; }).map(function (u) { return u[1]; }).join(', ') || 'A completer');
-    ligne('Besoins', e.besoins.map(municipalLibelleBesoin_).join('; ') || 'Aucun besoin specifique renseigne');
-    ligne('Etat de la demande', (MUNICIPAL_STATUTS.find(function (s) { return s[0] === e.statut; }) || ['', 'A demander'])[1]);
-    if (e.notes) ligne('Precisions', e.notes);
-  });
+  var organisateur = municipalChampDossier_('Nom du club ou de la structure organisatrice') || g.org_club_nom || 'Organisateur à compléter';
+  var contact = [municipalChampDossier_('Représenté par (M./Mme)') || g.org_representant_nom || g.referent_nom,
+    g.org_representant_tel || g.referent_tel, g.org_representant_mail || g.referent_mail].filter(Boolean).join(' - ') || 'À compléter';
   var annexes = municipalAnnexes_();
+  var besoinsTotal = municipalEtat.demande.espaces.reduce(function (total, espace) { return total + espace.besoins.length; }, 0);
+  var volets = MUNICIPAL_VOLETS.filter(function (v) { return municipalEtat.demande.volets[v[0]]; })
+    .map(function (v) { return v[1]; });
+  var canal = (MUNICIPAL_CANAUX.find(function (c) { return c[0] === d.canal; }) || ['', 'À confirmer avec la commune'])[1];
+  var destination = [d.commune, d.service].filter(Boolean).join(' - ') || 'Destination à confirmer avec la commune';
+
+  var couverture = kit.pageCouverture({ surtitre:'DOSSIER MUNICIPAL', titre:'DEMANDE MUNICIPALE',
+    sousTitre:(g.tournoi_nom || 'Tournoi à compléter') + '\n' +
+      [municipalDateLisible_(g.tournoi_date), g.tournoi_lieu].filter(Boolean).join(' - '),
+    statut:destination });
+  pagesMarquees.push(couverture);
+  couverture.drawText('PRÉSENTÉ PAR', { x:50, y:350, size:8, font:kit.bold, color:kit.c.cyan });
+  kit.paragraphe(couverture, organisateur, 50, 330, 480,
+    { taille:15, interligne:20, bold:true, couleur:kit.c.surface });
+  kit.metrique(couverture, { x:50, y:190, w:150, h:94, valeur:String(municipalEtat.demande.espaces.length),
+    libelle:'espaces demandés', fond:kit.c.surface, bordure:kit.c.ciel });
+  kit.metrique(couverture, { x:215, y:190, w:150, h:94, valeur:String(besoinsTotal),
+    libelle:'moyens détaillés', fond:kit.c.surface, bordure:kit.c.ciel });
+  kit.metrique(couverture, { x:380, y:190, w:150, h:94, valeur:String(annexes.length),
+    libelle:'pièces jointes locales', fond:kit.c.surface, bordure:kit.c.ciel });
+  kit.paragraphe(couverture,
+    'Dossier composé localement dans MaxiLou. Les pièces jointes restent dans ce fichier et ne sont pas envoyées automatiquement.',
+    50, 138, 475, { taille:9, interligne:13, couleur:kit.c.ciel });
+
+  var page = kit.nouvellePage('DOSSIER MUNICIPAL', 'Vue d’ensemble de la demande');
+  pagesMarquees.push(page);
+  kit.etiquette(page, 'À confirmer avec la commune', 38, 746,
+    { fond:kit.c.surface, bordure:kit.c.attention, couleur:kit.c.attention });
+  kit.paragraphe(page,
+    'Le canal, les délais, les justificatifs et les éventuelles autorisations complémentaires dépendent de la procédure locale.',
+    38, 726, 515, { taille:8, interligne:11, couleur:kit.c.secondaire });
+  kit.carte(page, { x:38, y:546, w:252, h:154, surtitre:'DESTINATAIRE', titre:destination,
+    texte:[d.interlocuteur, d.email, d.telephone, canal,
+      d.date_limite ? 'Échéance : ' + municipalDateLisible_(d.date_limite) : 'Échéance à confirmer avec la commune']
+      .filter(Boolean).join('\n'), accent:kit.c.cyan, taille:8, interligne:12 });
+  kit.carte(page, { x:305, y:546, w:252, h:154, surtitre:'MANIFESTATION',
+    titre:g.tournoi_nom || 'Tournoi à compléter',
+    texte:[[municipalDateLisible_(g.tournoi_date), g.tournoi_lieu].filter(Boolean).join(' - '),
+      g.tournoi_adresse, g.tournoi_description].filter(Boolean).join('\n') || 'À compléter',
+    accent:kit.c.action, taille:8, interligne:12 });
+  kit.carte(page, { x:38, y:356, w:252, h:174, surtitre:'ORGANISATEUR', titre:organisateur,
+    texte:[contact, o.adresse, o.rna && 'RNA ' + o.rna, o.siret && 'SIRET ' + o.siret,
+      o.code_ape && 'APE ' + o.code_ape, o.assurance && 'Assurance ' + o.assurance]
+      .filter(Boolean).join('\n') || 'À compléter', accent:kit.c.ciel, taille:8, interligne:12 });
+  kit.carte(page, { x:305, y:356, w:252, h:174, surtitre:'PUBLIC & FORMAT',
+    titre:municipalEstimation && municipalEstimation.contrat === 'estimation-public-1'
+      ? Number(municipalEstimation.centrale || 0) + ' spectateurs attendus' : 'Public à compléter',
+    texte:'Hors joueurs et éducateurs\nCatégories : ' + (municipalCategories_().join(', ') || 'à compléter') +
+      '\nEspaces : ' + municipalEtat.demande.espaces.length + '\nBesoins : ' + besoinsTotal,
+    accent:kit.c.cyan, taille:8, interligne:12 });
+  kit.carte(page, { x:38, y:184, w:519, h:154, surtitre:'PÉRIMÈTRE DE LA DEMANDE',
+    titre:volets.length ? volets.length + ' volet(s) identifié(s)' : 'Périmètre à confirmer avec la commune',
+    texte:(volets.join(' - ') || 'Aucune exigence municipale n’est présumée.') + '\n\n' +
+      (municipalEtat.demande.notes || 'Objet : mise à disposition des espaces et moyens décrits dans les pages suivantes.'),
+    accent:kit.c.action, fond:kit.c.selection, taille:8, interligne:12 });
+
+  function nouvellePageEspace(espace, index, suite) {
+    var p = kit.nouvellePage('ESPACE ' + (index + 1) + (suite ? ' - SUITE' : ''), espace.nom || 'Espace sans nom');
+    pagesMarquees.push(p);
+    var statut = (MUNICIPAL_STATUTS.find(function (s) { return s[0] === espace.statut; }) || ['', 'À demander'])[1];
+    kit.etiquette(p, statut, 38, 746, { fond:kit.c.surface,
+      bordure:espace.statut === 'accord' ? kit.c.succes : (espace.statut === 'refus' ? kit.c.danger : kit.c.ciel),
+      couleur:espace.statut === 'accord' ? kit.c.succes : (espace.statut === 'refus' ? kit.c.danger : kit.c.action) });
+    return p;
+  }
+  function cartesEspace(espace, index) {
+    var p = nouvellePageEspace(espace, index, false), y = 704;
+    kit.metrique(p, { x:38, y:625, w:160, h:64, valeur:espace.type || '-', libelle:'type d’espace', taille:13 });
+    kit.metrique(p, { x:217, y:625, w:160, h:64, valeur:municipalDateLisible_(espace.date) || '-', libelle:'premier jour', taille:13 });
+    kit.metrique(p, { x:396, y:625, w:161, h:64, valeur:String(espace.besoins.length), libelle:'besoins détaillés', taille:18 });
+    y = 608;
+    function ajouterCarte(titre, valeur, accent) {
+      var texte = valeur || 'À compléter', lignes = kit.lignes(texte, kit.regular, 9, 487);
+      var suite = false;
+      while (lignes.length) {
+        var place = Math.max(3, Math.floor((y - 78) / 13) - 7);
+        if (place < 3) { p = nouvellePageEspace(espace, index, true); y = 730; place = 45; }
+        var bloc = lignes.splice(0, place), h = Math.max(88, 70 + bloc.length * 13);
+        if (y - h < 58) { p = nouvellePageEspace(espace, index, true); y = 730; continue; }
+        kit.carte(p, { x:38, y:y - h, w:519, h:h, surtitre:'INFORMATION',
+          titre:titre + (suite ? ' - suite' : ''), texte:bloc.join('\n'),
+          accent:accent || kit.c.cyan, taille:9, interligne:13 });
+        y -= h + 12;
+        suite = true;
+      }
+    }
+    ajouterCarte('ADRESSE & INTERLOCUTEUR',
+      [espace.adresse, espace.gestionnaire_nom && 'Gestionnaire : ' + espace.gestionnaire_nom,
+        espace.interlocuteur_nom && 'Contact : ' + espace.interlocuteur_nom,
+        espace.gestionnaire_tel, espace.gestionnaire_mail].filter(Boolean).join('\n'), kit.c.action);
+    ajouterCarte('CRÉNEAU DEMANDÉ',
+      [[municipalDateLisible_(espace.date), municipalDateLisible_(espace.date_fin)].filter(Boolean).join(' au '),
+        espace.debut && espace.fin ? espace.debut + ' - ' + espace.fin : '',
+        [espace.montage_debut && 'Montage : ' + espace.montage_debut,
+          espace.demontage_fin && 'Démontage : ' + espace.demontage_fin].filter(Boolean).join(' - ')].filter(Boolean).join('\n'), kit.c.cyan);
+    ajouterCarte('USAGES PRÉVUS', MUNICIPAL_USAGES.filter(function (u) { return espace.usages[u[0]]; })
+      .map(function (u) { return u[1]; }).join(' - ') || 'À compléter', kit.c.ciel);
+    ajouterCarte('MOYENS DEMANDÉS', espace.besoins.map(municipalLibelleBesoin_).join('\n') ||
+      'Aucun besoin spécifique renseigné.', kit.c.action);
+    if (espace.notes) ajouterCarte('PRÉCISIONS', espace.notes, kit.c.attention);
+    var fichiers = municipalFichiersEspaces[espace.id] || [];
+    ajouterCarte('PIÈCES RATTACHÉES', fichiers.length ? fichiers.map(function (f) { return f.name; }).join('\n') :
+      'Aucune pièce jointe locale pour cet espace.', kit.c.ciel);
+  }
+  municipalEtat.demande.espaces.forEach(function (e, i) {
+    cartesEspace(e, i);
+  });
   if (annexes.length) {
-    nouvellePage('Index des annexes');
-    annexes.forEach(function (a, index) { ligne('Annexe ' + (index + 1), a.fichier.name + ' - ' + a.rattachement); });
+    page = kit.nouvellePage('DOSSIER MUNICIPAL', 'Index des annexes'); pagesMarquees.push(page);
+    kit.paragraphe(page, 'Les pièces ci-dessous sont intégrées au dossier dans leur ordre d’apparition.',
+      38, 750, 515, { taille:10, interligne:15, couleur:kit.c.secondaire });
+    var indexY = 690;
+    annexes.forEach(function (a, index) {
+      if (indexY < 110) { page = kit.nouvellePage('DOSSIER MUNICIPAL', 'Index des annexes - suite'); pagesMarquees.push(page); indexY = 740; }
+      kit.carte(page, { x:38, y:indexY - 84, w:519, h:74, surtitre:'ANNEXE ' + (index + 1),
+        titre:a.fichier.name, texte:a.rattachement, accent:index % 2 ? kit.c.ciel : kit.c.cyan,
+        taille:8, interligne:11 }); indexY -= 94;
+    });
   }
   for (var i = 0; i < annexes.length; i++) {
     var fichier = annexes[i].fichier, octets = await fichier.arrayBuffer(), nom = (fichier.name || '').toLowerCase();
     if (fichier.type === 'application/pdf' || /\.pdf$/.test(nom)) {
-      nouvellePage('Annexe ' + (i + 1) + ' - ' + annexes[i].rattachement);
-      ligne('Fichier', fichier.name);
+      page = kit.nouvellePage('ANNEXE ' + (i + 1), annexes[i].rattachement); pagesMarquees.push(page);
+      kit.carte(page, { x:38, y:520, w:519, h:180, surtitre:'DOCUMENT JOINT', titre:fichier.name,
+        texte:'Le document original est reproduit dans les pages suivantes.\nFormat : PDF\nRattachement : ' + annexes[i].rattachement,
+        accent:kit.c.action, fond:kit.c.selection });
       var annexe = await PDFDocument.load(octets); var pages = await pdf.copyPages(annexe, annexe.getPageIndices());
       pages.forEach(function (p) { pdf.addPage(p); });
     } else {
       var image = (fichier.type === 'image/png' || /\.png$/.test(nom)) ? await pdf.embedPng(octets) : await pdf.embedJpg(octets);
-      var p = pdf.addPage([595.28, 841.89]); var scale = Math.min(505 / image.width, 741 / image.height, 1);
-      p.drawText(municipalPdfTexte_('Annexe ' + (i + 1) + ' - ' + annexes[i].rattachement + ' - ' + fichier.name), { x:45, y:805, size:10, font:bold, color:rgb(.18,.29,.39) });
-      p.drawImage(image, { x:(595.28-image.width*scale)/2, y:35, width:image.width*scale, height:image.height*scale });
+      var p = kit.nouvellePage('ANNEXE ' + (i + 1), annexes[i].rattachement); pagesMarquees.push(p);
+      kit.paragraphe(p, fichier.name, 38, 758, 515, { taille:8, interligne:11, couleur:kit.c.secondaire });
+      var scale = Math.min(505 / image.width, 645 / image.height, 1);
+      var iw = image.width * scale, ih = image.height * scale;
+      p.drawRectangle({ x:(595.28 - iw) / 2 - 8, y:70 + (645 - ih) / 2 - 8,
+        width:iw + 16, height:ih + 16, color:kit.c.surface, borderColor:kit.c.bordure, borderWidth:1 });
+      p.drawImage(image, { x:(595.28 - iw) / 2, y:70 + (645 - ih) / 2, width:iw, height:ih });
     }
   }
+  kit.pieds('DOSSIER MUNICIPAL', pagesMarquees);
   return pdf.save();
 }
 async function municipalProduirePdf_(mode, bouton) {
