@@ -162,7 +162,8 @@ async function main() {
     ok(!element('bloc-conformite-ffr').innerHTML.includes('ffr-vert'), 'pas de verdict sur erreur');
     const bouton = { disabled: false };
     await c.onReessayerControleFFR({ target: { closest: () => bouton } });
-    ok(lectures === 2 && verdicts === 1, 'un clic de reprise effectue uniquement les lectures nécessaires');
+    ok(lectures === 2 && verdicts === 2,
+      'backend ancien : la reprise rejoue le verdict puis son repli référentiel, sans appel supplémentaire');
     ok(element('bloc-conformite-ffr').innerHTML.includes('ffr-vert'), 'reprise sans rechargement');
     await c.majConformiteFFR(); ok(lectures === 2, 'seul le succès est mémorisé');
   }
@@ -178,7 +179,8 @@ async function main() {
     let lectures = 0;
     const { c, element } = bacFFR(async () => { lectures++; return ref; });
     await c.majConformiteFFR(); await c.majConformiteFFR();
-    ok(lectures === 2 && c.refFFRCache === null, 'référentiel vide ou malformé réessayable');
+    ok(lectures === 4 && c.refFFRCache === null,
+      'backend ancien : référentiel vide ou malformé réessayable (un verdict + un repli par tentative)');
     ok(!element('bloc-conformite-ffr').innerHTML.includes('ffr-vert'), 'absence de faux vert');
   }
   {

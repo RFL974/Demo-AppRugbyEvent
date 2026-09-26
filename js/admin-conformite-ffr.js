@@ -82,6 +82,19 @@ async function chargerRefFFR() {
   return refFFREnCours;
 }
 
+/**
+ * Mémorise le référentiel autoritaire joint par getConformiteFFR. La propriété est additive : un
+ * backend d'avant ce contrat n'en renvoie pas et le frontend retombe alors sur chargerRefFFR().
+ * Une réponse vide est reconnue (pas de GET redondant), mais n'est pas figée pour la session : une
+ * reprise ultérieure doit pouvoir constater que la source FFR est revenue.
+ */
+function integrerReferentielConformite(res) {
+  const ref = res && res.referentiel;
+  if (!ref || !Array.isArray(ref.formes) || !Array.isArray(ref.dates)) return false;
+  if (ref.formes.length || ref.dates.length) refFFRCache = ref;
+  return true;
+}
+
 function messageRepriseFFR(texte) {
   return statutNeutreFFR('Vérification indisponible', texte + ' Aucun verdict de conformité.',
     '<button type="button" class="bouton secondaire" data-action="reessayer-ffr">Réessayer le contrôle FFR</button>');
@@ -205,22 +218,22 @@ async function majConformiteFFR() {
   if (!zone._ffrAppliquerWired) { zone.addEventListener('click', onClicAppliquerFFR); zone._ffrAppliquerWired = true; }
   if (!zone._ffrRepriseWired) { zone.addEventListener('click', onReessayerControleFFR); zone._ffrRepriseWired = true; }
 
-  zone.innerHTML = statutNeutreFFR('Vérification en cours', 'Chargement du référentiel FFR…');
-  await chargerRefFFR(); // dispo du référentiel + formes pour les cartes
-  if (generation !== conformiteFFRGeneration) return;
-
-  const refVide = !refFFRCache ||
-    ((refFFRCache.formes || []).length === 0 && (refFFRCache.dates || []).length === 0);
-  if (refVide) {
-    zone.innerHTML = messageRepriseFFR(refFFRErreur
-      ? 'Lecture du référentiel FFR indisponible pour le moment.'
-      : 'Référentiel FFR vide ou indisponible.');
-    majFormesCategories();
-    return;
-  }
-
   const dateISO = dateTournoiCourante();
   if (!dateISO) {
+    // Sans date il n'y a pas de verdict à demander ; le référentiel seul reste nécessaire aux
+    // cartes de catégories. C'est le seul parcours qui conserve le GET autonome.
+    zone.innerHTML = statutNeutreFFR('Vérification en cours', 'Chargement du référentiel FFR…');
+    await chargerRefFFR();
+    if (generation !== conformiteFFRGeneration) return;
+    const refVideSansDate = !refFFRCache ||
+      ((refFFRCache.formes || []).length === 0 && (refFFRCache.dates || []).length === 0);
+    if (refVideSansDate) {
+      zone.innerHTML = messageRepriseFFR(refFFRErreur
+        ? 'Lecture du référentiel FFR indisponible pour le moment.'
+        : 'Référentiel FFR vide ou indisponible.');
+      majFormesCategories();
+      return;
+    }
     zone.innerHTML = statutNeutreFFR('Date à renseigner',
       'Renseigne la date du tournoi pour vérifier la conformité avec le calendrier FFR.');
     majFormesCategories();
@@ -234,7 +247,8 @@ async function majConformiteFFR() {
     res = await apiPostProtege('getConformiteFFR', {
       date: dateISO,
       categories: categories.join(','),
-      zone: zoneVacances
+      zone: zoneVacances,
+      inclure_referentiel: 'oui'
     }, 'admin', 'admin', { delaiMs: 30000 });
   } catch (e) {
     if (generation !== conformiteFFRGeneration) return;
@@ -242,6 +256,21 @@ async function majConformiteFFR() {
     return;
   }
   if (generation !== conformiteFFRGeneration) return;
+  const refJointe = integrerReferentielConformite(res);
+  // Compatibilité de déploiement : avec un backend d'avant, on retrouve le parcours historique.
+  if (!refJointe && !refFFRCache) {
+    await chargerRefFFR();
+    if (generation !== conformiteFFRGeneration) return;
+  }
+  const refVide = !refFFRCache ||
+    ((refFFRCache.formes || []).length === 0 && (refFFRCache.dates || []).length === 0);
+  if (refVide) {
+    zone.innerHTML = messageRepriseFFR(refFFRErreur
+      ? 'Lecture du référentiel FFR indisponible pour le moment.'
+      : 'Référentiel FFR vide ou indisponible.');
+    majFormesCategories();
+    return;
+  }
   if (!res || res.refDisponible !== true) {
     zone.innerHTML = messageRepriseFFR('Le serveur ne confirme pas la disponibilité du référentiel FFR.');
     return;

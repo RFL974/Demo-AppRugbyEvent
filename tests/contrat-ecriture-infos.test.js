@@ -132,7 +132,8 @@ async function sauvegarder(options) {
     },
     apiPostProtege: async (action) => {
       appelsFFR.push(action);
-      return { refDisponible: true, statut: 'OK', conflits: [], vigilances: [], formes: {}, regles: {}, temps: {} };
+      return { refDisponible: true, statut: 'OK', conflits: [], vigilances: [], formes: {}, regles: {}, temps: {},
+        referentiel: { formes: [{ categorie: 'M10' }], dates: [], regles: [], temps: [], millesime: '2026-2027' } };
     },
     echapper: (s) => String(s)
   });
@@ -141,8 +142,17 @@ async function sauvegarder(options) {
   ffr.majFormesCategories = () => {};
   vrai(ffr.verdictFFRAJour() === false, 'D.3 aucun verdict affiché : pas « à jour »');
   await ffr.majConformiteFFR();
-  vrai(appelsFFR.join() === 'getRefFFR,getConformiteFFR' && ffr.verdictFFRAJour() === true,
-    'D.4 après un contrôle réussi, le verdict est à jour pour ces date, zone et catégories');
+  vrai(appelsFFR.join() === 'getConformiteFFR' && ffr.verdictFFRAJour() === true,
+    'D.4 ⭐ après un contrôle réussi, le verdict ET le référentiel arrivent en une requête');
+  appelsFFR.length = 0;
+  ffr.refFFRCache = null;
+  ffr.apiPostProtege = async (action) => {
+    appelsFFR.push(action);
+    return { refDisponible: true, statut: 'OK', conflits: [], vigilances: [], formes: {}, regles: {}, temps: {} };
+  };
+  await ffr.majConformiteFFR();
+  vrai(appelsFFR.join() === 'getConformiteFFR,getRefFFR' && ffr.verdictFFRAJour() === true,
+    'D.4 bis backend ancien sans référentiel joint : repli historique, résultat inchangé');
   champs.tournoi_date.value = '2027-05-22';
   vrai(ffr.verdictFFRAJour() === false, 'D.5 ⭐ date changée dans le formulaire : verdict périmé');
   champs.tournoi_date.value = '2027-05-15';
