@@ -1648,7 +1648,9 @@ function messageEnvoisNonServis(res) {
     ['non_envoyes', 'non envoyée(s) — délai du serveur atteint, un nouvel envoi les fera partir'],
     ['en_cours', 'déjà en cours d’envoi (autre écran)'],
     ['non_confirmes', 'dont l’envoi précédent a été interrompu sans confirmation — à inviter un par un depuis la liste'],
-    ['recents', 'invitée(s) il y a moins de 5 min']
+    ['recents', 'invitée(s) il y a moins de 5 min'],
+    // ⭐ MAIL-GROUPE-DEMO-01 — refusés par le serveur avant tout envoi (règle de l'envoi individuel) : noms seuls, jamais l'adresse.
+    ['demo_non_distribuables', 'non envoyée(s) — adresse de démonstration non distribuable, à remplacer dans les coordonnées du club']
   ].filter(function (p) { return Array.isArray(r[p[0]]) && r[p[0]].length; })
     .map(function (p) { return ' ⚠️ ' + r[p[0]].length + ' ' + p[1] + ' : ' + r[p[0]].join(', ') + '.'; });
   if (r.suivi_a_jour === false) parties.push(' ⚠️ ' + (r.avertissements || []).join(' '));
@@ -1827,11 +1829,19 @@ async function onEnvoyerInvitationsGroupe() {
     const avecEmail = invitables.filter(function (c) { return String(c.club_contact_email || '').trim(); });
     const sansEmail = invitables.filter(function (c) { return !String(c.club_contact_email || '').trim(); });
     const deja = avecEmail.filter(function (c) { return String(c.invitation_envoyee || '').trim(); });
-    const eligibles = avecEmail.filter(function (c) { return !String(c.invitation_envoyee || '').trim(); });
+    const aInviter = avecEmail.filter(function (c) { return !String(c.invitation_envoyee || '').trim(); });
+    // ⭐ MAIL-GROUPE-DEMO-01 — la règle de l'envoi individuel (MAIL-01) signale d'avance les adresses de démonstration, qui ne
+    //   sont ni envoyées ni vérifiées ensuite. Le serveur applique la même règle sur la fiche du club et reste seul juge : un
+    //   club qu'il refuserait encore est nommé dans le bilan (messageEnvoisNonServis).
+    const demo = aInviter.filter(estDestinataireDemoNonDistribuable);
+    const eligibles = aInviter.filter(function (c) { return !estDestinataireDemoNonDistribuable(c); });
+    const ligneDemo = demo.length ? demo.length + ' adresse(s) de démonstration non distribuable(s), à remplacer dans les coordonnées '
+      + 'du club : ' + demo.map(function (c) { return String(c.club_nom || ''); }).join(', ') : '';
 
     if (!eligibles.length) {
       await dialogAlerter('Aucun club à inviter pour le moment.\n\n'
         + sansEmail.length + ' club(s) sans email (à inviter manuellement).\n'
+        + (ligneDemo ? ligneDemo + '.\n' : '')
         + deja.length + ' club(s) déjà invité(s)'
         + ' — les relances se font dans « Suivi des clubs ».');
       return;
@@ -1840,6 +1850,7 @@ async function onEnvoyerInvitationsGroupe() {
       + '• ' + eligibles.length + ' recevront l\'invitation\n'
       + '• ' + sansEmail.length + ' sans email (à inviter manuellement)\n'
       + '• ' + deja.length + ' déjà invité(s) (exclus)\n'
+      + (ligneDemo ? '• ' + ligneDemo + ' (exclue(s))\n' : '')
       + '• ' + (piecesAEnvoyer.length
         ? piecesAEnvoyer.length + ' pièce(s) jointe(s) : ' + piecesAEnvoyer.map(function (p) { return p.nom; }).join(', ')
         : 'aucune pièce jointe')
