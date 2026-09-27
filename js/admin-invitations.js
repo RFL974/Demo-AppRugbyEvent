@@ -3068,6 +3068,7 @@ async function supprimerClubInviteUI(bouton) {
       return;
     }
     const supprimables = (apercu && apercu.equipes_supprimables) || [];
+    const cibleClubId = String((apercu && apercu.cible_club_id) || '').trim();
     const detail = supprimables.length
       ? '\n\nSes ' + supprimables.length + ' équipe(s) seront aussi retirées de l\'onglet Équipes : ' +
         supprimables.map(function (e) { return e.nom + ' (' + e.categorie + ')'; }).join(', ') + '.'
@@ -3077,12 +3078,23 @@ async function supprimerClubInviteUI(bouton) {
 
     // 2) Suppression réelle (le serveur recalcule le plan : un planning généré entre-temps re-bloque).
     etape = 'retrait';
-    const res = await ecrireInvitation('supprimerClubInvite', Object.assign({ club_nom: nom }, ETAT_DANS_LA_REPONSE));
+    const demande = { club_nom: nom };
+    if (cibleClubId) demande.club_id = cibleClubId;             // lie le retrait à la fiche ACTIVE vue à l'aperçu
+    const res = await ecrireInvitation('supprimerClubInvite', Object.assign(demande, ETAT_DANS_LA_REPONSE));
     const retirees = (res && res.equipes_supprimees) || [];
+    // Clubs, et l'écran Équipes + le tableau de bord quand des équipes sont parties, suivent immédiatement.
+    const etatAJour = await appliquerOuRelireEtat(res, { clubs: true, equipes: retirees.length > 0 });
+    const encorePresent = clubsInvitesCourants.some(function (c) { return memeTexteSouple(c.club_nom, nom); });
+    // Un {ok:true} sans état appliqué n'est pas une preuve. Backend ancien ou réponse incomplète :
+    // la relecture ci-dessus tranche ; jamais de succès tant que la fiche reste visible côté serveur.
+    if (!etatAJour || encorePresent) {
+      afficherMessage(message, '⚠️ Le serveur a répondu, mais le retrait de « ' + nom +
+        ' » n’est pas confirmé par l’état relu. Rien n’est renvoyé automatiquement ; rafraîchis puis réessaie.', 'ko');
+      bouton.disabled = false;
+      return;
+    }
     afficherMessage(message, '🗑️ « ' + nom + ' » retiré' +
       (retirees.length ? ' avec ' + retirees.length + ' équipe(s)' : '') + '.', 'ok');
-    // Clubs, et l'écran Équipes + le tableau de bord quand des équipes sont parties, suivent immédiatement.
-    await appliquerOuRelireEtat(res, { clubs: true, equipes: retirees.length > 0 });
   } catch (erreur) {
     bouton.disabled = false;
     if (!issueIncertaine(erreur)) { afficherMessage(message, '⚠️ ' + erreur.message, 'ko'); return; }
@@ -3093,8 +3105,20 @@ async function supprimerClubInviteUI(bouton) {
     }
     afficherMessage(message, messageIncertain('le retrait de « ' + nom + ' » n’est pas confirmé', erreur,
       'la liste des clubs et celle des équipes sont relues'), 'ko');
-    if (typeof rafraichirRessourceAdmin === 'function') rafraichirRessourceAdmin('clubsInvites');
-    if (typeof rechargerEquipes === 'function') rechargerEquipes({ preserverEdition: true }).catch(function () { return false; });
+    // Réponse perdue / 404 après effet serveur : lectures sûres seulement, jamais un second POST.
+    const lectures = [];
+    if (typeof rafraichirRessourceAdmin === 'function') lectures.push(rafraichirRessourceAdmin('clubsInvites'));
+    if (typeof rechargerEquipes === 'function') {
+      lectures.push(rechargerEquipes({ preserverEdition: true }).catch(function () { return false; }));
+    }
+    const issues = await Promise.all(lectures);
+    const clubsRelus = lectures.length > 0 && issues[0] === true;
+    const absent = !clubsInvitesCourants.some(function (c) { return memeTexteSouple(c.club_nom, nom); });
+    if (clubsRelus && absent) {
+      afficherMessage(message, '🗑️ « ' + nom + ' » retiré (confirmé par la relecture du serveur).', 'ok');
+    } else if (clubsRelus) {
+      afficherMessage(message, '⚠️ Relecture faite : « ' + nom + ' » est toujours présent. Le retrait n’a pas eu lieu.', 'ko');
+    }
   }
 }
 
