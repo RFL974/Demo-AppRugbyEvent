@@ -1272,6 +1272,11 @@ details[open] > summary .ffr-chevron { transform:rotate(45deg); }
 .cv-cat-ref-table td { font-weight:650; color:var(--cv-texte); text-align:right; white-space:nowrap; }
 .cv-cat-ref-table tbody tr:nth-child(odd) { background:#f7fafd; }
 .cv-cat-ref-table tbody tr:last-child th, .cv-cat-ref-table tbody tr:last-child td { border-bottom:0; }
+/* Un tableau par section (Temps de jeu, Effectifs, Organisation, Terrain et règles), titré par sa légende. */
+.cv-cat-ref-table + .cv-cat-ref-table { margin-top:16px; }
+.cv-cat-ref-table caption { caption-side:top; padding:0 0 8px; text-align:left; font-size:14px; font-weight:650; color:var(--cv-texte); }
+.cv-cat-ref-table caption .cv-cat-titre-note { font-size:12px; }
+.cv-cat-ref-note { margin:12px 0 0; color:var(--cv-secondaire); font-size:13px; line-height:1.5; }
 .cv-cat-reference .ffr-forme, .cv-cat-reference .ffr-appliquer-carte { margin-top:16px; font-size:13px; }
 .cv-cat-reference .ffr-appliquer { width:100%; justify-content:center; }
 .cv-cat-avertissement { display:flex; align-items:flex-start; gap:12px; margin-top:16px; }

@@ -590,7 +590,7 @@ function formulaireCategorie(cat) {
  * Carte « Référence FFR » posée à côté des paramètres de la catégorie.
  *
  * Elle n'affiche RIEN d'inventé : son tableau, la forme attendue et le bouton « Appliquer la
- * norme FFR » sont remplis par admin-conformite-ffr.js à partir du référentiel réellement chargé
+ * recommandation » sont remplis par admin-conformite-ffr.js à partir du référentiel réellement chargé
  * (majReferencesFFRCategories / majFormesCategories / majBoutonNormeCategories). Tant que le
  * référentiel est absent, la carte le dit au lieu de proposer des valeurs.
  */
@@ -604,13 +604,13 @@ function carteReferenceFFR(cat) {
       '<div class="cv-cat-reference-table" data-cat="' + nom + '"></div>' +
       // Forme FFR attendue du mois + badges (tournoi non autorisé / format limité) et alerte d'effectif.
       '<div class="ffr-forme" data-cat="' + nom + '" hidden></div>' +
-      // Bouton « Appliquer la norme FFR » : rempli par admin-conformite-ffr.js (majBoutonNormeCategories)
+      // Bouton « Appliquer la recommandation » : rempli par admin-conformite-ffr.js (majBoutonNormeCategories)
       // quand le référentiel expose des valeurs. Il remplit le formulaire voisin, il n'enregistre rien.
       '<div class="ffr-appliquer-carte" data-cat="' + nom + '" hidden></div>' +
       '<div class="cv-information cv-attention cv-cat-avertissement">' +
         '<span class="ffr-statut-pastille" aria-hidden="true">' + icone + '</span>' +
         '<span class="cv-information-texte"><strong>Vérifiez avant d’enregistrer</strong>' +
-        'Ces valeurs sont données à titre indicatif d’après les prescriptions FFR. ' +
+        'Ces valeurs sont données à titre indicatif. ' +
         'Adaptez-les selon l’organisation de votre tournoi.</span>' +
       '</div>' +
     '</aside>'
@@ -1585,7 +1585,7 @@ async function onAjouterCategorie(evenement) {
   }
 
   // Réglages sportifs (temps + effectifs) VIERGES à la création : on ne devine aucune valeur.
-  // L'organisateur clique « Appliquer la norme FFR » sur la carte (référentiel = source unique) ou
+  // L'organisateur clique « Appliquer la recommandation » sur la carte (référentiel = source unique) ou
   // saisit lui-même. Un garde-fou à la génération bloque tant que la durée de mi-temps reste vide,
   // pour ne jamais produire de matchs de 0 min.
   const data = {
@@ -1619,7 +1619,7 @@ async function onAjouterCategorie(evenement) {
       form.categorie.value = '';
       appliquerConfigCategories(res.config);
       annoncerCategorie(nom, '✅ Catégorie « ' + nom + ' » ajoutée' + (res.nouvelle === false ? ' (par ton envoi précédent)' : '') +
-        '. Ses réglages sont vierges : complète-les (ou « Appliquer la norme FFR »), puis « Enregistrer ».', 'ok');
+        '. Ses réglages sont vierges : complète-les (ou « Appliquer la recommandation »), puis « Enregistrer ».', 'ok');
       return;
     }
     if (refus && refus.code === 'categorie_existante' && reponseCategoriesComplete(refus)) {

@@ -12,8 +12,9 @@
  *  Vrais modules du frontend (banc-ecran-invitation.js) contre le vrai Code.gs ; seul `fetch` est simulé, minuteries ×1/1000.
  *  Le jeu Démo est créé par sa vraie porte ; ses clubs y sont « Accepté » : CLAMART est REMIS invitable dans le classeur du
  *  banc (statut vide, sans date), comme après un changement de statut à la main. ⛔ Le jeu lui-même n'est pas modifié.
- *    A — périmètre : js/api.js et les pages publiques octet pour octet ceux de la référence ; admin.html ne change que
- *        l'adresse versionnée de admin-invitations.js ; un seul appel groupé, `renvoyer: 'non'`, garde du double clic ;
+ *    A — périmètre : js/api.js et les pages publiques octet pour octet ceux de la référence ; admin.html charge une seule
+ *        fois admin-invitations.js, à sa nouvelle adresse versionnée ; un seul appel groupé, `renvoyer: 'non'`, garde du
+ *        double clic ;
  *    R — résumé AVANT confirmation : la règle de l'envoi individuel (MAIL-01, `estDestinataireDemoNonDistribuable`, déjà
  *        dans ce module) signale les adresses de démonstration, nommées sans leur adresse, exclues du compte « recevront » ;
  *        tous Démo → « Aucun club à inviter », AUCUNE requête ;
@@ -88,12 +89,27 @@ const premiere = (action, mode) => { let n = 0; return (e) => (e.action === acti
     const identiques = ['js/api.js', 'index.html', 'tournoi.html', 'perfs.html'].map((f) => [f, LIRE(f) === LECTEUR_AVANT(f)]);
     t.vrai(identiques.every((x) => x[1]), 'A.1 js/api.js, index.html, tournoi.html et perfs.html : octet pour octet ceux de la référence ' +
       FRONTEND_AVANT_REV.slice(0, 7), identiques.filter((x) => !x[1]));
-    const ha = LIRE('admin.html').split('\n'), hv = LECTEUR_AVANT('admin.html').split('\n');
-    const lignes = ha.map((l, i) => [l, hv[i]]).filter((x) => x[0] !== x[1]);
-    t.vrai(arg('frontend') === 'avant' || (ha.length === hv.length && lignes.length === 1 &&
-      /js\/admin-invitations\.js\?v=refonte-ciel-verre-20260927-mail-groupe-demo01"/.test(lignes[0][0]) &&
-      /js\/admin-invitations\.js\?v=refonte-ciel-verre-20260927-mail-groupe-status01"/.test(lignes[0][1])),
-    'A.2 admin.html ne change qu\'UNE ligne : la nouvelle adresse versionnée de admin-invitations.js (mail-groupe-demo01)', lignes);
+    /* A.2 — le contrat du lot DANS admin.html : admin-invitations.js chargé UNE seule fois, à SA nouvelle adresse versionnée
+       (la référence le chargeait une fois, en mail-groupe-status01 : le fichier a changé, son adresse aussi). ⭐ Seules les
+       balises <script> réellement chargées comptent (commentaires HTML retirés). ⛔ On ne compare plus TOUT admin.html à la
+       référence : les évolutions indépendantes de la page (versions d'autres fichiers…) ne concernent pas ce lot. */
+    const chargementsInvitations = (html) => {
+      const motif = /<script\b[^>]*\bsrc=["']([^"'?]*admin-invitations\.js(?:\?[^"']*)?)["']/gi;
+      const page = html.replace(/<!--[\s\S]*?-->/g, '');
+      const srcs = [];
+      let m;
+      while ((m = motif.exec(page)) !== null) srcs.push(m[1]);
+      return srcs;
+    };
+    const chargesMaintenant = chargementsInvitations(LIRE('admin.html'));
+    const chargesReference = chargementsInvitations(LECTEUR_AVANT('admin.html'));
+    t.vrai(arg('frontend') === 'avant' || (chargesMaintenant.length === 1 &&
+      chargesMaintenant[0] === 'js/admin-invitations.js?v=refonte-ciel-verre-20260927-mail-groupe-demo01' &&
+      chargesReference.length === 1 &&
+      chargesReference[0] === 'js/admin-invitations.js?v=refonte-ciel-verre-20260927-mail-groupe-status01'),
+    'A.2 admin.html charge admin-invitations.js UNE seule fois, à la nouvelle adresse versionnée (mail-groupe-demo01, ' +
+      'mail-groupe-status01 à la référence) ; les autres évolutions d\'admin.html ne concernent pas ce lot',
+    { maintenant: chargesMaintenant, reference: chargesReference });
     const module = LIRE('js/admin-invitations.js');
     const appels = module.match(/ecrireEnvoiEmail\('envoyerInvitationsGroupe'[\s\S]{0,400}?\}\s*,\s*ETAT_DANS_LA_REPONSE\)/g) || [];
     t.vrai(appels.length === 1 && /renvoyer: 'non'/.test(appels[0]) && !/renvoyer:\s*'oui'/.test(module) &&

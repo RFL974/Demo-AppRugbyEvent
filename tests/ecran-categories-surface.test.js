@@ -40,7 +40,7 @@ const s = (ms) => (ms / 1000).toFixed(2).replace('.', ',') + ' s';
 const essai = async (code, fn) => { try { await fn(); } catch (e) { t.vrai(false, code + ' (exception) ' + String(e && e.message || e).slice(0, 200)); } };
 
 /* Inventaire d'une carte : [balise, nom ou libellé, type]. ⛔ Toute évolution de la carte se déclare ICI. La forme de jeu
-   (référentiel FFR du mois), le contexte U14 et le bouton « Appliquer la norme FFR » (profil FFR) sont conditionnels. */
+   (référentiel FFR du mois), le contexte U14 et le bouton « Appliquer la recommandation » (profil FFR) sont conditionnels. */
 const CARTE = (cat) => [['form', 'form-categorie ' + cat, '']]
   .concat(['U10', 'U12'].indexOf(cat) !== -1 ? [['select', 'forme_jeu', 'select-one']] : [])
   .concat([['select', 'format_mi_temps', 'select-one'], ['input', 'duree_mi_temps_min', 'number'], ['input', 'pause_mi_temps_min', 'number'],
@@ -51,7 +51,7 @@ const CARTE = (cat) => [['form', 'form-categorie ' + cat, '']]
     ['input', 'scf_phase', 'radio']] : [])
   .concat([['select', 'format_apresmidi', 'select-one'], ['input', 'nbQualifiesCoupe', 'number'], ['button', 'Enregistrer', 'submit'],
     ['button', 'Supprimer', 'button'], ['span', 'msg-cat', '']])
-  .concat(['U10', 'U12'].indexOf(cat) !== -1 ? [['button', 'Appliquer la norme FFR', 'button']] : []);
+  .concat(['U10', 'U12'].indexOf(cat) !== -1 ? [['button', 'Appliquer la recommandation', 'button']] : []);
 const CATEGORIES = ['U6', 'U8', 'U10', 'U12', 'U14'];
 const INVENTAIRE = [['div', 'tablist', '']].concat(CATEGORIES.concat(['']).map((c) => ['button', 'onglet ' + c, 'button']))
   .concat([].concat.apply([], CATEGORIES.map(CARTE)))
@@ -132,7 +132,7 @@ function releverControles(doc) {
       'L.6 contexte U14 « Super Challenge » et phase : panneau et récapitulatif suivent (local)');
     b.onglet('U12');
     b.clic(b.doc.querySelector('#zone-categories .ffr-appliquer[data-cat="U12"]'));
-    t.vrai(/référence FFR|Référence FFR|Norme FFR/i.test(b.message('U12')), 'L.7 « Appliquer la norme FFR » : remplit la carte ou dit pourquoi, sans rien enregistrer', b.message('U12'));
+    t.vrai(/référence FFR|Référence FFR|Norme FFR/i.test(b.message('U12')), 'L.7 « Appliquer la recommandation » : remplit la carte ou dit pourquoi, sans rien enregistrer', b.message('U12'));
     const apercu = b.doc.querySelector('.cv-cat-apercu');
     apercu.open = true; apercu.open = false;
     t.vrai(b.journal.length === 0, 'L.8 ⭐ onglets, clavier, douze champs, formats, terrains, contexte U14, norme FFR, vue d\'ensemble : 0 requête',

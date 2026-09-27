@@ -675,9 +675,11 @@ function majFormesCategories() {
 
 /* --------------------------------------------------------------------------
    CARTE « RÉFÉRENCE FFR » posée à côté des paramètres d'une catégorie.
-   Elle ne montre QUE ce que le référentiel publie réellement : chaque ligne naît
-   d'une valeur présente, jamais d'un défaut. Sans référence certaine, la carte le
-   DIT — on ne remplit pas un tableau au jugé.
+   Elle ne montre QUE deux choses : ce que le référentiel publie réellement, et ce
+   que « Appliquer la recommandation » posera dans le formulaire (y compris les
+   réglages d'organisation de DEFAUTS_NORME_FFR_CARTE, que le bouton applique aussi).
+   Rien d'autre n'est deviné. Sans référence certaine, la carte le DIT — on ne
+   remplit pas un tableau au jugé.
    -------------------------------------------------------------------------- */
 
 /**
@@ -702,24 +704,73 @@ function regleReferenceFFRCarte(cat) {
   return regles.length === 1 ? regles[0] : null;
 }
 
-/** Les lignes du tableau : une par valeur RÉELLEMENT publiée pour cette catégorie. */
-function lignesReferenceFFRCarte(r) {
-  const lignes = [];
-  if (r.terrain_longueur_m && r.terrain_largeur_m) {
-    lignes.push(['Dimension terrain', r.terrain_longueur_m + ' × ' + r.terrain_largeur_m + ' m']);
-  } else if (r.terrain_libelle) {
-    lignes.push(['Dimension terrain', r.terrain_libelle]);
+/**
+ * Recommandation(s) que « Appliquer la recommandation » posera dans le formulaire : calculées par
+ * la MÊME fonction que le clic (calculerNormeFFRCarte), pour les mêmes variantes que les boutons de
+ * boutonNormeFFRCarte, et seulement quand ces boutons peuvent exister. La carte montre donc
+ * exactement ce que le bouton appliquera — ni plus, ni autre chose.
+ */
+function recommandationsFFRCarte(cat) {
+  const res = dernierResConformite;
+  if (!res || !refFFRCache) return [];            // mêmes gardes que boutonNormeFFRCarte :
+  if (((res.regles || {})[cat] || []).length > 1) return []; // plusieurs formes ⇒ aucun bouton
+  const grilles = ((res.temps || {})[cat] || {}).grilles || [];
+  const variantes = (!profilNormeFFRCarte(cat) && grilles.length > 1)
+    ? grilles.map(function (g) { return g.variante || ''; })
+    : [grilles.length ? (grilles[0].variante || '') : ''];
+  return variantes.map(function (v) { return { variante: v, calc: calculerNormeFFRCarte(cat, v) }; });
+}
+
+/**
+ * Le tableau de la carte, par sections. Temps de jeu, effectifs et organisation reprennent À
+ * L'IDENTIQUE les valeurs que le bouton posera dans le formulaire (mêmes champs, même calcul) ;
+ * sans recommandation applicable, seuls les effectifs publiés par le référentiel restent. Terrain
+ * et carton jaune sont des repères publiés que le bouton ne modifie pas. Chaque ligne naît d'une
+ * valeur présente, jamais d'un défaut.
+ */
+function sectionsReferenceFFRCarte(r, recos) {
+  const sections = [];
+  const valides = (recos || []).filter(function (x) { return x.calc && x.calc.valeurs; });
+  valides.forEach(function (x) {
+    const v = x.calc.valeurs;
+    // Variantes A/B : une section par découpage, comme un bouton par découpage.
+    const precision = valides.length < 2 ? '' : ' — ' + (x.variante ? 'variante ' + x.variante
+      : v.format_mi_temps + ' × ' + v.duree_mi_temps_min + ' min');
+    sections.push({ titre: 'Temps de jeu' + precision, lignes: [
+      ['Nombre de périodes', v.format_mi_temps],
+      ['Durée d’une période', v.duree_mi_temps_min + ' min'],
+      ['Pause entre deux périodes', v.pause_mi_temps_min + ' min'],
+      ['Récupération entre matchs', v.recup_entre_matchs_min + ' min']
+    ] });
+  });
+  const reco = valides.length ? valides[0].calc.valeurs : null;
+  // Le référentiel publie l'effectif SUR LE TERRAIN et l'effectif MAXIMUM SUR LA FEUILLE de match
+  // (dont ceux sur le terrain) — pas un nombre de remplaçants. Le bouton les pose en effectif
+  // minimum et maximum : le libellé dit les deux.
+  const effectifs = [];
+  const effMin = reco ? reco.effectif_min : r.effectif_terrain;
+  const effMax = reco ? reco.effectif_max : r.effectif_max_feuille;
+  if (effMin) effectifs.push(['Effectif minimum (sur le terrain)', effMin]);
+  if (effMax) effectifs.push(['Effectif maximum (sur la feuille)', effMax]);
+  if (effectifs.length) sections.push({ titre: 'Effectifs', lignes: effectifs });
+  if (reco) {
+    sections.push({ titre: 'Organisation', lignes: [
+      ['Arbitrage', reco.arbitrage_organisation],
+      ['Max équipes par club', reco.max_equipes_par_club]
+    ] });
   }
-  if (r.ballon) lignes.push(['Ballon', r.ballon]);
-  if (r.effectif_terrain) lignes.push(['Effectif sur le terrain', r.effectif_terrain]);
-  // Le référentiel publie l'effectif MAXIMUM SUR LA FEUILLE de match (dont ceux sur le terrain) —
-  // ce n'est pas un nombre de remplaçants, et on ne le renomme donc pas ainsi.
-  if (r.effectif_max_feuille) lignes.push(['Effectif max sur la feuille', r.effectif_max_feuille]);
-  if (r.carton_jaune_min) lignes.push(['Carton jaune', r.carton_jaune_min + ' min']);
+  const terrain = [];
+  if (r.terrain_longueur_m && r.terrain_largeur_m) {
+    terrain.push(['Dimension terrain', r.terrain_longueur_m + ' × ' + r.terrain_largeur_m + ' m']);
+  } else if (r.terrain_libelle) {
+    terrain.push(['Dimension terrain', r.terrain_libelle]);
+  }
+  if (r.carton_jaune_min) terrain.push(['Carton jaune', r.carton_jaune_min + ' min']);
   // `tir_au_but` n'est vrai que sur un « OUI » explicite : une colonne vide ne prouve pas une
   // interdiction, on ne l'affiche donc QUE lorsqu'il est autorisé.
-  if (r.tir_au_but === true) lignes.push(['Tir au but', 'autorisé']);
-  return lignes;
+  if (r.tir_au_but === true) terrain.push(['Tir au but', 'autorisé']);
+  if (terrain.length) sections.push({ titre: 'Terrain et règles', note: 'non modifiés par le bouton', lignes: terrain });
+  return sections;
 }
 
 /** Remplit le tableau « Référence FFR » de chaque carte catégorie affichée. */
@@ -728,25 +779,35 @@ function majReferencesFFRCategories() {
     const cat = el.getAttribute('data-cat');
     const sous = document.querySelector('.cv-cat-reference-sous[data-cat="' + selCategorieFFR(cat) + '"]');
     const r = regleReferenceFFRCarte(cat);
-    const lignes = r ? lignesReferenceFFRCarte(r) : [];
+    const recos = r ? recommandationsFFRCarte(cat) : [];
+    const sections = r ? sectionsReferenceFFRCarte(r, recos) : [];
     if (sous) {
       const forme = r ? libelleFormeFFRCarte(r.forme_jeu, r.effectif) : '';
       sous.textContent = forme ? cat + ' · ' + forme : cat;
     }
-    if (!lignes.length) {
+    if (!sections.length) {
       el.innerHTML = statutNeutreFFR('Référence FFR indisponible', !refFFRCache
         ? 'Le référentiel FFR n’est pas chargé — renseigne la date du tournoi puis relance le contrôle.'
         : 'Aucune prescription certaine pour « ' + cat + ' » à la date du tournoi.');
       return;
     }
-    el.innerHTML = '<table class="cv-cat-ref-table"><tbody>' + lignes.map(function (l) {
-      return '<tr><th scope="row">' + echapper(l[0]) + '</th><td>' + echapper(String(l[1])) + '</td></tr>';
-    }).join('') + '</tbody></table>';
+    // Bouton proposé mais rien d'applicable : on le dit AVANT le clic, avec le motif du clic.
+    const echec = recos.length && !recos.some(function (x) { return x.calc && x.calc.valeurs; })
+      ? recos[0].calc : null;
+    el.innerHTML = sections.map(function (s) {
+      return '<table class="cv-cat-ref-table"><caption>' + echapper(s.titre) +
+        (s.note ? ' <span class="cv-cat-titre-note">(' + echapper(s.note) + ')</span>' : '') +
+        '</caption><tbody>' + s.lignes.map(function (l) {
+          return '<tr><th scope="row">' + echapper(l[0]) + '</th><td>' + echapper(String(l[1])) + '</td></tr>';
+        }).join('') + '</tbody></table>';
+    }).join('') + (echec && echec.erreur
+      ? '<p class="cv-cat-ref-note">Temps de jeu et organisation : rien à appliquer. ' + echapper(echec.erreur) + '</p>'
+      : '');
   });
 }
 
 /* --------------------------------------------------------------------------
-   BOUTON « APPLIQUER LA NORME FFR » dans la carte de réglage (session 16)
+   BOUTON « APPLIQUER LA RECOMMANDATION » dans la carte de réglage (session 16)
    Le bouton de CARTE ne sauvegarde rien : il calcule toutes les valeurs depuis le
    référentiel déjà chargé, puis remplit le formulaire en une fois. L'ancien bouton
    de l'écran Conformité conserve plus bas son flux d'écriture explicite.
@@ -851,7 +912,7 @@ function libelleFormeFFRCarte(forme, effectif) {
   return [String(forme || '').trim(), String(effectif || '').trim()].filter(Boolean).join(' — ');
 }
 
-/** Bouton(s) « Appliquer la norme FFR » d'une carte, ou '' si rien à proposer. */
+/** Bouton(s) « Appliquer la recommandation » d'une carte, ou '' si rien à proposer. */
 function boutonNormeFFRCarte(cat) {
   const res = dernierResConformite;
   if (!res || !refFFRCache) return '';         // conformité / référentiel pas encore chargés
@@ -875,12 +936,12 @@ function boutonNormeFFRCarte(cat) {
       const lib = (g.nb_periodes && g.duree_periode_min)
         ? (g.nb_periodes + ' × ' + g.duree_periode_min + ' min') : ('variante ' + g.variante);
       return '<button type="button" class="ffr-appliquer" data-cat="' + catAttr + '" data-variante="' +
-        echapper(g.variante || '') + '">Appliquer la norme FFR — ' + echapper(lib) + '</button>';
+        echapper(g.variante || '') + '">Appliquer la recommandation — ' + echapper(lib) + '</button>';
     }).join('');
   }
   const v = grilles.length ? (grilles[0].variante || '') : '';
   return aide + '<button type="button" class="ffr-appliquer" data-cat="' + catAttr + '" data-variante="' +
-    echapper(v) + '">Appliquer la norme FFR</button>';
+    echapper(v) + '">Appliquer la recommandation</button>';
 }
 
 /** Remplit le placeholder .ffr-appliquer-carte de chaque carte catégorie. */
@@ -936,10 +997,17 @@ function onClicAppliquerNormeFFRCarte(e) {
       messageNormeFFRCarte(form, '⚠️ Le formulaire est incomplet : champ « ' + nom + ' » introuvable.', 'ko');
       return;
     }
-    if (nom === 'forme_jeu' && champ.options &&
-        !Array.from(champ.options).some(function (o) { return o.value === calc.valeurs.forme_jeu; })) {
-      messageNormeFFRCarte(form, '⚠️ La forme FFR « ' + calc.valeurs.forme_jeu +
-        ' » n’est pas proposée dans ce formulaire.', 'ko');
+    // Une liste ne garde QUE ses options : y poser une autre valeur la viderait sans un mot (ex. une
+    // grille FFR en 3 périodes face à « Nombre de périodes » limité à 1 ou 2). On refuse donc avant
+    // tout remplissage, pour chaque liste et pas seulement la forme de jeu.
+    if (champ.options &&
+        !Array.from(champ.options).some(function (o) { return o.value === calc.valeurs[nom]; })) {
+      const def = typeof CHAMPS_CATEGORIE !== 'undefined' &&
+        CHAMPS_CATEGORIE.filter(function (c) { return c.cle === nom; })[0];
+      messageNormeFFRCarte(form, nom === 'forme_jeu'
+        ? '⚠️ La forme FFR « ' + calc.valeurs.forme_jeu + ' » n’est pas proposée dans ce formulaire.'
+        : '⚠️ La valeur « ' + calc.valeurs[nom] + ' » n’est pas proposée pour « ' + (def ? def.label : nom) +
+          ' » dans ce formulaire. Rien n’a été rempli.', 'ko');
       return;
     }
     cibles[nom] = champ;

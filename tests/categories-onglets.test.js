@@ -86,6 +86,9 @@ egal((html.match(/class="carte cv-cat-carte cv-cat-reference"/g) || []).length, 
 ok(html.includes('Référence FFR'), 'la carte de référence porte son titre');
 ok(html.includes('(à titre indicatif)'), 'la carte de référence annonce sa portée');
 ok(html.includes('Vérifiez avant d’enregistrer'), 'l’avertissement accompagne les valeurs FFR');
+ok(html.includes('Ces valeurs sont données à titre indicatif. Adaptez-les selon l’organisation de votre tournoi.'),
+  'l’avertissement garde tout son texte, sauf la mention retirée');
+ok(!html.includes('d’après les prescriptions FFR'), 'la mention « d’après les prescriptions FFR » a disparu de l’avertissement');
 ['cv-cat-reference-table', 'ffr-forme', 'ffr-appliquer-carte'].forEach(function (c) {
   ok(html.includes('class="' + c + '" data-cat="U10"'), 'accroche ' + c + ' branchée sur la catégorie');
 });
@@ -117,17 +120,23 @@ ffr.refFFRCache = {
 };
 const regle = ffr.regleReferenceFFRCarte('U10');
 ok(regle && regle.effectif_terrain === '7', 'la règle FFR de la catégorie est retrouvée');
-egal(ffr.lignesReferenceFFRCarte(regle), [
-  ['Dimension terrain', '40 × 30 m'], ['Ballon', 'T3'], ['Effectif sur le terrain', '7'],
-  ['Effectif max sur la feuille', '13'], ['Carton jaune', '2 min']
+// Sans recommandation applicable (aucune grille de temps) : effectifs publiés + terrain et règles, rien d'autre.
+egal(ffr.sectionsReferenceFFRCarte(regle, []), [
+  { titre: 'Effectifs', lignes: [['Effectif minimum (sur le terrain)', '7'], ['Effectif maximum (sur la feuille)', '13']] },
+  { titre: 'Terrain et règles', note: 'non modifiés par le bouton', lignes: [['Dimension terrain', '40 × 30 m'], ['Carton jaune', '2 min']] }
 ], 'les lignes reprennent exactement les valeurs publiées');
-ok(!JSON.stringify(ffr.lignesReferenceFFRCarte(regle)).includes('Tir au but'),
+ok(!JSON.stringify(ffr.sectionsReferenceFFRCarte(regle, [])).includes('Ballon') &&
+   !JSON.stringify(ffr.sectionsReferenceFFRCarte(regle, [])).includes('T3'), 'la taille du ballon n’apparaît plus sur la carte');
+ok(!JSON.stringify(ffr.sectionsReferenceFFRCarte(Object.assign({}, regle, { carton_jaune_min: '' }), [])).includes('Carton jaune'),
+  'aucun carton jaune publié ⇒ aucune ligne « Carton jaune »');
+ok(!JSON.stringify(ffr.sectionsReferenceFFRCarte(regle, [])).includes('Tir au but'),
   'tir_au_but non explicitement autorisé ⇒ ligne absente (on n’affirme pas une interdiction)');
-ok(JSON.stringify(ffr.lignesReferenceFFRCarte(Object.assign({}, regle, { tir_au_but: true })))
+ok(JSON.stringify(ffr.sectionsReferenceFFRCarte(Object.assign({}, regle, { tir_au_but: true }), []))
   .includes('Tir au but'), 'tir_au_but autorisé ⇒ la ligne apparaît');
-egal(ffr.lignesReferenceFFRCarte({ terrain_libelle: 'terrain normal' }),
-  [['Dimension terrain', 'terrain normal']], 'sans dimensions chiffrées, le libellé FFR suffit');
-egal(ffr.lignesReferenceFFRCarte({}), [], 'aucune valeur publiée ⇒ aucune ligne inventée');
+egal(ffr.sectionsReferenceFFRCarte({ terrain_libelle: 'terrain normal' }, []),
+  [{ titre: 'Terrain et règles', note: 'non modifiés par le bouton', lignes: [['Dimension terrain', 'terrain normal']] }],
+  'sans dimensions chiffrées, le libellé FFR suffit');
+egal(ffr.sectionsReferenceFFRCarte({}, []), [], 'aucune valeur publiée ⇒ aucune ligne inventée');
 
 // Ambiguïté non levée : plusieurs formes possibles ⇒ on ne choisit pas à la place de l'organisateur.
 ffr.refFFRCache = { regles: [], temps: [] };
