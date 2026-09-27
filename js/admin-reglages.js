@@ -45,8 +45,10 @@ function afficherHoraires(global) {
   // battement de 2 ou 3 min que le serveur accepte (et que l'arbitrage du planning propose).
   return '<div class="cv-horaires"><section class="carte"><h2>Horaires principaux</h2>' +
     '<form id="form-horaires" class="form-reglages" novalidate>' +
-    champHeure('heure_rdv','Accueil des équipes',val('heure_rdv')) +
+    // Ordre de SAISIE seulement (HORAIRE-01) : le début des matchs d'abord, il pré-remplit l'accueil. La frise suit ses
+    // propres repères (reperesHorairesCiel, friseJournee, etapesJourneeEmail) : elle ne dépend pas de cet ordre.
     champHeure('heure_debut','Début des matchs',val('heure_debut')) +
+    champHeure('heure_rdv','Accueil des équipes',val('heure_rdv')) +
     blocPauseDejeuner(global,val) +
     champNombre('marge_fin_communiquee_min','Clôture après le dernier match (min)',val('marge_fin_communiquee_min','75'),'Retour aux vestiaires et remise des trophées.') +
     '<details class="cv-options"><summary>Options avancées<span>Battement, fin des matchs et horaire communiqué</span></summary>' +

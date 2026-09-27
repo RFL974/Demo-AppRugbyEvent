@@ -34,8 +34,8 @@ const s = (ms) => (ms / 1000).toFixed(2).replace('.', ',') + ' s';
 /* Inventaire de l'écran : [balise, identifiant ou nom, type]. ⛔ Toute évolution de la carte se déclare ICI. */
 const INVENTAIRE = [
   ['form', 'form-horaires', ''],
+  ['input', 'heure_debut', 'time'],   // HORAIRE-01 : « Début des matchs » avant « Accueil des équipes » (ordre de saisie seul)
   ['input', 'heure_rdv', 'time'],
-  ['input', 'heure_debut', 'time'],
   ['details', 'Options de pause', ''],
   ['summary', 'Options de pause', ''],
   ['input', 'pause_echelonnee', 'checkbox'],
