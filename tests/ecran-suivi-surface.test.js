@@ -226,19 +226,31 @@ const clubMemoire = (b, nom) => b.global('clubsInvitesCourants').filter((c) => c
         'V.A4 « Réessayer » (double clic compris) : UNE lecture, puis le tableau (' + mode + ')', r2.resume);
     });
   }
+  /* ⭐ CLUB-PERF-01 — la lecture des clubs a 30 s de tentative ET 30 s de budget total : une lecture muette échoue à 30 s,
+     sans seconde tentative automatique ; « Réessayer » reste le recours. ⚠️ Ce banc accélère ses minuteries (×1/1000) mais
+     pas `performance.now()` : le budget ne s'y épuiserait jamais, et la relance d'api.js y partirait encore — ce que le
+     navigateur ne fait plus. `horlogeBanc` fait avancer `performance.now()` au rythme des minuteries, pour ces deux essais. */
+  const horlogeBanc = (b) => { const t0 = performance.now(); b.ctx.performance = { now: () => (performance.now() - t0) * 1000 }; };
   await essai('V.A5', async () => {
     const a = await avecPannes({ sansArrivee: true });
+    horlogeBanc(a);
     a.poserPanne(panneUnique('listerClubsInvites', 'silence', 2));
     const r = await a.jouer(() => a.global('ouvrirEtapeAdmin')('suivi-clubs'));
     const liste = txt(a.id('liste-suivi-clubs'));
-    t.vrai(!r.bloque && r.requetes.length === 2 && /délai de 30 s dépassé/.test(liste) && !!a.doc.querySelector('[data-action="relire-suivi"]'),
-      'V.A5 lecture muette deux fois : bornée (30 s + la relance unique d\'api.js), l\'écran ne reste plus pendu et dit « délai de 30 s dépassé »',
+    t.vrai(!r.bloque && r.requetes.length === 1 && /délai de 30 s dépassé/.test(liste) && !!a.doc.querySelector('[data-action="relire-suivi"]'),
+      'V.A5 lecture muette : bornée à 30 s, UNE requête (budget épuisé, aucune seconde tentative automatique), l\'écran dit « délai de 30 s dépassé » et offre « Réessayer »',
       [r.bloque, r.resume, liste]);
     const c = await avecPannes({ sansArrivee: true });
+    horlogeBanc(c);
     c.poserPanne(panneUnique('listerClubsInvites', 'silence', 1));
     const r2 = await c.jouer(() => c.global('ouvrirEtapeAdmin')('suivi-clubs'));
-    t.vrai(!r2.bloque && r2.requetes.length === 2 && c.doc.querySelectorAll('#liste-suivi-clubs .suivi-club-ligne').length === 12,
-      'V.A6 lecture muette une fois : la relance unique d\'api.js aboutit, le tableau paraît', [r2.bloque, r2.resume]);
+    const relire = c.doc.querySelector('#liste-suivi-clubs [data-action="relire-suivi"]');
+    const r3 = relire ? await c.jouer(async () => { await c.cliquer(relire);
+      for (let i = 0; i < 400 && c.global('typeof suiviRelectureEnCours !== "undefined" && suiviRelectureEnCours'); i++) { await BC.tour(); await attendre(1); } }) : null;
+    t.vrai(!r2.bloque && r2.requetes.length === 1 && !!r3 && r3.requetes.length === 1 &&
+      c.doc.querySelectorAll('#liste-suivi-clubs .suivi-club-ligne').length === 12,
+      'V.A6 lecture muette une fois : échec à 30 s sans relance automatique, puis « Réessayer » — UNE lecture — et le tableau paraît',
+      [r2.bloque, r2.resume, r3 && r3.resume]);
   });
   await essai('V.A7', async () => {
     const a = await avecPannes();

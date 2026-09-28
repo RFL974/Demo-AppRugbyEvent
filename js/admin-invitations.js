@@ -2420,9 +2420,16 @@ function memeTexteSouple(a, b) {
 
 /* ⭐ Lot « Suivi des clubs » — LA LECTURE EST BORNÉE. Sans délai client, une réponse muette laissait la liste en attente
  *   pour toujours : « Suivi des clubs » affichait « Connecte-toi pour charger le suivi. » à un organisateur connecté, et
- *   revenir sur l'écran ne relançait rien (la lecture pendue était partagée). 30 s par tentative ; `js/api.js` relance UNE
- *   fois cette lecture de sa liste fermée après un délai dépassé ou un 404 : au pire ≈ 60 s, puis l'erreur est dite. */
+ *   revenir sur l'écran ne relançait rien (la lecture pendue était partagée). `js/api.js` relance UNE fois cette lecture de
+ *   sa liste fermée après un délai dépassé ou un 404.
+ * ⭐ CLUB-PERF-01 — 30 s POUR LA TENTATIVE, 30 s DE BUDGET TOTAL. Sans budget, une réponse muette déclenchait une seconde
+ *   tentative complète : ≈ 60 s d'attente, annoncées « 30 s ». Désormais une réponse valide garde les 30 s entières (des
+ *   lectures réelles ont répondu en 13,9 s et 17 s), une réponse muette échoue à 30 s sans seconde tentative automatique,
+ *   et « Réessayer » reste le recours ; un 404 précoce reste rejoué une fois, dans le temps restant.
+ *   ⛔ Pas moins de 30 s par tentative : 15 s abandonnait une lecture réelle de 17 s. ⚠️ Borne de l'attente seulement : la
+ *   lenteur du serveur, elle, reste inexpliquée. */
 const DELAI_LECTURE_CLUBS_MS = 30000;
+const BUDGET_LECTURE_CLUBS_MS = 30000;
 /* L'état de la lecture, pour les écrans qui montrent la liste sans la lire eux-mêmes (« Suivi des clubs ») : `lue` — au moins
  *   une lecture a réussi ; `enCours` — une lecture court ; `erreur` — message de la dernière lecture en échec, '' après un succès. */
 const etatLectureClubs = { lue: false, enCours: false, erreur: '' };
@@ -2450,7 +2457,7 @@ async function chargerClubsInvites() {
   // Liste jamais lue : le Suivi dit « Chargement… » pendant la lecture (il affichait « Connecte-toi… » à un organisateur connecté).
   if (!etatLectureClubs.lue && typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
   try {
-    const res = await ecrireAdmin('listerClubsInvites', {}, { delaiMs: DELAI_LECTURE_CLUBS_MS });
+    const res = await ecrireAdmin('listerClubsInvites', {}, { delaiMs: DELAI_LECTURE_CLUBS_MS, budgetMs: BUDGET_LECTURE_CLUBS_MS });
     clubsInvitesCourants = (res && res.clubs) || [];
     estimationPublicCourante = (res && res.estimation_public) || null;
     if (typeof afficherEstimationPublicAutorisation === 'function') afficherEstimationPublicAutorisation();
@@ -2465,14 +2472,48 @@ async function chargerClubsInvites() {
     return true;
   } catch (erreur) {
     etatLectureClubs.enCours = false;
+    // Le temps réellement attendu : le budget total, relance après un 404 comprise. ⛔ Jamais une chaîne technique d'api.js :
+    //   ni l'abandon du navigateur, ni son rejeu interne après un 404 reçu en fin de budget. Le motif d'une erreur métier reste.
     etatLectureClubs.erreur = String((erreur && erreur.name === 'AbortError')
-      ? 'délai de ' + Math.round(DELAI_LECTURE_CLUBS_MS / 1000) + ' s dépassé' : ((erreur && erreur.message) || 'erreur réseau')).replace(/\.\s*$/, '');
-    zone.innerHTML = '<p class="vide">⚠️ Impossible de charger les clubs invités : '
-      + echapper(erreur.message) + '</p>';
+      ? 'délai de ' + Math.round(BUDGET_LECTURE_CLUBS_MS / 1000) + ' s dépassé'
+      : (erreur && erreur.rejeuLecture404 === true) ? 'réponse du serveur indisponible'
+        : ((erreur && erreur.message) || 'erreur réseau')).replace(/\.\s*$/, '');
+    zone.innerHTML = htmlEchecLectureClubs();
     // Le Suivi montre la même liste : il dit l'échec au lieu d'un faux « aucun club ».
     if (typeof afficherSuiviClubs === 'function') afficherSuiviClubs();
     return false;
   }
+}
+
+/** CLUB-PERF-01 — l'échec de lecture dans « Clubs invités », comme dans le Suivi : le motif normalisé et « Réessayer ». */
+function htmlEchecLectureClubs() {
+  return '<div class="vide clubs-etat-lecture" role="alert"><p>⚠️ Impossible de charger les clubs invités : ' +
+    echapper(etatLectureClubs.erreur || 'erreur réseau') + '.</p>' +
+    '<button type="button" class="bouton bouton-doux" data-action="relire-clubs-invites">Réessayer</button></div>';
+}
+
+/* ⭐ CLUB-PERF-01 — « Réessayer » de « Clubs invités » : la relecture du Suivi (`rafraichirRessourceAdmin`, registre partagé),
+ *   une à la fois, « Chargement… » pendant qu'elle court ; la lecture repeint les deux écrans, ou redit l'échec. Une lecture
+ *   déjà en cours (lancée depuis le Suivi) n'est pas doublée : c'est elle qui repeindra cet écran. */
+let relectureClubsEnCours = false;
+function relireClubsInvites() {
+  if (relectureClubsEnCours || typeof rafraichirRessourceAdmin !== 'function') return Promise.resolve(false);
+  const zone = document.getElementById('liste-clubs-invites');
+  if (zone) zone.innerHTML = '<p class="vide" role="status">Chargement des clubs invités…</p>';
+  if (etatLectureClubs.enCours) return Promise.resolve(false);
+  relectureClubsEnCours = true;
+  return Promise.resolve(rafraichirRessourceAdmin('clubsInvites')).then(function (ok) { return ok; }, function () { return false; })
+    .then(function (ok) {
+      relectureClubsEnCours = false;
+      if (ok || !zone) return ok;
+      // Aucune lecture n'a repeint (déconnecté) : l'échec revient, jamais un « Chargement… » sans fin.
+      if (/Chargement des clubs invités/.test(zone.innerHTML)) zone.innerHTML = htmlEchecLectureClubs();
+      // Le focus, tombé avec le bouton remplacé, revient au nouveau « Réessayer ».
+      const actif = document.activeElement;
+      const bouton = typeof zone.querySelector === 'function' ? zone.querySelector('[data-action="relire-clubs-invites"]') : null;
+      if (bouton && (!actif || actif === document.body) && typeof bouton.focus === 'function') bouton.focus();
+      return ok;
+    });
 }
 
 /**
@@ -2945,6 +2986,8 @@ async function ouvrirAlerteEcart(badgeAlerte) {
 
 /** Clic dans la liste des clubs : suppression, invitation initiale, catégories, coordonnées. */
 async function onClicClubsInvites(evenement) {
+  // « Réessayer » d'une lecture de la liste en échec (CLUB-PERF-01).
+  if (evenement.target.closest('[data-action="relire-clubs-invites"]')) return relireClubsInvites();
   const btnSuppr = evenement.target.closest('.bouton-suppr-club');
   if (btnSuppr) return supprimerClubInviteUI(btnSuppr);
   const btnInviter = evenement.target.closest('.bouton-inviter-club');
